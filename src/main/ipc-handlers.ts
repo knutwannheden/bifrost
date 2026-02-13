@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { ipcMain, BrowserWindow, dialog } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import { IPC } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig } from '../shared/types';
@@ -117,5 +117,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // IDE
   ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string) => {
     return openInIde(worktreePath);
+  });
+
+  // Dialog
+  ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openDirectory'],
+      title: 'Select Repository Directory',
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0];
   });
 }

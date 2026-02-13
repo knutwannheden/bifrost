@@ -42,6 +42,9 @@ const api: BifrostAPI = {
   // IDE
   openInIde: (worktreePath) => ipcRenderer.invoke(IPC.OPEN_IN_IDE, worktreePath),
 
+  // Dialog
+  selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
+
   // Notifications
   onNotification: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, title: string, body: string) =>

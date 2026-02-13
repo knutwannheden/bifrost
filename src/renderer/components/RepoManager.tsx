@@ -18,6 +18,13 @@ export default function RepoManager() {
     return () => window.removeEventListener('keydown', handleKey);
   }, [close]);
 
+  const handleBrowse = async () => {
+    const selected = await window.bifrost.selectDirectory();
+    if (selected) {
+      setLocalPath(selected);
+    }
+  };
+
   const handleAddLocal = async () => {
     if (!localPath.trim()) return;
     setError(null);
@@ -89,8 +96,15 @@ export default function RepoManager() {
                 className="flex-1 px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
               />
               <button
+                onClick={handleBrowse}
+                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm rounded"
+              >
+                Browse
+              </button>
+              <button
                 onClick={handleAddLocal}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded"
+                disabled={!localPath.trim()}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded"
               >
                 Add
               </button>

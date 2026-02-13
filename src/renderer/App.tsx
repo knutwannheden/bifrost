@@ -61,8 +61,8 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-200">
       {/* Title bar drag area */}
-      <div className="h-8 bg-slate-800 border-b border-slate-700 flex items-center px-4"
-           style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
+      <div className="h-8 bg-slate-800 border-b border-slate-700 flex items-center justify-center"
+           style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}>
         <span className="text-xs font-semibold tracking-wide text-slate-500">BIFROST</span>
       </div>
 

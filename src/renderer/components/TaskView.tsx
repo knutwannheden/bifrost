@@ -15,7 +15,7 @@ export default function TaskView() {
           <p className="text-sm mt-1">
             Press{' '}
             <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 text-xs">
-              Cmd+T
+              ⌘T
             </kbd>{' '}
             to create a task
           </p>

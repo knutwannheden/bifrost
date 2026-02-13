@@ -34,6 +34,9 @@ export const IPC = {
 
   // IDE
   OPEN_IN_IDE: 'ide:open',
+
+  // Dialog
+  SELECT_DIRECTORY: 'dialog:select-directory',
 } as const;
 
 // Streaming channels (send/on)
@@ -72,6 +75,9 @@ export interface BifrostAPI {
 
   // IDE
   openInIde(worktreePath: string): Promise<void>;
+
+  // Dialog
+  selectDirectory(): Promise<string | null>;
 
   // Notifications
   onNotification(callback: (title: string, body: string) => void): () => void;
