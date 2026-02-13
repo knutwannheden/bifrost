@@ -154,9 +154,11 @@ export default function TaskHistoryPanel() {
   };
 
   const handleActivate = (task: Task) => {
-    if (task.status === 'running' || task.status === 'stopped') {
+    if (task.status === 'running') {
       dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
       close();
+    } else if (canReopen(task)) {
+      handleReopen(task);
     }
   };
 
@@ -212,10 +214,10 @@ export default function TaskHistoryPanel() {
       case 'Enter':
         e.preventDefault();
         if (focusedTask) {
-          if (focusedTask.status === 'archived') {
-            handleReopen(focusedTask);
-          } else {
+          if (focusedTask.status === 'running') {
             handleActivate(focusedTask);
+          } else {
+            handleReopen(focusedTask);
           }
         }
         break;
