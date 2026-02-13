@@ -16,6 +16,7 @@ const api: BifrostAPI = {
   // Tasks
   createTask: (params) => ipcRenderer.invoke(IPC.CREATE_TASK, params),
   closeTask: (taskId) => ipcRenderer.invoke(IPC.CLOSE_TASK, taskId),
+  stopTask: (taskId) => ipcRenderer.invoke(IPC.STOP_TASK, taskId),
   archiveTask: (taskId) => ipcRenderer.invoke(IPC.ARCHIVE_TASK, taskId),
   reopenTask: (taskId) => ipcRenderer.invoke(IPC.REOPEN_TASK, taskId),
   renameTask: (taskId, name) => ipcRenderer.invoke(IPC.RENAME_TASK, taskId, name),

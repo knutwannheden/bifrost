@@ -4,7 +4,7 @@ import TerminalPane from './TerminalPane';
 
 const shortcuts = [
   { keys: '⌘T', label: 'New task' },
-  { keys: '⌘W', label: 'Archive task' },
+  { keys: '⌘W', label: 'Stop task' },
   { keys: '⌘H', label: 'Task history' },
   { keys: '⌘R', label: 'Repositories' },
   { keys: '⌘D', label: 'View diff' },

@@ -54,15 +54,8 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           e.preventDefault();
           if (state.activeTaskId) {
             const taskId = state.activeTaskId;
-            window.bifrost.archiveTask(taskId).then((updated) => {
+            window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
-              const activeTasks = state.tasks.filter(
-                (t) => t.id !== taskId && t.status !== 'archived',
-              );
-              dispatch({
-                type: 'SET_ACTIVE_TASK',
-                taskId: activeTasks.length > 0 ? activeTasks[activeTasks.length - 1].id : null,
-              });
             });
           }
           break;

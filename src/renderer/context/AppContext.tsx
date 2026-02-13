@@ -10,6 +10,7 @@ export interface AppState {
   config: BifrostConfig | null;
   showRepoManager: boolean;
   showCreateDialog: boolean;
+  createDialogRepoId: string | null;
   showDiff: boolean;
   showTaskHistory: boolean;
   diffMode: DiffMode;
@@ -26,7 +27,7 @@ type AppAction =
   | { type: 'SET_TASK_UNREAD'; taskId: string; hasUnread: boolean }
   | { type: 'SET_TASK_STATUS'; taskId: string; status: TaskStatus }
   | { type: 'TOGGLE_REPO_MANAGER' }
-  | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean }
+  | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean; repoId?: string }
   | { type: 'TOGGLE_DIFF' }
   | { type: 'TOGGLE_TASK_HISTORY' }
   | { type: 'SET_DIFF_MODE'; mode: DiffMode };
@@ -38,6 +39,7 @@ const initialState: AppState = {
   config: null,
   showRepoManager: false,
   showCreateDialog: false,
+  createDialogRepoId: null,
   showDiff: false,
   showTaskHistory: false,
   diffMode: 'git',
@@ -88,7 +90,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_REPO_MANAGER':
       return { ...state, showRepoManager: !state.showRepoManager };
     case 'SHOW_CREATE_TASK_DIALOG':
-      return { ...state, showCreateDialog: action.show };
+      return { ...state, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null };
     case 'TOGGLE_DIFF':
       return { ...state, showDiff: !state.showDiff };
     case 'TOGGLE_TASK_HISTORY':

@@ -124,11 +124,28 @@ export default function RepoManager() {
 
       default:
         // Alt+letter shortcuts
-        if (e.altKey && focusedRepo) {
+        if (e.altKey) {
           switch (e.code) {
             case 'KeyR':
+              if (focusedRepo) {
+                e.preventDefault();
+                handleRemove(focusedRepo.id);
+              }
+              break;
+            case 'KeyT':
+              if (focusedRepo) {
+                e.preventDefault();
+                close();
+                dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: focusedRepo.id });
+              }
+              break;
+            case 'KeyB':
               e.preventDefault();
-              handleRemove(focusedRepo.id);
+              handleBrowse();
+              break;
+            case 'KeyA':
+              e.preventDefault();
+              handleAddLocal();
               break;
           }
         } else if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1) {
@@ -154,7 +171,7 @@ export default function RepoManager() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <h2 className="text-sm font-semibold text-slate-200">Manage Repositories</h2>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-600">&uarr;&darr; navigate &middot; Tab to add</span>
+            <span className="text-xs text-slate-600">&uarr;&darr; navigate &middot; Alt+B browse &middot; Alt+A add</span>
             <button
               onClick={close}
               tabIndex={-1}
@@ -198,14 +215,24 @@ export default function RepoManager() {
                   <p className="text-sm text-slate-200 truncate">{repo.name}</p>
                   <p className="text-xs text-slate-400 truncate">{repo.path}</p>
                 </div>
-                <button
-                  onClick={() => handleRemove(repo.id)}
-                  tabIndex={-1}
-                  title="Remove (Alt+R)"
-                  className="ml-3 text-xs text-red-400 hover:text-red-300"
-                >
-                  <ActionLabel text="Remove" showHint={idx === focusedIdx} />
-                </button>
+                <div className="flex items-center gap-1 ml-3">
+                  <button
+                    onClick={() => { close(); dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id }); }}
+                    tabIndex={-1}
+                    title="Create task (Alt+T)"
+                    className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+                  >
+                    <ActionLabel text="Task" showHint={idx === focusedIdx} />
+                  </button>
+                  <button
+                    onClick={() => handleRemove(repo.id)}
+                    tabIndex={-1}
+                    title="Remove (Alt+R)"
+                    className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
+                  >
+                    <ActionLabel text="Remove" showHint={idx === focusedIdx} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -235,7 +262,7 @@ export default function RepoManager() {
                 tabIndex={-1}
                 className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
-                Browse
+                <ActionLabel text="Browse" showHint={true} />
               </button>
               <button
                 onClick={handleAddLocal}
@@ -243,7 +270,7 @@ export default function RepoManager() {
                 tabIndex={-1}
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               >
-                Add
+                <ActionLabel text="Add" showHint={!localPath.trim() ? false : true} />
               </button>
             </div>
             {error && <p className="mt-1 text-xs text-red-400">{error}</p>}

@@ -24,6 +24,7 @@ export const IPC = {
   // Tasks
   CREATE_TASK: 'task:create',
   CLOSE_TASK: 'task:close',
+  STOP_TASK: 'task:stop',
   ARCHIVE_TASK: 'task:archive',
   REOPEN_TASK: 'task:reopen',
   RENAME_TASK: 'task:rename',
@@ -72,6 +73,7 @@ export interface BifrostAPI {
   // Tasks
   createTask(params: CreateTaskParams): Promise<Task>;
   closeTask(taskId: string): Promise<void>;
+  stopTask(taskId: string): Promise<Task>;
   archiveTask(taskId: string): Promise<Task>;
   reopenTask(taskId: string): Promise<Task>;
   renameTask(taskId: string, name: string): Promise<Task>;

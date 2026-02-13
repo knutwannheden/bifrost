@@ -140,6 +140,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     saveTasks(tasks);
   });
 
+  ipcMain.handle(IPC.STOP_TASK, (_event, taskId: string) => {
+    const task = getTask(taskId);
+
+    if (task.status === 'running') {
+      killSession(task.sessionId);
+    }
+
+    return updateTask(taskId, {
+      status: 'stopped',
+    });
+  });
+
   ipcMain.handle(IPC.ARCHIVE_TASK, (_event, taskId: string) => {
     const task = getTask(taskId);
 

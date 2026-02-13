@@ -15,7 +15,7 @@ function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintInde
 
 export default function TaskCreateDialog() {
   const { state, dispatch } = useApp();
-  const [repoId, setRepoId] = useState('');
+  const [repoId, setRepoId] = useState(state.createDialogRepoId ?? '');
   const [taskName, setTaskName] = useState('');
   const [branch, setBranch] = useState('');
   const [branches, setBranches] = useState<string[]>([]);
