@@ -1,14 +1,25 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import '@xterm/xterm/css/xterm.css';
+import { useApp } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
 
 interface TerminalPaneProps {
   sessionId: string;
+  active: boolean;
 }
 
-export default function TerminalPane({ sessionId }: TerminalPaneProps) {
+export default function TerminalPane({ sessionId, active }: TerminalPaneProps) {
+  const { state } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
-  useTerminal(sessionId, containerRef);
+  const { terminal } = useTerminal(sessionId, containerRef);
+
+  // Focus the terminal when it becomes active and no overlays are showing
+  useEffect(() => {
+    const anyOverlay = state.showRepoManager || state.showCreateDialog || state.showDiff || state.showTaskHistory;
+    if (!anyOverlay && active && terminal.current) {
+      terminal.current.focus();
+    }
+  }, [state.showRepoManager, state.showCreateDialog, state.showDiff, state.showTaskHistory, active, terminal]);
 
   return (
     <div

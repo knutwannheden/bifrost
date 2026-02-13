@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import type { Repo, Task, BifrostConfig, TaskStatus } from '../../shared/types';
 
+export type DiffMode = 'git' | 'activity';
+
 export interface AppState {
   repos: Repo[];
   tasks: Task[];
@@ -10,6 +12,7 @@ export interface AppState {
   showCreateDialog: boolean;
   showDiff: boolean;
   showTaskHistory: boolean;
+  diffMode: DiffMode;
 }
 
 type AppAction =
@@ -25,7 +28,8 @@ type AppAction =
   | { type: 'TOGGLE_REPO_MANAGER' }
   | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean }
   | { type: 'TOGGLE_DIFF' }
-  | { type: 'TOGGLE_TASK_HISTORY' };
+  | { type: 'TOGGLE_TASK_HISTORY' }
+  | { type: 'SET_DIFF_MODE'; mode: DiffMode };
 
 const initialState: AppState = {
   repos: [],
@@ -36,6 +40,7 @@ const initialState: AppState = {
   showCreateDialog: false,
   showDiff: false,
   showTaskHistory: false,
+  diffMode: 'git',
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -88,6 +93,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, showDiff: !state.showDiff };
     case 'TOGGLE_TASK_HISTORY':
       return { ...state, showTaskHistory: !state.showTaskHistory };
+    case 'SET_DIFF_MODE':
+      return { ...state, diffMode: action.mode };
     default:
       return state;
   }
@@ -107,6 +114,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     window.bifrost.listTasks().then((tasks) => {
       dispatch({ type: 'SET_TASKS', tasks });
+      // Auto-select first active (non-archived) task on startup
+      const active = tasks.find((t) => t.status !== 'archived');
+      if (active) {
+        dispatch({ type: 'SET_ACTIVE_TASK', taskId: active.id });
+      }
     });
   }, []);
 

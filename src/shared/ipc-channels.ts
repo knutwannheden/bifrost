@@ -1,4 +1,5 @@
 import type {
+  ActivityEntry,
   AddRepoParams,
   BifrostConfig,
   CreateTaskParams,
@@ -36,6 +37,10 @@ export const IPC = {
   // Diff
   GET_DIFF: 'diff:get',
 
+  // Activity Log
+  GET_ACTIVITY_LOG: 'activity:get-log',
+  CLEAR_ACTIVITY_LOG: 'activity:clear',
+
   // IDE
   OPEN_IN_IDE: 'ide:open',
 
@@ -48,6 +53,7 @@ export const IPC_STREAM = {
   SESSION_DATA: 'session:data',
   SESSION_EXIT: 'session:exit',
   NOTIFICATION: 'notification',
+  ACTIVITY_ENTRY: 'activity:entry',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -80,6 +86,11 @@ export interface BifrostAPI {
 
   // Diff
   getDiff(taskId: string): Promise<DiffResult>;
+
+  // Activity Log
+  getActivityLog(taskId: string): Promise<ActivityEntry[]>;
+  clearActivityLog(taskId: string): Promise<void>;
+  onActivityEntry(callback: (entry: ActivityEntry) => void): () => void;
 
   // IDE
   openInIde(worktreePath: string): Promise<void>;

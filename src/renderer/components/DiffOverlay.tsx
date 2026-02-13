@@ -1,10 +1,13 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import type { DiffMode } from '../context/AppContext';
 import { useDiff } from '../hooks/useDiff';
+import { useActivityLog } from '../hooks/useActivityLog';
 import { parseDiff, extFromPath } from '../utils/diff-parser';
 import { highlightLines } from '../utils/syntax-highlight';
 import type { DiffFile, DiffLine } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
+import type { ActivityEntry } from '../../shared/types';
 
 interface HighlightedFile {
   file: DiffFile;
@@ -132,11 +135,141 @@ function FileSection({ data }: { data: HighlightedFile }) {
   );
 }
 
+function formatTimestamp(ts: number): string {
+  return new Date(ts).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
+  const highlighted = useHighlightedFiles(entry.diff ?? null);
+
+  if (entry.type === 'commit') {
+    return (
+      <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
+        <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
+        <span className="text-blue-400 font-semibold">Commit</span>
+        <span className="text-slate-400 font-mono">{entry.commitSha?.slice(0, 8)}</span>
+        <span className="text-slate-300">{entry.commitMessage}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2 mb-1 text-xs">
+        <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
+        <span className="text-slate-300 font-mono">{entry.filePath}</span>
+      </div>
+      {highlighted && highlighted.map((data, i) => (
+        <FileSection key={i} data={data} />
+      ))}
+      {!highlighted && entry.diff && (
+        <pre className="text-xs text-slate-400 font-mono overflow-x-auto p-2 bg-slate-800/50 rounded border border-slate-700">
+          {entry.diff}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintIndex?: number; showHint: boolean }) {
+  if (!showHint) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, hintIndex)}
+      <span className="underline underline-offset-2">{text[hintIndex]}</span>
+      {text.slice(hintIndex + 1)}
+    </>
+  );
+}
+
+function ModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (m: DiffMode) => void }) {
+  return (
+    <div className="flex gap-1">
+      {(['git', 'activity'] as const).map((m) => (
+        <button
+          key={m}
+          tabIndex={-1}
+          onClick={() => onChange(m)}
+          className={`px-3 py-1 text-xs rounded ${
+            mode === m
+              ? 'bg-slate-600 text-slate-200'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+          }`}
+        >
+          {m === 'git' ? (
+            <ActionLabel text="Git Diff" showHint={true} />
+          ) : (
+            <ActionLabel text="Activity Log" showHint={true} />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function GitDiffContent({ taskId }: { taskId: string }) {
+  const { diff, loading, error } = useDiff(taskId);
+  const highlighted = useHighlightedFiles(diff);
+
+  return (
+    <>
+      {loading && (
+        <div className="flex items-center gap-2 text-slate-400">
+          <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+          <span>Loading diff...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="text-red-400">Error: {error}</div>
+      )}
+
+      {!loading && !error && (diff === null || diff === '') && (
+        <div className="text-slate-500">No changes</div>
+      )}
+
+      {!loading && !error && highlighted && highlighted.map((data, i) => (
+        <FileSection key={i} data={data} />
+      ))}
+    </>
+  );
+}
+
+function ActivityLogContent({ taskId }: { taskId: string }) {
+  const { entries, loading, error } = useActivityLog(taskId);
+
+  return (
+    <>
+      {loading && (
+        <div className="flex items-center gap-2 text-slate-400">
+          <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+          <span>Loading activity log...</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="text-red-400">Error: {error}</div>
+      )}
+
+      {!loading && !error && entries.length === 0 && (
+        <div className="text-slate-500">No activity recorded yet</div>
+      )}
+
+      {!loading && !error && entries.map((entry) => (
+        <ActivityEntryView key={entry.id} entry={entry} />
+      ))}
+    </>
+  );
+}
+
 export default function DiffOverlay() {
   const { state, dispatch } = useApp();
-  const { diff, loading, error } = useDiff(state.showDiff ? state.activeTaskId : null);
-  const highlighted = useHighlightedFiles(state.showDiff ? diff : null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (state.showDiff) {
@@ -147,9 +280,44 @@ export default function DiffOverlay() {
   if (!state.showDiff) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      dispatch({ type: 'TOGGLE_DIFF' });
+    switch (e.key) {
+      case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch({ type: 'TOGGLE_DIFF' });
+        break;
+
+      case 'Tab':
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch({ type: 'SET_DIFF_MODE', mode: state.diffMode === 'git' ? 'activity' : 'git' });
+        break;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        scrollRef.current?.scrollBy({ top: -80 });
+        break;
+
+      case 'ArrowDown':
+        e.preventDefault();
+        scrollRef.current?.scrollBy({ top: 80 });
+        break;
+
+      default:
+        // Alt+letter shortcuts
+        if (e.altKey) {
+          switch (e.code) {
+            case 'KeyG':
+              e.preventDefault();
+              dispatch({ type: 'SET_DIFF_MODE', mode: 'git' });
+              break;
+            case 'KeyA':
+              e.preventDefault();
+              dispatch({ type: 'SET_DIFF_MODE', mode: 'activity' });
+              break;
+          }
+        }
+        break;
     }
   };
 
@@ -161,35 +329,35 @@ export default function DiffOverlay() {
       onKeyDown={handleKeyDown}
     >
       <div className="flex items-center justify-between h-10 px-4 border-b border-slate-700 flex-shrink-0">
-        <span className="text-sm font-semibold text-slate-300">Diff</span>
-        <button
-          tabIndex={-1}
-          className="text-slate-400 hover:text-slate-200 text-lg"
-          onClick={() => dispatch({ type: 'TOGGLE_DIFF' })}
-        >
-          &times;
-        </button>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-semibold text-slate-300">Diff</span>
+          <ModeToggle
+            mode={state.diffMode}
+            onChange={(m) => dispatch({ type: 'SET_DIFF_MODE', mode: m })}
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-slate-600">&uarr;&darr; scroll &middot; Tab toggle</span>
+          <button
+            tabIndex={-1}
+            className="text-slate-400 hover:text-slate-200 text-lg"
+            onClick={() => dispatch({ type: 'TOGGLE_DIFF' })}
+          >
+            &times;
+          </button>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
-        {loading && (
-          <div className="flex items-center gap-2 text-slate-400">
-            <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
-            <span>Loading diff...</span>
-          </div>
+      <div ref={scrollRef} className="flex-1 overflow-auto p-4">
+        {state.activeTaskId && state.diffMode === 'git' && (
+          <GitDiffContent taskId={state.activeTaskId} />
         )}
-
-        {error && (
-          <div className="text-red-400">Error: {error}</div>
+        {state.activeTaskId && state.diffMode === 'activity' && (
+          <ActivityLogContent taskId={state.activeTaskId} />
         )}
-
-        {!loading && !error && (diff === null || diff === '') && (
-          <div className="text-slate-500">No changes</div>
+        {!state.activeTaskId && (
+          <div className="text-slate-500">No active task</div>
         )}
-
-        {!loading && !error && highlighted && highlighted.map((data, i) => (
-          <FileSection key={i} data={data} />
-        ))}
       </div>
     </div>
   );

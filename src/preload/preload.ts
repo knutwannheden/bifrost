@@ -43,6 +43,16 @@ const api: BifrostAPI = {
   // Diff
   getDiff: (taskId) => ipcRenderer.invoke(IPC.GET_DIFF, taskId),
 
+  // Activity Log
+  getActivityLog: (taskId) => ipcRenderer.invoke(IPC.GET_ACTIVITY_LOG, taskId),
+  clearActivityLog: (taskId) => ipcRenderer.invoke(IPC.CLEAR_ACTIVITY_LOG, taskId),
+  onActivityEntry: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, entry: import('../shared/types').ActivityEntry) =>
+      callback(entry);
+    ipcRenderer.on(IPC_STREAM.ACTIVITY_ENTRY, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.ACTIVITY_ENTRY, handler);
+  },
+
   // IDE
   openInIde: (worktreePath) => ipcRenderer.invoke(IPC.OPEN_IN_IDE, worktreePath),
 

@@ -43,6 +43,17 @@ export interface DiffResult {
   diff: string;
 }
 
+export interface ActivityEntry {
+  id: string;
+  taskId: string;
+  timestamp: number;
+  type: 'file_change' | 'commit';
+  filePath?: string;
+  diff?: string;
+  commitSha?: string;
+  commitMessage?: string;
+}
+
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',

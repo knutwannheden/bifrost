@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { AppState } from '../context/AppContext';
+import type { AppState, DiffMode } from '../context/AppContext';
 
 type AppAction =
   | { type: 'SET_ACTIVE_TASK'; taskId: string | null }
@@ -7,7 +7,8 @@ type AppAction =
   | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean }
   | { type: 'TOGGLE_REPO_MANAGER' }
   | { type: 'TOGGLE_DIFF' }
-  | { type: 'TOGGLE_TASK_HISTORY' };
+  | { type: 'TOGGLE_TASK_HISTORY' }
+  | { type: 'SET_DIFF_MODE'; mode: DiffMode };
 
 export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>) {
   useEffect(() => {
@@ -15,6 +16,22 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
       if (!e.metaKey) return;
 
       const key = e.key.toLowerCase();
+
+      // Cmd+Shift+[ or Cmd+Shift+]: switch to prev/next tab
+      if (e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+        e.preventDefault();
+        const activeTasks = state.tasks.filter((t) => t.status !== 'archived');
+        if (activeTasks.length === 0) return;
+        const currentIdx = activeTasks.findIndex((t) => t.id === state.activeTaskId);
+        let newIdx: number;
+        if (e.code === 'BracketLeft') {
+          newIdx = currentIdx <= 0 ? activeTasks.length - 1 : currentIdx - 1;
+        } else {
+          newIdx = currentIdx >= activeTasks.length - 1 ? 0 : currentIdx + 1;
+        }
+        dispatch({ type: 'SET_ACTIVE_TASK', taskId: activeTasks[newIdx].id });
+        return;
+      }
 
       // Cmd+1 through Cmd+9: switch to task at index
       if (key >= '1' && key <= '9') {

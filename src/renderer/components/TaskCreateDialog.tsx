@@ -2,6 +2,17 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { generateTaskName } from '../utils/name-generator';
 
+function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintIndex?: number; showHint: boolean }) {
+  if (!showHint) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, hintIndex)}
+      <span className="underline underline-offset-2">{text[hintIndex]}</span>
+      {text.slice(hintIndex + 1)}
+    </>
+  );
+}
+
 export default function TaskCreateDialog() {
   const { state, dispatch } = useApp();
   const [repoId, setRepoId] = useState('');
@@ -20,17 +31,14 @@ export default function TaskCreateDialog() {
     dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: false });
   }, [dispatch]);
 
-  const handleOverlayKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopPropagation();
-      close();
-    }
-  };
+  const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Focus the repo select on open
+  // Focus the overlay (or repo select) on open
   useEffect(() => {
     if (state.repos.length > 0) {
       repoRef.current?.focus();
+    } else {
+      overlayRef.current?.focus();
     }
   }, [state.repos.length]);
 
@@ -77,34 +85,60 @@ export default function TaskCreateDialog() {
     }
   };
 
-  const handleFormKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      return;
+    }
+
     if (e.key === 'Enter' && !e.defaultPrevented) {
       e.preventDefault();
       e.stopPropagation();
       handleSubmit();
+      return;
+    }
+
+    // Alt+letter shortcuts
+    if (e.altKey) {
+      switch (e.code) {
+        case 'KeyC':
+          e.preventDefault();
+          handleSubmit();
+          break;
+        case 'KeyN':
+          e.preventDefault();
+          regenerateName();
+          break;
+      }
     }
   };
 
   return (
     <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-black/60"
+      ref={overlayRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 focus:outline-none"
       onClick={close}
-      onKeyDown={handleOverlayKeyDown}
+      onKeyDown={handleKeyDown}
     >
       <div
         className="bg-slate-800 rounded-lg border border-slate-600 w-[450px] shadow-xl"
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleFormKeyDown}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <h2 className="text-sm font-semibold text-slate-200">Create Task</h2>
-          <button
-            onClick={close}
-            tabIndex={-1}
-            className="text-slate-400 hover:text-slate-200 text-lg leading-none"
-          >
-            &times;
-          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-slate-600">Alt+N name &middot; Alt+C create</span>
+            <button
+              onClick={close}
+              tabIndex={-1}
+              className="text-slate-400 hover:text-slate-200 text-lg leading-none"
+            >
+              &times;
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-4">
@@ -161,7 +195,7 @@ export default function TaskCreateDialog() {
               />
               <button
                 onClick={regenerateName}
-                title="Generate new name"
+                title="Generate new name (Alt+N)"
                 tabIndex={-1}
                 className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-slate-400 hover:text-slate-200 hover:border-slate-500 text-sm"
               >
@@ -204,7 +238,7 @@ export default function TaskCreateDialog() {
               disabled={loading || !repoId || !taskName.trim() || !branch}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
-              {loading ? 'Creating...' : 'Create'}
+              {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
             </button>
           </div>
           </>

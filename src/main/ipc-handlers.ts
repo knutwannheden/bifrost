@@ -10,6 +10,7 @@ import { createSession, writeToSession, resizeSession, killSession } from './ses
 import { getDiff } from './diff-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
+import { startWatching, stopWatching, getActivityLog, clearActivityLog } from './activity-watcher';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -29,10 +30,26 @@ function updateTask(taskId: string, updates: Partial<Task>): Task {
 }
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
-  // Load persisted tasks on startup, mark any previously-running tasks as stopped
-  tasks = loadTasks().map((t) =>
+  // Load persisted tasks on startup, restore sessions for previously-running tasks
+  const persisted = loadTasks();
+  const tasksToRestore = persisted.filter((t) => t.status === 'running');
+
+  tasks = persisted.map((t) =>
     t.status === 'running' ? { ...t, status: 'stopped' as const } : t,
   );
+
+  // Re-spawn sessions for tasks that were running when the app quit
+  for (const task of tasksToRestore) {
+    if (fs.existsSync(task.worktreePath)) {
+      const sessionId = uuidv4();
+      createSession(sessionId, task.worktreePath, mainWindow, { resume: true });
+      const idx = tasks.findIndex((t) => t.id === task.id);
+      if (idx !== -1) {
+        tasks[idx] = { ...tasks[idx], sessionId, status: 'running', hasUnread: false };
+      }
+    }
+  }
+
   saveTasks(tasks);
 
   // Config
@@ -96,12 +113,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     tasks.push(task);
     saveTasks(tasks);
+
+    // Start watching for file changes
+    startWatching(task.id, worktreePath, mainWindow);
+
     return task;
   });
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
     const task = getTask(taskId);
 
+    stopWatching(taskId);
     killSession(task.sessionId);
 
     const config = loadConfig();
@@ -120,6 +142,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.ARCHIVE_TASK, (_event, taskId: string) => {
     const task = getTask(taskId);
+
+    stopWatching(taskId);
 
     // Kill session if still running
     if (task.status === 'running') {
@@ -143,6 +167,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const sessionId = uuidv4();
     createSession(sessionId, task.worktreePath, mainWindow, { resume: true });
 
+    // Restart file watcher
+    startWatching(taskId, task.worktreePath, mainWindow);
+
     return updateTask(taskId, {
       sessionId,
       status: 'running',
@@ -157,6 +184,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {
     const task = getTask(taskId);
+
+    stopWatching(taskId);
 
     // Kill session if running
     if (task.status === 'running') {
@@ -203,6 +232,24 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string) => {
     return openInIde(worktreePath);
   });
+
+  // Activity Log
+  ipcMain.handle(IPC.GET_ACTIVITY_LOG, (_event, taskId: string) => {
+    return getActivityLog(taskId);
+  });
+
+  ipcMain.handle(IPC.CLEAR_ACTIVITY_LOG, (_event, taskId: string) => {
+    clearActivityLog(taskId);
+  });
+
+  // Start watchers for any running tasks on startup
+  for (const task of tasks) {
+    if (task.status === 'running' || task.status === 'stopped') {
+      if (fs.existsSync(task.worktreePath)) {
+        startWatching(task.id, task.worktreePath, mainWindow);
+      }
+    }
+  }
 
   // Dialog
   ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
