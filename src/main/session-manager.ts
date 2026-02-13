@@ -11,13 +11,16 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
+  options?: { resume?: boolean },
 ): void {
   const env = { ...process.env } as Record<string, string>;
   // Remove CLAUDECODE so claude CLI doesn't refuse to start
   // when Bifrost itself was launched from a Claude Code session
   delete env.CLAUDECODE;
 
-  const shell = pty.spawn('claude', [], {
+  const args = options?.resume ? ['--resume'] : [];
+
+  const shell = pty.spawn('claude', args, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,

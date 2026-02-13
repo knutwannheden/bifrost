@@ -1,4 +1,4 @@
-export type TaskStatus = 'running' | 'stopped' | 'error';
+export type TaskStatus = 'running' | 'stopped' | 'error' | 'archived';
 
 export interface Repo {
   id: string;
@@ -17,6 +17,7 @@ export interface Task {
   status: TaskStatus;
   hasUnread: boolean;
   createdAt: number;
+  archivedAt?: number;
 }
 
 export interface BifrostConfig {

@@ -23,6 +23,10 @@ export const IPC = {
   // Tasks
   CREATE_TASK: 'task:create',
   CLOSE_TASK: 'task:close',
+  ARCHIVE_TASK: 'task:archive',
+  REOPEN_TASK: 'task:reopen',
+  RENAME_TASK: 'task:rename',
+  DELETE_TASK: 'task:delete',
   LIST_TASKS: 'task:list',
 
   // Terminal sessions
@@ -62,6 +66,10 @@ export interface BifrostAPI {
   // Tasks
   createTask(params: CreateTaskParams): Promise<Task>;
   closeTask(taskId: string): Promise<void>;
+  archiveTask(taskId: string): Promise<Task>;
+  reopenTask(taskId: string): Promise<Task>;
+  renameTask(taskId: string, name: string): Promise<Task>;
+  deleteTask(taskId: string): Promise<void>;
   listTasks(): Promise<Task[]>;
 
   // Terminal

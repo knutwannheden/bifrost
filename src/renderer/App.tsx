@@ -8,6 +8,7 @@ import StatusBar from './components/StatusBar';
 import RepoManager from './components/RepoManager';
 import TaskCreateDialog from './components/TaskCreateDialog';
 import DiffOverlay from './components/DiffOverlay';
+import TaskHistoryPanel from './components/TaskHistoryPanel';
 
 declare global {
   interface Window {
@@ -83,6 +84,7 @@ export default function App() {
       {/* Modals */}
       {state.showRepoManager && <RepoManager />}
       {state.showCreateDialog && <TaskCreateDialog />}
+      {state.showTaskHistory && <TaskHistoryPanel />}
 
       {/* Diff overlay */}
       <DiffOverlay />

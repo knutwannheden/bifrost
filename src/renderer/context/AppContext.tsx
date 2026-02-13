@@ -9,19 +9,23 @@ export interface AppState {
   showRepoManager: boolean;
   showCreateDialog: boolean;
   showDiff: boolean;
+  showTaskHistory: boolean;
 }
 
 type AppAction =
   | { type: 'SET_CONFIG'; config: BifrostConfig }
   | { type: 'SET_REPOS'; repos: Repo[] }
+  | { type: 'SET_TASKS'; tasks: Task[] }
   | { type: 'ADD_TASK'; task: Task }
   | { type: 'REMOVE_TASK'; taskId: string }
+  | { type: 'UPDATE_TASK'; task: Task }
   | { type: 'SET_ACTIVE_TASK'; taskId: string | null }
   | { type: 'SET_TASK_UNREAD'; taskId: string; hasUnread: boolean }
   | { type: 'SET_TASK_STATUS'; taskId: string; status: TaskStatus }
   | { type: 'TOGGLE_REPO_MANAGER' }
   | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean }
-  | { type: 'TOGGLE_DIFF' };
+  | { type: 'TOGGLE_DIFF' }
+  | { type: 'TOGGLE_TASK_HISTORY' };
 
 const initialState: AppState = {
   repos: [],
@@ -31,6 +35,7 @@ const initialState: AppState = {
   showRepoManager: false,
   showCreateDialog: false,
   showDiff: false,
+  showTaskHistory: false,
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -39,16 +44,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, config: action.config, repos: action.config.repos };
     case 'SET_REPOS':
       return { ...state, repos: action.repos };
+    case 'SET_TASKS':
+      return { ...state, tasks: action.tasks };
     case 'ADD_TASK':
       return { ...state, tasks: [...state.tasks, action.task] };
     case 'REMOVE_TASK': {
       const newTasks = state.tasks.filter((t) => t.id !== action.taskId);
+      const activeTasks = newTasks.filter((t) => t.status !== 'archived');
       const newActiveId =
         state.activeTaskId === action.taskId
-          ? (newTasks.length > 0 ? newTasks[newTasks.length - 1].id : null)
+          ? (activeTasks.length > 0 ? activeTasks[activeTasks.length - 1].id : null)
           : state.activeTaskId;
       return { ...state, tasks: newTasks, activeTaskId: newActiveId };
     }
+    case 'UPDATE_TASK':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === action.task.id ? action.task : t,
+        ),
+      };
     case 'SET_ACTIVE_TASK':
       return { ...state, activeTaskId: action.taskId };
     case 'SET_TASK_UNREAD':
@@ -71,6 +86,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, showCreateDialog: action.show };
     case 'TOGGLE_DIFF':
       return { ...state, showDiff: !state.showDiff };
+    case 'TOGGLE_TASK_HISTORY':
+      return { ...state, showTaskHistory: !state.showTaskHistory };
     default:
       return state;
   }
@@ -87,6 +104,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     window.bifrost.loadConfig().then((config) => {
       dispatch({ type: 'SET_CONFIG', config });
+    });
+    window.bifrost.listTasks().then((tasks) => {
+      dispatch({ type: 'SET_TASKS', tasks });
     });
   }, []);
 

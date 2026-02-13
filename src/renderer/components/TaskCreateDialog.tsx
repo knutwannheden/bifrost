@@ -20,13 +20,12 @@ export default function TaskCreateDialog() {
     dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: false });
   }, [dispatch]);
 
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [close]);
+  const handleOverlayKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      close();
+    }
+  };
 
   // Focus the repo select on open
   useEffect(() => {
@@ -81,12 +80,17 @@ export default function TaskCreateDialog() {
   const handleFormKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.defaultPrevented) {
       e.preventDefault();
+      e.stopPropagation();
       handleSubmit();
     }
   };
 
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/60" onClick={close}>
+    <div
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/60"
+      onClick={close}
+      onKeyDown={handleOverlayKeyDown}
+    >
       <div
         className="bg-slate-800 rounded-lg border border-slate-600 w-[450px] shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -99,7 +103,7 @@ export default function TaskCreateDialog() {
             tabIndex={-1}
             className="text-slate-400 hover:text-slate-200 text-lg leading-none"
           >
-            x
+            &times;
           </button>
         </div>
 

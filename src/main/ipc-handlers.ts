@@ -1,5 +1,6 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'node:fs';
 import { IPC } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
@@ -8,10 +9,32 @@ import { createWorktree, removeWorktree } from './worktree-manager';
 import { createSession, writeToSession, resizeSession, killSession } from './session-manager';
 import { getDiff } from './diff-service';
 import { openInIde } from './ide-launcher';
+import { loadTasks, saveTasks } from './task-store';
 
-const tasks = new Map<string, Task>();
+// In-memory task list, synced to disk
+let tasks: Task[] = [];
+
+function getTask(taskId: string): Task {
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task) throw new Error(`Task not found: ${taskId}`);
+  return task;
+}
+
+function updateTask(taskId: string, updates: Partial<Task>): Task {
+  const idx = tasks.findIndex((t) => t.id === taskId);
+  if (idx === -1) throw new Error(`Task not found: ${taskId}`);
+  tasks[idx] = { ...tasks[idx], ...updates };
+  saveTasks(tasks);
+  return tasks[idx];
+}
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+  // Load persisted tasks on startup, mark any previously-running tasks as stopped
+  tasks = loadTasks().map((t) =>
+    t.status === 'running' ? { ...t, status: 'stopped' as const } : t,
+  );
+  saveTasks(tasks);
+
   // Config
   ipcMain.handle(IPC.LOAD_CONFIG, () => loadConfig());
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => saveConfig(config));
@@ -71,13 +94,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       createdAt: Date.now(),
     };
 
-    tasks.set(task.id, task);
+    tasks.push(task);
+    saveTasks(tasks);
     return task;
   });
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
-    const task = tasks.get(taskId);
-    if (!task) throw new Error(`Task not found: ${taskId}`);
+    const task = getTask(taskId);
 
     killSession(task.sessionId);
 
@@ -91,11 +114,74 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
-    tasks.delete(taskId);
+    tasks = tasks.filter((t) => t.id !== taskId);
+    saveTasks(tasks);
+  });
+
+  ipcMain.handle(IPC.ARCHIVE_TASK, (_event, taskId: string) => {
+    const task = getTask(taskId);
+
+    // Kill session if still running
+    if (task.status === 'running') {
+      killSession(task.sessionId);
+    }
+
+    return updateTask(taskId, {
+      status: 'archived',
+      archivedAt: Date.now(),
+    });
+  });
+
+  ipcMain.handle(IPC.REOPEN_TASK, (_event, taskId: string) => {
+    const task = getTask(taskId);
+
+    // Check worktree still exists
+    if (!fs.existsSync(task.worktreePath)) {
+      throw new Error(`Worktree no longer exists: ${task.worktreePath}`);
+    }
+
+    const sessionId = uuidv4();
+    createSession(sessionId, task.worktreePath, mainWindow, { resume: true });
+
+    return updateTask(taskId, {
+      sessionId,
+      status: 'running',
+      hasUnread: false,
+      archivedAt: undefined,
+    });
+  });
+
+  ipcMain.handle(IPC.RENAME_TASK, (_event, taskId: string, name: string) => {
+    return updateTask(taskId, { name });
+  });
+
+  ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+
+    // Kill session if running
+    if (task.status === 'running') {
+      killSession(task.sessionId);
+    }
+
+    // Remove worktree if it exists
+    if (fs.existsSync(task.worktreePath)) {
+      const config = loadConfig();
+      const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+      if (repo) {
+        try {
+          await removeWorktree(repo.path, task.worktreePath);
+        } catch {
+          // Best effort
+        }
+      }
+    }
+
+    tasks = tasks.filter((t) => t.id !== taskId);
+    saveTasks(tasks);
   });
 
   ipcMain.handle(IPC.LIST_TASKS, () => {
-    return Array.from(tasks.values());
+    return tasks;
   });
 
   // Terminal sessions
@@ -109,8 +195,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Diff
   ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string) => {
-    const task = tasks.get(taskId);
-    if (!task) throw new Error(`Task not found: ${taskId}`);
+    const task = getTask(taskId);
     return getDiff(task.worktreePath);
   });
 

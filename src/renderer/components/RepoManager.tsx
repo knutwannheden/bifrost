@@ -1,22 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 
 export default function RepoManager() {
   const { state, dispatch } = useApp();
   const [localPath, setLocalPath] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const close = useCallback(() => {
     dispatch({ type: 'TOGGLE_REPO_MANAGER' });
   }, [dispatch]);
 
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [close]);
+    inputRef.current?.focus();
+  }, []);
 
   const handleBrowse = async () => {
     const selected = await window.bifrost.selectDirectory();
@@ -42,8 +39,19 @@ export default function RepoManager() {
     dispatch({ type: 'SET_REPOS', repos: state.repos.filter((r) => r.id !== repoId) });
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      close();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/60" onClick={close}>
+    <div
+      className="fixed inset-0 z-20 flex items-center justify-center bg-black/60"
+      onClick={close}
+      onKeyDown={handleKeyDown}
+    >
       <div
         className="bg-slate-800 rounded-lg border border-slate-600 w-[500px] max-h-[80vh] overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
@@ -52,9 +60,10 @@ export default function RepoManager() {
           <h2 className="text-sm font-semibold text-slate-200">Manage Repositories</h2>
           <button
             onClick={close}
+            tabIndex={-1}
             className="text-slate-400 hover:text-slate-200 text-lg leading-none"
           >
-            x
+            &times;
           </button>
         </div>
 
@@ -88,23 +97,29 @@ export default function RepoManager() {
             <label className="block text-xs text-slate-400 mb-1">Add Local Repository</label>
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={localPath}
                 onChange={(e) => setLocalPath(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddLocal()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    handleAddLocal();
+                  }
+                }}
                 placeholder="/path/to/repo"
-                className="flex-1 px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                className="flex-1 px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
               <button
                 onClick={handleBrowse}
-                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm rounded"
+                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
                 Browse
               </button>
               <button
                 onClick={handleAddLocal}
                 disabled={!localPath.trim()}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded"
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               >
                 Add
               </button>

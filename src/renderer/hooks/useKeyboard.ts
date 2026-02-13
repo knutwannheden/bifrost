@@ -3,10 +3,11 @@ import type { AppState } from '../context/AppContext';
 
 type AppAction =
   | { type: 'SET_ACTIVE_TASK'; taskId: string | null }
-  | { type: 'REMOVE_TASK'; taskId: string }
+  | { type: 'UPDATE_TASK'; task: import('../../shared/types').Task }
   | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean }
   | { type: 'TOGGLE_REPO_MANAGER' }
-  | { type: 'TOGGLE_DIFF' };
+  | { type: 'TOGGLE_DIFF' }
+  | { type: 'TOGGLE_TASK_HISTORY' };
 
 export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>) {
   useEffect(() => {
@@ -17,10 +18,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
       // Cmd+1 through Cmd+9: switch to task at index
       if (key >= '1' && key <= '9') {
+        const activeTasks = state.tasks.filter((t) => t.status !== 'archived');
         const index = parseInt(key, 10) - 1;
-        if (index < state.tasks.length) {
+        if (index < activeTasks.length) {
           e.preventDefault();
-          dispatch({ type: 'SET_ACTIVE_TASK', taskId: state.tasks[index].id });
+          dispatch({ type: 'SET_ACTIVE_TASK', taskId: activeTasks[index].id });
         }
         return;
       }
@@ -34,8 +36,16 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         case 'w': {
           e.preventDefault();
           if (state.activeTaskId) {
-            window.bifrost.closeTask(state.activeTaskId).then(() => {
-              dispatch({ type: 'REMOVE_TASK', taskId: state.activeTaskId! });
+            const taskId = state.activeTaskId;
+            window.bifrost.archiveTask(taskId).then((updated) => {
+              dispatch({ type: 'UPDATE_TASK', task: updated });
+              const activeTasks = state.tasks.filter(
+                (t) => t.id !== taskId && t.status !== 'archived',
+              );
+              dispatch({
+                type: 'SET_ACTIVE_TASK',
+                taskId: activeTasks.length > 0 ? activeTasks[activeTasks.length - 1].id : null,
+              });
             });
           }
           break;
@@ -49,6 +59,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         case 'd':
           e.preventDefault();
           dispatch({ type: 'TOGGLE_DIFF' });
+          break;
+
+        case 'h':
+          e.preventDefault();
+          dispatch({ type: 'TOGGLE_TASK_HISTORY' });
           break;
 
         case 'o': {
