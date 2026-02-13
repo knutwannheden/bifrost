@@ -14,6 +14,8 @@ interface ClaudeWatcher {
   /** Byte offset per JSONL file so we only read new lines */
   fileOffsets: Map<string, number>;
   pollTimer: ReturnType<typeof setInterval>;
+  /** Most recently active Claude session ID */
+  latestClaudeSessionId: string | null;
 }
 
 const watchers = new Map<string, ClaudeWatcher>();
@@ -212,6 +214,13 @@ export function startClaudeWatching(
       const { lines, newOffset } = readNewLines(filePath, offset);
       if (newOffset !== offset) {
         fileOffsets.set(filePath, newOffset);
+
+        // Track the Claude session ID from the filename
+        const claudeSessionId = path.basename(file, '.jsonl');
+        const watcher = watchers.get(taskId);
+        if (watcher) {
+          watcher.latestClaudeSessionId = claudeSessionId;
+        }
       }
 
       for (const line of lines) {
@@ -223,7 +232,7 @@ export function startClaudeWatching(
     }
   }, 1000);
 
-  watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer });
+  watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer, latestClaudeSessionId: null });
 }
 
 export function stopClaudeWatching(taskId: string): void {
@@ -232,4 +241,32 @@ export function stopClaudeWatching(taskId: string): void {
     clearInterval(w.pollTimer);
     watchers.delete(taskId);
   }
+}
+
+export function getClaudeSessionId(taskId: string): string | null {
+  return watchers.get(taskId)?.latestClaudeSessionId ?? null;
+}
+
+/**
+ * Find the most recently modified JSONL session file for a worktree.
+ * Used when reopening a task to resume the Claude session.
+ */
+export function findLatestClaudeSessionId(worktreePath: string): string | null {
+  const dirName = projectDirName(worktreePath);
+  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+
+  if (!fs.existsSync(projectDir)) return null;
+
+  let latest: { name: string; mtime: number } | null = null;
+  for (const file of fs.readdirSync(projectDir)) {
+    if (!file.endsWith('.jsonl')) continue;
+    try {
+      const stat = fs.statSync(path.join(projectDir, file));
+      if (!latest || stat.mtimeMs > latest.mtime) {
+        latest = { name: file.replace('.jsonl', ''), mtime: stat.mtimeMs };
+      }
+    } catch { /* ignore */ }
+  }
+
+  return latest?.name ?? null;
 }

@@ -6,9 +6,12 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 export function useTerminal(
   sessionId: string | null,
   containerRef: React.RefObject<HTMLDivElement | null>,
+  onTitleChange?: (title: string) => void,
 ) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const onTitleChangeRef = useRef(onTitleChange);
+  onTitleChangeRef.current = onTitleChange;
 
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
@@ -45,6 +48,11 @@ export function useTerminal(
     // Send keystrokes to session
     terminal.onData((data) => {
       window.bifrost.writeToSession(sessionId, data);
+    });
+
+    // Listen for terminal title changes (OSC 0/2)
+    terminal.onTitleChange((title) => {
+      onTitleChangeRef.current?.(title);
     });
 
     // Receive data from session

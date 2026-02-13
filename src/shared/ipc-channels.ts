@@ -45,6 +45,9 @@ export const IPC = {
   // IDE
   OPEN_IN_IDE: 'ide:open',
 
+  // Terminal title
+  SET_TERMINAL_TITLE: 'task:set-terminal-title',
+
   // Dialog
   SELECT_DIRECTORY: 'dialog:select-directory',
 } as const;
@@ -93,6 +96,9 @@ export interface BifrostAPI {
   getActivityLog(taskId: string): Promise<ActivityEntry[]>;
   clearActivityLog(taskId: string): Promise<void>;
   onActivityEntry(callback: (entry: ActivityEntry) => void): () => void;
+
+  // Terminal title
+  setTerminalTitle(taskId: string, title: string): Promise<void>;
 
   // IDE
   openInIde(worktreePath: string): Promise<void>;

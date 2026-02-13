@@ -11,6 +11,7 @@ import { getDiff } from './diff-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog } from './activity-watcher';
+import { findLatestClaudeSessionId } from './claude-watcher';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -176,8 +177,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       throw new Error(`Worktree no longer exists: ${task.worktreePath}`);
     }
 
+    // Find the most recent Claude session to resume
+    const claudeSessionId = findLatestClaudeSessionId(task.worktreePath);
+
     const sessionId = uuidv4();
-    createSession(sessionId, task.worktreePath, mainWindow, { resume: true });
+    createSession(sessionId, task.worktreePath, mainWindow, { claudeSessionId: claudeSessionId ?? undefined });
 
     // Restart file watcher
     startWatching(taskId, task.worktreePath, mainWindow);
@@ -187,6 +191,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       status: 'running',
       hasUnread: false,
       archivedAt: undefined,
+      claudeSessionId: claudeSessionId ?? undefined,
     });
   });
 
@@ -262,6 +267,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
   }
+
+  // Terminal title
+  ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, taskId: string, title: string) => {
+    updateTask(taskId, { terminalTitle: title });
+    // Update the BrowserWindow title
+    const task = getTask(taskId);
+    // Only update window title for the "current" task — the renderer knows which is active
+    mainWindow.setTitle(`BIFROST — ${title}`);
+  });
 
   // Dialog
   ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {

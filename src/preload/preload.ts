@@ -54,6 +54,9 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.ACTIVITY_ENTRY, handler);
   },
 
+  // Terminal title
+  setTerminalTitle: (taskId, title) => ipcRenderer.invoke(IPC.SET_TERMINAL_TITLE, taskId, title),
+
   // IDE
   openInIde: (worktreePath) => ipcRenderer.invoke(IPC.OPEN_IN_IDE, worktreePath),
 

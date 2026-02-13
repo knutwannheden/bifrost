@@ -18,6 +18,10 @@ export interface Task {
   hasUnread: boolean;
   createdAt: number;
   archivedAt?: number;
+  /** Last known terminal title (from OSC 0/2) */
+  terminalTitle?: string;
+  /** Claude Code session ID (JSONL filename) for resume */
+  claudeSessionId?: string;
 }
 
 export interface BifrostConfig {

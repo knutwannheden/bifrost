@@ -46,7 +46,7 @@ export default function TaskView() {
           className="absolute inset-0"
           style={{ display: task.id === state.activeTaskId ? 'block' : 'none' }}
         >
-          <TerminalPane sessionId={task.sessionId} active={task.id === state.activeTaskId} />
+          <TerminalPane taskId={task.id} sessionId={task.sessionId} active={task.id === state.activeTaskId} />
         </div>
       ))}
     </div>
