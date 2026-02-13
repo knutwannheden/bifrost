@@ -143,8 +143,45 @@ function formatTimestamp(ts: number): string {
   });
 }
 
+function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
+  const kindConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
+    user_message: { label: 'User', color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-700/40' },
+    assistant_text: { label: 'Claude', color: 'text-purple-400', bg: 'bg-purple-900/20', border: 'border-purple-700/40' },
+    tool_use: { label: '', color: 'text-amber-400', bg: 'bg-amber-900/15', border: 'border-amber-700/30' },
+    tool_result: { label: 'Result', color: 'text-slate-400', bg: 'bg-slate-800/50', border: 'border-slate-700/30' },
+  };
+
+  const config = kindConfig[entry.claudeEventKind ?? ''] ?? kindConfig.assistant_text;
+
+  if (entry.claudeEventKind === 'tool_use') {
+    return (
+      <div className={`mb-1 flex items-start gap-2 px-3 py-1.5 ${config.bg} border ${config.border} rounded text-xs`}>
+        <span className="text-slate-500 flex-shrink-0">{formatTimestamp(entry.timestamp)}</span>
+        <span className={`${config.color} font-semibold flex-shrink-0`}>{entry.claudeToolName}</span>
+        {entry.claudeText && (
+          <span className="text-slate-400 font-mono truncate">{entry.claudeText}</span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`mb-2 px-3 py-2 ${config.bg} border ${config.border} rounded text-xs`}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
+        <span className={`${config.color} font-semibold`}>{config.label}</span>
+      </div>
+      <p className="text-slate-300 whitespace-pre-wrap">{entry.claudeText}</p>
+    </div>
+  );
+}
+
 function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
   const highlighted = useHighlightedFiles(entry.diff ?? null);
+
+  if (entry.type === 'claude_event') {
+    return <ClaudeEventView entry={entry} />;
+  }
 
   if (entry.type === 'commit') {
     return (

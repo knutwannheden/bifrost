@@ -20,26 +20,26 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
       // Cmd+Shift+[ or Cmd+Shift+]: switch to prev/next tab
       if (e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
         e.preventDefault();
-        const activeTasks = state.tasks.filter((t) => t.status !== 'archived');
-        if (activeTasks.length === 0) return;
-        const currentIdx = activeTasks.findIndex((t) => t.id === state.activeTaskId);
+        const openTasks = state.tasks.filter((t) => t.status === 'running');
+        if (openTasks.length === 0) return;
+        const currentIdx = openTasks.findIndex((t) => t.id === state.activeTaskId);
         let newIdx: number;
         if (e.code === 'BracketLeft') {
-          newIdx = currentIdx <= 0 ? activeTasks.length - 1 : currentIdx - 1;
+          newIdx = currentIdx <= 0 ? openTasks.length - 1 : currentIdx - 1;
         } else {
-          newIdx = currentIdx >= activeTasks.length - 1 ? 0 : currentIdx + 1;
+          newIdx = currentIdx >= openTasks.length - 1 ? 0 : currentIdx + 1;
         }
-        dispatch({ type: 'SET_ACTIVE_TASK', taskId: activeTasks[newIdx].id });
+        dispatch({ type: 'SET_ACTIVE_TASK', taskId: openTasks[newIdx].id });
         return;
       }
 
       // Cmd+1 through Cmd+9: switch to task at index
       if (key >= '1' && key <= '9') {
-        const activeTasks = state.tasks.filter((t) => t.status !== 'archived');
+        const openTasks = state.tasks.filter((t) => t.status === 'running');
         const index = parseInt(key, 10) - 1;
-        if (index < activeTasks.length) {
+        if (index < openTasks.length) {
           e.preventDefault();
-          dispatch({ type: 'SET_ACTIVE_TASK', taskId: activeTasks[index].id });
+          dispatch({ type: 'SET_ACTIVE_TASK', taskId: openTasks[index].id });
         }
         return;
       }
@@ -56,6 +56,13 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             const taskId = state.activeTaskId;
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
+              const remaining = state.tasks.filter(
+                (t) => t.id !== taskId && t.status === 'running',
+              );
+              dispatch({
+                type: 'SET_ACTIVE_TASK',
+                taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+              });
             });
           }
           break;

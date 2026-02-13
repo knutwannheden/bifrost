@@ -8,6 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import type { ActivityEntry } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { startClaudeWatching, stopClaudeWatching } from './claude-watcher';
 
 const execFile = promisify(execFileCb);
 
@@ -245,6 +246,9 @@ export function startWatching(
   }
 
   watchers.set(taskId, tw);
+
+  // Also watch Claude Code JSONL session files
+  startClaudeWatching(taskId, worktreePath, mainWindow);
 }
 
 export function stopWatching(taskId: string): void {
@@ -256,6 +260,7 @@ export function stopWatching(taskId: string): void {
     }
     watchers.delete(taskId);
   }
+  stopClaudeWatching(taskId);
 }
 
 export function getActivityLog(taskId: string): ActivityEntry[] {

@@ -43,15 +43,21 @@ export interface DiffResult {
   diff: string;
 }
 
+export type ClaudeEventKind = 'user_message' | 'assistant_text' | 'tool_use' | 'tool_result';
+
 export interface ActivityEntry {
   id: string;
   taskId: string;
   timestamp: number;
-  type: 'file_change' | 'commit';
+  type: 'file_change' | 'commit' | 'claude_event';
   filePath?: string;
   diff?: string;
   commitSha?: string;
   commitMessage?: string;
+  // Claude event fields
+  claudeEventKind?: ClaudeEventKind;
+  claudeText?: string;
+  claudeToolName?: string;
 }
 
 export const DEFAULT_CONFIG: BifrostConfig = {

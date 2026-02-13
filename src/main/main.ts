@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut } from 'electron';
+import { app, BrowserWindow, globalShortcut, nativeImage } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -37,6 +37,12 @@ const createWindow = () => {
 };
 
 app.on('ready', () => {
+  // Set dock icon on macOS (needed during development)
+  if (process.platform === 'darwin' && app.dock) {
+    const iconPath = path.join(__dirname, '../../assets/icon.png');
+    app.dock.setIcon(nativeImage.createFromPath(iconPath));
+  }
+
   createWindow();
 
   if (mainWindow) {

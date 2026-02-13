@@ -5,23 +5,23 @@ import { useApp } from '../context/AppContext';
 export default function TaskBar() {
   const { state, dispatch } = useApp();
 
-  const activeTasks = state.tasks.filter((t) => t.status !== 'archived');
+  const openTasks = state.tasks.filter((t) => t.status === 'running');
 
-  if (activeTasks.length === 0) return null;
+  if (openTasks.length === 0) return null;
 
   return (
     <div className="flex items-center h-8 bg-slate-800/50 border-b border-slate-700 overflow-x-auto">
-      {activeTasks.map((task) => (
+      {openTasks.map((task) => (
         <TaskTab
           key={task.id}
           task={task}
           isActive={task.id === state.activeTaskId}
           onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
           onClose={() => {
-            window.bifrost.archiveTask(task.id).then((updated) => {
+            window.bifrost.stopTask(task.id).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
               if (state.activeTaskId === task.id) {
-                const remaining = activeTasks.filter((t) => t.id !== task.id);
+                const remaining = openTasks.filter((t) => t.id !== task.id);
                 dispatch({
                   type: 'SET_ACTIVE_TASK',
                   taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,

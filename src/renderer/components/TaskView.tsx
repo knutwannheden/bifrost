@@ -4,7 +4,7 @@ import TerminalPane from './TerminalPane';
 
 const shortcuts = [
   { keys: '⌘T', label: 'New task' },
-  { keys: '⌘W', label: 'Stop task' },
+  { keys: '⌘W', label: 'Close tab' },
   { keys: '⌘H', label: 'Task history' },
   { keys: '⌘R', label: 'Repositories' },
   { keys: '⌘D', label: 'View diff' },
@@ -15,8 +15,8 @@ const shortcuts = [
 export default function TaskView() {
   const { state } = useApp();
 
-  const activeTasks = state.tasks.filter((t) => t.status !== 'archived');
-  const activeTask = activeTasks.find((t) => t.id === state.activeTaskId);
+  const openTasks = state.tasks.filter((t) => t.status === 'running');
+  const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
 
   if (!activeTask) {
     return (
@@ -40,7 +40,7 @@ export default function TaskView() {
 
   return (
     <div className="flex-1 relative">
-      {activeTasks.map((task) => (
+      {openTasks.map((task) => (
         <div
           key={task.id}
           className="absolute inset-0"
