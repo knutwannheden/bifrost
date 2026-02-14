@@ -361,11 +361,12 @@ export default function DiffOverlay() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-30 bg-slate-900/95 flex flex-col focus:outline-none"
+      className="fixed inset-0 z-30 bg-slate-900 flex flex-col focus:outline-none"
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
-      <div className="flex items-center justify-between h-10 px-4 border-b border-slate-700 flex-shrink-0">
+      <div className="flex items-center justify-between h-10 px-4 border-b border-slate-700 flex-shrink-0"
+           style={{ paddingLeft: 78 }}>
         <div className="flex items-center gap-4">
           <span className="text-sm font-semibold text-slate-300">Diff</span>
           <ModeToggle
