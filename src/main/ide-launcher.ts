@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import path from 'node:path';
 import { loadConfig } from './config';
 
 export function openInIde(
@@ -10,17 +11,20 @@ export function openInIde(
   const resolved = ide ?? loadConfig().ide;
   const command = resolved === 'idea' ? 'idea' : 'code';
 
+  // Resolve relative file paths to absolute
+  const absFile = filePath ? path.resolve(worktreePath, filePath) : undefined;
+
   const args = [worktreePath];
-  if (filePath) {
+  if (absFile) {
     if (resolved === 'idea') {
       if (line) args.push('--line', String(line));
-      args.push(filePath);
+      args.push(absFile);
     } else {
       // VS Code: --goto supports file:line:col
       if (line) {
-        args.push('--goto', `${filePath}:${line}`);
+        args.push('--goto', `${absFile}:${line}`);
       } else {
-        args.push(filePath);
+        args.push(absFile);
       }
     }
   }
