@@ -107,7 +107,7 @@ export function useTerminal(
 
     // Handle session exit
     const removeExitListener = window.bifrost.onSessionExit(
-      (sid: string, _code: number) => {
+      (sid: string) => {
         if (sid === sessionId) {
           terminal.write('\r\n[Session ended]\r\n');
         }

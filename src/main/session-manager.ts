@@ -3,6 +3,7 @@ import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 // Use require for node-pty because it's externalized from Vite bundling
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const pty = require('node-pty');
 
 const sessions = new Map<string, IPty>();
@@ -63,9 +64,7 @@ export function createSession(
   const extraEnv: Record<string, string> = {};
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
   if (options?.apiPort) extraEnv.BIFROST_API_PORT = String(options.apiPort);
-  spawnSession(sessionId, 'claude', args, cwd, mainWindow, {
-    extraEnv: Object.keys(extraEnv).length > 0 ? extraEnv : undefined,
-  });
+  spawnSession(sessionId, 'claude', args, cwd, mainWindow, { extraEnv });
 }
 
 export function createShellSession(

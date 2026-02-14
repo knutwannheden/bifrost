@@ -1,16 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-
-function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintIndex?: number; showHint: boolean }) {
-  if (!showHint) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, hintIndex)}
-      <span className="underline underline-offset-2">{text[hintIndex]}</span>
-      {text.slice(hintIndex + 1)}
-    </>
-  );
-}
+import ActionLabel from './ActionLabel';
 
 export default function RepoManager() {
   const { state, dispatch } = useApp();
@@ -270,7 +260,7 @@ export default function RepoManager() {
                 tabIndex={-1}
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
               >
-                <ActionLabel text="Add" showHint={!localPath.trim() ? false : true} />
+                <ActionLabel text="Add" showHint={!!localPath.trim()} />
               </button>
             </div>
             {error && <p className="mt-1 text-xs text-red-400">{error}</p>}

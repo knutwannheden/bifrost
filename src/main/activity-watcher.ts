@@ -1,8 +1,8 @@
 import { BrowserWindow } from 'electron';
-import chokidar from 'chokidar';
+import { watch as chokidarWatch, type FSWatcher } from 'chokidar';
 import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -15,7 +15,7 @@ const execFile = promisify(execFileCb);
 const ACTIVITY_DIR = path.join(os.homedir(), '.bifrost', 'activity');
 
 interface TaskWatcher {
-  watcher: ReturnType<typeof chokidar.watch>;
+  watcher: FSWatcher;
   entries: ActivityEntry[];
   headSha: string | null;
   debounceTimers: Map<string, ReturnType<typeof setTimeout>>;
@@ -114,7 +114,7 @@ export function startWatching(
   const entries = loadEntries(taskId);
 
   const tw: TaskWatcher = {
-    watcher: null!,
+    watcher: null as unknown as FSWatcher,
     entries,
     headSha: null,
     debounceTimers: new Map(),
@@ -125,7 +125,7 @@ export function startWatching(
     tw.headSha = sha;
   });
 
-  const watcher = chokidar.watch(worktreePath, {
+  const watcher = chokidarWatch(worktreePath, {
     ignored: [
       /(^|[/\\])\../, // dotfiles (includes .git)
       '**/node_modules/**',
@@ -158,7 +158,7 @@ export function startWatching(
           // A commit happened — add commit marker and clear file entries
           const commitMsg = await getCommitMessage(worktreePath, currentSha);
           const commitEntry: ActivityEntry = {
-            id: uuidv4(),
+            id: randomUUID(),
             taskId,
             timestamp: Date.now(),
             type: 'commit',
@@ -176,7 +176,7 @@ export function startWatching(
         if (!diff) return;
 
         const entry: ActivityEntry = {
-          id: uuidv4(),
+          id: randomUUID(),
           taskId,
           timestamp: Date.now(),
           type: 'file_change',
@@ -214,7 +214,7 @@ export function startWatching(
   // Watch the HEAD ref file for commit detection
   const headRefPath = path.join(gitDir, 'HEAD');
   if (fs.existsSync(headRefPath)) {
-    const headWatcher = chokidar.watch(headRefPath, {
+    const headWatcher = chokidarWatch(headRefPath, {
       ignoreInitial: true,
     });
     headWatcher.on('change', async () => {
@@ -222,7 +222,7 @@ export function startWatching(
       if (currentSha && tw.headSha && currentSha !== tw.headSha) {
         const commitMsg = await getCommitMessage(worktreePath, currentSha);
         const commitEntry: ActivityEntry = {
-          id: uuidv4(),
+          id: randomUUID(),
           taskId,
           timestamp: Date.now(),
           type: 'commit',
@@ -280,8 +280,9 @@ export function getLastChangedFile(taskId: string): string | null {
   const tw = watchers.get(taskId);
   const entries = tw ? tw.entries : loadEntries(taskId);
   for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].type === 'file_change' && entries[i].filePath) {
-      return entries[i].filePath!;
+    const filePath = entries[i].filePath;
+    if (entries[i].type === 'file_change' && filePath) {
+      return filePath;
     }
   }
   return null;

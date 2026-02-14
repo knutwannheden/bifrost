@@ -54,7 +54,7 @@ function getTerminalCapture(sessionId: string): TerminalCapture | null {
   if (!terminal) return null;
 
   const selection = terminal.getSelection();
-  const hasSelection = !!(selection && selection.trim().length > 0);
+  const hasSelection = !!selection?.trim();
 
   let content: string;
   if (hasSelection) {
@@ -72,7 +72,7 @@ function getTerminalCapture(sessionId: string): TerminalCapture | null {
     content = lines.join('\n').trimEnd();
   }
 
-  if (!content || content.trim().length === 0) return null;
+  if (!content.trim()) return null;
 
   // Scan for ⏺ to detect Claude assistant turn
   const transcriptText = findTranscriptText(terminal, hasSelection);
@@ -102,7 +102,6 @@ function findTranscriptText(terminal: Terminal, hasSelection: boolean): string |
 
   // Search backwards for ⏺
   let recordRow = -1;
-  let recordCol = -1;
   for (let row = endRow; row >= startRow; row--) {
     const line = buffer.getLine(row);
     if (!line) continue;
@@ -110,7 +109,6 @@ function findTranscriptText(terminal: Terminal, hasSelection: boolean): string |
       const cell = line.getCell(col);
       if (cell && cell.getChars() === RECORD_SYMBOL) {
         recordRow = row;
-        recordCol = col;
         break;
       }
     }
@@ -159,8 +157,8 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           if (state.showDiff) {
             if (state.diffMode === 'git') {
               const diff = await window.bifrost.getDiff(activeTask.id);
-              const content = diff.diff || null;
-              if (!content || content.trim().length === 0) return;
+              const content = diff.diff;
+              if (!content?.trim()) return;
               params = { type: 'diff', content, ...taskMeta };
             } else {
               const entries = await window.bifrost.getActivityLog(activeTask.id);
@@ -170,7 +168,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
                 if (e.type === 'claude_event') return `[${e.claudeEventKind}] ${e.claudeText || ''}`;
                 return `[${e.type}]`;
               }).join('\n\n');
-              if (!content || content.trim().length === 0) return;
+              if (!content.trim()) return;
               params = { type: 'activity', content, ...taskMeta };
             }
           } else {

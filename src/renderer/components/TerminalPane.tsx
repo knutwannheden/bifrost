@@ -19,12 +19,12 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing
+  const anyOverlay = state.showRepoManager || state.showCreateDialog || state.showDiff || state.showTaskHistory;
   useEffect(() => {
-    const anyOverlay = state.showRepoManager || state.showCreateDialog || state.showDiff || state.showTaskHistory;
     if (!anyOverlay && active && focused && terminal.current) {
       terminal.current.focus();
     }
-  }, [state.showRepoManager, state.showCreateDialog, state.showDiff, state.showTaskHistory, active, focused, terminal]);
+  }, [anyOverlay, active, focused, terminal]);
 
   return (
     <div

@@ -15,27 +15,3 @@ export function sendNotification(title: string, body: string): void {
     mainWindow.webContents.send(IPC_STREAM.NOTIFICATION, title, body);
   }
 }
-
-export function scanOutputForNotifications(
-  output: string,
-): { title: string; body: string } | null {
-  const lines = output.split('\n');
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (/^(Task completed|Done)\b/i.test(trimmed)) {
-      return { title: 'Task Completed', body: trimmed };
-    }
-
-    if (/\bError:/i.test(trimmed)) {
-      return { title: 'Error Detected', body: trimmed };
-    }
-
-    if (/\b(waiting for input|Waiting for)\b/i.test(trimmed)) {
-      return { title: 'Waiting for Input', body: trimmed };
-    }
-  }
-
-  return null;
-}

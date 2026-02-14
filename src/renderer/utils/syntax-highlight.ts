@@ -18,7 +18,7 @@ async function getHighlighter(): Promise<Highlighter> {
     highlighterPromise = import('shiki').then((shiki) =>
       shiki.createHighlighter({
         themes: ['github-dark'],
-        langs: Object.values(extToLang).filter((v, i, a) => a.indexOf(v) === i),
+        langs: [...new Set(Object.values(extToLang))],
       }),
     );
   }

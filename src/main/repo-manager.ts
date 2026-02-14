@@ -1,15 +1,16 @@
 import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import type { AddRepoParams, BifrostConfig, Repo } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
 export async function addRepo(params: AddRepoParams): Promise<Repo> {
   if (params.type === 'local') {
-    const repoPath = params.path!;
+    const repoPath = params.path ?? '';
     const gitDir = path.join(repoPath, '.git');
     if (!fs.existsSync(gitDir)) {
       throw new Error(`Not a git repository: ${repoPath}`);
@@ -19,7 +20,7 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
     const name = path.basename(repoPath);
 
     return {
-      id: uuidv4(),
+      id: randomUUID(),
       name,
       path: repoPath,
       defaultBranch,
@@ -27,16 +28,15 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
   }
 
   if (params.type === 'clone') {
-    const url = params.url!;
+    const url = params.url ?? '';
     const repoName = path.basename(url, '.git');
-    const os = await import('node:os');
     const clonePath = path.join(os.homedir(), '.bifrost', 'repos', repoName);
 
     await execFile('git', ['clone', url, clonePath]);
     const defaultBranch = await getDefaultBranch(clonePath);
 
     return {
-      id: uuidv4(),
+      id: randomUUID(),
       name: repoName,
       path: clonePath,
       defaultBranch,

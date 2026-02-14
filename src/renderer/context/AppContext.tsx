@@ -89,6 +89,15 @@ function hiddenKey(pane: PaneTarget): 'claudeHidden' | 'devHidden' {
   return pane === 'claude' ? 'claudeHidden' : 'devHidden';
 }
 
+/** Close all overlays — used when toggling one open so only one shows at a time */
+const allOverlaysClosed = {
+  showRepoManager: false,
+  showCreateDialog: false,
+  showDiff: false,
+  showTaskHistory: false,
+  showKeyboardShortcuts: false,
+};
+
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_CONFIG':
@@ -132,15 +141,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ),
       };
     case 'TOGGLE_REPO_MANAGER':
-      return { ...state, showRepoManager: !state.showRepoManager, showCreateDialog: false, showDiff: false, showTaskHistory: false, showKeyboardShortcuts: false };
+      return { ...state, ...allOverlaysClosed, showRepoManager: !state.showRepoManager };
     case 'SHOW_CREATE_TASK_DIALOG':
-      return { ...state, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null, showRepoManager: false, showDiff: false, showTaskHistory: false, showKeyboardShortcuts: false };
+      return { ...state, ...allOverlaysClosed, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null };
     case 'TOGGLE_DIFF':
-      return { ...state, showDiff: !state.showDiff, showRepoManager: false, showCreateDialog: false, showTaskHistory: false, showKeyboardShortcuts: false };
+      return { ...state, ...allOverlaysClosed, showDiff: !state.showDiff };
     case 'TOGGLE_TASK_HISTORY':
-      return { ...state, showTaskHistory: !state.showTaskHistory, showRepoManager: false, showCreateDialog: false, showDiff: false, showKeyboardShortcuts: false };
+      return { ...state, ...allOverlaysClosed, showTaskHistory: !state.showTaskHistory };
     case 'TOGGLE_KEYBOARD_SHORTCUTS':
-      return { ...state, showKeyboardShortcuts: !state.showKeyboardShortcuts, showRepoManager: false, showCreateDialog: false, showDiff: false, showTaskHistory: false };
+      return { ...state, ...allOverlaysClosed, showKeyboardShortcuts: !state.showKeyboardShortcuts };
     case 'SET_DIFF_MODE':
       return { ...state, diffMode: action.mode };
     case 'SET_DEV_SESSION': {
@@ -179,7 +188,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 const AppContext = createContext<{
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
-}>({ state: initialState, dispatch: () => {} });
+}>({ state: initialState, dispatch: () => { /* default no-op */ } });
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);

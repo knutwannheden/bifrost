@@ -1,17 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { generateTaskName } from '../utils/name-generator';
-
-function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintIndex?: number; showHint: boolean }) {
-  if (!showHint) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, hintIndex)}
-      <span className="underline underline-offset-2">{text[hintIndex]}</span>
-      {text.slice(hintIndex + 1)}
-    </>
-  );
-}
+import ActionLabel from './ActionLabel';
 
 export default function TaskCreateDialog() {
   const { state, dispatch } = useApp();

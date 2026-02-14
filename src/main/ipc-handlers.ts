@@ -1,5 +1,5 @@
-import { ipcMain, BrowserWindow, dialog } from 'electron';
-import { v4 as uuidv4 } from 'uuid';
+import { ipcMain, BrowserWindow, clipboard, dialog } from 'electron';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { IPC } from '../shared/ipc-channels';
@@ -37,6 +37,27 @@ function updateTask(taskId: string, updates: Partial<Task>): Task {
   return tasks[idx];
 }
 
+async function destroyTask(taskId: string): Promise<void> {
+  const task = getTask(taskId);
+  stopWatching(taskId);
+  if (task.status === 'running') {
+    killSession(task.sessionId);
+  }
+  if (fs.existsSync(task.worktreePath)) {
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+    if (repo) {
+      try {
+        await removeWorktree(repo.path, task.worktreePath);
+      } catch {
+        // Worktree may already be removed
+      }
+    }
+  }
+  tasks = tasks.filter((t) => t.id !== taskId);
+  saveTasks(tasks);
+}
+
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Load persisted context entries from disk
   loadPersistedContexts();
@@ -52,7 +73,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Re-spawn sessions for tasks that were running when the app quit
   for (const task of tasksToRestore) {
     if (fs.existsSync(task.worktreePath)) {
-      const sessionId = uuidv4();
+      const sessionId = randomUUID();
       createSession(sessionId, task.worktreePath, mainWindow, {
         resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined,
       });
@@ -108,8 +129,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!repo) throw new Error(`Repo not found: ${params.repoId}`);
 
     const worktreePath = await createWorktree(repo.path, params.name, params.branch);
-    const sessionId = uuidv4();
-    const taskId = uuidv4();
+    const sessionId = randomUUID();
+    const taskId = randomUUID();
 
     createSession(sessionId, worktreePath, mainWindow, {
       taskId, apiPort: getApiPort() ?? undefined,
@@ -137,35 +158,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
-    const task = getTask(taskId);
-
-    stopWatching(taskId);
-    killSession(task.sessionId);
-
-    const config = loadConfig();
-    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-    if (repo) {
-      try {
-        await removeWorktree(repo.path, task.worktreePath);
-      } catch {
-        // Worktree may already be removed
-      }
-    }
-
-    tasks = tasks.filter((t) => t.id !== taskId);
-    saveTasks(tasks);
+    await destroyTask(taskId);
   });
 
   ipcMain.handle(IPC.STOP_TASK, (_event, taskId: string) => {
     const task = getTask(taskId);
-
     if (task.status === 'running') {
       killSession(task.sessionId);
     }
-
-    return updateTask(taskId, {
-      status: 'stopped',
-    });
+    return updateTask(taskId, { status: 'stopped' });
   });
 
   ipcMain.handle(IPC.ARCHIVE_TASK, (_event, taskId: string) => {
@@ -192,7 +193,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       throw new Error(`Directory no longer exists: ${task.worktreePath}`);
     }
 
-    const sessionId = uuidv4();
+    const sessionId = randomUUID();
     createSession(sessionId, task.worktreePath, mainWindow, {
       claudeSessionId: task.claudeSessionId,
       taskId,
@@ -215,30 +216,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {
-    const task = getTask(taskId);
-
-    stopWatching(taskId);
-
-    // Kill session if running
-    if (task.status === 'running') {
-      killSession(task.sessionId);
-    }
-
-    // Remove worktree if it exists
-    if (fs.existsSync(task.worktreePath)) {
-      const config = loadConfig();
-      const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-      if (repo) {
-        try {
-          await removeWorktree(repo.path, task.worktreePath);
-        } catch {
-          // Best effort
-        }
-      }
-    }
-
-    tasks = tasks.filter((t) => t.id !== taskId);
-    saveTasks(tasks);
+    await destroyTask(taskId);
   });
 
   ipcMain.handle(IPC.LIST_TASKS, () => {
@@ -254,7 +232,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const existing = devSessions.get(taskId);
     if (existing) killSession(existing);
 
-    const devSessionId = uuidv4();
+    const devSessionId = randomUUID();
     createShellSession(devSessionId, task.worktreePath, mainWindow);
     devSessions.set(taskId, devSessionId);
     return devSessionId;
@@ -314,16 +292,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Terminal title
   ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, taskId: string, title: string) => {
     updateTask(taskId, { terminalTitle: title });
-    // Update the BrowserWindow title
-    const task = getTask(taskId);
-    // Only update window title for the "current" task — the renderer knows which is active
     mainWindow.setTitle(`BIFROST — ${title}`);
   });
 
   // Context capture
   ipcMain.handle(IPC.CAPTURE_CONTEXT, (_event, params: CaptureContextParams) => {
     const id = storeContext(params);
-    require('electron').clipboard.writeText(`[Bifrost #${id}]`);
+    clipboard.writeText(`[Bifrost #${id}]`);
     return id;
   });
 
@@ -350,8 +325,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       throw new Error(`Directory no longer exists: ${cwd}`);
     }
 
-    const sessionId = uuidv4();
-    const taskId = uuidv4();
+    const sessionId = randomUUID();
+    const taskId = randomUUID();
     const name = path.basename(cwd);
 
     createSession(sessionId, cwd, mainWindow, {

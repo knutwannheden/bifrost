@@ -1,6 +1,9 @@
+export type DiffFileStatus = 'added' | 'modified' | 'deleted' | 'renamed';
+
 export interface DiffFile {
   oldPath: string;
   newPath: string;
+  status: DiffFileStatus;
   hunks: DiffHunk[];
 }
 
@@ -34,12 +37,20 @@ export function parseDiff(raw: string): DiffFile[] {
     const file: DiffFile = {
       oldPath: match?.[1] ?? '',
       newPath: match?.[2] ?? '',
+      status: 'modified',
       hunks: [],
     };
     i++;
 
-    // Skip index, --- and +++ lines
+    // Skip index, --- and +++ lines, detecting file status
     while (i < lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff --git ')) {
+      if (lines[i].startsWith('new file mode') || lines[i] === '--- /dev/null') {
+        file.status = 'added';
+      } else if (lines[i].startsWith('deleted file mode') || lines[i] === '+++ /dev/null') {
+        file.status = 'deleted';
+      } else if (lines[i].startsWith('rename from') || lines[i].startsWith('rename to')) {
+        file.status = 'renamed';
+      }
       if (lines[i].startsWith('--- a/')) {
         file.oldPath = lines[i].slice(6);
       } else if (lines[i].startsWith('+++ b/')) {
@@ -109,4 +120,16 @@ export function parseDiff(raw: string): DiffFile[] {
 export function extFromPath(p: string): string {
   const dot = p.lastIndexOf('.');
   return dot >= 0 ? p.slice(dot + 1) : '';
+}
+
+export function diffFileStats(file: DiffFile): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const hunk of file.hunks) {
+    for (const line of hunk.lines) {
+      if (line.type === 'add') additions++;
+      else if (line.type === 'remove') deletions++;
+    }
+  }
+  return { additions, deletions };
 }

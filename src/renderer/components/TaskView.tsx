@@ -33,7 +33,8 @@ export default function TaskView() {
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    const container = (e.target as HTMLElement).parentElement!;
+    const container = (e.target as HTMLElement).parentElement;
+    if (!container) return;
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
 

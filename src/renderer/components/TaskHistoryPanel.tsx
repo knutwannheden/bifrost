@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import ActionLabel from './ActionLabel';
 import type { Task, ClaudeSession } from '../../shared/types';
 
 const statusLabel: Record<string, string> = {
@@ -39,24 +40,10 @@ function formatRelative(ts: number): string {
   return `${days}d ago`;
 }
 
-function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintIndex?: number; showHint: boolean }) {
-  if (!showHint) return <>{text}</>;
-  return (
-    <>
-      {text.slice(0, hintIndex)}
-      <span className="underline underline-offset-2">{text[hintIndex]}</span>
-      {text.slice(hintIndex + 1)}
-    </>
-  );
-}
-
 function shortenPath(cwd: string): string {
-  const home = '/Users/';
-  if (cwd.startsWith(home)) {
-    const rest = cwd.slice(home.length);
-    const slash = rest.indexOf('/');
-    if (slash >= 0) return '~' + rest.slice(slash);
-    return '~';
+  const home = window.bifrost.homeDir;
+  if (home && cwd.startsWith(home)) {
+    return '~' + cwd.slice(home.length);
   }
   return cwd;
 }

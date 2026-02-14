@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Task, BifrostConfig, Repo } from '../../shared/types';
 
 function shortenHome(p: string): string {

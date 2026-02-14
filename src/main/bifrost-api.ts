@@ -39,6 +39,10 @@ function errorResponse(res: http.ServerResponse, message: string, status = 400):
   jsonResponse(res, { error: message }, status);
 }
 
+function resolveTaskId(body: Record<string, unknown>): string | undefined {
+  return (body.taskId as string) || (body.callerTaskId as string) || undefined;
+}
+
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
     errorResponse(res, 'Method not allowed', 405);
@@ -77,9 +81,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/get-task-diff': {
-      const taskId = body.taskId as string | undefined;
-      const callerTaskId = body.callerTaskId as string | undefined;
-      const targetId = taskId || callerTaskId;
+      const targetId = resolveTaskId(body);
       if (!targetId) {
         errorResponse(res, 'No taskId provided');
         return;
@@ -95,10 +97,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/get-activity-log': {
-      const taskId = body.taskId as string | undefined;
-      const callerTaskId = body.callerTaskId as string | undefined;
+      const targetId = resolveTaskId(body);
       const limit = (body.limit as number) || 50;
-      const targetId = taskId || callerTaskId;
       if (!targetId) {
         errorResponse(res, 'No taskId provided');
         return;

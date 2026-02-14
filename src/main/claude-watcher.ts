@@ -2,7 +2,7 @@ import { BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import type { ActivityEntry } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
@@ -61,7 +61,7 @@ function parseJsonlLine(
     }
 
     return {
-      id: uuidv4(),
+      id: randomUUID(),
       taskId,
       timestamp,
       type: 'claude_event',
@@ -81,7 +81,7 @@ function parseJsonlLine(
         const text = (block.text as string || '').trim();
         if (text) {
           entries.push({
-            id: uuidv4(),
+            id: randomUUID(),
             taskId,
             timestamp,
             type: 'claude_event',
@@ -91,7 +91,7 @@ function parseJsonlLine(
         }
       } else if (block.type === 'tool_use') {
         entries.push({
-          id: uuidv4(),
+          id: randomUUID(),
           taskId,
           timestamp,
           type: 'claude_event',
@@ -223,7 +223,7 @@ export function startClaudeWatching(
         continue;
       }
 
-      const offset = fileOffsets.get(filePath)!;
+      const offset = fileOffsets.get(filePath) ?? 0;
       const { lines, newOffset } = readNewLines(filePath, offset);
       fileOffsets.set(filePath, newOffset);
 
