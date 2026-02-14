@@ -85,6 +85,14 @@ const api: BifrostAPI = {
   // Dialog
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
 
+  // Task summary
+  onTaskSummary: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, summary: string) =>
+      callback(taskId, summary);
+    ipcRenderer.on(IPC_STREAM.TASK_SUMMARY, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TASK_SUMMARY, handler);
+  },
+
   // Notifications
   onNotification: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, title: string, body: string) =>

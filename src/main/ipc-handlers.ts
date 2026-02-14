@@ -6,7 +6,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
-import { IPC } from '../shared/ipc-channels';
+import { IPC, IPC_STREAM } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
@@ -20,6 +20,7 @@ import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastC
 import { getApiPort } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
+import { summarizeTask, countJsonlLines } from './task-summarizer';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -91,6 +92,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   saveTasks(tasks);
 
+  // Summary callback: persist to task and push to renderer
+  const onSummary = (taskId: string, summary: string) => {
+    try {
+      updateTask(taskId, { summary });
+      mainWindow.webContents.send(IPC_STREAM.TASK_SUMMARY, taskId, summary);
+    } catch { /* task may have been deleted */ }
+  };
+
   // Config
   ipcMain.handle(IPC.LOAD_CONFIG, () => loadConfig());
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => saveConfig(config));
@@ -157,7 +166,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     saveTasks(tasks);
 
     // Start watching for file changes
-    startWatching(task.id, worktreePath, mainWindow);
+    startWatching(task.id, worktreePath, mainWindow, onSummary);
 
     return task;
   });
@@ -207,7 +216,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
 
     // Restart file watcher
-    startWatching(taskId, task.worktreePath, mainWindow);
+    startWatching(taskId, task.worktreePath, mainWindow, onSummary);
 
     return updateTask(taskId, {
       sessionId,
@@ -319,10 +328,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   for (const task of tasks) {
     if (task.status === 'running' || task.status === 'stopped') {
       if (fs.existsSync(task.worktreePath)) {
-        startWatching(task.id, task.worktreePath, mainWindow);
+        startWatching(task.id, task.worktreePath, mainWindow, onSummary);
       }
     }
   }
+
+  // Summarize unsummarized tasks on startup
+  (async () => {
+    for (const task of tasks) {
+      if (!task.summary && countJsonlLines(task.worktreePath) >= 3) {
+        const summary = await summarizeTask(task.worktreePath);
+        if (summary) onSummary(task.id, summary);
+      }
+    }
+  })();
 
   // Terminal title
   ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, taskId: string, title: string) => {
@@ -388,7 +407,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     tasks.push(task);
     saveTasks(tasks);
 
-    startWatching(taskId, cwd, mainWindow);
+    startWatching(taskId, cwd, mainWindow, onSummary);
 
     return task;
   });

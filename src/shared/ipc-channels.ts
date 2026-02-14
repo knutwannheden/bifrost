@@ -79,6 +79,7 @@ export const IPC_STREAM = {
   SESSION_EXIT: 'session:exit',
   NOTIFICATION: 'notification',
   ACTIVITY_ENTRY: 'activity:entry',
+  TASK_SUMMARY: 'task:summary',
   MENU_ACTION: 'menu:action',
 } as const;
 
@@ -145,6 +146,9 @@ export interface BifrostAPI {
 
   // Dialog
   selectDirectory(): Promise<string | null>;
+
+  // Task summary
+  onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
 
   // Notifications
   onNotification(callback: (title: string, body: string) => void): () => void;

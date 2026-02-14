@@ -66,8 +66,13 @@ export default function TaskView() {
     }
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-slate-500">
-          <p className="text-lg mb-4">No active tasks</p>
+        <div className="text-center text-slate-500 max-w-md">
+          <p className="text-2xl font-semibold text-slate-300 mb-2">BIFROST</p>
+          <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+            A keyboard-centric command center for orchestrating parallel Claude Code sessions.
+            Each task runs in its own isolated git worktree, so agents work independently without
+            stepping on each other.
+          </p>
           <div className="inline-grid grid-cols-[auto_auto] gap-x-4 gap-y-1.5 text-left">
             {shortcuts.map((s) => (
               <React.Fragment key={s.keys}>

@@ -54,7 +54,8 @@ export type AppAction =
   | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget }
   | { type: 'SHOW_TOAST'; message: string }
   | { type: 'HIDE_TOAST' }
-  | { type: 'SET_API_PORT'; port: number | null };
+  | { type: 'SET_API_PORT'; port: number | null }
+  | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string };
 
 const initialState: AppState = {
   repos: [],
@@ -195,6 +196,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, toast: null };
     case 'SET_API_PORT':
       return { ...state, apiPort: action.port };
+    case 'SET_TASK_SUMMARY':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) =>
+          t.id === action.taskId ? { ...t, summary: action.summary } : t,
+        ),
+      };
     default:
       return state;
   }
@@ -218,6 +226,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.bifrost.listTasks().then((tasks) => {
       dispatch({ type: 'SET_TASKS', tasks });
     });
+
+    const unsubSummary = window.bifrost.onTaskSummary((taskId, summary) => {
+      dispatch({ type: 'SET_TASK_SUMMARY', taskId, summary });
+    });
+    return () => { unsubSummary(); };
   }, []);
 
   return (

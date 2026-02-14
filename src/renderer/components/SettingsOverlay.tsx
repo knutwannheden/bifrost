@@ -112,6 +112,26 @@ export default function SettingsOverlay() {
               />
             </button>
           </div>
+
+          {/* Group history by repo */}
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm text-slate-300">Group history by repo</label>
+              <p className="text-xs text-slate-500">Group tasks by repository in history view</p>
+            </div>
+            <button
+              onClick={() => updateConfig({ groupHistoryByRepo: !config.groupHistoryByRepo })}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                config.groupHistoryByRepo ? 'bg-blue-600' : 'bg-slate-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  config.groupHistoryByRepo ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
     </div>

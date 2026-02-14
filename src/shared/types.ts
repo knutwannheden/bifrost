@@ -20,6 +20,8 @@ export interface Task {
   archivedAt?: number;
   /** Last known terminal title (from OSC 0/2) */
   terminalTitle?: string;
+  /** Auto-generated one-sentence summary of what the task is doing */
+  summary?: string;
   /** If this task was resumed from an external Claude session */
   claudeSessionId?: string;
   /** True if this task has no managed worktree (e.g. resumed external session) */
@@ -39,6 +41,7 @@ export interface BifrostConfig {
   ide: 'code' | 'idea';
   fontSize: number;
   sandbox: boolean;
+  groupHistoryByRepo: boolean;
 }
 
 export interface CreateTaskParams {
@@ -136,4 +139,5 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   ide: 'code',
   fontSize: 14,
   sandbox: false,
+  groupHistoryByRepo: false,
 };

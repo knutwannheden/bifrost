@@ -107,6 +107,7 @@ export function startWatching(
   taskId: string,
   worktreePath: string,
   mainWindow: BrowserWindow,
+  onSummary?: (taskId: string, summary: string) => void,
 ): void {
   // Stop any existing watcher for this task
   stopWatching(taskId);
@@ -248,7 +249,7 @@ export function startWatching(
   watchers.set(taskId, tw);
 
   // Also watch Claude Code JSONL session files
-  startClaudeWatching(taskId, worktreePath, mainWindow);
+  startClaudeWatching(taskId, worktreePath, mainWindow, onSummary);
 }
 
 export function stopWatching(taskId: string): void {

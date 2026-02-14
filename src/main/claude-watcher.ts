@@ -5,6 +5,7 @@ import os from 'node:os';
 import { randomUUID } from 'node:crypto';
 import type { ActivityEntry } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { summarizeTask } from './task-summarizer';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
@@ -14,6 +15,10 @@ interface ClaudeWatcher {
   /** Byte offset per JSONL file so we only read new lines */
   fileOffsets: Map<string, number>;
   pollTimer: ReturnType<typeof setInterval>;
+  /** Total JSONL lines seen so far */
+  lineCount: number;
+  /** lineCount at which we last triggered a summary */
+  lastSummaryAt: number;
 }
 
 const watchers = new Map<string, ClaudeWatcher>();
@@ -181,6 +186,7 @@ export function startClaudeWatching(
   taskId: string,
   worktreePath: string,
   mainWindow: BrowserWindow,
+  onSummary?: (taskId: string, summary: string) => void,
 ): void {
   stopClaudeWatching(taskId);
 
@@ -233,10 +239,23 @@ export function startClaudeWatching(
           mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
         }
       }
+
+      if (lines.length > 0) {
+        const w = watchers.get(taskId);
+        if (w) {
+          w.lineCount += lines.length;
+          if (onSummary && w.lineCount >= 5 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 20)) {
+            w.lastSummaryAt = w.lineCount;
+            summarizeTask(worktreePath).then((summary) => {
+              if (summary) onSummary(taskId, summary);
+            }).catch(() => { /* ignore */ });
+          }
+        }
+      }
     }
   }, 1000);
 
-  watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer });
+  watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer, lineCount: 0, lastSummaryAt: 0 });
 }
 
 /**

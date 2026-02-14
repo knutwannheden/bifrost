@@ -48,6 +48,133 @@ function shortenPath(cwd: string): string {
   return cwd;
 }
 
+interface TaskRowProps {
+  task: Task;
+  idx: number;
+  focusedIdx: number;
+  editingId: string | null;
+  editName: string;
+  setEditName: (name: string) => void;
+  setFocusedIdx: (idx: number) => void;
+  itemRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
+  handleActivate: (task: Task) => void;
+  startRename: (task: Task) => void;
+  submitRename: (taskId: string) => void;
+  setEditingId: (id: string | null) => void;
+  handleReopen: (task: Task) => void;
+  handleArchive: (task: Task) => void;
+  handleDelete: (task: Task) => void;
+  canReopen: (task: Task) => boolean;
+  canArchive: (task: Task) => boolean;
+  repoName: (repoId: string) => string;
+  shortenPath: (cwd: string) => string;
+}
+
+function TaskRow({
+  task, idx, focusedIdx, editingId, editName, setEditName,
+  setFocusedIdx, itemRefs, handleActivate, startRename, submitRename,
+  setEditingId, handleReopen, handleArchive, handleDelete,
+  canReopen, canArchive, repoName, shortenPath,
+}: TaskRowProps) {
+  return (
+    <div
+      ref={(el) => { itemRefs.current[idx] = el; }}
+      onMouseEnter={() => setFocusedIdx(idx)}
+      onClick={() => handleActivate(task)}
+      className={`rounded border p-3 cursor-default transition-colors ${
+        idx === focusedIdx
+          ? 'bg-slate-700 border-blue-500/70 ring-1 ring-blue-500/40'
+          : 'bg-slate-700/50 border-slate-600/50'
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          {editingId === task.id ? (
+            <input
+              autoFocus
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitRename(task.id);
+                if (e.key === 'Escape') { e.stopPropagation(); setEditingId(null); }
+              }}
+              onBlur={() => submitRename(task.id)}
+              className="px-2 py-0.5 bg-slate-600 border border-slate-500 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 w-48"
+            />
+          ) : (
+            <span
+              className={`text-sm font-medium truncate ${
+                task.status === 'archived' ? 'text-slate-400' : 'text-slate-200'
+              }`}
+            >
+              {task.name}
+            </span>
+          )}
+          <span className={`text-xs ${statusColor[task.status]}`}>
+            {statusLabel[task.status]}
+          </span>
+          {task.isExternal && (
+            <span className="text-xs text-slate-600">external</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+          <button
+            onClick={(e) => { e.stopPropagation(); startRename(task); }}
+            title="Rename (F2)"
+            tabIndex={-1}
+            className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+          >
+            <ActionLabel text="Rename" showHint={idx === focusedIdx} />
+          </button>
+          {canReopen(task) && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
+              title="Reopen task (Alt+O)"
+              tabIndex={-1}
+              className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+            >
+              <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
+            </button>
+          )}
+          {canArchive(task) && (
+            <button
+              onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
+              title="Archive task (Alt+A)"
+              tabIndex={-1}
+              className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+            >
+              <ActionLabel text="Archive" showHint={idx === focusedIdx} />
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
+            title="Delete task and worktree (Alt+D)"
+            tabIndex={-1}
+            className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
+          >
+            <ActionLabel text="Delete" showHint={idx === focusedIdx} />
+          </button>
+        </div>
+      </div>
+      {task.summary && (
+        <div className="mt-1 text-xs text-slate-500 truncate">{task.summary}</div>
+      )}
+      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+        {task.isExternal ? (
+          <span className="font-mono">{shortenPath(task.worktreePath)}</span>
+        ) : (
+          <>
+            <span>{repoName(task.repoId)}</span>
+            <span>{task.branch}</span>
+          </>
+        )}
+        <span>{formatDate(task.createdAt)}</span>
+        {task.archivedAt && <span>Archived {formatDate(task.archivedAt)}</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
   const [filter, setFilter] = useState<Filter>('all');
@@ -100,7 +227,38 @@ export default function TaskHistoryPanel() {
       })
     : [];
 
-  const listLength = isSessionsMode ? filteredSessions.length : filteredTasks.length;
+  const repoName = (repoId: string) =>
+    state.repos.find((r) => r.id === repoId)?.name ?? '';
+
+  const groupByRepo = !isSessionsMode && !!state.config?.groupHistoryByRepo;
+
+  const taskGroups = groupByRepo
+    ? (() => {
+        const map = new Map<string, Task[]>();
+        for (const task of filteredTasks) {
+          const name = task.isExternal ? 'Other' : (repoName(task.repoId) || 'Other');
+          let group = map.get(name);
+          if (!group) {
+            group = [];
+            map.set(name, group);
+          }
+          group.push(task);
+        }
+        return Array.from(map, ([name, tasks]) => ({ name, tasks }))
+          .sort((a, b) => {
+            if (a.name === 'Other') return 1;
+            if (b.name === 'Other') return -1;
+            return a.name.localeCompare(b.name);
+          });
+      })()
+    : [];
+
+  // Build a flat list of tasks in grouped order for navigation
+  const flatTaskList = groupByRepo
+    ? taskGroups.flatMap((g) => g.tasks)
+    : filteredTasks;
+
+  const listLength = isSessionsMode ? filteredSessions.length : flatTaskList.length;
 
   // Reset focus when filter or search changes
   useEffect(() => {
@@ -125,9 +283,6 @@ export default function TaskHistoryPanel() {
   }, []);
 
   const close = useCallback(() => dispatch({ type: 'TOGGLE_TASK_HISTORY' }), [dispatch]);
-
-  const repoName = (repoId: string) =>
-    state.repos.find((r) => r.id === repoId)?.name ?? '';
 
   const handleReopen = async (task: Task) => {
     setError(null);
@@ -264,7 +419,7 @@ export default function TaskHistoryPanel() {
           const session = filteredSessions[focusedIdx];
           if (session) handleResumeSession(session);
         } else {
-          const focusedTask = filteredTasks[focusedIdx];
+          const focusedTask = flatTaskList[focusedIdx];
           if (focusedTask) {
             if (focusedTask.status === 'running') {
               handleActivate(focusedTask);
@@ -278,14 +433,14 @@ export default function TaskHistoryPanel() {
       case 'F2':
         e.preventDefault();
         if (!isSessionsMode) {
-          const focusedTask = filteredTasks[focusedIdx];
+          const focusedTask = flatTaskList[focusedIdx];
           if (focusedTask) startRename(focusedTask);
         }
         break;
 
       default:
         if (!isSessionsMode) {
-          const focusedTask = filteredTasks[focusedIdx];
+          const focusedTask = flatTaskList[focusedIdx];
           // Alt+letter shortcuts (use e.code since Alt produces special chars on macOS)
           if (e.altKey && focusedTask) {
             switch (e.code) {
@@ -330,7 +485,7 @@ export default function TaskHistoryPanel() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[600px] max-h-[80vh] flex flex-col shadow-xl"
+        className="bg-slate-800 rounded-lg border border-slate-600 w-[600px] h-[90vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -424,104 +579,73 @@ export default function TaskHistoryPanel() {
             </>
           ) : (
             <>
-              {filteredTasks.length === 0 && (
+              {flatTaskList.length === 0 && (
                 <p className="text-sm text-slate-500 text-center py-4">No tasks found.</p>
               )}
-              {filteredTasks.map((task, idx) => (
-                <div
-                  key={task.id}
-                  ref={(el) => { itemRefs.current[idx] = el; }}
-                  onMouseEnter={() => setFocusedIdx(idx)}
-                  onClick={() => handleActivate(task)}
-                  className={`rounded border p-3 cursor-default transition-colors ${
-                    idx === focusedIdx
-                      ? 'bg-slate-700 border-blue-500/70 ring-1 ring-blue-500/40'
-                      : 'bg-slate-700/50 border-slate-600/50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {editingId === task.id ? (
-                        <input
-                          autoFocus
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') submitRename(task.id);
-                            if (e.key === 'Escape') { e.stopPropagation(); setEditingId(null); }
-                          }}
-                          onBlur={() => submitRename(task.id)}
-                          className="px-2 py-0.5 bg-slate-600 border border-slate-500 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 w-48"
-                        />
-                      ) : (
-                        <span
-                          className={`text-sm font-medium truncate ${
-                            task.status === 'archived' ? 'text-slate-400' : 'text-slate-200'
-                          }`}
-                        >
-                          {task.name}
-                        </span>
-                      )}
-                      <span className={`text-xs ${statusColor[task.status]}`}>
-                        {statusLabel[task.status]}
-                      </span>
-                      {task.isExternal && (
-                        <span className="text-xs text-slate-600">external</span>
-                      )}
+              {groupByRepo ? (
+                (() => {
+                  let flatIdx = 0;
+                  return taskGroups.map((group) => (
+                    <div key={group.name} className="space-y-2">
+                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide px-1 pt-2 pb-1">
+                        {group.name}
+                      </div>
+                      {group.tasks.map((task) => {
+                        const idx = flatIdx++;
+                        return (
+                          <TaskRow
+                            key={task.id}
+                            task={task}
+                            idx={idx}
+                            focusedIdx={focusedIdx}
+                            editingId={editingId}
+                            editName={editName}
+                            setEditName={setEditName}
+                            setFocusedIdx={setFocusedIdx}
+                            itemRefs={itemRefs}
+                            handleActivate={handleActivate}
+                            startRename={startRename}
+                            submitRename={submitRename}
+                            setEditingId={setEditingId}
+                            handleReopen={handleReopen}
+                            handleArchive={handleArchive}
+                            handleDelete={handleDelete}
+                            canReopen={canReopen}
+                            canArchive={canArchive}
+                            repoName={repoName}
+                            shortenPath={shortenPath}
+                          />
+                        );
+                      })}
                     </div>
-                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); startRename(task); }}
-                        title="Rename (F2)"
-                        tabIndex={-1}
-                        className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
-                      >
-                        <ActionLabel text="Rename" showHint={idx === focusedIdx} />
-                      </button>
-                      {canReopen(task) && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
-                          title="Reopen task (Alt+O)"
-                          tabIndex={-1}
-                          className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
-                        >
-                          <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
-                        </button>
-                      )}
-                      {canArchive(task) && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
-                          title="Archive task (Alt+A)"
-                          tabIndex={-1}
-                          className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
-                        >
-                          <ActionLabel text="Archive" showHint={idx === focusedIdx} />
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
-                        title="Delete task and worktree (Alt+D)"
-                        tabIndex={-1}
-                        className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
-                      >
-                        <ActionLabel text="Delete" showHint={idx === focusedIdx} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                    {task.isExternal ? (
-                      <span className="font-mono">{shortenPath(task.worktreePath)}</span>
-                    ) : (
-                      <>
-                        <span>{repoName(task.repoId)}</span>
-                        <span>{task.branch}</span>
-                      </>
-                    )}
-                    <span>{formatDate(task.createdAt)}</span>
-                    {task.archivedAt && <span>Archived {formatDate(task.archivedAt)}</span>}
-                  </div>
-                </div>
-              ))}
+                  ));
+                })()
+              ) : (
+                flatTaskList.map((task, idx) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    idx={idx}
+                    focusedIdx={focusedIdx}
+                    editingId={editingId}
+                    editName={editName}
+                    setEditName={setEditName}
+                    setFocusedIdx={setFocusedIdx}
+                    itemRefs={itemRefs}
+                    handleActivate={handleActivate}
+                    startRename={startRename}
+                    submitRename={submitRename}
+                    setEditingId={setEditingId}
+                    handleReopen={handleReopen}
+                    handleArchive={handleArchive}
+                    handleDelete={handleDelete}
+                    canReopen={canReopen}
+                    canArchive={canArchive}
+                    repoName={repoName}
+                    shortenPath={shortenPath}
+                  />
+                ))
+              )}
             </>
           )}
         </div>
