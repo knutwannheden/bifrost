@@ -1,6 +1,14 @@
 import React from 'react';
 import type { Task, BifrostConfig, Repo } from '../../shared/types';
 
+function shortenHome(p: string): string {
+  const home = window.bifrost.homeDir;
+  if (home && p.startsWith(home)) {
+    return '~' + p.slice(home.length);
+  }
+  return p;
+}
+
 interface StatusBarProps {
   activeTask: Task | null;
   config: BifrostConfig | null;
@@ -22,7 +30,7 @@ export default function StatusBar({
         {activeTask && (
           <>
             <span className="truncate max-w-[300px]" title={activeTask.worktreePath}>
-              {activeTask.worktreePath}
+              {shortenHome(activeTask.worktreePath)}
             </span>
             <span className="capitalize">{activeTask.status}</span>
           </>

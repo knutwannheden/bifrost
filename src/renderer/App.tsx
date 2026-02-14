@@ -33,10 +33,13 @@ export default function App() {
 
   // Listen for session exit to update task status
   useEffect(() => {
-    const unsub = window.bifrost.onSessionExit((sessionId, _code) => {
+    const unsub = window.bifrost.onSessionExit((sessionId, code) => {
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task) {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
+        if (code !== 0) {
+          dispatch({ type: 'SHOW_TOAST', message: `${task.name} exited with code ${code}` });
+        }
       }
     });
     return unsub;

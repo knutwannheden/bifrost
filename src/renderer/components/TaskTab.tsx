@@ -3,6 +3,7 @@ import type { Task } from '../../shared/types';
 
 interface TaskTabProps {
   task: Task;
+  repoName: string;
   isActive: boolean;
   onClick: () => void;
   onClose: () => void;
@@ -15,7 +16,7 @@ const statusColors: Record<string, string> = {
   error: 'bg-red-400',
 };
 
-export default function TaskTab({ task, isActive, onClick, onClose, onRename }: TaskTabProps) {
+export default function TaskTab({ task, repoName, isActive, onClick, onClose, onRename }: TaskTabProps) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(task.name);
@@ -61,7 +62,7 @@ export default function TaskTab({ task, isActive, onClick, onClose, onRename }: 
 
   return (
     <button
-      className={`flex items-center gap-1.5 px-3 h-full text-sm whitespace-nowrap transition-colors ${
+      className={`flex items-center gap-1.5 px-3 h-full whitespace-nowrap transition-colors ${
         isActive
           ? 'bg-slate-700 border-b-2 border-blue-500 text-slate-200'
           : 'bg-transparent hover:bg-slate-700/50 text-slate-400'
@@ -71,11 +72,16 @@ export default function TaskTab({ task, isActive, onClick, onClose, onRename }: 
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColors[task.status]}`} />
-      {task.hasUnread && !isActive && (
-        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
-      )}
-      <span className="truncate max-w-[120px]">{task.name}</span>
+      <span className="flex flex-col items-center min-w-0 max-w-[200px]">
+        <span className="flex items-center gap-1.5">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColors[task.status]}`} />
+          {task.hasUnread && !isActive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
+          )}
+          <span className="text-xs leading-tight truncate">{task.name}</span>
+        </span>
+        <span className="text-[9px] leading-tight truncate max-w-full text-slate-500">{repoName}</span>
+      </span>
       {hovered && (
         <span
           className="ml-1 text-slate-500 hover:text-slate-200 flex-shrink-0"

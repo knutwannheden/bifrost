@@ -86,6 +86,9 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.NOTIFICATION, handler);
   },
 
+  // Platform
+  homeDir: process.env.HOME || '',
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) =>
