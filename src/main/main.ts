@@ -44,25 +44,25 @@ const createWindow = () => {
 };
 
 function installMcpServer(): void {
-  const destDir = path.join(os.homedir(), '.bifrost', 'mcp');
-  const srcDir = path.join(app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..', '..'), 'src', 'mcp-server');
+  try {
+    const destDir = path.join(os.homedir(), '.bifrost', 'mcp');
+    const srcDir = path.join(app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..', '..'), 'src', 'mcp-server');
 
-  if (!fs.existsSync(srcDir)) return;
-  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    if (!fs.existsSync(srcDir)) return;
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-  // Copy server.mjs and package.json
-  for (const file of ['server.mjs', 'package.json']) {
-    fs.copyFileSync(path.join(srcDir, file), path.join(destDir, file));
-  }
-
-  // Install deps if node_modules is missing or package.json changed
-  const destModules = path.join(destDir, 'node_modules');
-  if (!fs.existsSync(destModules)) {
-    try {
-      execSync('npm install --production', { cwd: destDir, stdio: 'ignore', timeout: 30000 });
-    } catch {
-      // best-effort
+    // Copy server.mjs and package.json
+    for (const file of ['server.mjs', 'package.json']) {
+      fs.copyFileSync(path.join(srcDir, file), path.join(destDir, file));
     }
+
+    // Install deps if node_modules is missing or package.json changed
+    const destModules = path.join(destDir, 'node_modules');
+    if (!fs.existsSync(destModules)) {
+      execSync('npm install --production', { cwd: destDir, stdio: 'ignore', timeout: 30000 });
+    }
+  } catch {
+    // Best-effort — MCP server is optional
   }
 }
 

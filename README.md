@@ -41,6 +41,34 @@ Bifrost lets you run multiple Claude Code sessions side-by-side, each in its own
 | Cmd+Shift+[ / ] | Previous / next tab |
 | Cmd+1-9 | Switch to tab N |
 
+## MCP Server
+
+Bifrost includes an MCP server that lets Claude Code sessions access captured context, task diffs, and activity logs. On startup, Bifrost automatically installs the server to `~/.bifrost/mcp/`.
+
+To enable it, add the following to your Claude Code MCP config (`~/.claude/claude_desktop_config.json` or project `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "bifrost": {
+      "command": "node",
+      "args": ["~/.bifrost/mcp/server.mjs"]
+    }
+  }
+}
+```
+
+The MCP server provides these tools:
+
+| Tool | Description |
+|------|-------------|
+| `resolve_context` | Resolve a `[Bifrost #N]` context reference to its content |
+| `list_tasks` | List all Bifrost tasks with status and branch info |
+| `get_task_diff` | Get the git diff for a task |
+| `get_activity_log` | Get recent file changes, commits, and Claude events |
+
+The server communicates with Bifrost's HTTP API (port 7623-7632) via `~/.bifrost/api-port`. Sessions launched from Bifrost automatically receive `BIFROST_TASK_ID` and `BIFROST_API_PORT` environment variables.
+
 ## Development
 
 ```bash
