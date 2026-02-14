@@ -120,7 +120,12 @@ export default function App() {
         }
         case 'open-in-ide': {
           const task = state.tasks.find((t) => t.id === state.activeTaskId);
-          if (task) window.bifrost.openInIde(task.worktreePath);
+          if (task) {
+            // From menu, try last changed file as fallback
+            window.bifrost.getLastChangedFile(task.id)
+              .then((lastFile) => window.bifrost.openInIde(task.worktreePath, lastFile ?? undefined))
+              .catch(() => window.bifrost.openInIde(task.worktreePath));
+          }
           break;
         }
       }

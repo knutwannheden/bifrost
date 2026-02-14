@@ -60,7 +60,8 @@ const api: BifrostAPI = {
   setTerminalTitle: (taskId, title) => ipcRenderer.invoke(IPC.SET_TERMINAL_TITLE, taskId, title),
 
   // IDE
-  openInIde: (worktreePath) => ipcRenderer.invoke(IPC.OPEN_IN_IDE, worktreePath),
+  openInIde: (worktreePath, filePath?, line?) => ipcRenderer.invoke(IPC.OPEN_IN_IDE, worktreePath, filePath, line),
+  getLastChangedFile: (taskId) => ipcRenderer.invoke(IPC.GET_LAST_CHANGED_FILE, taskId),
 
   // Context capture
   captureContext: (params) =>

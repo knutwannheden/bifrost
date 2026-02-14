@@ -276,6 +276,17 @@ export function getActivityLog(taskId: string, worktreePath: string): ActivityEn
   return [...fileEntries, ...claudeEntries].sort((a, b) => a.timestamp - b.timestamp);
 }
 
+export function getLastChangedFile(taskId: string): string | null {
+  const tw = watchers.get(taskId);
+  const entries = tw ? tw.entries : loadEntries(taskId);
+  for (let i = entries.length - 1; i >= 0; i--) {
+    if (entries[i].type === 'file_change' && entries[i].filePath) {
+      return entries[i].filePath!;
+    }
+  }
+  return null;
+}
+
 export function clearActivityLog(taskId: string): void {
   const tw = watchers.get(taskId);
   if (tw) {

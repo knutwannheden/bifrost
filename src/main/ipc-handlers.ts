@@ -11,7 +11,7 @@ import { createSession, createShellSession, writeToSession, resizeSession, killS
 import { getDiff } from './diff-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
-import { startWatching, stopWatching, getActivityLog, clearActivityLog } from './activity-watcher';
+import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastChangedFile } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
@@ -285,8 +285,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // IDE
-  ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string) => {
-    return openInIde(worktreePath);
+  ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string, filePath?: string, line?: number) => {
+    return openInIde(worktreePath, undefined, filePath, line);
+  });
+
+  ipcMain.handle(IPC.GET_LAST_CHANGED_FILE, (_event, taskId: string) => {
+    return getLastChangedFile(taskId);
   });
 
   // Activity Log

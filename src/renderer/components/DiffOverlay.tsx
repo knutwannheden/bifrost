@@ -370,6 +370,24 @@ export default function DiffOverlay() {
   if (!state.showDiff) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Cmd+O: open the focused entry's file in the IDE
+    if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
+      const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
+      if (activeTask) {
+        let filePath: string | undefined;
+        if (isActivity && filteredEntries.length > 0) {
+          const entry = filteredEntries[focusedIdx];
+          filePath = entry?.filePath;
+        }
+        if (filePath) {
+          e.preventDefault();
+          window.bifrost.openInIde(activeTask.worktreePath, filePath);
+          return;
+        }
+        // No file from focused entry — let useKeyboard handle it
+      }
+    }
+
     // Cmd+Shift+C: capture context for the focused entry
     if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'c') {
       if (isActivity && filteredEntries.length > 0) {

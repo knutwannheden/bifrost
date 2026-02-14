@@ -7,6 +7,41 @@ import { terminalRegistry } from './useTerminal';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
 
+/**
+ * Try to extract a file path (and optional line number) from text.
+ * Handles patterns like:
+ *   src/main/foo.ts:42:10
+ *   src/main/foo.ts:42
+ *   src/main/foo.ts
+ *   "path/to/file.ts"
+ *   (path/to/file.ts)
+ */
+function extractFilePath(text: string): { path: string; line?: number } | null {
+  let trimmed = text.trim();
+  if (!trimmed || trimmed.includes('\n')) return null;
+
+  // Strip matching quotes/parens/brackets
+  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+      (trimmed.startsWith('`') && trimmed.endsWith('`')) ||
+      (trimmed.startsWith('(') && trimmed.endsWith(')'))) {
+    trimmed = trimmed.slice(1, -1);
+  }
+
+  // Match file:line:col or file:line
+  const match = trimmed.match(/^(.+?):(\d+)(?::(\d+))?$/);
+  if (match) {
+    return { path: match[1], line: parseInt(match[2], 10) };
+  }
+
+  // Check if it looks like a file path (has extension or directory separator, no spaces)
+  if (/[/.]/.test(trimmed) && !/\s/.test(trimmed)) {
+    return { path: trimmed };
+  }
+
+  return null;
+}
+
 interface TerminalCapture {
   content: string;
   hasSelection: boolean;
@@ -297,9 +332,39 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         case 'o': {
           e.preventDefault();
           const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
-          if (activeTask) {
+          if (!activeTask) break;
+
+          const openFile = async () => {
+            // 1. Try terminal selection
+            const ps = state.paneStates[activeTask.id] ?? defaultPaneState;
+            const targetSessionId = ps.focusedPane === 'dev' && ps.devSessionId
+              ? ps.devSessionId
+              : activeTask.sessionId;
+            const terminal = terminalRegistry.get(targetSessionId);
+            const selection = terminal?.getSelection()?.trim();
+            if (selection) {
+              const extracted = extractFilePath(selection);
+              if (extracted) {
+                window.bifrost.openInIde(activeTask.worktreePath, extracted.path, extracted.line);
+                return;
+              }
+            }
+
+            // 2. Fall back to last changed file from activity watcher
+            try {
+              const lastFile = await window.bifrost.getLastChangedFile(activeTask.id);
+              if (lastFile) {
+                window.bifrost.openInIde(activeTask.worktreePath, lastFile);
+                return;
+              }
+            } catch {
+              // ignore — fall through to worktree
+            }
+
+            // 3. Fall back to just opening the worktree
             window.bifrost.openInIde(activeTask.worktreePath);
-          }
+          };
+          openFile();
           break;
         }
       }

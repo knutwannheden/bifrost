@@ -48,6 +48,7 @@ export const IPC = {
 
   // IDE
   OPEN_IN_IDE: 'ide:open',
+  GET_LAST_CHANGED_FILE: 'ide:last-changed-file',
 
   // Terminal title
   SET_TERMINAL_TITLE: 'task:set-terminal-title',
@@ -117,7 +118,8 @@ export interface BifrostAPI {
   setTerminalTitle(taskId: string, title: string): Promise<void>;
 
   // IDE
-  openInIde(worktreePath: string): Promise<void>;
+  openInIde(worktreePath: string, filePath?: string, line?: number): Promise<void>;
+  getLastChangedFile(taskId: string): Promise<string | null>;
 
   // Context capture
   captureContext(params: CaptureContextParams): Promise<number>;
