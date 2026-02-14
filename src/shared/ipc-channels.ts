@@ -39,6 +39,7 @@ export const IPC = {
   CLOSE_DEV_TERMINAL: 'session:close-dev-terminal',
   WRITE_TO_SESSION: 'session:write',
   RESIZE_SESSION: 'session:resize',
+  DRAIN_SESSION_BUFFER: 'session:drain-buffer',
 
   // Diff
   GET_DIFF: 'diff:get',
@@ -108,6 +109,7 @@ export interface BifrostAPI {
   closeDevTerminal(taskId: string): Promise<void>;
   writeToSession(sessionId: string, data: string): Promise<void>;
   resizeSession(sessionId: string, cols: number, rows: number): Promise<void>;
+  drainSessionBuffer(sessionId: string): Promise<string>;
   onSessionData(callback: (sessionId: string, data: string) => void): () => void;
   onSessionExit(callback: (sessionId: string, code: number) => void): () => void;
 

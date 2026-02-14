@@ -7,6 +7,11 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 const pty = require('node-pty');
 
 const sessions = new Map<string, IPty>();
+// Buffer recent output per session so the renderer can replay it on connect.
+// This handles the startup race where the PTY produces data before the
+// renderer's terminal listener is registered.
+const sessionBuffers = new Map<string, string>();
+const MAX_BUFFER = 256 * 1024; // 256 KB per session
 
 function spawnSession(
   sessionId: string,
@@ -34,8 +39,13 @@ function spawnSession(
   });
 
   sessions.set(sessionId, shell);
+  sessionBuffers.set(sessionId, '');
 
   shell.onData((data: string) => {
+    // Accumulate output so the renderer can replay on connect
+    const buf = (sessionBuffers.get(sessionId) ?? '') + data;
+    sessionBuffers.set(sessionId, buf.length > MAX_BUFFER ? buf.slice(-MAX_BUFFER) : buf);
+
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_STREAM.SESSION_DATA, sessionId, data);
     }
@@ -43,6 +53,7 @@ function spawnSession(
 
   shell.onExit(({ exitCode }: { exitCode: number }) => {
     sessions.delete(sessionId);
+    sessionBuffers.delete(sessionId);
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
     }
@@ -93,11 +104,19 @@ export function resizeSession(sessionId: string, cols: number, rows: number): vo
   }
 }
 
+/** Return buffered output and clear it (one-time replay for renderer connect). */
+export function drainSessionBuffer(sessionId: string): string {
+  const buf = sessionBuffers.get(sessionId) ?? '';
+  sessionBuffers.set(sessionId, '');
+  return buf;
+}
+
 export function killSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (session) {
     session.kill('SIGTERM');
     sessions.delete(sessionId);
+    sessionBuffers.delete(sessionId);
   }
 }
 

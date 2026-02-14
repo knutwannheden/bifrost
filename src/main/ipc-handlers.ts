@@ -7,7 +7,7 @@ import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, Captur
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
 import { createWorktree, removeWorktree } from './worktree-manager';
-import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './session-manager';
+import { createSession, createShellSession, writeToSession, resizeSession, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff } from './diff-service';
 import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
@@ -255,6 +255,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.RESIZE_SESSION, (_event, sessionId: string, cols: number, rows: number) => {
     resizeSession(sessionId, cols, rows);
+  });
+
+  ipcMain.handle(IPC.DRAIN_SESSION_BUFFER, (_event, sessionId: string) => {
+    return drainSessionBuffer(sessionId);
   });
 
   // Diff
