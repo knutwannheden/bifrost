@@ -111,9 +111,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_REPOS':
       return { ...state, repos: action.repos };
     case 'SET_TASKS': {
-      // Auto-select first non-archived task when none is active
+      // Auto-select first running task (prefer running over stopped)
       const autoSelect = !state.activeTaskId
-        ? (action.tasks.find((t) => t.status !== 'archived')?.id ?? null)
+        ? (action.tasks.find((t) => t.status === 'running')?.id
+           ?? action.tasks.find((t) => t.status !== 'archived')?.id
+           ?? null)
         : state.activeTaskId;
       return { ...state, tasks: action.tasks, tasksLoaded: true, activeTaskId: autoSelect };
     }

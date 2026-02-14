@@ -16,7 +16,7 @@ export function useTerminal(
   sessionId: string | null,
   containerRef: React.RefObject<HTMLDivElement | null>,
   onTitleChange?: (title: string) => void,
-  options?: TerminalOptions,
+  options?: TerminalOptions & { active?: boolean },
 ) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -143,6 +143,18 @@ export function useTerminal(
       fitAddonRef.current = null;
     };
   }, [sessionId, containerRef]);
+
+  // Re-fit when the terminal becomes the active (visible) pane
+  const active = options?.active ?? true;
+  useEffect(() => {
+    if (active && fitAddonRef.current && terminalRef.current) {
+      try {
+        fitAddonRef.current.fit();
+      } catch {
+        // ignore fit errors
+      }
+    }
+  }, [active]);
 
   // Update fontSize dynamically when config changes
   const fontSize = options?.fontSize ?? 14;
