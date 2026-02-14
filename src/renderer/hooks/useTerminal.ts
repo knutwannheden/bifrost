@@ -77,6 +77,15 @@ export function useTerminal(
     fitAddonRef.current = fitAddon;
     terminalRegistry.set(sessionId, terminal);
 
+    // Let the app handle these Cmd+key shortcuts instead of xterm
+    terminal.attachCustomKeyEventHandler((e) => {
+      if (e.metaKey && !e.shiftKey) {
+        const key = e.key.toLowerCase();
+        if ('atdrhko'.includes(key)) return false;
+      }
+      return true;
+    });
+
     // Send keystrokes to session
     terminal.onData((data) => {
       window.bifrost.writeToSession(sessionId, data);

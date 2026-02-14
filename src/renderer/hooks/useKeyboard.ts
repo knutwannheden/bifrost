@@ -248,7 +248,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
       switch (key) {
         case 't':
           e.preventDefault();
-          dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true });
+          dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: !state.showCreateDialog });
           break;
 
         case 'w': {
@@ -329,13 +329,40 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           dispatch({ type: 'TOGGLE_TASK_HISTORY' });
           break;
 
+        case 'a':
+          e.preventDefault();
+          if (state.showDiff && state.diffMode === 'activity') {
+            dispatch({ type: 'TOGGLE_DIFF' });
+          } else {
+            dispatch({ type: 'SET_DIFF_MODE', mode: 'activity' });
+            if (!state.showDiff) {
+              dispatch({ type: 'TOGGLE_DIFF' });
+            }
+          }
+          break;
+
+        case 'k':
+          e.preventDefault();
+          dispatch({ type: 'TOGGLE_KEYBOARD_SHORTCUTS' });
+          break;
+
         case 'o': {
           e.preventDefault();
           const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
           if (!activeTask) break;
 
           const openFile = async () => {
-            // 1. Try terminal selection
+            // 1. Try DOM text selection (e.g. diff overlay, activity view)
+            const domSelection = window.getSelection()?.toString()?.trim();
+            if (domSelection) {
+              const extracted = extractFilePath(domSelection);
+              if (extracted) {
+                window.bifrost.openInIde(activeTask.worktreePath, extracted.path, extracted.line);
+                return;
+              }
+            }
+
+            // 2. Try terminal selection
             const ps = state.paneStates[activeTask.id] ?? defaultPaneState;
             const targetSessionId = ps.focusedPane === 'dev' && ps.devSessionId
               ? ps.devSessionId
@@ -350,7 +377,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
               }
             }
 
-            // 2. Fall back to last changed file from activity watcher
+            // 3. Fall back to last changed file from activity watcher
             try {
               const lastFile = await window.bifrost.getLastChangedFile(activeTask.id);
               if (lastFile) {
@@ -361,7 +388,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
               // ignore — fall through to worktree
             }
 
-            // 3. Fall back to just opening the worktree
+            // 4. Fall back to just opening the worktree
             window.bifrost.openInIde(activeTask.worktreePath);
           };
           openFile();

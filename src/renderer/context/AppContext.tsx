@@ -21,6 +21,7 @@ export interface AppState {
   createDialogRepoId: string | null;
   showDiff: boolean;
   showTaskHistory: boolean;
+  showKeyboardShortcuts: boolean;
   diffMode: DiffMode;
   paneStates: Record<string, TaskPaneState>;
   toast: string | null;
@@ -41,6 +42,7 @@ export type AppAction =
   | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean; repoId?: string }
   | { type: 'TOGGLE_DIFF' }
   | { type: 'TOGGLE_TASK_HISTORY' }
+  | { type: 'TOGGLE_KEYBOARD_SHORTCUTS' }
   | { type: 'SET_DIFF_MODE'; mode: DiffMode }
   | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
   | { type: 'CLOSE_DEV_SESSION'; taskId: string }
@@ -61,6 +63,7 @@ const initialState: AppState = {
   createDialogRepoId: null,
   showDiff: false,
   showTaskHistory: false,
+  showKeyboardShortcuts: false,
   diffMode: 'git',
   paneStates: {},
   toast: null,
@@ -129,13 +132,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ),
       };
     case 'TOGGLE_REPO_MANAGER':
-      return { ...state, showRepoManager: !state.showRepoManager };
+      return { ...state, showRepoManager: !state.showRepoManager, showCreateDialog: false, showDiff: false, showTaskHistory: false, showKeyboardShortcuts: false };
     case 'SHOW_CREATE_TASK_DIALOG':
-      return { ...state, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null };
+      return { ...state, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null, showRepoManager: false, showDiff: false, showTaskHistory: false, showKeyboardShortcuts: false };
     case 'TOGGLE_DIFF':
-      return { ...state, showDiff: !state.showDiff };
+      return { ...state, showDiff: !state.showDiff, showRepoManager: false, showCreateDialog: false, showTaskHistory: false, showKeyboardShortcuts: false };
     case 'TOGGLE_TASK_HISTORY':
-      return { ...state, showTaskHistory: !state.showTaskHistory };
+      return { ...state, showTaskHistory: !state.showTaskHistory, showRepoManager: false, showCreateDialog: false, showDiff: false, showKeyboardShortcuts: false };
+    case 'TOGGLE_KEYBOARD_SHORTCUTS':
+      return { ...state, showKeyboardShortcuts: !state.showKeyboardShortcuts, showRepoManager: false, showCreateDialog: false, showDiff: false, showTaskHistory: false };
     case 'SET_DIFF_MODE':
       return { ...state, diffMode: action.mode };
     case 'SET_DEV_SESSION': {

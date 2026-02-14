@@ -10,6 +10,7 @@ import RepoManager from './components/RepoManager';
 import TaskCreateDialog from './components/TaskCreateDialog';
 import DiffOverlay from './components/DiffOverlay';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
+import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
 
 declare global {
   interface Window {
@@ -45,16 +46,16 @@ export default function App() {
     return unsub;
   }, [state.tasks, dispatch]);
 
-  // Listen for session data to mark non-active tasks as unread
+  // Mark non-active tasks as unread when new JSONL activity arrives
+  // (actual Claude interactions, not terminal noise).
   useEffect(() => {
-    const unsub = window.bifrost.onSessionData((sessionId, _data) => {
-      const task = state.tasks.find((t) => t.sessionId === sessionId);
-      if (task && task.id !== state.activeTaskId) {
-        dispatch({ type: 'SET_TASK_UNREAD', taskId: task.id, hasUnread: true });
+    const unsub = window.bifrost.onActivityEntry((entry) => {
+      if (entry.type === 'claude_event' && entry.taskId !== state.activeTaskId) {
+        dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
       }
     });
     return unsub;
-  }, [state.tasks, state.activeTaskId, dispatch]);
+  }, [state.activeTaskId, dispatch]);
 
   // Listen for menu actions from the main process
   useEffect(() => {
@@ -177,6 +178,7 @@ export default function App() {
       {state.showRepoManager && <RepoManager />}
       {state.showCreateDialog && <TaskCreateDialog />}
       {state.showTaskHistory && <TaskHistoryPanel />}
+      {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
 
       {/* Diff overlay */}
       <DiffOverlay />
