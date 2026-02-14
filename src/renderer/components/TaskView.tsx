@@ -21,14 +21,6 @@ export default function TaskView() {
   const openTasks = state.tasks.filter((t) => t.status === 'running');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
 
-  // Auto-select a running task if none is active (handles startup race)
-  const hasOpenTasks = openTasks.length > 0;
-  useEffect(() => {
-    if (!activeTask && hasOpenTasks) {
-      dispatch({ type: 'SET_ACTIVE_TASK', taskId: openTasks[0].id });
-    }
-  }, [activeTask, hasOpenTasks, openTasks, dispatch]);
-
   const handlePaneFocus = useCallback((taskId: string, pane: PaneTarget) => {
     dispatch({ type: 'SET_PANE_FOCUS', taskId, pane });
   }, [dispatch]);
