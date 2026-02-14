@@ -329,8 +329,8 @@ export function startClaudeWatching(
 
 /**
  * Read recent entries from JSONL files for a task.
- * Reads the largest JSONL file (the one with actual conversation data)
- * since small files are typically failed/empty sessions.
+ * Reads from all JSONL files above a minimum size (to skip failed/empty sessions),
+ * merges entries, and returns the most recent ones sorted by timestamp.
  */
 export function getRecentClaudeEntries(taskId: string, worktreePath: string): ActivityEntry[] {
   const dirName = projectDirName(worktreePath);
@@ -338,21 +338,21 @@ export function getRecentClaudeEntries(taskId: string, worktreePath: string): Ac
 
   if (!fs.existsSync(projectDir)) return [];
 
-  // Find the largest JSONL file (most likely to contain actual conversation)
-  let bestFile: { path: string; size: number } | null = null;
+  const allEntries: ActivityEntry[] = [];
   for (const file of fs.readdirSync(projectDir)) {
     if (!file.endsWith('.jsonl')) continue;
     const filePath = path.join(projectDir, file);
     try {
       const stat = fs.statSync(filePath);
-      if (!bestFile || stat.size > bestFile.size) {
-        bestFile = { path: filePath, size: stat.size };
-      }
+      if (stat.size < 500) continue; // skip empty/failed sessions
+      const entries = readRecentEntries(filePath, taskId, 50);
+      allEntries.push(...entries);
     } catch { /* ignore */ }
   }
 
-  if (!bestFile || bestFile.size < 500) return [];
-  return readRecentEntries(bestFile.path, taskId, 50);
+  if (allEntries.length === 0) return [];
+  allEntries.sort((a, b) => a.timestamp - b.timestamp);
+  return allEntries.slice(-50);
 }
 
 export function stopClaudeWatching(taskId: string): void {

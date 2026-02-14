@@ -123,6 +123,9 @@ export default function App() {
           }
           break;
         }
+        case 'quit-confirm':
+          dispatch({ type: 'SHOW_TOAST', message: 'Press ⌘Q again to quit' });
+          break;
         case 'open-in-ide': {
           const task = state.tasks.find((t) => t.id === state.activeTaskId);
           if (task) {

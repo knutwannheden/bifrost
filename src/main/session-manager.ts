@@ -64,7 +64,7 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; sandbox?: boolean },
+  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; sandbox?: boolean; prompt?: string },
 ): void {
   const args: string[] = [];
   if (options?.claudeSessionId) {
@@ -74,6 +74,9 @@ export function createSession(
   }
   if (options?.sandbox) {
     args.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
+  }
+  if (options?.prompt) {
+    args.push(options.prompt);
   }
   const extraEnv: Record<string, string> = {};
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;

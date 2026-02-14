@@ -10,6 +10,7 @@ interface TerminalOptions {
   cursorBlink?: boolean;
   hideCursor?: boolean;
   fontSize?: number;
+  themeBackground?: string;
 }
 
 export function useTerminal(
@@ -27,6 +28,7 @@ export function useTerminal(
     if (!sessionId || !containerRef.current) return;
 
     const hideCursor = options?.hideCursor ?? false;
+    const bg = options?.themeBackground ?? '#282a36';
     const cursorConfig = hideCursor
       ? { cursorBlink: false, cursorStyle: 'bar' as const, cursorWidth: 1, cursorInactiveStyle: 'none' as const }
       : { cursorBlink: options?.cursorBlink ?? true, cursorStyle: 'block' as const, cursorInactiveStyle: 'outline' as const };
@@ -41,9 +43,9 @@ export function useTerminal(
         },
       },
       theme: {
-        background: '#282a36',
+        background: bg,
         foreground: '#f8f8f2',
-        cursor: hideCursor ? '#282a36' : '#f8f8f2',
+        cursor: hideCursor ? bg : '#f8f8f2',
         selectionBackground: '#44475a',
         selectionForeground: '#f8f8f2',
         black: '#21222c',
@@ -89,7 +91,11 @@ export function useTerminal(
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && !e.shiftKey) {
         const key = e.key.toLowerCase();
-        if ('atdrhko,lg'.includes(key)) return false;
+        if ('atdrhko,lgj'.includes(key)) return false;
+      }
+      if (e.metaKey && e.shiftKey) {
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'c') return false;
       }
       return true;
     });

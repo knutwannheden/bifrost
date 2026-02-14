@@ -5,6 +5,7 @@ interface TaskTabProps {
   task: Task;
   repoName: string;
   isActive: boolean;
+  isReviewActive?: boolean;
   onClick: () => void;
   onClose: () => void;
   onRename: (name: string) => void;
@@ -16,7 +17,7 @@ const statusColors: Record<string, string> = {
   error: 'bg-red-400',
 };
 
-export default function TaskTab({ task, repoName, isActive, onClick, onClose, onRename }: TaskTabProps) {
+export default function TaskTab({ task, repoName, isActive, isReviewActive, onClick, onClose, onRename }: TaskTabProps) {
   const [hovered, setHovered] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(task.name);
@@ -79,6 +80,9 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
           )}
           <span className="text-xs leading-tight truncate">{task.name}</span>
+          {isReviewActive && (
+            <span className="text-[9px] text-purple-400 flex-shrink-0">Review</span>
+          )}
         </span>
         <span className="text-[9px] leading-tight truncate max-w-full text-slate-500">{repoName}</span>
       </span>

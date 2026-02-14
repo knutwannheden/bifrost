@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Terminal } from '@xterm/xterm';
 import type { AppState, AppAction, PaneTarget } from '../context/AppContext';
 import type { CaptureContextParams } from '../../shared/types';
@@ -6,6 +6,7 @@ import { defaultPaneState } from '../context/AppContext';
 import { terminalRegistry } from './useTerminal';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
+const DOUBLE_PRESS_MS = 500;
 
 /**
  * Try to extract a file path (and optional line number) from text.
@@ -138,6 +139,9 @@ function findTranscriptText(terminal: Terminal, hasSelection: boolean): string |
 }
 
 export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>) {
+  const lastCmdWRef = useRef(0);
+  const lastStoppedTaskRef = useRef<string | null>(null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!e.metaKey) return;
@@ -216,6 +220,21 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         return;
       }
 
+      // Cmd+Shift+W: reopen last stopped task
+      if (e.shiftKey && key === 'w') {
+        e.preventDefault();
+        const taskId = lastStoppedTaskRef.current;
+        if (!taskId) return;
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (!task || task.status === 'running') return;
+        lastStoppedTaskRef.current = null;
+        window.bifrost.reopenTask(taskId).then((updated) => {
+          dispatch({ type: 'UPDATE_TASK', task: updated });
+          dispatch({ type: 'SET_ACTIVE_TASK', taskId: updated.id });
+        });
+        return;
+      }
+
       // Cmd+Shift+[ or Cmd+Shift+]: switch to prev/next tab
       if (e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
         e.preventDefault();
@@ -249,11 +268,36 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: !state.showCreateDialog });
           break;
 
+        case 'j': {
+          e.preventDefault();
+          if (!state.activeTaskId) break;
+          const taskId = state.activeTaskId;
+          const ps = state.paneStates[taskId] ?? defaultPaneState;
+
+          if (!ps.reviewSessionId) {
+            // Create review session on first press
+            window.bifrost.createReviewSession(taskId).then((reviewSessionId) => {
+              dispatch({ type: 'SET_REVIEW_SESSION', taskId, reviewSessionId });
+            });
+          } else {
+            // Toggle between main and review
+            dispatch({ type: 'CYCLE_SESSION', taskId });
+          }
+          break;
+        }
+
         case 'w': {
           e.preventDefault();
           if (!state.activeTaskId) break;
           const taskId = state.activeTaskId;
           const ps = state.paneStates[taskId] ?? defaultPaneState;
+
+          // If the review session is showing, close just the review pane
+          if (ps.reviewSessionId && ps.activeSession === 'review') {
+            window.bifrost.closeReviewSession(taskId);
+            dispatch({ type: 'CLOSE_REVIEW_SESSION', taskId });
+            break;
+          }
 
           // Hide the focused pane
           const hiding = ps.focusedPane;
@@ -266,11 +310,24 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
             dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
           } else {
-            // Both panes will be hidden — close the tab
+            // About to close the tab — require double Cmd+W
+            const now = Date.now();
+            if (now - lastCmdWRef.current >= DOUBLE_PRESS_MS) {
+              lastCmdWRef.current = now;
+              dispatch({ type: 'SHOW_TOAST', message: 'Press ⌘W again to stop task' });
+              break;
+            }
+            lastCmdWRef.current = 0;
+
             if (ps.devSessionId) {
               window.bifrost.closeDevTerminal(taskId);
               dispatch({ type: 'CLOSE_DEV_SESSION', taskId });
             }
+            if (ps.reviewSessionId) {
+              window.bifrost.closeReviewSession(taskId);
+              dispatch({ type: 'CLOSE_REVIEW_SESSION', taskId });
+            }
+            lastStoppedTaskRef.current = taskId;
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
               const remaining = state.tasks.filter(

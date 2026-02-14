@@ -12,7 +12,7 @@ import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
 import { createWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, killSession, drainSessionBuffer } from './session-manager';
-import { getDiff } from './diff-service';
+import { getDiff, getDiffStats } from './diff-service';
 import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
@@ -24,6 +24,30 @@ import { summarizeTask, countJsonlLines } from './task-summarizer';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
+
+// Review sessions: taskId -> review PTY sessionId
+const reviewSessions = new Map<string, string>();
+// Saved claudeSessionId before review session started, so we can restore it
+const savedClaudeSessionIds = new Map<string, string | undefined>();
+
+/** Kill a review session and restore the task's original claudeSessionId. */
+function cleanupReviewSession(taskId: string): void {
+  const reviewId = reviewSessions.get(taskId);
+  if (reviewId) {
+    killSession(reviewId);
+    reviewSessions.delete(taskId);
+  }
+  const savedId = savedClaudeSessionIds.get(taskId);
+  if (savedId !== undefined) {
+    // Restore the original claudeSessionId so reopening resumes the main session
+    const idx = tasks.findIndex((t) => t.id === taskId);
+    if (idx !== -1) {
+      tasks[idx] = { ...tasks[idx], claudeSessionId: savedId };
+      saveTasks(tasks);
+    }
+    savedClaudeSessionIds.delete(taskId);
+  }
+}
 
 export function getTasks(): Task[] {
   return tasks;
@@ -49,6 +73,7 @@ async function destroyTask(taskId: string): Promise<void> {
   if (task.status === 'running') {
     killSession(task.sessionId);
   }
+  cleanupReviewSession(taskId);
   if (fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
@@ -102,6 +127,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     },
     onSessionChange: (taskId: string, claudeSessionId: string) => {
       try {
+        // Skip if a review session is active — prevents the review JSONL
+        // from overwriting the task's main session ID
+        if (reviewSessions.has(taskId)) return;
         updateTask(taskId, { claudeSessionId });
       } catch { /* task may have been deleted */ }
     },
@@ -187,6 +215,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (task.status === 'running') {
       killSession(task.sessionId);
     }
+    cleanupReviewSession(taskId);
     return updateTask(taskId, { status: 'stopped' });
   });
 
@@ -199,6 +228,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (task.status === 'running') {
       killSession(task.sessionId);
     }
+
+    cleanupReviewSession(taskId);
 
     return updateTask(taskId, {
       status: 'archived',
@@ -269,6 +300,34 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
+  // Review sessions
+  ipcMain.handle(IPC.CREATE_REVIEW_SESSION, (_event, taskId: string) => {
+    const task = getTask(taskId);
+
+    // Kill existing review session if any
+    const existing = reviewSessions.get(taskId);
+    if (existing) killSession(existing);
+
+    // Save the current claudeSessionId so we can restore it after the review ends
+    if (!savedClaudeSessionIds.has(taskId)) {
+      savedClaudeSessionIds.set(taskId, task.claudeSessionId);
+    }
+
+    const reviewSessionId = randomUUID();
+    const config = loadConfig();
+    createSession(reviewSessionId, task.worktreePath, mainWindow, {
+      sandbox: config.sandbox,
+      prompt: '/review',
+    });
+    reviewSessions.set(taskId, reviewSessionId);
+
+    return reviewSessionId;
+  });
+
+  ipcMain.handle(IPC.CLOSE_REVIEW_SESSION, (_event, taskId: string) => {
+    cleanupReviewSession(taskId);
+  });
+
   // Terminal sessions
   ipcMain.handle(IPC.WRITE_TO_SESSION, (_event, sessionId: string, data: string) => {
     writeToSession(sessionId, data);
@@ -286,6 +345,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string) => {
     const task = getTask(taskId);
     return getDiff(task.worktreePath);
+  });
+
+  // Diff stats
+  ipcMain.handle(IPC.GET_DIFF_STATS, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    return getDiffStats(task.worktreePath);
   });
 
   // Git log

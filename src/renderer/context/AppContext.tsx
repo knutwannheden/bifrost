@@ -6,6 +6,8 @@ export type PaneTarget = 'claude' | 'dev';
 
 export interface TaskPaneState {
   devSessionId: string | null;
+  reviewSessionId: string | null;
+  activeSession: 'main' | 'review';
   claudeHidden: boolean;
   devHidden: boolean;
   focusedPane: PaneTarget;
@@ -55,7 +57,10 @@ export type AppAction =
   | { type: 'SHOW_TOAST'; message: string }
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
-  | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string };
+  | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
+  | { type: 'SET_REVIEW_SESSION'; taskId: string; reviewSessionId: string }
+  | { type: 'CLOSE_REVIEW_SESSION'; taskId: string }
+  | { type: 'CYCLE_SESSION'; taskId: string };
 
 const initialState: AppState = {
   repos: [],
@@ -78,6 +83,8 @@ const initialState: AppState = {
 
 export const defaultPaneState: TaskPaneState = {
   devSessionId: null,
+  reviewSessionId: null,
+  activeSession: 'main',
   claudeHidden: false,
   devHidden: false,
   focusedPane: 'claude',
@@ -203,6 +210,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
           t.id === action.taskId ? { ...t, summary: action.summary } : t,
         ),
       };
+    case 'SET_REVIEW_SESSION': {
+      const ps = getPaneState(state, action.taskId);
+      return setPaneState(state, action.taskId, { ...ps, reviewSessionId: action.reviewSessionId, activeSession: 'review' });
+    }
+    case 'CLOSE_REVIEW_SESSION': {
+      const ps = getPaneState(state, action.taskId);
+      return setPaneState(state, action.taskId, { ...ps, reviewSessionId: null, activeSession: 'main' });
+    }
+    case 'CYCLE_SESSION': {
+      const ps = getPaneState(state, action.taskId);
+      if (!ps.reviewSessionId) return state;
+      return setPaneState(state, action.taskId, { ...ps, activeSession: ps.activeSession === 'main' ? 'review' : 'main' });
+    }
     default:
       return state;
   }

@@ -134,6 +134,12 @@ export interface GitLogEntry {
   date: string; // ISO 8601
 }
 
+export interface DiffStats {
+  additions: number;
+  deletions: number;
+  filesChanged: number;
+}
+
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',

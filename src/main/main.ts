@@ -72,6 +72,9 @@ function installMcpServer(): void {
   }
 }
 
+let lastQuitAttempt = 0;
+const DOUBLE_TAP_MS = 500;
+
 function buildMenu() {
   const sendAction = (action: string) => {
     mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, action);
@@ -89,7 +92,19 @@ function buildMenu() {
         { role: 'hideOthers' as const },
         { role: 'unhide' as const },
         { type: 'separator' as const },
-        { role: 'quit' as const },
+        {
+          label: 'Quit Bifrost',
+          accelerator: 'CommandOrControl+Q',
+          click: () => {
+            const now = Date.now();
+            if (now - lastQuitAttempt < DOUBLE_TAP_MS) {
+              app.quit();
+            } else {
+              lastQuitAttempt = now;
+              mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, 'quit-confirm');
+            }
+          },
+        },
       ],
     }] : []),
     // File

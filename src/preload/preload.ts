@@ -26,6 +26,8 @@ const api: BifrostAPI = {
   // Terminal
   createDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CREATE_DEV_TERMINAL, taskId),
   closeDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CLOSE_DEV_TERMINAL, taskId),
+  createReviewSession: (taskId) => ipcRenderer.invoke(IPC.CREATE_REVIEW_SESSION, taskId),
+  closeReviewSession: (taskId) => ipcRenderer.invoke(IPC.CLOSE_REVIEW_SESSION, taskId),
   writeToSession: (sessionId, data) =>
     ipcRenderer.invoke(IPC.WRITE_TO_SESSION, sessionId, data),
   resizeSession: (sessionId, cols, rows) =>
@@ -47,6 +49,7 @@ const api: BifrostAPI = {
 
   // Diff
   getDiff: (taskId) => ipcRenderer.invoke(IPC.GET_DIFF, taskId),
+  getDiffStats: (taskId) => ipcRenderer.invoke(IPC.GET_DIFF_STATS, taskId),
   getGitLog: (taskId) => ipcRenderer.invoke(IPC.GET_GIT_LOG, taskId),
   getPrUrl: (taskId) => ipcRenderer.invoke(IPC.GET_PR_URL, taskId),
 

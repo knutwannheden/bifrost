@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import ActionLabel from './ActionLabel';
-import type { Task, ClaudeSession } from '../../shared/types';
+import DiffStatsBadge from './DiffStatsBadge';
+import type { Task, ClaudeSession, DiffStats } from '../../shared/types';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -54,6 +55,7 @@ interface TaskRowProps {
   focusedIdx: number;
   editingId: string | null;
   editName: string;
+  diffStats?: DiffStats | null;
   setEditName: (name: string) => void;
   setFocusedIdx: (idx: number) => void;
   itemRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
@@ -71,7 +73,7 @@ interface TaskRowProps {
 }
 
 function TaskRow({
-  task, idx, focusedIdx, editingId, editName, setEditName,
+  task, idx, focusedIdx, editingId, editName, diffStats, setEditName,
   setFocusedIdx, itemRefs, handleActivate, startRename, submitRename,
   setEditingId, handleReopen, handleArchive, handleDelete,
   canReopen, canArchive, repoName, shortenPath,
@@ -113,6 +115,9 @@ function TaskRow({
           <span className={`text-xs ${statusColor[task.status]}`}>
             {statusLabel[task.status]}
           </span>
+          {diffStats && (
+            <DiffStatsBadge additions={diffStats.additions} deletions={diffStats.deletions} />
+          )}
           {task.isExternal && (
             <span className="text-xs text-slate-600">external</span>
           )}
@@ -185,11 +190,33 @@ export default function TaskHistoryPanel() {
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ClaudeSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [diffStatsMap, setDiffStatsMap] = useState<Map<string, DiffStats>>(new Map());
   const overlayRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
 
   const isSessionsMode = filter === 'sessions';
+
+  // Fetch diff stats for visible tasks
+  useEffect(() => {
+    if (isSessionsMode) return;
+    const tasksToFetch = state.tasks.filter((t) => t.status !== 'archived' && !diffStatsMap.has(t.id));
+    if (tasksToFetch.length === 0) return;
+
+    for (const task of tasksToFetch) {
+      window.bifrost.getDiffStats(task.id).then((stats) => {
+        if (stats) {
+          setDiffStatsMap((prev) => {
+            const next = new Map(prev);
+            next.set(task.id, stats);
+            return next;
+          });
+        }
+      }).catch(() => {
+        // ignore errors
+      });
+    }
+  }, [state.tasks, isSessionsMode]);
 
   // Load sessions when switching to sessions tab
   useEffect(() => {
@@ -600,6 +627,7 @@ export default function TaskHistoryPanel() {
                             focusedIdx={focusedIdx}
                             editingId={editingId}
                             editName={editName}
+                            diffStats={diffStatsMap.get(task.id)}
                             setEditName={setEditName}
                             setFocusedIdx={setFocusedIdx}
                             itemRefs={itemRefs}
@@ -629,6 +657,7 @@ export default function TaskHistoryPanel() {
                     focusedIdx={focusedIdx}
                     editingId={editingId}
                     editName={editName}
+                    diffStats={diffStatsMap.get(task.id)}
                     setEditName={setEditName}
                     setFocusedIdx={setFocusedIdx}
                     itemRefs={itemRefs}

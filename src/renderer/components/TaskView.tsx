@@ -110,16 +110,41 @@ export default function TaskView() {
                 minHeight: 0,
                 display: showClaude ? 'block' : 'none',
                 overflow: 'hidden',
+                position: 'relative',
               }}
             >
-              <TerminalPane
-                sessionId={task.sessionId}
-                active={isActive}
-                focused={ps.focusedPane === 'claude'}
-                hideCursor
-                onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
-                onTitleChange={(title) => handleTitleChange(task.id, title)}
-              />
+              {/* Main terminal */}
+              <div style={{
+                position: 'absolute',
+                inset: 0,
+                display: ps.activeSession === 'main' ? 'block' : 'none',
+              }}>
+                <TerminalPane
+                  sessionId={task.sessionId}
+                  active={isActive && ps.activeSession === 'main'}
+                  focused={ps.focusedPane === 'claude'}
+                  hideCursor
+                  onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
+                  onTitleChange={(title) => handleTitleChange(task.id, title)}
+                />
+              </div>
+              {/* Review terminal — rendered when session exists, hidden via CSS */}
+              {ps.reviewSessionId && (
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: ps.activeSession === 'review' ? 'block' : 'none',
+                }}>
+                  <TerminalPane
+                    sessionId={ps.reviewSessionId}
+                    active={isActive && ps.activeSession === 'review'}
+                    focused={ps.focusedPane === 'claude'}
+                    hideCursor
+                    themeBackground="#2d2636"
+                    onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Draggable divider between panes */}

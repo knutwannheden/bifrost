@@ -1,5 +1,5 @@
 import TaskTab from './TaskTab';
-import { useApp } from '../context/AppContext';
+import { useApp, defaultPaneState } from '../context/AppContext';
 
 function repoLabel(repoPath: string): string {
   const parts = repoPath.split('/').filter(Boolean);
@@ -23,12 +23,14 @@ export default function TaskBar() {
       {openTasks.map((task) => {
         const repo = repos.find((r) => r.id === task.repoId);
         const repoName = repo ? repoLabel(repo.path) : repoLabel(task.worktreePath);
+        const ps = state.paneStates[task.id] ?? defaultPaneState;
         return (
         <TaskTab
           key={task.id}
           task={task}
           repoName={repoName}
           isActive={task.id === state.activeTaskId}
+          isReviewActive={ps.activeSession === 'review'}
           onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
           onClose={() => {
             window.bifrost.stopTask(task.id).then((updated) => {

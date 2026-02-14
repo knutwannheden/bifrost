@@ -6,6 +6,7 @@ import type {
   ClaudeSession,
   CreateTaskParams,
   DiffResult,
+  DiffStats,
   GitLogEntry,
   Repo,
   Task,
@@ -37,12 +38,15 @@ export const IPC = {
   // Terminal sessions
   CREATE_DEV_TERMINAL: 'session:create-dev-terminal',
   CLOSE_DEV_TERMINAL: 'session:close-dev-terminal',
+  CREATE_REVIEW_SESSION: 'session:create-review',
+  CLOSE_REVIEW_SESSION: 'session:close-review',
   WRITE_TO_SESSION: 'session:write',
   RESIZE_SESSION: 'session:resize',
   DRAIN_SESSION_BUFFER: 'session:drain-buffer',
 
   // Diff
   GET_DIFF: 'diff:get',
+  GET_DIFF_STATS: 'diff:stats',
   GET_GIT_LOG: 'git:log',
   GET_PR_URL: 'git:pr-url',
 
@@ -109,6 +113,8 @@ export interface BifrostAPI {
   // Terminal
   createDevTerminal(taskId: string): Promise<string>;
   closeDevTerminal(taskId: string): Promise<void>;
+  createReviewSession(taskId: string): Promise<string>;
+  closeReviewSession(taskId: string): Promise<void>;
   writeToSession(sessionId: string, data: string): Promise<void>;
   resizeSession(sessionId: string, cols: number, rows: number): Promise<void>;
   drainSessionBuffer(sessionId: string): Promise<string>;
@@ -117,6 +123,7 @@ export interface BifrostAPI {
 
   // Diff
   getDiff(taskId: string): Promise<DiffResult>;
+  getDiffStats(taskId: string): Promise<DiffStats | null>;
   getGitLog(taskId: string): Promise<GitLogEntry[]>;
   getPrUrl(taskId: string): Promise<string | null>;
 

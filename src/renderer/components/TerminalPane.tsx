@@ -8,16 +8,17 @@ interface TerminalPaneProps {
   active: boolean;
   focused: boolean;
   hideCursor?: boolean;
+  themeBackground?: string;
   onFocusRequest?: () => void;
   onTitleChange?: (title: string) => void;
 }
 
-export default function TerminalPane({ sessionId, active, focused, hideCursor = false, onFocusRequest, onTitleChange }: TerminalPaneProps) {
+export default function TerminalPane({ sessionId, active, focused, hideCursor = false, themeBackground, onFocusRequest, onTitleChange }: TerminalPaneProps) {
   const { state } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
 
   const fontSize = state.config?.fontSize ?? 14;
-  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize });
+  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, themeBackground });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing
   const anyOverlay = state.showRepoManager || state.showCreateDialog || state.showDiff || state.showTaskHistory;
@@ -32,7 +33,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
       ref={containerRef}
       className="w-full h-full"
       style={{
-        backgroundColor: '#282a36',
+        backgroundColor: themeBackground ?? '#282a36',
         borderTop: focused ? '2px solid #3b82f6' : '2px solid transparent',
       }}
       onMouseDown={onFocusRequest}

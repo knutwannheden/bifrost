@@ -7,6 +7,7 @@ import { useGitLog } from '../hooks/useGitLog';
 import { parseDiff, extFromPath, diffFileStats } from '../utils/diff-parser';
 import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
+import DiffStatsBadge from './DiffStatsBadge';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import type { ActivityEntry, CaptureContextParams, GitLogEntry } from '../../shared/types';
@@ -288,10 +289,9 @@ function FileListSidebar({
 
   return (
     <div className="w-64 flex-shrink-0 border-r border-slate-700 overflow-y-auto">
-      <div className="px-3 py-2 border-b border-slate-700 text-xs text-slate-400">
+      <div className="px-3 py-2 border-b border-slate-700 text-xs text-slate-400 flex items-center gap-2">
         <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
-        <span className="ml-2 text-green-400">+{totalStats.additions}</span>
-        <span className="ml-1 text-red-400">-{totalStats.deletions}</span>
+        <DiffStatsBadge additions={totalStats.additions} deletions={totalStats.deletions} />
       </div>
       {files.map((data, idx) => {
         const path = data.file.newPath || data.file.oldPath;
@@ -318,10 +318,7 @@ function FileListSidebar({
               <div className="text-slate-200 truncate">{basename}</div>
               {dirname && <div className="text-slate-500 truncate">{dirname}</div>}
             </div>
-            <div className="flex-shrink-0 flex gap-1">
-              {stats.additions > 0 && <span className="text-green-400">+{stats.additions}</span>}
-              {stats.deletions > 0 && <span className="text-red-400">-{stats.deletions}</span>}
-            </div>
+            <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0" />
           </div>
         );
       })}
