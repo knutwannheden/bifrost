@@ -110,8 +110,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, config: action.config, repos: action.config.repos };
     case 'SET_REPOS':
       return { ...state, repos: action.repos };
-    case 'SET_TASKS':
-      return { ...state, tasks: action.tasks, tasksLoaded: true };
+    case 'SET_TASKS': {
+      // Auto-select first non-archived task when none is active
+      const autoSelect = !state.activeTaskId
+        ? (action.tasks.find((t) => t.status !== 'archived')?.id ?? null)
+        : state.activeTaskId;
+      return { ...state, tasks: action.tasks, tasksLoaded: true, activeTaskId: autoSelect };
+    }
     case 'ADD_TASK':
       return { ...state, tasks: [...state.tasks, action.task] };
     case 'REMOVE_TASK': {
@@ -210,11 +215,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     window.bifrost.listTasks().then((tasks) => {
       dispatch({ type: 'SET_TASKS', tasks });
-      // Auto-select first active (non-archived) task on startup
-      const active = tasks.find((t) => t.status !== 'archived');
-      if (active) {
-        dispatch({ type: 'SET_ACTIVE_TASK', taskId: active.id });
-      }
     });
   }, []);
 
