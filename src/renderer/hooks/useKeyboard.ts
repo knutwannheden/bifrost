@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { AppState, DiffMode } from '../context/AppContext';
+import type { AppState, DiffMode, PaneTarget } from '../context/AppContext';
 
 type AppAction =
   | { type: 'SET_ACTIVE_TASK'; taskId: string | null }
@@ -8,7 +8,12 @@ type AppAction =
   | { type: 'TOGGLE_REPO_MANAGER' }
   | { type: 'TOGGLE_DIFF' }
   | { type: 'TOGGLE_TASK_HISTORY' }
-  | { type: 'SET_DIFF_MODE'; mode: DiffMode };
+  | { type: 'SET_DIFF_MODE'; mode: DiffMode }
+  | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
+  | { type: 'CLOSE_DEV_SESSION'; taskId: string }
+  | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
+  | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
+  | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget };
 
 export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>) {
   useEffect(() => {
@@ -52,8 +57,26 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
         case 'w': {
           e.preventDefault();
-          if (state.activeTaskId) {
-            const taskId = state.activeTaskId;
+          if (!state.activeTaskId) break;
+          const taskId = state.activeTaskId;
+          const ps = state.paneStates[taskId] ?? { claudeHidden: false, devHidden: false, devSessionId: null, focusedPane: 'claude' as const };
+
+          // Hide the focused pane
+          const hiding = ps.focusedPane;
+          const otherPane: PaneTarget = hiding === 'claude' ? 'dev' : 'claude';
+          const otherHidden = otherPane === 'claude' ? ps.claudeHidden : ps.devHidden;
+          const otherExists = otherPane === 'dev' ? !!ps.devSessionId : true;
+
+          if (otherExists && !otherHidden) {
+            // Other pane is visible — hide current and focus other
+            dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
+          } else {
+            // Both panes will be hidden — close the tab
+            if (ps.devSessionId) {
+              window.bifrost.closeDevTerminal(taskId);
+              dispatch({ type: 'CLOSE_DEV_SESSION', taskId });
+            }
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
               const remaining = state.tasks.filter(
@@ -64,6 +87,33 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
                 taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
               });
             });
+          }
+          break;
+        }
+
+        case '/': {
+          e.preventDefault();
+          if (!state.activeTaskId) break;
+          const taskId = state.activeTaskId;
+          const ps = state.paneStates[taskId] ?? { claudeHidden: false, devHidden: false, devSessionId: null, focusedPane: 'claude' as const };
+
+          if (!ps.devSessionId) {
+            // No dev terminal yet — create one
+            window.bifrost.createDevTerminal(taskId).then((devSessionId) => {
+              dispatch({ type: 'SET_DEV_SESSION', taskId, devSessionId });
+            });
+          } else if (ps.claudeHidden) {
+            // Claude pane hidden — show it and focus it
+            dispatch({ type: 'SHOW_PANE', taskId, pane: 'claude' });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: 'claude' });
+          } else if (ps.devHidden) {
+            // Dev pane hidden — show it and focus it
+            dispatch({ type: 'SHOW_PANE', taskId, pane: 'dev' });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: 'dev' });
+          } else {
+            // Both visible — toggle focus
+            const newFocus: PaneTarget = ps.focusedPane === 'claude' ? 'dev' : 'claude';
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: newFocus });
           }
           break;
         }

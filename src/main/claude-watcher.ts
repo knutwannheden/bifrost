@@ -159,6 +159,28 @@ function readNewLines(filePath: string, offset: number): { lines: string[]; newO
   return { lines, newOffset: stat.size };
 }
 
+/**
+ * Read the tail of a JSONL file and parse the last N entries.
+ */
+function readRecentEntries(filePath: string, taskId: string, maxEntries: number): ActivityEntry[] {
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  const lines = content.split('\n').filter((l) => l.trim());
+  // Take only the last maxEntries lines
+  const recentLines = lines.slice(-maxEntries);
+  const entries: ActivityEntry[] = [];
+  for (const line of recentLines) {
+    const entry = parseJsonlLine(line, taskId);
+    if (entry) entries.push(entry);
+  }
+  return entries;
+}
+
 export function startClaudeWatching(
   taskId: string,
   worktreePath: string,
@@ -169,22 +191,17 @@ export function startClaudeWatching(
   const dirName = projectDirName(worktreePath);
   const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
 
-  if (!fs.existsSync(projectDir)) {
-    // No Claude project directory yet — we'll poll until it appears
-  }
-
   const fileOffsets = new Map<string, number>();
 
-  // Initialize offsets for existing files (skip existing content)
+  // Initialize offsets for existing files (skip existing content for live streaming)
   if (fs.existsSync(projectDir)) {
     for (const file of fs.readdirSync(projectDir)) {
-      if (file.endsWith('.jsonl')) {
-        const filePath = path.join(projectDir, file);
-        try {
-          const stat = fs.statSync(filePath);
-          fileOffsets.set(filePath, stat.size);
-        } catch { /* ignore */ }
-      }
+      if (!file.endsWith('.jsonl')) continue;
+      const filePath = path.join(projectDir, file);
+      try {
+        const stat = fs.statSync(filePath);
+        fileOffsets.set(filePath, stat.size);
+      } catch { /* ignore */ }
     }
   }
 
@@ -200,10 +217,9 @@ export function startClaudeWatching(
 
     for (const file of files) {
       const filePath = path.join(projectDir, file);
-      const offset = fileOffsets.get(filePath) ?? 0;
 
-      // For new files (offset 0), skip to end to avoid replaying history
-      if (offset === 0 && !fileOffsets.has(filePath)) {
+      // For new files not yet tracked, start from end
+      if (!fileOffsets.has(filePath)) {
         try {
           const stat = fs.statSync(filePath);
           fileOffsets.set(filePath, stat.size);
@@ -211,6 +227,7 @@ export function startClaudeWatching(
         continue;
       }
 
+      const offset = fileOffsets.get(filePath)!;
       const { lines, newOffset } = readNewLines(filePath, offset);
       if (newOffset !== offset) {
         fileOffsets.set(filePath, newOffset);
@@ -233,6 +250,34 @@ export function startClaudeWatching(
   }, 1000);
 
   watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer, latestClaudeSessionId: null });
+}
+
+/**
+ * Read recent entries from JSONL files for a task.
+ * Reads the largest JSONL file (the one with actual conversation data)
+ * since small files are typically failed/empty sessions.
+ */
+export function getRecentClaudeEntries(taskId: string, worktreePath: string): ActivityEntry[] {
+  const dirName = projectDirName(worktreePath);
+  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+
+  if (!fs.existsSync(projectDir)) return [];
+
+  // Find the largest JSONL file (most likely to contain actual conversation)
+  let bestFile: { path: string; size: number } | null = null;
+  for (const file of fs.readdirSync(projectDir)) {
+    if (!file.endsWith('.jsonl')) continue;
+    const filePath = path.join(projectDir, file);
+    try {
+      const stat = fs.statSync(filePath);
+      if (!bestFile || stat.size > bestFile.size) {
+        bestFile = { path: filePath, size: stat.size };
+      }
+    } catch { /* ignore */ }
+  }
+
+  if (!bestFile || bestFile.size < 500) return [];
+  return readRecentEntries(bestFile.path, taskId, 50);
 }
 
 export function stopClaudeWatching(taskId: string): void {

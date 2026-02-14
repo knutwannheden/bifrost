@@ -8,7 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import type { ActivityEntry } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import { startClaudeWatching, stopClaudeWatching } from './claude-watcher';
+import { startClaudeWatching, stopClaudeWatching, getRecentClaudeEntries } from './claude-watcher';
 
 const execFile = promisify(execFileCb);
 
@@ -263,10 +263,17 @@ export function stopWatching(taskId: string): void {
   stopClaudeWatching(taskId);
 }
 
-export function getActivityLog(taskId: string): ActivityEntry[] {
+export function getActivityLog(taskId: string, worktreePath: string): ActivityEntry[] {
   const tw = watchers.get(taskId);
-  if (tw) return tw.entries;
-  return loadEntries(taskId);
+  const fileEntries = tw ? tw.entries : loadEntries(taskId);
+
+  // Also include recent Claude JSONL entries (read directly from source)
+  const claudeEntries = getRecentClaudeEntries(taskId, worktreePath);
+
+  if (claudeEntries.length === 0) return fileEntries;
+
+  // Merge and sort by timestamp
+  return [...fileEntries, ...claudeEntries].sort((a, b) => a.timestamp - b.timestamp);
 }
 
 export function clearActivityLog(taskId: string): void {

@@ -11,21 +11,53 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { claudeSessionId?: string },
+  options?: { resume?: boolean },
 ): void {
   const env = { ...process.env } as Record<string, string>;
   // Remove CLAUDECODE so claude CLI doesn't refuse to start
   // when Bifrost itself was launched from a Claude Code session
   delete env.CLAUDECODE;
 
-  const args = options?.claudeSessionId
-    ? ['--resume', options.claudeSessionId]
-    : [];
+  const args = options?.resume ? ['--continue'] : [];
 
   const shell = pty.spawn('claude', args, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
+    cwd,
+    env,
+  });
+
+  sessions.set(sessionId, shell);
+
+  shell.onData((data: string) => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_STREAM.SESSION_DATA, sessionId, data);
+    }
+  });
+
+  shell.onExit(({ exitCode }: { exitCode: number }) => {
+    sessions.delete(sessionId);
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
+    }
+  });
+}
+
+export function createShellSession(
+  sessionId: string,
+  cwd: string,
+  mainWindow: BrowserWindow,
+): void {
+  const env = { ...process.env } as Record<string, string>;
+  delete env.CLAUDECODE;
+
+  const shellPath = process.env.SHELL || '/bin/zsh';
+
+  const shell = pty.spawn(shellPath, ['-l'], {
+    name: 'xterm-256color',
+    cols: 120,
+    rows: 15,
     cwd,
     env,
   });

@@ -32,6 +32,8 @@ export const IPC = {
   LIST_TASKS: 'task:list',
 
   // Terminal sessions
+  CREATE_DEV_TERMINAL: 'session:create-dev-terminal',
+  CLOSE_DEV_TERMINAL: 'session:close-dev-terminal',
   WRITE_TO_SESSION: 'session:write',
   RESIZE_SESSION: 'session:resize',
 
@@ -84,6 +86,8 @@ export interface BifrostAPI {
   listTasks(): Promise<Task[]>;
 
   // Terminal
+  createDevTerminal(taskId: string): Promise<string>;
+  closeDevTerminal(taskId: string): Promise<void>;
   writeToSession(sessionId: string, data: string): Promise<void>;
   resizeSession(sessionId: string, cols: number, rows: number): Promise<void>;
   onSessionData(callback: (sessionId: string, data: string) => void): () => void;

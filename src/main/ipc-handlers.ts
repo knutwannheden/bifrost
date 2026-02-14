@@ -6,12 +6,11 @@ import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig } from 
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
 import { createWorktree, removeWorktree } from './worktree-manager';
-import { createSession, writeToSession, resizeSession, killSession } from './session-manager';
+import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './session-manager';
 import { getDiff } from './diff-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog } from './activity-watcher';
-import { findLatestClaudeSessionId } from './claude-watcher';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -177,11 +176,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       throw new Error(`Worktree no longer exists: ${task.worktreePath}`);
     }
 
-    // Find the most recent Claude session to resume
-    const claudeSessionId = findLatestClaudeSessionId(task.worktreePath);
-
     const sessionId = uuidv4();
-    createSession(sessionId, task.worktreePath, mainWindow, { claudeSessionId: claudeSessionId ?? undefined });
+    createSession(sessionId, task.worktreePath, mainWindow, { resume: true });
 
     // Restart file watcher
     startWatching(taskId, task.worktreePath, mainWindow);
@@ -191,7 +187,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       status: 'running',
       hasUnread: false,
       archivedAt: undefined,
-      claudeSessionId: claudeSessionId ?? undefined,
     });
   });
 
@@ -230,6 +225,29 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return tasks;
   });
 
+  // Dev terminal
+  const devSessions = new Map<string, string>(); // taskId -> dev sessionId
+
+  ipcMain.handle(IPC.CREATE_DEV_TERMINAL, (_event, taskId: string) => {
+    const task = getTask(taskId);
+    // Kill existing dev session if any
+    const existing = devSessions.get(taskId);
+    if (existing) killSession(existing);
+
+    const devSessionId = uuidv4();
+    createShellSession(devSessionId, task.worktreePath, mainWindow);
+    devSessions.set(taskId, devSessionId);
+    return devSessionId;
+  });
+
+  ipcMain.handle(IPC.CLOSE_DEV_TERMINAL, (_event, taskId: string) => {
+    const devSessionId = devSessions.get(taskId);
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
+  });
+
   // Terminal sessions
   ipcMain.handle(IPC.WRITE_TO_SESSION, (_event, sessionId: string, data: string) => {
     writeToSession(sessionId, data);
@@ -252,7 +270,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Activity Log
   ipcMain.handle(IPC.GET_ACTIVITY_LOG, (_event, taskId: string) => {
-    return getActivityLog(taskId);
+    const task = getTask(taskId);
+    return getActivityLog(taskId, task.worktreePath);
   });
 
   ipcMain.handle(IPC.CLEAR_ACTIVITY_LOG, (_event, taskId: string) => {

@@ -3,10 +3,16 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 
+interface TerminalOptions {
+  cursorBlink?: boolean;
+  hideCursor?: boolean;
+}
+
 export function useTerminal(
   sessionId: string | null,
   containerRef: React.RefObject<HTMLDivElement | null>,
   onTitleChange?: (title: string) => void,
+  options?: TerminalOptions,
 ) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -16,14 +22,18 @@ export function useTerminal(
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
 
+    const hideCursor = options?.hideCursor ?? false;
     const terminal = new Terminal({
-      cursorBlink: true,
+      cursorBlink: hideCursor ? false : (options?.cursorBlink ?? true),
+      cursorStyle: hideCursor ? 'bar' : 'block',
+      cursorWidth: hideCursor ? 1 : undefined,
+      cursorInactiveStyle: hideCursor ? 'none' : 'outline',
       fontSize: 14,
-      fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+      fontFamily: '"MesloLGS NF", "MesloLGM Nerd Font", "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font", Menlo, Monaco, "Courier New", monospace',
       theme: {
         background: '#0f172a',
         foreground: '#e2e8f0',
-        cursor: '#e2e8f0',
+        cursor: hideCursor ? '#0f172a' : '#e2e8f0',
         selectionBackground: '#334155',
       },
     });

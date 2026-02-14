@@ -2,6 +2,14 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import type { Repo, Task, BifrostConfig, TaskStatus } from '../../shared/types';
 
 export type DiffMode = 'git' | 'activity';
+export type PaneTarget = 'claude' | 'dev';
+
+export interface TaskPaneState {
+  devSessionId: string | null;
+  claudeHidden: boolean;
+  devHidden: boolean;
+  focusedPane: PaneTarget;
+}
 
 export interface AppState {
   repos: Repo[];
@@ -14,6 +22,7 @@ export interface AppState {
   showDiff: boolean;
   showTaskHistory: boolean;
   diffMode: DiffMode;
+  paneStates: Record<string, TaskPaneState>;
 }
 
 type AppAction =
@@ -30,7 +39,12 @@ type AppAction =
   | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean; repoId?: string }
   | { type: 'TOGGLE_DIFF' }
   | { type: 'TOGGLE_TASK_HISTORY' }
-  | { type: 'SET_DIFF_MODE'; mode: DiffMode };
+  | { type: 'SET_DIFF_MODE'; mode: DiffMode }
+  | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
+  | { type: 'CLOSE_DEV_SESSION'; taskId: string }
+  | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
+  | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
+  | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget };
 
 const initialState: AppState = {
   repos: [],
@@ -43,7 +57,23 @@ const initialState: AppState = {
   showDiff: false,
   showTaskHistory: false,
   diffMode: 'git',
+  paneStates: {},
 };
+
+const defaultPaneState: TaskPaneState = {
+  devSessionId: null,
+  claudeHidden: false,
+  devHidden: false,
+  focusedPane: 'claude',
+};
+
+function getPaneState(state: AppState, taskId: string): TaskPaneState {
+  return state.paneStates[taskId] ?? defaultPaneState;
+}
+
+function setPaneState(state: AppState, taskId: string, ps: TaskPaneState): AppState {
+  return { ...state, paneStates: { ...state.paneStates, [taskId]: ps } };
+}
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -97,6 +127,26 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, showTaskHistory: !state.showTaskHistory };
     case 'SET_DIFF_MODE':
       return { ...state, diffMode: action.mode };
+    case 'SET_DEV_SESSION': {
+      const ps = getPaneState(state, action.taskId);
+      return setPaneState(state, action.taskId, { ...ps, devSessionId: action.devSessionId, devHidden: false, focusedPane: 'dev' });
+    }
+    case 'CLOSE_DEV_SESSION': {
+      const ps = getPaneState(state, action.taskId);
+      return setPaneState(state, action.taskId, { ...ps, devSessionId: null, devHidden: false, focusedPane: 'claude' });
+    }
+    case 'SET_PANE_FOCUS': {
+      const ps = getPaneState(state, action.taskId);
+      return setPaneState(state, action.taskId, { ...ps, focusedPane: action.pane });
+    }
+    case 'HIDE_PANE': {
+      const ps = getPaneState(state, action.taskId);
+      return setPaneState(state, action.taskId, { ...ps, [action.pane === 'claude' ? 'claudeHidden' : 'devHidden']: true });
+    }
+    case 'SHOW_PANE': {
+      const ps = getPaneState(state, action.taskId);
+      return setPaneState(state, action.taskId, { ...ps, [action.pane === 'claude' ? 'claudeHidden' : 'devHidden']: false });
+    }
     default:
       return state;
   }
