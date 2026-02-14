@@ -266,9 +266,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Git log
   ipcMain.handle(IPC.GET_GIT_LOG, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    const config = loadConfig();
-    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-    return getGitLog(task.worktreePath, repo?.defaultBranch);
+    // task.branch is the base branch the worktree was forked from
+    const baseBranch = task.branch || undefined;
+    return getGitLog(task.worktreePath, baseBranch);
   });
 
   // Shell

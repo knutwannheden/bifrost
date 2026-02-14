@@ -415,39 +415,17 @@ function formatRelativeDate(isoDate: string): string {
   return date.toLocaleDateString();
 }
 
-function GitLogContent({ taskId }: { taskId: string }) {
-  const { entries, loading, error } = useGitLog(taskId);
-
-  if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-slate-400 p-4">
-        <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
-        <span>Loading git log...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return <div className="text-red-400 p-4">Error: {error}</div>;
-  }
-
-  if (entries.length === 0) {
-    return <div className="text-slate-500 p-4">No commits</div>;
-  }
-
+function GitLogEntryView({ entry, focused }: { entry: GitLogEntry; focused: boolean }) {
   return (
-    <div className="space-y-1">
-      {entries.map((entry: GitLogEntry) => (
-        <div
-          key={entry.sha}
-          className="flex items-start gap-3 px-3 py-2 bg-slate-800/40 border border-slate-700/50 rounded text-xs"
-        >
-          <span className="text-yellow-400 font-mono flex-shrink-0">{entry.shortSha}</span>
-          <span className="text-slate-200 flex-1 min-w-0 break-words">{entry.subject}</span>
-          <span className="text-slate-500 flex-shrink-0">{entry.author}</span>
-          <span className="text-slate-600 flex-shrink-0 w-16 text-right">{formatRelativeDate(entry.date)}</span>
-        </div>
-      ))}
+    <div
+      className={`flex items-start gap-3 px-3 py-2 bg-slate-800/40 border border-slate-700/50 rounded text-xs ${
+        focused ? 'ring-1 ring-blue-500/40 bg-blue-900/10' : ''
+      }`}
+    >
+      <span className="text-yellow-400 font-mono flex-shrink-0">{entry.shortSha}</span>
+      <span className="text-slate-200 flex-1 min-w-0 break-words">{entry.subject}</span>
+      <span className="text-slate-500 flex-shrink-0">{entry.author}</span>
+      <span className="text-slate-600 flex-shrink-0 w-16 text-right">{formatRelativeDate(entry.date)}</span>
     </div>
   );
 }
@@ -465,6 +443,7 @@ export default function DiffOverlay() {
   const [gitFileCount, setGitFileCount] = useState(0);
 
   const isActivity = state.diffMode === 'activity';
+  const isLog = state.diffMode === 'log';
 
   // Fetch activity data at DiffOverlay level for search/navigation
   const activityLog = useActivityLog(
@@ -476,6 +455,17 @@ export default function DiffOverlay() {
     const s = search.toLowerCase();
     return activityLog.entries.filter((e) => entrySearchText(e).includes(s));
   }, [activityLog.entries, search]);
+
+  // Fetch git log data at DiffOverlay level for search/navigation
+  const gitLog = useGitLog(
+    state.showDiff && isLog && state.activeTaskId ? state.activeTaskId : null,
+  );
+
+  const filteredLogEntries = useMemo(() => {
+    if (!search) return gitLog.entries;
+    const s = search.toLowerCase();
+    return gitLog.entries.filter((e) => e.subject.toLowerCase().includes(s));
+  }, [gitLog.entries, search]);
 
   // Reset search and focus when mode changes
   useEffect(() => {
@@ -495,7 +485,10 @@ export default function DiffOverlay() {
     if (isActivity && focusedIdx >= filteredEntries.length && filteredEntries.length > 0) {
       setFocusedIdx(filteredEntries.length - 1);
     }
-  }, [filteredEntries.length, focusedIdx, isActivity]);
+    if (isLog && focusedIdx >= filteredLogEntries.length && filteredLogEntries.length > 0) {
+      setFocusedIdx(filteredLogEntries.length - 1);
+    }
+  }, [filteredEntries.length, filteredLogEntries.length, focusedIdx, isActivity, isLog]);
 
   // Clamp git file index when file list shrinks
   useEffect(() => {
@@ -506,10 +499,10 @@ export default function DiffOverlay() {
 
   // Scroll focused entry into view
   useEffect(() => {
-    if (isActivity) {
+    if (isActivity || isLog) {
       itemRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
     }
-  }, [focusedIdx, isActivity]);
+  }, [focusedIdx, isActivity, isLog]);
 
   useEffect(() => {
     if (state.showDiff) {
@@ -543,14 +536,35 @@ export default function DiffOverlay() {
 
     // Cmd+Shift+C: capture context for the focused entry
     if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+      const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
+      if (!activeTask) return;
+
       if (isActivity && filteredEntries.length > 0) {
         e.preventDefault();
         e.stopPropagation();
         const entry = filteredEntries[focusedIdx];
-        const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
-        if (!entry || !activeTask) return;
+        if (!entry) return;
 
         const content = entryToText(entry);
+        const params: CaptureContextParams = {
+          type: 'activity',
+          content,
+          taskId: activeTask.id,
+          taskName: activeTask.name,
+        };
+        window.bifrost.captureContext(params).then((id) => {
+          dispatch({ type: 'SHOW_TOAST', message: `[Bifrost #${id}] copied` });
+        });
+        return;
+      }
+
+      if (isLog && filteredLogEntries.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        const entry = filteredLogEntries[focusedIdx];
+        if (!entry) return;
+
+        const content = `[commit] ${entry.shortSha} ${entry.subject} (${entry.author})`;
         const params: CaptureContextParams = {
           type: 'activity',
           content,
@@ -593,7 +607,9 @@ export default function DiffOverlay() {
         e.preventDefault();
         if (isActivity && filteredEntries.length > 0) {
           setFocusedIdx((i) => (i > 0 ? i - 1 : filteredEntries.length - 1));
-        } else if (!isActivity && gitFileCount > 0) {
+        } else if (isLog && filteredLogEntries.length > 0) {
+          setFocusedIdx((i) => (i > 0 ? i - 1 : filteredLogEntries.length - 1));
+        } else if (state.diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i > 0 ? i - 1 : gitFileCount - 1));
         }
         break;
@@ -602,7 +618,9 @@ export default function DiffOverlay() {
         e.preventDefault();
         if (isActivity && filteredEntries.length > 0) {
           setFocusedIdx((i) => (i < filteredEntries.length - 1 ? i + 1 : 0));
-        } else if (!isActivity && gitFileCount > 0) {
+        } else if (isLog && filteredLogEntries.length > 0) {
+          setFocusedIdx((i) => (i < filteredLogEntries.length - 1 ? i + 1 : 0));
+        } else if (state.diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i < gitFileCount - 1 ? i + 1 : 0));
         }
         break;
@@ -671,7 +689,10 @@ export default function DiffOverlay() {
           {isActivity && (
             <span className="text-xs text-slate-600">{filteredEntries.length} match{filteredEntries.length !== 1 ? 'es' : ''}</span>
           )}
-          {!isActivity && (
+          {isLog && (
+            <span className="text-xs text-slate-600">{filteredLogEntries.length} commit{filteredLogEntries.length !== 1 ? 's' : ''}</span>
+          )}
+          {state.diffMode === 'git' && (
             <span className="text-xs text-slate-600">{gitFileCount} file{gitFileCount !== 1 ? 's' : ''}</span>
           )}
           <span className="ml-auto text-xs text-slate-600">Esc to clear</span>
@@ -691,9 +712,38 @@ export default function DiffOverlay() {
         </div>
       )}
 
-      {state.activeTaskId && state.diffMode === 'log' && (
+      {state.activeTaskId && isLog && (
         <div className="flex-1 overflow-auto p-4">
-          <GitLogContent taskId={state.activeTaskId} />
+          {gitLog.loading && (
+            <div className="flex items-center gap-2 text-slate-400">
+              <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+              <span>Loading git log...</span>
+            </div>
+          )}
+
+          {gitLog.error && (
+            <div className="text-red-400">Error: {gitLog.error}</div>
+          )}
+
+          {!gitLog.loading && !gitLog.error && filteredLogEntries.length === 0 && (
+            <div className="text-slate-500">
+              {search ? 'No matching commits' : 'No commits'}
+            </div>
+          )}
+
+          {!gitLog.loading && !gitLog.error && filteredLogEntries.length > 0 && (
+            <div className="space-y-1">
+              {filteredLogEntries.map((entry, idx) => (
+                <div
+                  key={entry.sha}
+                  ref={(el) => { itemRefs.current[idx] = el; }}
+                  onMouseEnter={() => setFocusedIdx(idx)}
+                >
+                  <GitLogEntryView entry={entry} focused={idx === focusedIdx} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
