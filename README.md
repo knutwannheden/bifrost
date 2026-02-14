@@ -18,10 +18,13 @@ Bifrost lets you run multiple Claude Code sessions side-by-side, each in its own
 - **Live terminal streaming** — xterm.js terminals with Dracula theme
 - **Split panes** — Claude + dev terminal side by side per task
 - **Git diff viewer** — syntax-highlighted diffs via Shiki
+- **Git log viewer** — commit history filtered per worktree
 - **Activity log** — file changes, commits, and Claude events tracked in real time
+- **Task auto-summarization** — completed tasks are summarized via Claude CLI
 - **Context capture** — Cmd+Shift+C captures terminal content or transcript references for cross-session sharing
 - **Session resumption** — discover and resume external Claude Code sessions
 - **IDE integration** — open files in VS Code or JetBrains IDEs
+- **Settings** — IDE selection, font size, sandbox mode
 - **MCP server** — exposes captured context to Claude via Model Context Protocol
 
 ## Keyboard Shortcuts
@@ -33,10 +36,13 @@ Bifrost lets you run multiple Claude Code sessions side-by-side, each in its own
 | Cmd+/ | Toggle dev terminal |
 | Cmd+D | Git diff |
 | Cmd+A | Activity log |
+| Cmd+L | Git log |
 | Cmd+R | Repositories |
 | Cmd+H | Task history |
 | Cmd+O | Open in IDE |
-| Cmd+K | Keyboard shortcuts |
+| Cmd+G | Open PR in GitHub |
+| Cmd+K | Command palette |
+| Cmd+, | Settings |
 | Cmd+Shift+C | Capture context |
 | Cmd+Shift+[ / ] | Previous / next tab |
 | Cmd+1-9 | Switch to tab N |
