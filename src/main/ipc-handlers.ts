@@ -92,12 +92,19 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   saveTasks(tasks);
 
-  // Summary callback: persist to task and push to renderer
-  const onSummary = (taskId: string, summary: string) => {
-    try {
-      updateTask(taskId, { summary });
-      mainWindow.webContents.send(IPC_STREAM.TASK_SUMMARY, taskId, summary);
-    } catch { /* task may have been deleted */ }
+  // Claude watcher callbacks
+  const claudeCallbacks = {
+    onSummary: (taskId: string, summary: string) => {
+      try {
+        updateTask(taskId, { summary });
+        mainWindow.webContents.send(IPC_STREAM.TASK_SUMMARY, taskId, summary);
+      } catch { /* task may have been deleted */ }
+    },
+    onSessionChange: (taskId: string, claudeSessionId: string) => {
+      try {
+        updateTask(taskId, { claudeSessionId });
+      } catch { /* task may have been deleted */ }
+    },
   };
 
   // Config
@@ -166,7 +173,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     saveTasks(tasks);
 
     // Start watching for file changes
-    startWatching(task.id, worktreePath, mainWindow, onSummary);
+    startWatching(task.id, worktreePath, mainWindow, claudeCallbacks);
 
     return task;
   });
@@ -216,7 +223,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
 
     // Restart file watcher
-    startWatching(taskId, task.worktreePath, mainWindow, onSummary);
+    startWatching(taskId, task.worktreePath, mainWindow, claudeCallbacks);
 
     return updateTask(taskId, {
       sessionId,
@@ -328,7 +335,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   for (const task of tasks) {
     if (task.status === 'running' || task.status === 'stopped') {
       if (fs.existsSync(task.worktreePath)) {
-        startWatching(task.id, task.worktreePath, mainWindow, onSummary);
+        startWatching(task.id, task.worktreePath, mainWindow, claudeCallbacks);
       }
     }
   }
@@ -338,7 +345,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     for (const task of tasks) {
       if (!task.summary && countJsonlLines(task.worktreePath) >= 3) {
         const summary = await summarizeTask(task.worktreePath);
-        if (summary) onSummary(task.id, summary);
+        if (summary) claudeCallbacks.onSummary(task.id, summary);
       }
     }
   })();
@@ -407,7 +414,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     tasks.push(task);
     saveTasks(tasks);
 
-    startWatching(taskId, cwd, mainWindow, onSummary);
+    startWatching(taskId, cwd, mainWindow, claudeCallbacks);
 
     return task;
   });

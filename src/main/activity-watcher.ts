@@ -8,7 +8,7 @@ import path from 'node:path';
 import os from 'node:os';
 import type { ActivityEntry } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import { startClaudeWatching, stopClaudeWatching, getRecentClaudeEntries } from './claude-watcher';
+import { startClaudeWatching, stopClaudeWatching, getRecentClaudeEntries, type ClaudeWatcherCallbacks } from './claude-watcher';
 
 const execFile = promisify(execFileCb);
 
@@ -107,7 +107,7 @@ export function startWatching(
   taskId: string,
   worktreePath: string,
   mainWindow: BrowserWindow,
-  onSummary?: (taskId: string, summary: string) => void,
+  claudeCallbacks?: ClaudeWatcherCallbacks,
 ): void {
   // Stop any existing watcher for this task
   stopWatching(taskId);
@@ -249,7 +249,7 @@ export function startWatching(
   watchers.set(taskId, tw);
 
   // Also watch Claude Code JSONL session files
-  startClaudeWatching(taskId, worktreePath, mainWindow, onSummary);
+  startClaudeWatching(taskId, worktreePath, mainWindow, claudeCallbacks);
 }
 
 export function stopWatching(taskId: string): void {
