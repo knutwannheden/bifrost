@@ -3,6 +3,7 @@ import type {
   AddRepoParams,
   BifrostConfig,
   CaptureContextParams,
+  ClaudeSession,
   CreateTaskParams,
   DiffResult,
   Repo,
@@ -56,6 +57,10 @@ export const IPC = {
   FIND_TRANSCRIPT_MATCH: 'context:find-transcript-match',
   GET_API_PORT: 'api:get-port',
 
+  // Claude sessions
+  LIST_CLAUDE_SESSIONS: 'claude:list-sessions',
+  RESUME_CLAUDE_SESSION: 'claude:resume-session',
+
   // Dialog
   SELECT_DIRECTORY: 'dialog:select-directory',
 } as const;
@@ -66,6 +71,7 @@ export const IPC_STREAM = {
   SESSION_EXIT: 'session:exit',
   NOTIFICATION: 'notification',
   ACTIVITY_ENTRY: 'activity:entry',
+  MENU_ACTION: 'menu:action',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -118,9 +124,16 @@ export interface BifrostAPI {
   findTranscriptMatch(worktreePath: string, searchText: string): Promise<{ jsonlPath: string; lineNumber: number; uuid: string } | null>;
   getApiPort(): Promise<number | null>;
 
+  // Claude sessions
+  listClaudeSessions(): Promise<ClaudeSession[]>;
+  resumeClaudeSession(claudeSessionId: string, cwd: string): Promise<Task>;
+
   // Dialog
   selectDirectory(): Promise<string | null>;
 
   // Notifications
   onNotification(callback: (title: string, body: string) => void): () => void;
+
+  // Menu actions
+  onMenuAction(callback: (action: string) => void): () => void;
 }

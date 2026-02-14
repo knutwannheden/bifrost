@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, nativeImage } from 'electron';
+import { app, BrowserWindow, globalShortcut, Menu, nativeImage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -8,10 +8,13 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
 import { initNotificationService } from './notification-service';
 import { startApi, stopApi } from './bifrost-api';
+import { IPC_STREAM } from '../shared/ipc-channels';
 
 if (started) {
   app.quit();
 }
+
+app.name = 'Bifrost';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -63,6 +66,79 @@ function installMcpServer(): void {
   }
 }
 
+function buildMenu() {
+  const sendAction = (action: string) => {
+    mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, action);
+  };
+
+  const isMac = process.platform === 'darwin';
+  const template: Electron.MenuItemConstructorOptions[] = [
+    // App menu (macOS only)
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const },
+      ],
+    }] : []),
+    // File
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Task', accelerator: 'CommandOrControl+T', registerAccelerator: false, click: () => sendAction('new-task') },
+        { label: 'Close Pane', accelerator: 'CommandOrControl+W', registerAccelerator: false, click: () => sendAction('close-pane') },
+      ],
+    },
+    // Edit
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    // View
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Toggle Dev Terminal', accelerator: 'CommandOrControl+/', registerAccelerator: false, click: () => sendAction('toggle-dev-terminal') },
+        { type: 'separator' },
+        { label: 'Diff', accelerator: 'CommandOrControl+D', registerAccelerator: false, click: () => sendAction('diff') },
+        { label: 'Task History', accelerator: 'CommandOrControl+H', registerAccelerator: false, click: () => sendAction('task-history') },
+        { label: 'Repositories', accelerator: 'CommandOrControl+R', registerAccelerator: false, click: () => sendAction('repositories') },
+        { type: 'separator' },
+        { label: 'Open in IDE', accelerator: 'CommandOrControl+O', registerAccelerator: false, click: () => sendAction('open-in-ide') },
+      ],
+    },
+    // Window
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        ...(isMac ? [
+          { type: 'separator' as const },
+          { role: 'front' as const },
+        ] : [
+          { role: 'close' as const },
+        ]),
+      ],
+    },
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 app.on('ready', async () => {
   // Set dock icon on macOS (needed during development)
   if (process.platform === 'darwin' && app.dock) {
@@ -70,6 +146,7 @@ app.on('ready', async () => {
     app.dock.setIcon(nativeImage.createFromPath(iconPath));
   }
 
+  buildMenu();
   createWindow();
 
   // Start HTTP API and install MCP server

@@ -52,9 +52,14 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean; taskId?: string; apiPort?: number },
+  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number },
 ): void {
-  const args = options?.resume ? ['--continue'] : [];
+  const args: string[] = [];
+  if (options?.claudeSessionId) {
+    args.push('--resume', options.claudeSessionId);
+  } else if (options?.resume) {
+    args.push('--continue');
+  }
   const extraEnv: Record<string, string> = {};
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
   if (options?.apiPort) extraEnv.BIFROST_API_PORT = String(options.apiPort);

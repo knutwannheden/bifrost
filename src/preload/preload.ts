@@ -69,6 +69,11 @@ const api: BifrostAPI = {
     ipcRenderer.invoke(IPC.FIND_TRANSCRIPT_MATCH, worktreePath, searchText),
   getApiPort: () => ipcRenderer.invoke(IPC.GET_API_PORT),
 
+  // Claude sessions
+  listClaudeSessions: () => ipcRenderer.invoke(IPC.LIST_CLAUDE_SESSIONS),
+  resumeClaudeSession: (claudeSessionId, cwd) =>
+    ipcRenderer.invoke(IPC.RESUME_CLAUDE_SESSION, claudeSessionId, cwd),
+
   // Dialog
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
 
@@ -78,6 +83,14 @@ const api: BifrostAPI = {
       callback(title, body);
     ipcRenderer.on(IPC_STREAM.NOTIFICATION, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.NOTIFICATION, handler);
+  },
+
+  // Menu actions
+  onMenuAction: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, action: string) =>
+      callback(action);
+    ipcRenderer.on(IPC_STREAM.MENU_ACTION, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.MENU_ACTION, handler);
   },
 };
 

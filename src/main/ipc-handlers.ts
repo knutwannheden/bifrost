@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow, dialog } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'node:fs';
+import path from 'node:path';
 import { IPC } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
@@ -13,6 +14,7 @@ import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
+import { scanClaudeSessions } from './claude-session-scanner';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -185,14 +187,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.REOPEN_TASK, (_event, taskId: string) => {
     const task = getTask(taskId);
 
-    // Check worktree still exists
+    // Check working directory still exists
     if (!fs.existsSync(task.worktreePath)) {
-      throw new Error(`Worktree no longer exists: ${task.worktreePath}`);
+      throw new Error(`Directory no longer exists: ${task.worktreePath}`);
     }
 
     const sessionId = uuidv4();
     createSession(sessionId, task.worktreePath, mainWindow, {
-      resume: true, taskId, apiPort: getApiPort() ?? undefined,
+      resume: !task.claudeSessionId,
+      claudeSessionId: task.claudeSessionId,
+      taskId,
+      apiPort: getApiPort() ?? undefined,
     });
 
     // Restart file watcher
@@ -329,6 +334,49 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.GET_API_PORT, () => {
     return getApiPort();
+  });
+
+  // Claude sessions
+  ipcMain.handle(IPC.LIST_CLAUDE_SESSIONS, () => {
+    const excludePaths = new Set(tasks.map((t) => t.worktreePath));
+    return scanClaudeSessions(excludePaths);
+  });
+
+  ipcMain.handle(IPC.RESUME_CLAUDE_SESSION, (_event, claudeSessionId: string, cwd: string) => {
+    if (!fs.existsSync(cwd)) {
+      throw new Error(`Directory no longer exists: ${cwd}`);
+    }
+
+    const sessionId = uuidv4();
+    const taskId = uuidv4();
+    const name = path.basename(cwd);
+
+    createSession(sessionId, cwd, mainWindow, {
+      claudeSessionId,
+      taskId,
+      apiPort: getApiPort() ?? undefined,
+    });
+
+    const task: Task = {
+      id: taskId,
+      name,
+      repoId: '',
+      branch: '',
+      worktreePath: cwd,
+      sessionId,
+      status: 'running',
+      hasUnread: false,
+      createdAt: Date.now(),
+      claudeSessionId,
+      isExternal: true,
+    };
+
+    tasks.push(task);
+    saveTasks(tasks);
+
+    startWatching(taskId, cwd, mainWindow);
+
+    return task;
   });
 
   // Dialog

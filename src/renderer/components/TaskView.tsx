@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useApp, defaultPaneState } from '../context/AppContext';
 import type { PaneTarget } from '../context/AppContext';
 import TerminalPane from './TerminalPane';
@@ -16,6 +16,7 @@ const shortcuts = [
 
 export default function TaskView() {
   const { state, dispatch } = useApp();
+  const [splitRatio, setSplitRatio] = useState(0.7);
 
   const openTasks = state.tasks.filter((t) => t.status === 'running');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
@@ -29,6 +30,29 @@ export default function TaskView() {
       window.bifrost.setTerminalTitle(taskId, title);
     }
   }, [state.activeTaskId]);
+
+  const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const container = (e.target as HTMLElement).parentElement!;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMouseMove = (ev: MouseEvent) => {
+      const rect = container.getBoundingClientRect();
+      const ratio = (ev.clientY - rect.top) / rect.height;
+      setSplitRatio(Math.min(0.9, Math.max(0.1, ratio)));
+    };
+
+    const onMouseUp = () => {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }, []);
 
   // Set window title from task name when active task changes
   useEffect(() => {
@@ -74,8 +98,12 @@ export default function TaskView() {
           >
             {/* Claude pane — always rendered, hidden via CSS to preserve xterm state */}
             <div
-              className={showDev ? 'flex-1 min-h-0' : 'flex-1'}
-              style={{ display: showClaude ? 'block' : 'none' }}
+              style={{
+                flex: showDev ? `0 0 ${splitRatio * 100}%` : '1 1 0%',
+                minHeight: 0,
+                display: showClaude ? 'block' : 'none',
+                overflow: 'hidden',
+              }}
             >
               <TerminalPane
                 sessionId={task.sessionId}
@@ -87,11 +115,24 @@ export default function TaskView() {
               />
             </div>
 
+            {/* Draggable divider between panes */}
+            {showDev && showClaude && (
+              <div
+                className="flex-shrink-0 bg-slate-700 hover:bg-blue-500 cursor-row-resize transition-colors"
+                style={{ height: 4 }}
+                onMouseDown={handleDividerMouseDown}
+              />
+            )}
+
             {/* Dev terminal pane — rendered when session exists, hidden via CSS */}
             {ps.devSessionId && (
               <div
-                className={showClaude ? 'h-[30%] min-h-[100px]' : 'flex-1'}
-                style={{ display: showDev ? 'block' : 'none' }}
+                style={{
+                  flex: '1 1 0%',
+                  minHeight: showClaude ? 100 : 0,
+                  display: showDev ? 'block' : 'none',
+                  overflow: 'hidden',
+                }}
               >
                 <TerminalPane
                   sessionId={ps.devSessionId}

@@ -20,6 +20,18 @@ export interface Task {
   archivedAt?: number;
   /** Last known terminal title (from OSC 0/2) */
   terminalTitle?: string;
+  /** If this task was resumed from an external Claude session */
+  claudeSessionId?: string;
+  /** True if this task has no managed worktree (e.g. resumed external session) */
+  isExternal?: boolean;
+}
+
+export interface ClaudeSession {
+  sessionId: string;
+  cwd: string;
+  projectDirName: string;
+  slug?: string;
+  lastModified: number;
 }
 
 export interface BifrostConfig {

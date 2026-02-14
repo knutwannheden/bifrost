@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { useApp } from './context/AppContext';
+import { useApp, defaultPaneState } from './context/AppContext';
+import type { PaneTarget } from './context/AppContext';
 import type { BifrostAPI } from '../shared/ipc-channels';
 import { useKeyboard } from './hooks/useKeyboard';
 import TaskBar from './components/TaskBar';
@@ -51,6 +52,81 @@ export default function App() {
     });
     return unsub;
   }, [state.tasks, state.activeTaskId, dispatch]);
+
+  // Listen for menu actions from the main process
+  useEffect(() => {
+    const unsub = window.bifrost.onMenuAction((action) => {
+      switch (action) {
+        case 'new-task':
+          dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true });
+          break;
+        case 'repositories':
+          dispatch({ type: 'TOGGLE_REPO_MANAGER' });
+          break;
+        case 'diff':
+          dispatch({ type: 'TOGGLE_DIFF' });
+          break;
+        case 'task-history':
+          dispatch({ type: 'TOGGLE_TASK_HISTORY' });
+          break;
+        case 'toggle-dev-terminal': {
+          if (!state.activeTaskId) break;
+          const taskId = state.activeTaskId;
+          const ps = state.paneStates[taskId] ?? defaultPaneState;
+          if (!ps.devSessionId) {
+            window.bifrost.createDevTerminal(taskId).then((devSessionId) => {
+              dispatch({ type: 'SET_DEV_SESSION', taskId, devSessionId });
+            });
+          } else if (ps.claudeHidden) {
+            dispatch({ type: 'SHOW_PANE', taskId, pane: 'claude' });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: 'claude' });
+          } else if (ps.devHidden) {
+            dispatch({ type: 'SHOW_PANE', taskId, pane: 'dev' });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: 'dev' });
+          } else {
+            const newFocus: PaneTarget = ps.focusedPane === 'claude' ? 'dev' : 'claude';
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: newFocus });
+          }
+          break;
+        }
+        case 'close-pane': {
+          if (!state.activeTaskId) break;
+          const taskId = state.activeTaskId;
+          const ps = state.paneStates[taskId] ?? defaultPaneState;
+          const hiding = ps.focusedPane;
+          const otherPane: PaneTarget = hiding === 'claude' ? 'dev' : 'claude';
+          const otherHidden = otherPane === 'claude' ? ps.claudeHidden : ps.devHidden;
+          const otherExists = otherPane === 'dev' ? !!ps.devSessionId : true;
+          if (otherExists && !otherHidden) {
+            dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
+          } else {
+            if (ps.devSessionId) {
+              window.bifrost.closeDevTerminal(taskId);
+              dispatch({ type: 'CLOSE_DEV_SESSION', taskId });
+            }
+            window.bifrost.stopTask(taskId).then((updated) => {
+              dispatch({ type: 'UPDATE_TASK', task: updated });
+              const remaining = state.tasks.filter(
+                (t) => t.id !== taskId && t.status === 'running',
+              );
+              dispatch({
+                type: 'SET_ACTIVE_TASK',
+                taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+              });
+            });
+          }
+          break;
+        }
+        case 'open-in-ide': {
+          const task = state.tasks.find((t) => t.id === state.activeTaskId);
+          if (task) window.bifrost.openInIde(task.worktreePath);
+          break;
+        }
+      }
+    });
+    return unsub;
+  }, [state, dispatch]);
 
   // Auto-dismiss toast after 2s
   useEffect(() => {

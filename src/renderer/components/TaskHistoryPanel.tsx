@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
-import type { Task } from '../../shared/types';
+import type { Task, ClaudeSession } from '../../shared/types';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -16,7 +16,7 @@ const statusColor: Record<string, string> = {
   archived: 'text-slate-500',
 };
 
-const filters = ['all', 'active', 'archived'] as const;
+const filters = ['all', 'active', 'archived', 'sessions'] as const;
 type Filter = (typeof filters)[number];
 
 function formatDate(ts: number): string {
@@ -26,6 +26,17 @@ function formatDate(ts: number): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function formatRelative(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintIndex?: number; showHint: boolean }) {
@@ -39,6 +50,17 @@ function ActionLabel({ text, hintIndex = 0, showHint }: { text: string; hintInde
   );
 }
 
+function shortenPath(cwd: string): string {
+  const home = '/Users/';
+  if (cwd.startsWith(home)) {
+    const rest = cwd.slice(home.length);
+    const slash = rest.indexOf('/');
+    if (slash >= 0) return '~' + rest.slice(slash);
+    return '~';
+  }
+  return cwd;
+}
+
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
   const [filter, setFilter] = useState<Filter>('all');
@@ -47,12 +69,30 @@ export default function TaskHistoryPanel() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ClaudeSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const taskRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
 
+  const isSessionsMode = filter === 'sessions';
+
+  // Load sessions when switching to sessions tab
+  useEffect(() => {
+    if (isSessionsMode && sessions.length === 0) {
+      setSessionsLoading(true);
+      window.bifrost.listClaudeSessions().then((result) => {
+        setSessions(result);
+        setSessionsLoading(false);
+      }).catch(() => {
+        setSessionsLoading(false);
+      });
+    }
+  }, [isSessionsMode]);
+
   const searchLower = search.toLowerCase();
-  const filteredTasks = state.tasks
+
+  const filteredTasks = isSessionsMode ? [] : state.tasks
     .filter((t) => {
       if (filter === 'active' && t.status === 'archived') return false;
       if (filter === 'archived' && t.status !== 'archived') return false;
@@ -65,6 +105,16 @@ export default function TaskHistoryPanel() {
     })
     .sort((a, b) => b.createdAt - a.createdAt);
 
+  const filteredSessions = isSessionsMode
+    ? sessions.filter((s) => {
+        if (!searchLower) return true;
+        const haystack = `${s.cwd} ${s.slug ?? ''}`.toLowerCase();
+        return haystack.includes(searchLower);
+      })
+    : [];
+
+  const listLength = isSessionsMode ? filteredSessions.length : filteredTasks.length;
+
   // Reset focus when filter or search changes
   useEffect(() => {
     setFocusedIdx(0);
@@ -72,14 +122,14 @@ export default function TaskHistoryPanel() {
 
   // Clamp focus index when list shrinks
   useEffect(() => {
-    if (focusedIdx >= filteredTasks.length && filteredTasks.length > 0) {
-      setFocusedIdx(filteredTasks.length - 1);
+    if (focusedIdx >= listLength && listLength > 0) {
+      setFocusedIdx(listLength - 1);
     }
-  }, [filteredTasks.length, focusedIdx]);
+  }, [listLength, focusedIdx]);
 
   // Scroll focused item into view
   useEffect(() => {
-    taskRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
+    itemRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
   }, [focusedIdx]);
 
   // Focus the overlay on mount
@@ -90,7 +140,7 @@ export default function TaskHistoryPanel() {
   const close = useCallback(() => dispatch({ type: 'TOGGLE_TASK_HISTORY' }), [dispatch]);
 
   const repoName = (repoId: string) =>
-    state.repos.find((r) => r.id === repoId)?.name ?? 'Unknown repo';
+    state.repos.find((r) => r.id === repoId)?.name ?? '';
 
   const handleReopen = async (task: Task) => {
     setError(null);
@@ -162,14 +212,24 @@ export default function TaskHistoryPanel() {
     }
   };
 
+  const handleResumeSession = async (session: ClaudeSession) => {
+    setError(null);
+    try {
+      const task = await window.bifrost.resumeClaudeSession(session.sessionId, session.cwd);
+      dispatch({ type: 'ADD_TASK', task });
+      dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
+      close();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to resume session');
+    }
+  };
+
   const canReopen = (task: Task) => task.status === 'archived' || task.status === 'stopped';
   const canArchive = (task: Task) => task.status === 'running' || task.status === 'stopped';
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Don't handle keys while editing a name
     if (editingId) return;
-
-    const focusedTask = filteredTasks[focusedIdx];
 
     switch (e.key) {
       case 'Escape':
@@ -189,12 +249,12 @@ export default function TaskHistoryPanel() {
 
       case 'ArrowUp':
         e.preventDefault();
-        setFocusedIdx((i) => (i > 0 ? i - 1 : filteredTasks.length - 1));
+        setFocusedIdx((i) => (i > 0 ? i - 1 : listLength - 1));
         break;
 
       case 'ArrowDown':
         e.preventDefault();
-        setFocusedIdx((i) => (i < filteredTasks.length - 1 ? i + 1 : 0));
+        setFocusedIdx((i) => (i < listLength - 1 ? i + 1 : 0));
         break;
 
       case 'ArrowLeft': {
@@ -213,46 +273,59 @@ export default function TaskHistoryPanel() {
 
       case 'Enter':
         e.preventDefault();
-        if (focusedTask) {
-          if (focusedTask.status === 'running') {
-            handleActivate(focusedTask);
-          } else {
-            handleReopen(focusedTask);
+        if (isSessionsMode) {
+          const session = filteredSessions[focusedIdx];
+          if (session) handleResumeSession(session);
+        } else {
+          const focusedTask = filteredTasks[focusedIdx];
+          if (focusedTask) {
+            if (focusedTask.status === 'running') {
+              handleActivate(focusedTask);
+            } else {
+              handleReopen(focusedTask);
+            }
           }
         }
         break;
 
       case 'F2':
         e.preventDefault();
-        if (focusedTask) startRename(focusedTask);
+        if (!isSessionsMode) {
+          const focusedTask = filteredTasks[focusedIdx];
+          if (focusedTask) startRename(focusedTask);
+        }
         break;
 
       default:
-        // Alt+letter shortcuts (use e.code since Alt produces special chars on macOS)
-        if (e.altKey && focusedTask) {
-          switch (e.code) {
-            case 'KeyR':
-              e.preventDefault();
-              startRename(focusedTask);
-              break;
-            case 'KeyO':
-              if (canReopen(focusedTask)) {
+        if (!isSessionsMode) {
+          const focusedTask = filteredTasks[focusedIdx];
+          // Alt+letter shortcuts (use e.code since Alt produces special chars on macOS)
+          if (e.altKey && focusedTask) {
+            switch (e.code) {
+              case 'KeyR':
                 e.preventDefault();
-                handleReopen(focusedTask);
-              }
-              break;
-            case 'KeyA':
-              if (canArchive(focusedTask)) {
+                startRename(focusedTask);
+                break;
+              case 'KeyO':
+                if (canReopen(focusedTask)) {
+                  e.preventDefault();
+                  handleReopen(focusedTask);
+                }
+                break;
+              case 'KeyA':
+                if (canArchive(focusedTask)) {
+                  e.preventDefault();
+                  handleArchive(focusedTask);
+                }
+                break;
+              case 'KeyD':
                 e.preventDefault();
-                handleArchive(focusedTask);
-              }
-              break;
-            case 'KeyD':
-              e.preventDefault();
-              handleDelete(focusedTask);
-              break;
+                handleDelete(focusedTask);
+                break;
+            }
           }
-        } else if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
+        }
+        if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1) {
           // Incremental search
           e.preventDefault();
           setSearch((s) => s + e.key);
@@ -275,7 +348,9 @@ export default function TaskHistoryPanel() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <h2 className="text-sm font-semibold text-slate-200">Task History</h2>
+          <h2 className="text-sm font-semibold text-slate-200">
+            {isSessionsMode ? 'Claude Sessions' : 'Task History'}
+          </h2>
           <button
             onClick={close}
             tabIndex={-1}
@@ -298,11 +373,11 @@ export default function TaskHistoryPanel() {
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
               }`}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'sessions' ? 'Sessions' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
           <span className="ml-auto text-xs text-slate-600 self-center">
-            &larr;&rarr; tabs &uarr;&darr; tasks
+            &larr;&rarr; tabs &uarr;&darr; {isSessionsMode ? 'sessions' : 'tasks'}
           </span>
         </div>
 
@@ -319,97 +394,149 @@ export default function TaskHistoryPanel() {
           </div>
         )}
 
-        {/* Task list */}
+        {/* List content */}
         <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-2">
-          {filteredTasks.length === 0 && (
-            <p className="text-sm text-slate-500 text-center py-4">No tasks found.</p>
-          )}
-          {filteredTasks.map((task, idx) => (
-            <div
-              key={task.id}
-              ref={(el) => { taskRefs.current[idx] = el; }}
-              onMouseEnter={() => setFocusedIdx(idx)}
-              onClick={() => handleActivate(task)}
-              className={`rounded border p-3 cursor-default transition-colors ${
-                idx === focusedIdx
-                  ? 'bg-slate-700 border-blue-500/70 ring-1 ring-blue-500/40'
-                  : 'bg-slate-700/50 border-slate-600/50'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  {editingId === task.id ? (
-                    <input
-                      autoFocus
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') submitRename(task.id);
-                        if (e.key === 'Escape') { e.stopPropagation(); setEditingId(null); }
-                      }}
-                      onBlur={() => submitRename(task.id)}
-                      className="px-2 py-0.5 bg-slate-600 border border-slate-500 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 w-48"
-                    />
-                  ) : (
-                    <span
-                      className={`text-sm font-medium truncate ${
-                        task.status === 'archived' ? 'text-slate-400' : 'text-slate-200'
-                      }`}
-                    >
-                      {task.name}
+          {isSessionsMode ? (
+            <>
+              {sessionsLoading && (
+                <div className="flex items-center justify-center py-4 gap-2 text-slate-400">
+                  <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+                  <span className="text-sm">Scanning sessions...</span>
+                </div>
+              )}
+              {!sessionsLoading && filteredSessions.length === 0 && (
+                <p className="text-sm text-slate-500 text-center py-4">No recent Claude sessions found.</p>
+              )}
+              {filteredSessions.map((session, idx) => (
+                <div
+                  key={session.sessionId}
+                  ref={(el) => { itemRefs.current[idx] = el; }}
+                  onMouseEnter={() => setFocusedIdx(idx)}
+                  onClick={() => handleResumeSession(session)}
+                  className={`rounded border p-3 cursor-default transition-colors ${
+                    idx === focusedIdx
+                      ? 'bg-slate-700 border-blue-500/70 ring-1 ring-blue-500/40'
+                      : 'bg-slate-700/50 border-slate-600/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-200 truncate">
+                      {shortenPath(session.cwd)}
                     </span>
-                  )}
-                  <span className={`text-xs ${statusColor[task.status]}`}>
-                    {statusLabel[task.status]}
-                  </span>
+                    <span className="text-xs text-blue-400 flex-shrink-0 ml-2">
+                      Resume
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+                    {session.slug && <span className="text-slate-400">{session.slug}</span>}
+                    <span>{formatRelative(session.lastModified)}</span>
+                    <span className="font-mono text-slate-600">{session.sessionId.slice(0, 8)}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); startRename(task); }}
-                    title="Rename (F2)"
-                    tabIndex={-1}
-                    className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
-                  >
-                    <ActionLabel text="Rename" showHint={idx === focusedIdx} />
-                  </button>
-                  {canReopen(task) && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
-                      title="Reopen task (Alt+O)"
-                      tabIndex={-1}
-                      className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
-                    >
-                      <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
-                    </button>
-                  )}
-                  {canArchive(task) && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
-                      title="Archive task (Alt+A)"
-                      tabIndex={-1}
-                      className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
-                    >
-                      <ActionLabel text="Archive" showHint={idx === focusedIdx} />
-                    </button>
-                  )}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
-                    title="Delete task and worktree (Alt+D)"
-                    tabIndex={-1}
-                    className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
-                  >
-                    <ActionLabel text="Delete" showHint={idx === focusedIdx} />
-                  </button>
+              ))}
+            </>
+          ) : (
+            <>
+              {filteredTasks.length === 0 && (
+                <p className="text-sm text-slate-500 text-center py-4">No tasks found.</p>
+              )}
+              {filteredTasks.map((task, idx) => (
+                <div
+                  key={task.id}
+                  ref={(el) => { itemRefs.current[idx] = el; }}
+                  onMouseEnter={() => setFocusedIdx(idx)}
+                  onClick={() => handleActivate(task)}
+                  className={`rounded border p-3 cursor-default transition-colors ${
+                    idx === focusedIdx
+                      ? 'bg-slate-700 border-blue-500/70 ring-1 ring-blue-500/40'
+                      : 'bg-slate-700/50 border-slate-600/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {editingId === task.id ? (
+                        <input
+                          autoFocus
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') submitRename(task.id);
+                            if (e.key === 'Escape') { e.stopPropagation(); setEditingId(null); }
+                          }}
+                          onBlur={() => submitRename(task.id)}
+                          className="px-2 py-0.5 bg-slate-600 border border-slate-500 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 w-48"
+                        />
+                      ) : (
+                        <span
+                          className={`text-sm font-medium truncate ${
+                            task.status === 'archived' ? 'text-slate-400' : 'text-slate-200'
+                          }`}
+                        >
+                          {task.name}
+                        </span>
+                      )}
+                      <span className={`text-xs ${statusColor[task.status]}`}>
+                        {statusLabel[task.status]}
+                      </span>
+                      {task.isExternal && (
+                        <span className="text-xs text-slate-600">external</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); startRename(task); }}
+                        title="Rename (F2)"
+                        tabIndex={-1}
+                        className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+                      >
+                        <ActionLabel text="Rename" showHint={idx === focusedIdx} />
+                      </button>
+                      {canReopen(task) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
+                          title="Reopen task (Alt+O)"
+                          tabIndex={-1}
+                          className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+                        >
+                          <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
+                        </button>
+                      )}
+                      {canArchive(task) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
+                          title="Archive task (Alt+A)"
+                          tabIndex={-1}
+                          className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+                        >
+                          <ActionLabel text="Archive" showHint={idx === focusedIdx} />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
+                        title="Delete task and worktree (Alt+D)"
+                        tabIndex={-1}
+                        className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
+                      >
+                        <ActionLabel text="Delete" showHint={idx === focusedIdx} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+                    {task.isExternal ? (
+                      <span className="font-mono">{shortenPath(task.worktreePath)}</span>
+                    ) : (
+                      <>
+                        <span>{repoName(task.repoId)}</span>
+                        <span>{task.branch}</span>
+                      </>
+                    )}
+                    <span>{formatDate(task.createdAt)}</span>
+                    {task.archivedAt && <span>Archived {formatDate(task.archivedAt)}</span>}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                <span>{repoName(task.repoId)}</span>
-                <span>{task.branch}</span>
-                <span>{formatDate(task.createdAt)}</span>
-                {task.archivedAt && <span>Archived {formatDate(task.archivedAt)}</span>}
-              </div>
-            </div>
-          ))}
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>

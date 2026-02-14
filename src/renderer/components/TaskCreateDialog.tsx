@@ -130,7 +130,6 @@ export default function TaskCreateDialog() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <h2 className="text-sm font-semibold text-slate-200">Create Task</h2>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-600">Alt+N name &middot; Alt+C create</span>
             <button
               onClick={close}
               tabIndex={-1}
@@ -183,7 +182,7 @@ export default function TaskCreateDialog() {
           <>
           {/* Task name */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Task Name</label>
+            <label className="block text-xs text-slate-400 mb-1">Task <span className="underline underline-offset-2">N</span>ame</label>
             <div className="flex gap-2">
               <input
                 ref={nameRef}
