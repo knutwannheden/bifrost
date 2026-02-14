@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { v4 as uuidv4 } from 'uuid';
-import type { ActivityEntry, ClaudeEventKind } from '../shared/types';
+import type { ActivityEntry } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -14,8 +14,6 @@ interface ClaudeWatcher {
   /** Byte offset per JSONL file so we only read new lines */
   fileOffsets: Map<string, number>;
   pollTimer: ReturnType<typeof setInterval>;
-  /** Most recently active Claude session ID */
-  latestClaudeSessionId: string | null;
 }
 
 const watchers = new Map<string, ClaudeWatcher>();
@@ -119,9 +117,7 @@ function summarizeToolInput(toolName: string, input: Record<string, unknown>): s
   if (!input) return '';
   switch (toolName) {
     case 'Edit':
-      return input.file_path as string || '';
     case 'Write':
-      return input.file_path as string || '';
     case 'Read':
       return input.file_path as string || '';
     case 'Bash':
@@ -229,16 +225,7 @@ export function startClaudeWatching(
 
       const offset = fileOffsets.get(filePath)!;
       const { lines, newOffset } = readNewLines(filePath, offset);
-      if (newOffset !== offset) {
-        fileOffsets.set(filePath, newOffset);
-
-        // Track the Claude session ID from the filename
-        const claudeSessionId = path.basename(file, '.jsonl');
-        const watcher = watchers.get(taskId);
-        if (watcher) {
-          watcher.latestClaudeSessionId = claudeSessionId;
-        }
-      }
+      fileOffsets.set(filePath, newOffset);
 
       for (const line of lines) {
         const entry = parseJsonlLine(line, taskId);
@@ -249,7 +236,7 @@ export function startClaudeWatching(
     }
   }, 1000);
 
-  watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer, latestClaudeSessionId: null });
+  watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer });
 }
 
 /**
@@ -288,30 +275,3 @@ export function stopClaudeWatching(taskId: string): void {
   }
 }
 
-export function getClaudeSessionId(taskId: string): string | null {
-  return watchers.get(taskId)?.latestClaudeSessionId ?? null;
-}
-
-/**
- * Find the most recently modified JSONL session file for a worktree.
- * Used when reopening a task to resume the Claude session.
- */
-export function findLatestClaudeSessionId(worktreePath: string): string | null {
-  const dirName = projectDirName(worktreePath);
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
-
-  if (!fs.existsSync(projectDir)) return null;
-
-  let latest: { name: string; mtime: number } | null = null;
-  for (const file of fs.readdirSync(projectDir)) {
-    if (!file.endsWith('.jsonl')) continue;
-    try {
-      const stat = fs.statSync(path.join(projectDir, file));
-      if (!latest || stat.mtimeMs > latest.mtime) {
-        latest = { name: file.replace('.jsonl', ''), mtime: stat.mtimeMs };
-      }
-    } catch { /* ignore */ }
-  }
-
-  return latest?.name ?? null;
-}

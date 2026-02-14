@@ -25,7 +25,7 @@ export interface AppState {
   paneStates: Record<string, TaskPaneState>;
 }
 
-type AppAction =
+export type AppAction =
   | { type: 'SET_CONFIG'; config: BifrostConfig }
   | { type: 'SET_REPOS'; repos: Repo[] }
   | { type: 'SET_TASKS'; tasks: Task[] }
@@ -60,7 +60,7 @@ const initialState: AppState = {
   paneStates: {},
 };
 
-const defaultPaneState: TaskPaneState = {
+export const defaultPaneState: TaskPaneState = {
   devSessionId: null,
   claudeHidden: false,
   devHidden: false,
@@ -73,6 +73,10 @@ function getPaneState(state: AppState, taskId: string): TaskPaneState {
 
 function setPaneState(state: AppState, taskId: string, ps: TaskPaneState): AppState {
   return { ...state, paneStates: { ...state.paneStates, [taskId]: ps } };
+}
+
+function hiddenKey(pane: PaneTarget): 'claudeHidden' | 'devHidden' {
+  return pane === 'claude' ? 'claudeHidden' : 'devHidden';
 }
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -141,11 +145,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'HIDE_PANE': {
       const ps = getPaneState(state, action.taskId);
-      return setPaneState(state, action.taskId, { ...ps, [action.pane === 'claude' ? 'claudeHidden' : 'devHidden']: true });
+      const key = hiddenKey(action.pane);
+      return setPaneState(state, action.taskId, { ...ps, [key]: true });
     }
     case 'SHOW_PANE': {
       const ps = getPaneState(state, action.taskId);
-      return setPaneState(state, action.taskId, { ...ps, [action.pane === 'claude' ? 'claudeHidden' : 'devHidden']: false });
+      const key = hiddenKey(action.pane);
+      return setPaneState(state, action.taskId, { ...ps, [key]: false });
     }
     default:
       return state;

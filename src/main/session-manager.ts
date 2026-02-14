@@ -7,23 +7,23 @@ const pty = require('node-pty');
 
 const sessions = new Map<string, IPty>();
 
-export function createSession(
+function spawnSession(
   sessionId: string,
+  command: string,
+  args: string[],
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean },
+  options?: { cols?: number; rows?: number },
 ): void {
   const env = { ...process.env } as Record<string, string>;
   // Remove CLAUDECODE so claude CLI doesn't refuse to start
   // when Bifrost itself was launched from a Claude Code session
   delete env.CLAUDECODE;
 
-  const args = options?.resume ? ['--continue'] : [];
-
-  const shell = pty.spawn('claude', args, {
+  const shell = pty.spawn(command, args, {
     name: 'xterm-256color',
-    cols: 120,
-    rows: 30,
+    cols: options?.cols ?? 120,
+    rows: options?.rows ?? 30,
     cwd,
     env,
   });
@@ -44,38 +44,23 @@ export function createSession(
   });
 }
 
+export function createSession(
+  sessionId: string,
+  cwd: string,
+  mainWindow: BrowserWindow,
+  options?: { resume?: boolean },
+): void {
+  const args = options?.resume ? ['--continue'] : [];
+  spawnSession(sessionId, 'claude', args, cwd, mainWindow);
+}
+
 export function createShellSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
 ): void {
-  const env = { ...process.env } as Record<string, string>;
-  delete env.CLAUDECODE;
-
   const shellPath = process.env.SHELL || '/bin/zsh';
-
-  const shell = pty.spawn(shellPath, ['-l'], {
-    name: 'xterm-256color',
-    cols: 120,
-    rows: 15,
-    cwd,
-    env,
-  });
-
-  sessions.set(sessionId, shell);
-
-  shell.onData((data: string) => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_STREAM.SESSION_DATA, sessionId, data);
-    }
-  });
-
-  shell.onExit(({ exitCode }: { exitCode: number }) => {
-    sessions.delete(sessionId);
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
-    }
-  });
+  spawnSession(sessionId, shellPath, ['-l'], cwd, mainWindow, { rows: 15 });
 }
 
 export function writeToSession(sessionId: string, data: string): void {

@@ -1,10 +1,9 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { useApp } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
 
 interface TerminalPaneProps {
-  taskId: string;
   sessionId: string;
   active: boolean;
   focused: boolean;
@@ -13,15 +12,11 @@ interface TerminalPaneProps {
   onTitleChange?: (title: string) => void;
 }
 
-export default function TerminalPane({ taskId, sessionId, active, focused, hideCursor = false, onFocusRequest, onTitleChange }: TerminalPaneProps) {
+export default function TerminalPane({ sessionId, active, focused, hideCursor = false, onFocusRequest, onTitleChange }: TerminalPaneProps) {
   const { state } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const handleTitleChange = useCallback((title: string) => {
-    onTitleChange?.(title);
-  }, [onTitleChange]);
-
-  const { terminal } = useTerminal(sessionId, containerRef, handleTitleChange, { hideCursor });
+  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing
   useEffect(() => {

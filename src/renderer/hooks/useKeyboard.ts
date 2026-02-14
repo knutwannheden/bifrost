@@ -1,19 +1,6 @@
 import { useEffect } from 'react';
-import type { AppState, DiffMode, PaneTarget } from '../context/AppContext';
-
-type AppAction =
-  | { type: 'SET_ACTIVE_TASK'; taskId: string | null }
-  | { type: 'UPDATE_TASK'; task: import('../../shared/types').Task }
-  | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean }
-  | { type: 'TOGGLE_REPO_MANAGER' }
-  | { type: 'TOGGLE_DIFF' }
-  | { type: 'TOGGLE_TASK_HISTORY' }
-  | { type: 'SET_DIFF_MODE'; mode: DiffMode }
-  | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
-  | { type: 'CLOSE_DEV_SESSION'; taskId: string }
-  | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
-  | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
-  | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget };
+import type { AppState, AppAction, PaneTarget } from '../context/AppContext';
+import { defaultPaneState } from '../context/AppContext';
 
 export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>) {
   useEffect(() => {
@@ -59,7 +46,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           e.preventDefault();
           if (!state.activeTaskId) break;
           const taskId = state.activeTaskId;
-          const ps = state.paneStates[taskId] ?? { claudeHidden: false, devHidden: false, devSessionId: null, focusedPane: 'claude' as const };
+          const ps = state.paneStates[taskId] ?? defaultPaneState;
 
           // Hide the focused pane
           const hiding = ps.focusedPane;
@@ -95,7 +82,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           e.preventDefault();
           if (!state.activeTaskId) break;
           const taskId = state.activeTaskId;
-          const ps = state.paneStates[taskId] ?? { claudeHidden: false, devHidden: false, devSessionId: null, focusedPane: 'claude' as const };
+          const ps = state.paneStates[taskId] ?? defaultPaneState;
 
           if (!ps.devSessionId) {
             // No dev terminal yet — create one

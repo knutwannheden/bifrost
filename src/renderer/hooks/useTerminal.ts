@@ -23,11 +23,12 @@ export function useTerminal(
     if (!sessionId || !containerRef.current) return;
 
     const hideCursor = options?.hideCursor ?? false;
+    const cursorConfig = hideCursor
+      ? { cursorBlink: false, cursorStyle: 'bar' as const, cursorWidth: 1, cursorInactiveStyle: 'none' as const }
+      : { cursorBlink: options?.cursorBlink ?? true, cursorStyle: 'block' as const, cursorInactiveStyle: 'outline' as const };
+
     const terminal = new Terminal({
-      cursorBlink: hideCursor ? false : (options?.cursorBlink ?? true),
-      cursorStyle: hideCursor ? 'bar' : 'block',
-      cursorWidth: hideCursor ? 1 : undefined,
-      cursorInactiveStyle: hideCursor ? 'none' : 'outline',
+      ...cursorConfig,
       fontSize: 14,
       fontFamily: '"MesloLGS NF", "MesloLGM Nerd Font", "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font", Menlo, Monaco, "Courier New", monospace',
       theme: {

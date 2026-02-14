@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, defaultPaneState } from '../context/AppContext';
 import type { PaneTarget } from '../context/AppContext';
 import TerminalPane from './TerminalPane';
 
@@ -61,16 +61,10 @@ export default function TaskView() {
     <div className="flex-1 relative">
       {openTasks.map((task) => {
         const isActive = task.id === state.activeTaskId;
-        const ps = state.paneStates[task.id] ?? {
-          devSessionId: null,
-          claudeHidden: false,
-          devHidden: false,
-          focusedPane: 'claude' as PaneTarget,
-        };
+        const ps = state.paneStates[task.id] ?? defaultPaneState;
 
         const showClaude = !ps.claudeHidden;
-        const hasDev = !!ps.devSessionId;
-        const showDev = hasDev && !ps.devHidden;
+        const showDev = !!ps.devSessionId && !ps.devHidden;
 
         return (
           <div
@@ -84,7 +78,6 @@ export default function TaskView() {
               style={{ display: showClaude ? 'block' : 'none' }}
             >
               <TerminalPane
-                taskId={task.id}
                 sessionId={task.sessionId}
                 active={isActive}
                 focused={ps.focusedPane === 'claude'}
@@ -95,13 +88,12 @@ export default function TaskView() {
             </div>
 
             {/* Dev terminal pane — rendered when session exists, hidden via CSS */}
-            {hasDev && ps.devSessionId && (
+            {ps.devSessionId && (
               <div
                 className={showClaude ? 'h-[30%] min-h-[100px]' : 'flex-1'}
                 style={{ display: showDev ? 'block' : 'none' }}
               >
                 <TerminalPane
-                  taskId={task.id}
                   sessionId={ps.devSessionId}
                   active={isActive}
                   focused={ps.focusedPane === 'dev'}
