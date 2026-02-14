@@ -216,6 +216,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     const sessionId = randomUUID();
     createSession(sessionId, task.worktreePath, mainWindow, {
+      resume: true,
       claudeSessionId: task.claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,

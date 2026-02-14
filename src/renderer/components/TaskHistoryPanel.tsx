@@ -17,7 +17,7 @@ const statusColor: Record<string, string> = {
   archived: 'text-slate-500',
 };
 
-const filters = ['all', 'active', 'archived', 'sessions'] as const;
+const filters = ['active', 'all', 'archived', 'sessions'] as const;
 type Filter = (typeof filters)[number];
 
 function formatDate(ts: number): string {
@@ -177,7 +177,7 @@ function TaskRow({
 
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>('active');
   const [search, setSearch] = useState('');
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
