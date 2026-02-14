@@ -594,7 +594,8 @@ export default function DiffOverlay() {
         e.stopPropagation();
         const modes: DiffMode[] = ['git', 'activity', 'log'];
         const curIdx = modes.indexOf(state.diffMode);
-        dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + 1) % modes.length] });
+        const step = e.shiftKey ? modes.length - 1 : 1;
+        dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + step) % modes.length] });
         break;
       }
 
@@ -670,7 +671,7 @@ export default function DiffOverlay() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-600">
-            &uarr;&darr; navigate &middot; Tab cycle
+            &uarr;&darr; navigate &middot; Tab/&#8679;Tab cycle
           </span>
           <button
             tabIndex={-1}
