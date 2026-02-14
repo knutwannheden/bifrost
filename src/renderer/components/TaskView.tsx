@@ -63,9 +63,9 @@ export default function TaskView() {
   }, [activeTask?.id]);
 
   if (!activeTask) {
-    // Don't show welcome screen until tasks have been loaded from disk,
-    // to avoid flashing it briefly when restoring previous sessions.
-    if (!state.tasksLoaded) {
+    // Don't show welcome screen if tasks exist (even if none is active yet),
+    // to avoid flashing it during startup task restoration.
+    if (!state.tasksLoaded || state.tasks.some((t) => t.status !== 'archived')) {
       return <div className="flex-1" />;
     }
     return (
