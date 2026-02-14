@@ -11,6 +11,7 @@ import TaskCreateDialog from './components/TaskCreateDialog';
 import DiffOverlay from './components/DiffOverlay';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
+import SettingsOverlay from './components/SettingsOverlay';
 
 declare global {
   interface Window {
@@ -179,6 +180,7 @@ export default function App() {
       {state.showCreateDialog && <TaskCreateDialog />}
       {state.showTaskHistory && <TaskHistoryPanel />}
       {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
+      {state.showSettings && <SettingsOverlay />}
 
       {/* Diff overlay */}
       <DiffOverlay />

@@ -339,9 +339,26 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           }
           break;
 
+        case 'l':
+          e.preventDefault();
+          if (state.showDiff && state.diffMode === 'log') {
+            dispatch({ type: 'TOGGLE_DIFF' });
+          } else {
+            dispatch({ type: 'SET_DIFF_MODE', mode: 'log' });
+            if (!state.showDiff) {
+              dispatch({ type: 'TOGGLE_DIFF' });
+            }
+          }
+          break;
+
         case 'k':
           e.preventDefault();
           dispatch({ type: 'TOGGLE_KEYBOARD_SHORTCUTS' });
+          break;
+
+        case ',':
+          e.preventDefault();
+          dispatch({ type: 'TOGGLE_SETTINGS' });
           break;
 
         case 'o': {

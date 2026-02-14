@@ -63,6 +63,11 @@ export default function TaskView() {
   }, [activeTask?.id]);
 
   if (!activeTask) {
+    // Don't show welcome screen until tasks have been loaded from disk,
+    // to avoid flashing it briefly when restoring previous sessions.
+    if (!state.tasksLoaded) {
+      return <div className="flex-1" />;
+    }
     return (
       <div className="flex-1 flex items-center justify-center">
         <div className="text-center text-slate-500">

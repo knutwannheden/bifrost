@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, clipboard, dialog } from 'electron';
+import { ipcMain, BrowserWindow, clipboard, dialog, shell } from 'electron';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
 import { createWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, killSession } from './session-manager';
 import { getDiff } from './diff-service';
+import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastChangedFile } from './activity-watcher';
@@ -75,7 +76,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (fs.existsSync(task.worktreePath)) {
       const sessionId = randomUUID();
       createSession(sessionId, task.worktreePath, mainWindow, {
-        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined,
+        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, sandbox: loadConfig().sandbox,
       });
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
@@ -133,7 +134,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const taskId = randomUUID();
 
     createSession(sessionId, worktreePath, mainWindow, {
-      taskId, apiPort: getApiPort() ?? undefined,
+      taskId, apiPort: getApiPort() ?? undefined, sandbox: config.sandbox,
     });
 
     const task: Task = {
@@ -198,6 +199,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       claudeSessionId: task.claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
+      sandbox: loadConfig().sandbox,
     });
 
     // Restart file watcher
@@ -260,6 +262,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     return getDiff(task.worktreePath);
   });
+
+  // Git log
+  ipcMain.handle(IPC.GET_GIT_LOG, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+    return getGitLog(task.worktreePath, repo?.defaultBranch);
+  });
+
+  // Shell
+  ipcMain.handle(IPC.OPEN_URL, (_event, url: string) => shell.openExternal(url));
 
   // IDE
   ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string, filePath?: string, line?: number) => {
@@ -333,6 +346,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
+      sandbox: loadConfig().sandbox,
     });
 
     const task: Task = {

@@ -9,6 +9,7 @@ export const terminalRegistry = new Map<string, Terminal>();
 interface TerminalOptions {
   cursorBlink?: boolean;
   hideCursor?: boolean;
+  fontSize?: number;
 }
 
 export function useTerminal(
@@ -32,7 +33,7 @@ export function useTerminal(
 
     const terminal = new Terminal({
       ...cursorConfig,
-      fontSize: 14,
+      fontSize: options?.fontSize ?? 14,
       fontFamily: '"MesloLGS NF", "MesloLGM Nerd Font", "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font", Menlo, Monaco, "Courier New", monospace',
       theme: {
         background: '#282a36',
@@ -60,7 +61,9 @@ export function useTerminal(
     });
 
     const fitAddon = new FitAddon();
-    const webLinksAddon = new WebLinksAddon();
+    const webLinksAddon = new WebLinksAddon((_e, uri) => {
+      window.bifrost.openUrl(uri);
+    });
 
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
@@ -81,7 +84,7 @@ export function useTerminal(
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && !e.shiftKey) {
         const key = e.key.toLowerCase();
-        if ('atdrhko'.includes(key)) return false;
+        if ('atdrhko,l'.includes(key)) return false;
       }
       return true;
     });
@@ -135,6 +138,19 @@ export function useTerminal(
       fitAddonRef.current = null;
     };
   }, [sessionId, containerRef]);
+
+  // Update fontSize dynamically when config changes
+  const fontSize = options?.fontSize ?? 14;
+  useEffect(() => {
+    if (terminalRef.current && fitAddonRef.current) {
+      terminalRef.current.options.fontSize = fontSize;
+      try {
+        fitAddonRef.current.fit();
+      } catch {
+        // ignore fit errors
+      }
+    }
+  }, [fontSize]);
 
   return { terminal: terminalRef, fitAddon: fitAddonRef };
 }

@@ -38,6 +38,7 @@ export interface BifrostConfig {
   repos: Repo[];
   ide: 'code' | 'idea';
   fontSize: number;
+  sandbox: boolean;
 }
 
 export interface CreateTaskParams {
@@ -122,8 +123,17 @@ export type CaptureContextParams =
   | { type: 'activity'; content: string; taskId: string; taskName: string }
   | { type: 'transcript'; content: string; jsonlPath: string; lineNumber: number; uuid: string; selectedText?: string; selectionStart?: number; selectionEnd?: number; taskId: string; taskName: string };
 
+export interface GitLogEntry {
+  sha: string;
+  shortSha: string;
+  subject: string;
+  author: string;
+  date: string; // ISO 8601
+}
+
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',
   fontSize: 14,
+  sandbox: false,
 };

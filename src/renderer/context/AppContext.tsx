@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import type { Repo, Task, BifrostConfig, TaskStatus } from '../../shared/types';
 
-export type DiffMode = 'git' | 'activity';
+export type DiffMode = 'git' | 'activity' | 'log';
 export type PaneTarget = 'claude' | 'dev';
 
 export interface TaskPaneState {
@@ -14,6 +14,7 @@ export interface TaskPaneState {
 export interface AppState {
   repos: Repo[];
   tasks: Task[];
+  tasksLoaded: boolean;
   activeTaskId: string | null;
   config: BifrostConfig | null;
   showRepoManager: boolean;
@@ -22,6 +23,7 @@ export interface AppState {
   showDiff: boolean;
   showTaskHistory: boolean;
   showKeyboardShortcuts: boolean;
+  showSettings: boolean;
   diffMode: DiffMode;
   paneStates: Record<string, TaskPaneState>;
   toast: string | null;
@@ -43,6 +45,7 @@ export type AppAction =
   | { type: 'TOGGLE_DIFF' }
   | { type: 'TOGGLE_TASK_HISTORY' }
   | { type: 'TOGGLE_KEYBOARD_SHORTCUTS' }
+  | { type: 'TOGGLE_SETTINGS' }
   | { type: 'SET_DIFF_MODE'; mode: DiffMode }
   | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
   | { type: 'CLOSE_DEV_SESSION'; taskId: string }
@@ -56,6 +59,7 @@ export type AppAction =
 const initialState: AppState = {
   repos: [],
   tasks: [],
+  tasksLoaded: false,
   activeTaskId: null,
   config: null,
   showRepoManager: false,
@@ -64,6 +68,7 @@ const initialState: AppState = {
   showDiff: false,
   showTaskHistory: false,
   showKeyboardShortcuts: false,
+  showSettings: false,
   diffMode: 'git',
   paneStates: {},
   toast: null,
@@ -96,6 +101,7 @@ const allOverlaysClosed = {
   showDiff: false,
   showTaskHistory: false,
   showKeyboardShortcuts: false,
+  showSettings: false,
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -105,7 +111,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_REPOS':
       return { ...state, repos: action.repos };
     case 'SET_TASKS':
-      return { ...state, tasks: action.tasks };
+      return { ...state, tasks: action.tasks, tasksLoaded: true };
     case 'ADD_TASK':
       return { ...state, tasks: [...state.tasks, action.task] };
     case 'REMOVE_TASK': {
@@ -150,6 +156,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, ...allOverlaysClosed, showTaskHistory: !state.showTaskHistory };
     case 'TOGGLE_KEYBOARD_SHORTCUTS':
       return { ...state, ...allOverlaysClosed, showKeyboardShortcuts: !state.showKeyboardShortcuts };
+    case 'TOGGLE_SETTINGS':
+      return { ...state, ...allOverlaysClosed, showSettings: !state.showSettings };
     case 'SET_DIFF_MODE':
       return { ...state, diffMode: action.mode };
     case 'SET_DEV_SESSION': {

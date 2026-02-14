@@ -53,13 +53,16 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number },
+  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; sandbox?: boolean },
 ): void {
   const args: string[] = [];
   if (options?.claudeSessionId) {
     args.push('--resume', options.claudeSessionId);
   } else if (options?.resume) {
     args.push('--continue');
+  }
+  if (options?.sandbox) {
+    args.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
   }
   const extraEnv: Record<string, string> = {};
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
@@ -93,14 +96,14 @@ export function resizeSession(sessionId: string, cols: number, rows: number): vo
 export function killSession(sessionId: string): void {
   const session = sessions.get(sessionId);
   if (session) {
-    session.kill();
+    session.kill('SIGTERM');
     sessions.delete(sessionId);
   }
 }
 
 export function killAllSessions(): void {
   for (const [id, session] of sessions) {
-    session.kill();
+    session.kill('SIGTERM');
     sessions.delete(id);
   }
 }

@@ -7,6 +7,7 @@ const shortcuts = [
   { key: '/', label: 'Toggle dev terminal' },
   { key: 'D', label: 'Git diff' },
   { key: 'A', label: 'Activity log' },
+  { key: 'L', label: 'Git log' },
   { key: 'R', label: 'Repositories' },
   { key: 'H', label: 'Task history' },
   { key: 'O', label: 'Open in IDE' },
@@ -15,6 +16,7 @@ const shortcuts = [
   { key: 'Shift+[', label: 'Previous tab' },
   { key: 'Shift+]', label: 'Next tab' },
   { key: '1-9', label: 'Switch to tab N' },
+  { key: ',', label: 'Settings' },
 ];
 
 export default function KeyboardShortcutsPanel() {
@@ -62,7 +64,7 @@ export default function KeyboardShortcutsPanel() {
             <div key={s.key} className="flex items-center justify-between py-1">
               <span className="text-sm text-slate-300">{s.label}</span>
               <kbd className="px-2 py-0.5 text-xs font-mono bg-slate-700 border border-slate-600 rounded text-slate-300">
-                Cmd+{s.key}
+                {s.key.includes('Shift+') ? `⌘⇧${s.key.replace('Shift+', '')}` : `⌘${s.key}`}
               </kbd>
             </div>
           ))}

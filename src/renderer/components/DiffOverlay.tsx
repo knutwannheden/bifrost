@@ -3,12 +3,13 @@ import { useApp } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
 import { useDiff } from '../hooks/useDiff';
 import { useActivityLog } from '../hooks/useActivityLog';
+import { useGitLog } from '../hooks/useGitLog';
 import { parseDiff, extFromPath, diffFileStats } from '../utils/diff-parser';
 import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
-import type { ActivityEntry, CaptureContextParams } from '../../shared/types';
+import type { ActivityEntry, CaptureContextParams, GitLogEntry } from '../../shared/types';
 
 interface HighlightedFile {
   file: DiffFile;
@@ -204,10 +205,16 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
   );
 }
 
+const modeLabels: Record<DiffMode, { text: string; hintIndex?: number }> = {
+  git: { text: 'Git Diff' },
+  activity: { text: 'Activity Log' },
+  log: { text: 'Git Log', hintIndex: 4 },
+};
+
 function ModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (m: DiffMode) => void }) {
   return (
     <div className="flex gap-1">
-      {(['git', 'activity'] as const).map((m) => (
+      {(['git', 'activity', 'log'] as const).map((m) => (
         <button
           key={m}
           tabIndex={-1}
@@ -218,11 +225,7 @@ function ModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (m: DiffMode
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
           }`}
         >
-          {m === 'git' ? (
-            <ActionLabel text="Git Diff" showHint={true} />
-          ) : (
-            <ActionLabel text="Activity Log" showHint={true} />
-          )}
+          <ActionLabel text={modeLabels[m].text} hintIndex={modeLabels[m].hintIndex} showHint={true} />
         </button>
       ))}
     </div>
@@ -398,6 +401,57 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
   );
 }
 
+function formatRelativeDate(isoDate: string): string {
+  const date = new Date(isoDate);
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+  return date.toLocaleDateString();
+}
+
+function GitLogContent({ taskId }: { taskId: string }) {
+  const { entries, loading, error } = useGitLog(taskId);
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-slate-400 p-4">
+        <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+        <span>Loading git log...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="text-red-400 p-4">Error: {error}</div>;
+  }
+
+  if (entries.length === 0) {
+    return <div className="text-slate-500 p-4">No commits</div>;
+  }
+
+  return (
+    <div className="space-y-1">
+      {entries.map((entry: GitLogEntry) => (
+        <div
+          key={entry.sha}
+          className="flex items-start gap-3 px-3 py-2 bg-slate-800/40 border border-slate-700/50 rounded text-xs"
+        >
+          <span className="text-yellow-400 font-mono flex-shrink-0">{entry.shortSha}</span>
+          <span className="text-slate-200 flex-1 min-w-0 break-words">{entry.subject}</span>
+          <span className="text-slate-500 flex-shrink-0">{entry.author}</span>
+          <span className="text-slate-600 flex-shrink-0 w-16 text-right">{formatRelativeDate(entry.date)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function DiffOverlay() {
   const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -521,11 +575,14 @@ export default function DiffOverlay() {
         }
         break;
 
-      case 'Tab':
+      case 'Tab': {
         e.preventDefault();
         e.stopPropagation();
-        dispatch({ type: 'SET_DIFF_MODE', mode: state.diffMode === 'git' ? 'activity' : 'git' });
+        const modes: DiffMode[] = ['git', 'activity', 'log'];
+        const curIdx = modes.indexOf(state.diffMode);
+        dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + 1) % modes.length] });
         break;
+      }
 
       case 'Backspace':
         e.preventDefault();
@@ -562,6 +619,10 @@ export default function DiffOverlay() {
               e.preventDefault();
               dispatch({ type: 'SET_DIFF_MODE', mode: 'activity' });
               break;
+            case 'KeyL':
+              e.preventDefault();
+              dispatch({ type: 'SET_DIFF_MODE', mode: 'log' });
+              break;
           }
         } else if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
           // Incremental search
@@ -590,7 +651,7 @@ export default function DiffOverlay() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-slate-600">
-            &uarr;&darr; navigate &middot; Tab toggle
+            &uarr;&darr; navigate &middot; Tab cycle
           </span>
           <button
             tabIndex={-1}
@@ -627,6 +688,12 @@ export default function DiffOverlay() {
             onFileCount={setGitFileCount}
             filesRef={gitFilesRef}
           />
+        </div>
+      )}
+
+      {state.activeTaskId && state.diffMode === 'log' && (
+        <div className="flex-1 overflow-auto p-4">
+          <GitLogContent taskId={state.activeTaskId} />
         </div>
       )}
 

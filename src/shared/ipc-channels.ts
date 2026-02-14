@@ -6,6 +6,7 @@ import type {
   ClaudeSession,
   CreateTaskParams,
   DiffResult,
+  GitLogEntry,
   Repo,
   Task,
 } from './types';
@@ -41,6 +42,10 @@ export const IPC = {
 
   // Diff
   GET_DIFF: 'diff:get',
+  GET_GIT_LOG: 'git:log',
+
+  // Shell
+  OPEN_URL: 'shell:open-url',
 
   // Activity Log
   GET_ACTIVITY_LOG: 'activity:get-log',
@@ -108,6 +113,10 @@ export interface BifrostAPI {
 
   // Diff
   getDiff(taskId: string): Promise<DiffResult>;
+  getGitLog(taskId: string): Promise<GitLogEntry[]>;
+
+  // Shell
+  openUrl(url: string): Promise<void>;
 
   // Activity Log
   getActivityLog(taskId: string): Promise<ActivityEntry[]>;
