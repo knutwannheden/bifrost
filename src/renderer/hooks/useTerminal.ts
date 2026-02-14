@@ -3,6 +3,9 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 
+// Global registry so keyboard shortcuts can access terminal instances
+export const terminalRegistry = new Map<string, Terminal>();
+
 interface TerminalOptions {
   cursorBlink?: boolean;
   hideCursor?: boolean;
@@ -55,6 +58,7 @@ export function useTerminal(
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
+    terminalRegistry.set(sessionId, terminal);
 
     // Send keystrokes to session
     terminal.onData((data) => {
@@ -99,6 +103,7 @@ export function useTerminal(
       resizeObserver.disconnect();
       removeDataListener();
       removeExitListener();
+      terminalRegistry.delete(sessionId);
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;

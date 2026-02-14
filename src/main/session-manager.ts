@@ -13,12 +13,16 @@ function spawnSession(
   args: string[],
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { cols?: number; rows?: number },
+  options?: { cols?: number; rows?: number; extraEnv?: Record<string, string> },
 ): void {
   const env = { ...process.env } as Record<string, string>;
   // Remove CLAUDECODE so claude CLI doesn't refuse to start
   // when Bifrost itself was launched from a Claude Code session
   delete env.CLAUDECODE;
+
+  if (options?.extraEnv) {
+    Object.assign(env, options.extraEnv);
+  }
 
   const shell = pty.spawn(command, args, {
     name: 'xterm-256color',
@@ -48,10 +52,15 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean },
+  options?: { resume?: boolean; taskId?: string; apiPort?: number },
 ): void {
   const args = options?.resume ? ['--continue'] : [];
-  spawnSession(sessionId, 'claude', args, cwd, mainWindow);
+  const extraEnv: Record<string, string> = {};
+  if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
+  if (options?.apiPort) extraEnv.BIFROST_API_PORT = String(options.apiPort);
+  spawnSession(sessionId, 'claude', args, cwd, mainWindow, {
+    extraEnv: Object.keys(extraEnv).length > 0 ? extraEnv : undefined,
+  });
 }
 
 export function createShellSession(

@@ -50,6 +50,10 @@ export const IPC = {
   // Terminal title
   SET_TERMINAL_TITLE: 'task:set-terminal-title',
 
+  // Context capture
+  CAPTURE_CONTEXT: 'context:capture',
+  GET_API_PORT: 'api:get-port',
+
   // Dialog
   SELECT_DIRECTORY: 'dialog:select-directory',
 } as const;
@@ -106,6 +110,10 @@ export interface BifrostAPI {
 
   // IDE
   openInIde(worktreePath: string): Promise<void>;
+
+  // Context capture
+  captureContext(content: string, label: string, taskId?: string): Promise<number>;
+  getApiPort(): Promise<number | null>;
 
   // Dialog
   selectDirectory(): Promise<string | null>;

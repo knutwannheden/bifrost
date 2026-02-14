@@ -11,11 +11,17 @@ import { getDiff } from './diff-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog } from './activity-watcher';
+import { getApiPort } from './bifrost-api';
+import { store as storeContext } from './context-store';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
 
-function getTask(taskId: string): Task {
+export function getTasks(): Task[] {
+  return tasks;
+}
+
+export function getTask(taskId: string): Task {
   const task = tasks.find((t) => t.id === taskId);
   if (!task) throw new Error(`Task not found: ${taskId}`);
   return task;
@@ -42,7 +48,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   for (const task of tasksToRestore) {
     if (fs.existsSync(task.worktreePath)) {
       const sessionId = uuidv4();
-      createSession(sessionId, task.worktreePath, mainWindow, { resume: true });
+      createSession(sessionId, task.worktreePath, mainWindow, {
+        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined,
+      });
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
         tasks[idx] = { ...tasks[idx], sessionId, status: 'running', hasUnread: false };
@@ -96,11 +104,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     const worktreePath = await createWorktree(repo.path, params.name, params.branch);
     const sessionId = uuidv4();
+    const taskId = uuidv4();
 
-    createSession(sessionId, worktreePath, mainWindow);
+    createSession(sessionId, worktreePath, mainWindow, {
+      taskId, apiPort: getApiPort() ?? undefined,
+    });
 
     const task: Task = {
-      id: uuidv4(),
+      id: taskId,
       name: params.name,
       repoId: params.repoId,
       branch: params.branch,
@@ -177,7 +188,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
 
     const sessionId = uuidv4();
-    createSession(sessionId, task.worktreePath, mainWindow, { resume: true });
+    createSession(sessionId, task.worktreePath, mainWindow, {
+      resume: true, taskId, apiPort: getApiPort() ?? undefined,
+    });
 
     // Restart file watcher
     startWatching(taskId, task.worktreePath, mainWindow);
@@ -294,6 +307,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     // Only update window title for the "current" task — the renderer knows which is active
     mainWindow.setTitle(`BIFROST — ${title}`);
+  });
+
+  // Context capture
+  ipcMain.handle(IPC.CAPTURE_CONTEXT, (_event, content: string, label: string, taskId?: string) => {
+    const id = storeContext(content, label, taskId);
+    require('electron').clipboard.writeText(`[Bifrost #${id}]`);
+    return id;
+  });
+
+  ipcMain.handle(IPC.GET_API_PORT, () => {
+    return getApiPort();
   });
 
   // Dialog

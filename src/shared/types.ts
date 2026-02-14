@@ -62,6 +62,14 @@ export interface ActivityEntry {
   claudeToolName?: string;
 }
 
+export interface ContextEntry {
+  id: number;
+  content: string;
+  label: string;
+  taskId?: string;
+  createdAt: number;
+}
+
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',

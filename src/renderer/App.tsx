@@ -52,6 +52,13 @@ export default function App() {
     return unsub;
   }, [state.tasks, state.activeTaskId, dispatch]);
 
+  // Auto-dismiss toast after 2s
+  useEffect(() => {
+    if (!state.toast) return;
+    const timer = setTimeout(() => dispatch({ type: 'HIDE_TOAST' }), 2000);
+    return () => clearTimeout(timer);
+  }, [state.toast, dispatch]);
+
   const handleToggleIde = async () => {
     if (!state.config) return;
     const newIde = state.config.ide === 'code' ? 'idea' : 'code';
@@ -78,6 +85,7 @@ export default function App() {
         activeTask={activeTask}
         config={state.config}
         repos={state.repos}
+        apiPort={state.apiPort}
         onToggleIde={handleToggleIde}
       />
 
@@ -88,6 +96,13 @@ export default function App() {
 
       {/* Diff overlay */}
       <DiffOverlay />
+
+      {/* Toast notification */}
+      {state.toast && (
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-700 text-slate-200 text-sm rounded shadow-lg animate-fade-in">
+          {state.toast}
+        </div>
+      )}
     </div>
   );
 }

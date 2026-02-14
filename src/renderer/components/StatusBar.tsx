@@ -5,6 +5,7 @@ interface StatusBarProps {
   activeTask: Task | null;
   config: BifrostConfig | null;
   repos: Repo[];
+  apiPort: number | null;
   onToggleIde: () => void;
 }
 
@@ -12,6 +13,7 @@ export default function StatusBar({
   activeTask,
   config,
   repos,
+  apiPort,
   onToggleIde,
 }: StatusBarProps) {
   return (
@@ -37,6 +39,7 @@ export default function StatusBar({
             IDE: {config.ide}
           </button>
         )}
+        <span>{apiPort ? `MCP :${apiPort}` : 'MCP off'}</span>
         <span>Repos: {repos.length}</span>
       </div>
     </div>

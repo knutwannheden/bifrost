@@ -62,6 +62,11 @@ const api: BifrostAPI = {
   // IDE
   openInIde: (worktreePath) => ipcRenderer.invoke(IPC.OPEN_IN_IDE, worktreePath),
 
+  // Context capture
+  captureContext: (content, label, taskId) =>
+    ipcRenderer.invoke(IPC.CAPTURE_CONTEXT, content, label, taskId),
+  getApiPort: () => ipcRenderer.invoke(IPC.GET_API_PORT),
+
   // Dialog
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
 

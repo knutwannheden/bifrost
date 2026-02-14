@@ -23,6 +23,8 @@ export interface AppState {
   showTaskHistory: boolean;
   diffMode: DiffMode;
   paneStates: Record<string, TaskPaneState>;
+  toast: string | null;
+  apiPort: number | null;
 }
 
 export type AppAction =
@@ -44,7 +46,10 @@ export type AppAction =
   | { type: 'CLOSE_DEV_SESSION'; taskId: string }
   | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
   | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
-  | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget };
+  | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget }
+  | { type: 'SHOW_TOAST'; message: string }
+  | { type: 'HIDE_TOAST' }
+  | { type: 'SET_API_PORT'; port: number | null };
 
 const initialState: AppState = {
   repos: [],
@@ -58,6 +63,8 @@ const initialState: AppState = {
   showTaskHistory: false,
   diffMode: 'git',
   paneStates: {},
+  toast: null,
+  apiPort: null,
 };
 
 export const defaultPaneState: TaskPaneState = {
@@ -153,6 +160,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const key = hiddenKey(action.pane);
       return setPaneState(state, action.taskId, { ...ps, [key]: false });
     }
+    case 'SHOW_TOAST':
+      return { ...state, toast: action.message };
+    case 'HIDE_TOAST':
+      return { ...state, toast: null };
+    case 'SET_API_PORT':
+      return { ...state, apiPort: action.port };
     default:
       return state;
   }
@@ -169,6 +182,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     window.bifrost.loadConfig().then((config) => {
       dispatch({ type: 'SET_CONFIG', config });
+    });
+    window.bifrost.getApiPort().then((port) => {
+      dispatch({ type: 'SET_API_PORT', port });
     });
     window.bifrost.listTasks().then((tasks) => {
       dispatch({ type: 'SET_TASKS', tasks });

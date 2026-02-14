@@ -1,9 +1,12 @@
 import { app, BrowserWindow, globalShortcut, nativeImage } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
 import { initNotificationService } from './notification-service';
+import { startApi, stopApi } from './bifrost-api';
 
 if (started) {
   app.quit();
@@ -36,7 +39,20 @@ const createWindow = () => {
   }
 };
 
-app.on('ready', () => {
+function installMcpBridge(): void {
+  const destDir = path.join(os.homedir(), '.bifrost', 'bin');
+  const destFile = path.join(destDir, 'bifrost-mcp.js');
+  const srcFile = path.join(__dirname, 'mcp-bridge', 'bifrost-mcp.js');
+
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
+  if (fs.existsSync(srcFile)) {
+    fs.copyFileSync(srcFile, destFile);
+  }
+}
+
+app.on('ready', async () => {
   // Set dock icon on macOS (needed during development)
   if (process.platform === 'darwin' && app.dock) {
     const iconPath = path.join(__dirname, '../../assets/icon.png');
@@ -44,6 +60,12 @@ app.on('ready', () => {
   }
 
   createWindow();
+
+  // Start HTTP API for MCP bridge
+  await startApi();
+
+  // Install MCP bridge script to ~/.bifrost/bin/
+  installMcpBridge();
 
   if (mainWindow) {
     registerIpcHandlers(mainWindow);
@@ -60,6 +82,7 @@ app.on('ready', () => {
 
 app.on('before-quit', () => {
   killAllSessions();
+  stopApi();
 });
 
 app.on('will-quit', () => {

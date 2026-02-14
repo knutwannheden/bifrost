@@ -1,0 +1,168 @@
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
+import { resolve as resolveContext } from './context-store';
+import { getTasks, getTask } from './ipc-handlers';
+import { getDiff } from './diff-service';
+import { getActivityLog } from './activity-watcher';
+
+const PORT_START = 7623;
+const PORT_END = 7632;
+const PORT_FILE = path.join(os.homedir(), '.bifrost', 'api-port');
+
+let server: http.Server | null = null;
+let activePort: number | null = null;
+
+function readJsonBody(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => {
+      if (chunks.length === 0) return resolve({});
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString()));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function jsonResponse(res: http.ServerResponse, data: unknown, status = 200): void {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+function errorResponse(res: http.ServerResponse, message: string, status = 400): void {
+  jsonResponse(res, { error: message }, status);
+}
+
+async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (req.method !== 'POST') {
+    errorResponse(res, 'Method not allowed', 405);
+    return;
+  }
+
+  const body = await readJsonBody(req);
+
+  switch (req.url) {
+    case '/resolve-context': {
+      const id = body.id as number;
+      if (typeof id !== 'number') {
+        errorResponse(res, 'Missing or invalid id');
+        return;
+      }
+      const entry = resolveContext(id);
+      if (!entry) {
+        errorResponse(res, `Context #${id} not found or expired`, 404);
+        return;
+      }
+      jsonResponse(res, entry);
+      return;
+    }
+
+    case '/list-tasks': {
+      const tasks = getTasks().map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        branch: t.branch,
+        worktreePath: t.worktreePath,
+        createdAt: t.createdAt,
+      }));
+      jsonResponse(res, { tasks });
+      return;
+    }
+
+    case '/get-task-diff': {
+      const taskId = body.taskId as string | undefined;
+      const callerTaskId = body.callerTaskId as string | undefined;
+      const targetId = taskId || callerTaskId;
+      if (!targetId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      try {
+        const task = getTask(targetId);
+        const diff = await getDiff(task.worktreePath);
+        jsonResponse(res, diff);
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 404);
+      }
+      return;
+    }
+
+    case '/get-activity-log': {
+      const taskId = body.taskId as string | undefined;
+      const callerTaskId = body.callerTaskId as string | undefined;
+      const limit = (body.limit as number) || 50;
+      const targetId = taskId || callerTaskId;
+      if (!targetId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      try {
+        const task = getTask(targetId);
+        const entries = getActivityLog(targetId, task.worktreePath);
+        jsonResponse(res, { entries: entries.slice(-limit) });
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 404);
+      }
+      return;
+    }
+
+    default:
+      errorResponse(res, 'Not found', 404);
+  }
+}
+
+function tryListen(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = http.createServer(async (req, res) => {
+      try {
+        await handleRequest(req, res);
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 500);
+      }
+    });
+    s.once('error', () => resolve(false));
+    s.listen(port, '127.0.0.1', () => {
+      server = s;
+      activePort = port;
+      resolve(true);
+    });
+  });
+}
+
+export async function startApi(): Promise<number | null> {
+  for (let port = PORT_START; port <= PORT_END; port++) {
+    if (await tryListen(port)) {
+      // Write port file
+      const dir = path.dirname(PORT_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(PORT_FILE, String(port));
+      return port;
+    }
+  }
+  console.error('Bifrost API: could not bind to any port in range', PORT_START, '-', PORT_END);
+  return null;
+}
+
+export function stopApi(): void {
+  if (server) {
+    server.close();
+    server = null;
+  }
+  try {
+    fs.unlinkSync(PORT_FILE);
+  } catch {
+    // ignore
+  }
+  activePort = null;
+}
+
+export function getApiPort(): number | null {
+  return activePort;
+}
