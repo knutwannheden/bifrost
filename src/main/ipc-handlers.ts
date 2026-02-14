@@ -1,7 +1,11 @@
 import { ipcMain, BrowserWindow, clipboard, dialog, shell } from 'electron';
+import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execFile = promisify(execFileCb);
 import { IPC } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
@@ -273,6 +277,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     // task.branch is the base branch the worktree was forked from
     const baseBranch = task.branch || undefined;
     return getGitLog(task.worktreePath, baseBranch);
+  });
+
+  // PR URL
+  ipcMain.handle(IPC.GET_PR_URL, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    try {
+      const { stdout } = await execFile('gh', ['pr', 'view', '--json', 'url', '-q', '.url'], {
+        cwd: task.worktreePath,
+      });
+      const url = stdout.trim();
+      return url || null;
+    } catch {
+      return null;
+    }
   });
 
   // Shell

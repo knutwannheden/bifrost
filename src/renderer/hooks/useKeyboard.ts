@@ -361,6 +361,20 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           dispatch({ type: 'TOGGLE_SETTINGS' });
           break;
 
+        case 'g': {
+          e.preventDefault();
+          const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
+          if (!activeTask) break;
+          window.bifrost.getPrUrl(activeTask.id).then((url) => {
+            if (url) {
+              window.bifrost.openUrl(url);
+            } else {
+              dispatch({ type: 'SHOW_TOAST', message: 'No PR found for this branch' });
+            }
+          });
+          break;
+        }
+
         case 'o': {
           e.preventDefault();
           const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);

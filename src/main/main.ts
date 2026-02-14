@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, globalShortcut, Menu, nativeImage, shell } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -32,6 +32,12 @@ const createWindow = () => {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  });
+
+  // Open external links in the system browser instead of Electron windows
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url).catch(() => { /* ignore */ });
+    return { action: 'deny' };
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {

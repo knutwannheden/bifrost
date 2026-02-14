@@ -44,6 +44,7 @@ export const IPC = {
   // Diff
   GET_DIFF: 'diff:get',
   GET_GIT_LOG: 'git:log',
+  GET_PR_URL: 'git:pr-url',
 
   // Shell
   OPEN_URL: 'shell:open-url',
@@ -116,6 +117,7 @@ export interface BifrostAPI {
   // Diff
   getDiff(taskId: string): Promise<DiffResult>;
   getGitLog(taskId: string): Promise<GitLogEntry[]>;
+  getPrUrl(taskId: string): Promise<string | null>;
 
   // Shell
   openUrl(url: string): Promise<void>;

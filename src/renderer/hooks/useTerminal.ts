@@ -35,6 +35,11 @@ export function useTerminal(
       ...cursorConfig,
       fontSize: options?.fontSize ?? 14,
       fontFamily: '"MesloLGS NF", "MesloLGM Nerd Font", "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font", Menlo, Monaco, "Courier New", monospace',
+      linkHandler: {
+        activate: (_event, uri) => {
+          window.bifrost.openUrl(uri);
+        },
+      },
       theme: {
         background: '#282a36',
         foreground: '#f8f8f2',
@@ -84,7 +89,7 @@ export function useTerminal(
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && !e.shiftKey) {
         const key = e.key.toLowerCase();
-        if ('atdrhko,l'.includes(key)) return false;
+        if ('atdrhko,lg'.includes(key)) return false;
       }
       return true;
     });

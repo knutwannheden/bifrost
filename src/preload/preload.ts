@@ -48,6 +48,7 @@ const api: BifrostAPI = {
   // Diff
   getDiff: (taskId) => ipcRenderer.invoke(IPC.GET_DIFF, taskId),
   getGitLog: (taskId) => ipcRenderer.invoke(IPC.GET_GIT_LOG, taskId),
+  getPrUrl: (taskId) => ipcRenderer.invoke(IPC.GET_PR_URL, taskId),
 
   // Shell
   openUrl: (url) => ipcRenderer.invoke(IPC.OPEN_URL, url),

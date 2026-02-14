@@ -4,14 +4,10 @@ import type { PaneTarget } from '../context/AppContext';
 import TerminalPane from './TerminalPane';
 
 const shortcuts = [
-  { keys: '⌘T', label: 'New task' },
-  { keys: '⌘W', label: 'Close pane' },
-  { keys: '⌘/', label: 'Toggle dev terminal' },
-  { keys: '⌘H', label: 'Task history' },
-  { keys: '⌘R', label: 'Repositories' },
-  { keys: '⌘D', label: 'View diff' },
-  { keys: '⌘O', label: 'Open in IDE' },
-  { keys: '⌘1-9', label: 'Switch task' },
+  { keys: '⌘R', label: 'Add a repository' },
+  { keys: '⌘T', label: 'Create a new task' },
+  { keys: '⌘H', label: 'Resume from history' },
+  { keys: '⌘K', label: 'All shortcuts' },
 ];
 
 export default function TaskView() {
