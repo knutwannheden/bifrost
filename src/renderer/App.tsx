@@ -39,7 +39,7 @@ export default function App() {
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task) {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
-        if (code !== 0) {
+        if (code !== 0 && code !== 143) { // 143 = SIGTERM (intentional kill)
           dispatch({ type: 'SHOW_TOAST', message: `${task.name} exited with code ${code}` });
         }
       }
