@@ -157,7 +157,7 @@ function TaskRow({
         </div>
       </div>
       {task.summary && (
-        <div className="mt-1 text-xs text-slate-500 truncate">{task.summary}</div>
+        <div className="mt-1 text-xs text-slate-500 truncate font-sans">{task.summary}</div>
       )}
       <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
         {task.isExternal ? (
@@ -485,7 +485,7 @@ export default function TaskHistoryPanel() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[600px] h-[90vh] flex flex-col shadow-xl"
+        className="bg-slate-800 rounded-lg border border-slate-600 w-[720px] h-[90vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
