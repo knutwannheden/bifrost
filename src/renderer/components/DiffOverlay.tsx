@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
 import { useDiff } from '../hooks/useDiff';
@@ -7,7 +7,7 @@ import { parseDiff, extFromPath } from '../utils/diff-parser';
 import { highlightLines } from '../utils/syntax-highlight';
 import type { DiffFile, DiffLine } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
-import type { ActivityEntry } from '../../shared/types';
+import type { ActivityEntry, CaptureContextParams } from '../../shared/types';
 
 interface HighlightedFile {
   file: DiffFile;
@@ -155,7 +155,7 @@ function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
 
   if (entry.claudeEventKind === 'tool_use') {
     return (
-      <div className={`mb-1 flex items-start gap-2 px-3 py-1.5 ${config.bg} border ${config.border} rounded text-xs`}>
+      <div className={`flex items-start gap-2 px-3 py-1.5 ${config.bg} border ${config.border} rounded text-xs`}>
         <span className="text-slate-500 flex-shrink-0">{formatTimestamp(entry.timestamp)}</span>
         <span className={`${config.color} font-semibold flex-shrink-0`}>{entry.claudeToolName}</span>
         {entry.claudeText && (
@@ -166,7 +166,7 @@ function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
   }
 
   return (
-    <div className={`mb-2 px-3 py-2 ${config.bg} border ${config.border} rounded text-xs`}>
+    <div className={`px-3 py-2 ${config.bg} border ${config.border} rounded text-xs`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
         <span className={`${config.color} font-semibold`}>{config.label}</span>
@@ -185,7 +185,7 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
 
   if (entry.type === 'commit') {
     return (
-      <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
+      <div className="flex items-center gap-2 px-3 py-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
         <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
         <span className="text-blue-400 font-semibold">Commit</span>
         <span className="text-slate-400 font-mono">{entry.commitSha?.slice(0, 8)}</span>
@@ -195,7 +195,7 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
   }
 
   return (
-    <div className="mb-4">
+    <div>
       <div className="flex items-center gap-2 mb-1 text-xs">
         <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
         <span className="text-slate-300 font-mono">{entry.filePath}</span>
@@ -248,9 +248,43 @@ function ModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (m: DiffMode
   );
 }
 
-function GitDiffContent({ taskId }: { taskId: string }) {
+/** Get searchable text from an activity entry */
+function entrySearchText(entry: ActivityEntry): string {
+  return `${entry.claudeText ?? ''} ${entry.filePath ?? ''} ${entry.commitMessage ?? ''} ${entry.claudeToolName ?? ''} ${entry.diff ?? ''}`.toLowerCase();
+}
+
+/** Format an activity entry as plain text for context capture */
+function entryToText(entry: ActivityEntry): string {
+  if (entry.type === 'commit') {
+    return `[commit] ${entry.commitSha?.slice(0, 8)} ${entry.commitMessage ?? ''}`;
+  }
+  if (entry.type === 'claude_event') {
+    const kind = entry.claudeEventKind ?? 'unknown';
+    if (kind === 'tool_use') return `[tool_use] ${entry.claudeToolName ?? ''} ${entry.claudeText ?? ''}`;
+    return `[${kind}] ${entry.claudeText ?? ''}`;
+  }
+  if (entry.type === 'file_change') {
+    return `[file] ${entry.filePath ?? ''}\n${entry.diff ?? ''}`;
+  }
+  return `[${entry.type}]`;
+}
+
+function GitDiffContent({ taskId, search }: { taskId: string; search: string }) {
   const { diff, loading, error } = useDiff(taskId);
   const highlighted = useHighlightedFiles(diff);
+
+  const filtered = useMemo(() => {
+    if (!highlighted || !search) return highlighted;
+    const s = search.toLowerCase();
+    return highlighted.filter((data) => {
+      const path = (data.file.newPath || data.file.oldPath).toLowerCase();
+      if (path.includes(s)) return true;
+      // Search within diff content
+      return data.file.hunks.some((h) =>
+        h.lines.some((l) => l.content.toLowerCase().includes(s)),
+      );
+    });
+  }, [highlighted, search]);
 
   return (
     <>
@@ -269,35 +303,12 @@ function GitDiffContent({ taskId }: { taskId: string }) {
         <div className="text-slate-500">No changes</div>
       )}
 
-      {!loading && !error && highlighted && highlighted.map((data, i) => (
+      {!loading && !error && filtered && filtered.length === 0 && search && (
+        <div className="text-slate-500">No matching files</div>
+      )}
+
+      {!loading && !error && filtered && filtered.map((data, i) => (
         <FileSection key={i} data={data} />
-      ))}
-    </>
-  );
-}
-
-function ActivityLogContent({ taskId }: { taskId: string }) {
-  const { entries, loading, error } = useActivityLog(taskId);
-
-  return (
-    <>
-      {loading && (
-        <div className="flex items-center gap-2 text-slate-400">
-          <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
-          <span>Loading activity log...</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="text-red-400">Error: {error}</div>
-      )}
-
-      {!loading && !error && entries.length === 0 && (
-        <div className="text-slate-500">No activity recorded yet</div>
-      )}
-
-      {!loading && !error && entries.map((entry) => (
-        <ActivityEntryView key={entry.id} entry={entry} />
       ))}
     </>
   );
@@ -307,6 +318,48 @@ export default function DiffOverlay() {
   const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const [search, setSearch] = useState('');
+  const [focusedIdx, setFocusedIdx] = useState(0);
+
+  const isActivity = state.diffMode === 'activity';
+
+  // Fetch activity data at DiffOverlay level for search/navigation
+  const activityLog = useActivityLog(
+    state.showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null,
+  );
+
+  const filteredEntries = useMemo(() => {
+    if (!search) return activityLog.entries;
+    const s = search.toLowerCase();
+    return activityLog.entries.filter((e) => entrySearchText(e).includes(s));
+  }, [activityLog.entries, search]);
+
+  // Reset search and focus when mode changes
+  useEffect(() => {
+    setSearch('');
+    setFocusedIdx(0);
+  }, [state.diffMode]);
+
+  // Reset focus when search changes
+  useEffect(() => {
+    setFocusedIdx(0);
+  }, [search]);
+
+  // Clamp focus when list shrinks
+  useEffect(() => {
+    if (isActivity && focusedIdx >= filteredEntries.length && filteredEntries.length > 0) {
+      setFocusedIdx(filteredEntries.length - 1);
+    }
+  }, [filteredEntries.length, focusedIdx, isActivity]);
+
+  // Scroll focused entry into view
+  useEffect(() => {
+    if (isActivity) {
+      itemRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [focusedIdx, isActivity]);
 
   useEffect(() => {
     if (state.showDiff) {
@@ -317,11 +370,38 @@ export default function DiffOverlay() {
   if (!state.showDiff) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Cmd+Shift+C: capture context for the focused entry
+    if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+      if (isActivity && filteredEntries.length > 0) {
+        e.preventDefault();
+        e.stopPropagation();
+        const entry = filteredEntries[focusedIdx];
+        const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
+        if (!entry || !activeTask) return;
+
+        const content = entryToText(entry);
+        const params: CaptureContextParams = {
+          type: 'activity',
+          content,
+          taskId: activeTask.id,
+          taskName: activeTask.name,
+        };
+        window.bifrost.captureContext(params).then((id) => {
+          dispatch({ type: 'SHOW_TOAST', message: `[Bifrost #${id}] copied` });
+        });
+        return;
+      }
+    }
+
     switch (e.key) {
       case 'Escape':
         e.preventDefault();
         e.stopPropagation();
-        dispatch({ type: 'TOGGLE_DIFF' });
+        if (search) {
+          setSearch('');
+        } else {
+          dispatch({ type: 'TOGGLE_DIFF' });
+        }
         break;
 
       case 'Tab':
@@ -330,14 +410,27 @@ export default function DiffOverlay() {
         dispatch({ type: 'SET_DIFF_MODE', mode: state.diffMode === 'git' ? 'activity' : 'git' });
         break;
 
+      case 'Backspace':
+        e.preventDefault();
+        setSearch((s) => s.slice(0, -1));
+        break;
+
       case 'ArrowUp':
         e.preventDefault();
-        scrollRef.current?.scrollBy({ top: -80 });
+        if (isActivity && filteredEntries.length > 0) {
+          setFocusedIdx((i) => (i > 0 ? i - 1 : filteredEntries.length - 1));
+        } else {
+          scrollRef.current?.scrollBy({ top: -80 });
+        }
         break;
 
       case 'ArrowDown':
         e.preventDefault();
-        scrollRef.current?.scrollBy({ top: 80 });
+        if (isActivity && filteredEntries.length > 0) {
+          setFocusedIdx((i) => (i < filteredEntries.length - 1 ? i + 1 : 0));
+        } else {
+          scrollRef.current?.scrollBy({ top: 80 });
+        }
         break;
 
       default:
@@ -353,6 +446,10 @@ export default function DiffOverlay() {
               dispatch({ type: 'SET_DIFF_MODE', mode: 'activity' });
               break;
           }
+        } else if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
+          // Incremental search
+          e.preventDefault();
+          setSearch((s) => s + e.key);
         }
         break;
     }
@@ -375,7 +472,9 @@ export default function DiffOverlay() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-600">&uarr;&darr; scroll &middot; Tab toggle</span>
+          <span className="text-xs text-slate-600">
+            &uarr;&darr; {isActivity ? 'navigate' : 'scroll'} &middot; Tab toggle
+          </span>
           <button
             tabIndex={-1}
             className="text-slate-400 hover:text-slate-200 text-lg"
@@ -386,12 +485,60 @@ export default function DiffOverlay() {
         </div>
       </div>
 
+      {/* Search indicator */}
+      {search && (
+        <div className="mx-4 mt-3 px-3 py-1.5 bg-slate-700/70 border border-slate-600 rounded flex items-center gap-2 flex-shrink-0">
+          <span className="text-xs text-slate-500">Search:</span>
+          <span className="text-sm text-slate-200 font-mono">{search}</span>
+          {isActivity && (
+            <span className="text-xs text-slate-600">{filteredEntries.length} match{filteredEntries.length !== 1 ? 'es' : ''}</span>
+          )}
+          <span className="ml-auto text-xs text-slate-600">Esc to clear</span>
+        </div>
+      )}
+
       <div ref={scrollRef} className="flex-1 overflow-auto p-4">
         {state.activeTaskId && state.diffMode === 'git' && (
-          <GitDiffContent taskId={state.activeTaskId} />
+          <GitDiffContent taskId={state.activeTaskId} search={search} />
         )}
-        {state.activeTaskId && state.diffMode === 'activity' && (
-          <ActivityLogContent taskId={state.activeTaskId} />
+        {state.activeTaskId && isActivity && (
+          <>
+            {activityLog.loading && (
+              <div className="flex items-center gap-2 text-slate-400">
+                <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+                <span>Loading activity log...</span>
+              </div>
+            )}
+
+            {activityLog.error && (
+              <div className="text-red-400">Error: {activityLog.error}</div>
+            )}
+
+            {!activityLog.loading && !activityLog.error && filteredEntries.length === 0 && (
+              <div className="text-slate-500">
+                {search ? 'No matching entries' : 'No activity recorded yet'}
+              </div>
+            )}
+
+            {!activityLog.loading && !activityLog.error && (
+              <div className="space-y-1">
+                {filteredEntries.map((entry, idx) => (
+                  <div
+                    key={entry.id}
+                    ref={(el) => { itemRefs.current[idx] = el; }}
+                    onMouseEnter={() => setFocusedIdx(idx)}
+                    className={`rounded transition-colors ${
+                      idx === focusedIdx
+                        ? 'ring-1 ring-blue-500/40 bg-blue-900/10'
+                        : ''
+                    }`}
+                  >
+                    <ActivityEntryView entry={entry} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
         {!state.activeTaskId && (
           <div className="text-slate-500">No active task</div>

@@ -111,8 +111,8 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
       const key = e.key.toLowerCase();
 
-      // Cmd+Shift+C: capture context
-      if (e.shiftKey && key === 'c') {
+      // Cmd+Shift+C: capture context (skip if already handled by DiffOverlay)
+      if (e.shiftKey && key === 'c' && !e.defaultPrevented) {
         e.preventDefault();
         const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
         if (!activeTask) return;
