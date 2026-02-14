@@ -1,27 +1,107 @@
 import { useEffect } from 'react';
+import type { Terminal } from '@xterm/xterm';
 import type { AppState, AppAction, PaneTarget } from '../context/AppContext';
+import type { CaptureContextParams } from '../../shared/types';
 import { defaultPaneState } from '../context/AppContext';
 import { terminalRegistry } from './useTerminal';
 
-function getTerminalContent(sessionId: string): string | null {
+const RECORD_SYMBOL = '\u23FA'; // ⏺
+
+interface TerminalCapture {
+  content: string;
+  hasSelection: boolean;
+  /** Text from the nearest ⏺ to the selection/cursor, if found */
+  transcriptText: string | null;
+}
+
+function getTerminalCapture(sessionId: string): TerminalCapture | null {
   const terminal = terminalRegistry.get(sessionId);
   if (!terminal) return null;
 
-  // Check for selection first
   const selection = terminal.getSelection();
-  if (selection && selection.trim().length > 0) return selection;
+  const hasSelection = !!(selection && selection.trim().length > 0);
 
-  // Fall back to last 50 lines of buffer
-  const buffer = terminal.buffer.active;
-  const totalRows = buffer.length;
-  const startRow = Math.max(0, totalRows - 50);
-  const lines: string[] = [];
-  for (let i = startRow; i < totalRows; i++) {
-    const line = buffer.getLine(i);
-    if (line) lines.push(line.translateToString(true));
+  let content: string;
+  if (hasSelection) {
+    content = selection;
+  } else {
+    // Fall back to last 50 lines of buffer
+    const buffer = terminal.buffer.active;
+    const totalRows = buffer.length;
+    const startRow = Math.max(0, totalRows - 50);
+    const lines: string[] = [];
+    for (let i = startRow; i < totalRows; i++) {
+      const line = buffer.getLine(i);
+      if (line) lines.push(line.translateToString(true));
+    }
+    content = lines.join('\n').trimEnd();
   }
-  const content = lines.join('\n').trimEnd();
-  return content.length > 0 ? content : null;
+
+  if (!content || content.trim().length === 0) return null;
+
+  // Scan for ⏺ to detect Claude assistant turn
+  const transcriptText = findTranscriptText(terminal, hasSelection);
+
+  return { content, hasSelection, transcriptText };
+}
+
+/**
+ * Scan backwards through the terminal buffer from the selection/cursor
+ * looking for ⏺ (U+23FA) which marks Claude assistant turns.
+ * Returns the text from ⏺ to the end of the captured region, or null.
+ */
+function findTranscriptText(terminal: Terminal, hasSelection: boolean): string | null {
+  const buffer = terminal.buffer.active;
+
+  // Determine the search end row
+  let endRow: number;
+  if (hasSelection) {
+    const selRange = terminal.getSelectionPosition();
+    endRow = selRange ? selRange.end.y : buffer.cursorY + buffer.viewportY;
+  } else {
+    endRow = buffer.cursorY + buffer.viewportY;
+  }
+
+  // Determine the search start row (limit lookback)
+  const startRow = Math.max(0, endRow - 200);
+
+  // Search backwards for ⏺
+  let recordRow = -1;
+  let recordCol = -1;
+  for (let row = endRow; row >= startRow; row--) {
+    const line = buffer.getLine(row);
+    if (!line) continue;
+    for (let col = line.length - 1; col >= 0; col--) {
+      const cell = line.getCell(col);
+      if (cell && cell.getChars() === RECORD_SYMBOL) {
+        recordRow = row;
+        recordCol = col;
+        break;
+      }
+    }
+    if (recordRow >= 0) break;
+  }
+
+  if (recordRow < 0) return null;
+
+  // Extract text from after the ⏺ to the end of the captured region
+  const lines: string[] = [];
+  for (let row = recordRow; row <= endRow; row++) {
+    const line = buffer.getLine(row);
+    if (!line) continue;
+    let text = line.translateToString(true);
+    if (row === recordRow) {
+      // Skip past the ⏺ character and any leading whitespace after it
+      const symbolIdx = text.indexOf(RECORD_SYMBOL);
+      if (symbolIdx >= 0) {
+        text = text.slice(symbolIdx + 1).trimStart();
+      }
+    }
+    lines.push(text);
+  }
+
+  const result = lines.join('\n').trim();
+  return result.length > 0 ? result : null;
 }
 
 export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>) {
@@ -38,38 +118,65 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         if (!activeTask) return;
 
         const capture = async () => {
-          let content: string | null = null;
-          let label: string;
+          let params: CaptureContextParams | null = null;
+          const taskMeta = { taskId: activeTask.id, taskName: activeTask.name };
 
           if (state.showDiff) {
-            // Capture diff or activity log content
             if (state.diffMode === 'git') {
               const diff = await window.bifrost.getDiff(activeTask.id);
-              content = diff.diff || null;
-              label = 'git diff';
+              const content = diff.diff || null;
+              if (!content || content.trim().length === 0) return;
+              params = { type: 'diff', content, ...taskMeta };
             } else {
               const entries = await window.bifrost.getActivityLog(activeTask.id);
-              content = entries.map((e) => {
+              const content = entries.map((e) => {
                 if (e.type === 'commit') return `[commit] ${e.commitMessage}`;
                 if (e.type === 'file_change') return `[file] ${e.filePath}\n${e.diff || ''}`;
                 if (e.type === 'claude_event') return `[${e.claudeEventKind}] ${e.claudeText || ''}`;
                 return `[${e.type}]`;
               }).join('\n\n');
-              label = 'activity log';
+              if (!content || content.trim().length === 0) return;
+              params = { type: 'activity', content, ...taskMeta };
             }
           } else {
-            // Try terminal content
             const ps = state.paneStates[activeTask.id] ?? defaultPaneState;
             const targetSessionId = ps.focusedPane === 'dev' && ps.devSessionId
               ? ps.devSessionId
               : activeTask.sessionId;
-            content = getTerminalContent(targetSessionId);
-            label = 'terminal';
+            const capture = getTerminalCapture(targetSessionId);
+            if (!capture) return;
+
+            // If we found a ⏺ marker, try to match against Claude's JSONL
+            if (capture.transcriptText) {
+              const match = await window.bifrost.findTranscriptMatch(
+                activeTask.worktreePath,
+                capture.transcriptText.slice(0, 500), // limit search text size
+              );
+              if (match) {
+                params = {
+                  type: 'transcript',
+                  content: capture.content,
+                  jsonlPath: match.jsonlPath,
+                  lineNumber: match.lineNumber,
+                  uuid: match.uuid,
+                  selectedText: capture.hasSelection ? capture.content : undefined,
+                  ...taskMeta,
+                };
+              }
+            }
+
+            // Fall back to terminal context
+            if (!params) {
+              params = {
+                type: 'terminal',
+                content: capture.content,
+                hasSelection: capture.hasSelection,
+                ...taskMeta,
+              };
+            }
           }
 
-          if (!content || content.trim().length === 0) return;
-
-          const id = await window.bifrost.captureContext(content, label, activeTask.id);
+          const id = await window.bifrost.captureContext(params);
           dispatch({ type: 'SHOW_TOAST', message: `[Bifrost #${id}] copied` });
         };
         capture();

@@ -15,7 +15,7 @@ const execFile = promisify(execFileCb);
 const ACTIVITY_DIR = path.join(os.homedir(), '.bifrost', 'activity');
 
 interface TaskWatcher {
-  watcher: chokidar.FSWatcher;
+  watcher: ReturnType<typeof chokidar.watch>;
   entries: ActivityEntry[];
   headSha: string | null;
   debounceTimers: Map<string, ReturnType<typeof setTimeout>>;

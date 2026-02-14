@@ -42,7 +42,7 @@ export async function highlightLines(
   try {
     const highlighter = await getHighlighter();
     const code = lines.join('\n');
-    const result = highlighter.codeToTokens(code, { lang, theme: 'github-dark' });
+    const result = highlighter.codeToTokens(code, { lang: lang as import('shiki').BundledLanguage, theme: 'github-dark' });
 
     return result.tokens.map((lineTokens) =>
       lineTokens.map((token) => ({

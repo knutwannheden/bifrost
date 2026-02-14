@@ -2,7 +2,7 @@ import { ipcMain, BrowserWindow, dialog } from 'electron';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'node:fs';
 import { IPC } from '../shared/ipc-channels';
-import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig } from '../shared/types';
+import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
 import { createWorktree, removeWorktree } from './worktree-manager';
@@ -12,7 +12,7 @@ import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
-import { store as storeContext } from './context-store';
+import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -36,6 +36,9 @@ function updateTask(taskId: string, updates: Partial<Task>): Task {
 }
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+  // Load persisted context entries from disk
+  loadPersistedContexts();
+
   // Load persisted tasks on startup, restore sessions for previously-running tasks
   const persisted = loadTasks();
   const tasksToRestore = persisted.filter((t) => t.status === 'running');
@@ -81,7 +84,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.REMOVE_REPO, (_event, repoId: string) => {
     const config = loadConfig();
     const updated = removeRepo(repoId, config);
-    saveConfig(updated as BifrostConfig);
+    saveConfig(updated);
   });
 
   ipcMain.handle(IPC.LIST_REPOS, () => {
@@ -310,10 +313,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Context capture
-  ipcMain.handle(IPC.CAPTURE_CONTEXT, (_event, content: string, label: string, taskId?: string) => {
-    const id = storeContext(content, label, taskId);
+  ipcMain.handle(IPC.CAPTURE_CONTEXT, (_event, params: CaptureContextParams) => {
+    const id = storeContext(params);
     require('electron').clipboard.writeText(`[Bifrost #${id}]`);
     return id;
+  });
+
+  ipcMain.handle(IPC.FIND_TRANSCRIPT_MATCH, (_event, worktreePath: string, searchText: string) => {
+    const jsonlPath = getClaudeJsonlPath(worktreePath);
+    if (!jsonlPath) return null;
+    const match = findTranscriptMatch(jsonlPath, searchText);
+    if (!match) return null;
+    return { jsonlPath, ...match };
   });
 
   ipcMain.handle(IPC.GET_API_PORT, () => {

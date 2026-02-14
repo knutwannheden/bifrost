@@ -2,6 +2,7 @@ import { app, BrowserWindow, globalShortcut, nativeImage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
+import { execSync } from 'node:child_process';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
@@ -39,16 +40,26 @@ const createWindow = () => {
   }
 };
 
-function installMcpBridge(): void {
-  const destDir = path.join(os.homedir(), '.bifrost', 'bin');
-  const destFile = path.join(destDir, 'bifrost-mcp.js');
-  const srcFile = path.join(__dirname, 'mcp-bridge', 'bifrost-mcp.js');
+function installMcpServer(): void {
+  const destDir = path.join(os.homedir(), '.bifrost', 'mcp');
+  const srcDir = path.join(app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..', '..'), 'src', 'mcp-server');
 
-  if (!fs.existsSync(destDir)) {
-    fs.mkdirSync(destDir, { recursive: true });
+  if (!fs.existsSync(srcDir)) return;
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+
+  // Copy server.mjs and package.json
+  for (const file of ['server.mjs', 'package.json']) {
+    fs.copyFileSync(path.join(srcDir, file), path.join(destDir, file));
   }
-  if (fs.existsSync(srcFile)) {
-    fs.copyFileSync(srcFile, destFile);
+
+  // Install deps if node_modules is missing or package.json changed
+  const destModules = path.join(destDir, 'node_modules');
+  if (!fs.existsSync(destModules)) {
+    try {
+      execSync('npm install --production', { cwd: destDir, stdio: 'ignore', timeout: 30000 });
+    } catch {
+      // best-effort
+    }
   }
 }
 
@@ -61,11 +72,9 @@ app.on('ready', async () => {
 
   createWindow();
 
-  // Start HTTP API for MCP bridge
+  // Start HTTP API and install MCP server
   await startApi();
-
-  // Install MCP bridge script to ~/.bifrost/bin/
-  installMcpBridge();
+  installMcpServer();
 
   if (mainWindow) {
     registerIpcHandlers(mainWindow);

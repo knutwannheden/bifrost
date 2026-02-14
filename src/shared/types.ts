@@ -62,13 +62,53 @@ export interface ActivityEntry {
   claudeToolName?: string;
 }
 
-export interface ContextEntry {
+// Context capture types
+
+export interface ContextBase {
   id: number;
-  content: string;
-  label: string;
-  taskId?: string;
-  createdAt: number;
+  type: string;
+  taskId: string;
+  taskName: string;
+  capturedAt: number;
 }
+
+export interface TerminalContext extends ContextBase {
+  type: 'terminal';
+  content: string;
+  hasSelection: boolean;
+}
+
+export interface DiffContext extends ContextBase {
+  type: 'diff';
+  content: string;
+}
+
+export interface ActivityContext extends ContextBase {
+  type: 'activity';
+  content: string;
+}
+
+export interface TranscriptContext extends ContextBase {
+  type: 'transcript';
+  /** Captured terminal text — always stored as fallback */
+  content: string;
+  jsonlPath: string;
+  lineNumber: number;
+  uuid: string;
+  selectedText?: string;
+  selectionStart?: number;
+  selectionEnd?: number;
+  /** Populated at resolve time from the JSONL file */
+  resolvedContent?: string;
+}
+
+export type ContextEntry = TerminalContext | DiffContext | ActivityContext | TranscriptContext;
+
+export type CaptureContextParams =
+  | { type: 'terminal'; content: string; hasSelection: boolean; taskId: string; taskName: string }
+  | { type: 'diff'; content: string; taskId: string; taskName: string }
+  | { type: 'activity'; content: string; taskId: string; taskName: string }
+  | { type: 'transcript'; content: string; jsonlPath: string; lineNumber: number; uuid: string; selectedText?: string; selectionStart?: number; selectionEnd?: number; taskId: string; taskName: string };
 
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],

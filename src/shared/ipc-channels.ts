@@ -2,6 +2,7 @@ import type {
   ActivityEntry,
   AddRepoParams,
   BifrostConfig,
+  CaptureContextParams,
   CreateTaskParams,
   DiffResult,
   Repo,
@@ -52,6 +53,7 @@ export const IPC = {
 
   // Context capture
   CAPTURE_CONTEXT: 'context:capture',
+  FIND_TRANSCRIPT_MATCH: 'context:find-transcript-match',
   GET_API_PORT: 'api:get-port',
 
   // Dialog
@@ -112,7 +114,8 @@ export interface BifrostAPI {
   openInIde(worktreePath: string): Promise<void>;
 
   // Context capture
-  captureContext(content: string, label: string, taskId?: string): Promise<number>;
+  captureContext(params: CaptureContextParams): Promise<number>;
+  findTranscriptMatch(worktreePath: string, searchText: string): Promise<{ jsonlPath: string; lineNumber: number; uuid: string } | null>;
   getApiPort(): Promise<number | null>;
 
   // Dialog

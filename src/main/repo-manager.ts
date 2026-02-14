@@ -3,7 +3,7 @@ import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
-import type { AddRepoParams, Repo } from '../shared/types';
+import type { AddRepoParams, BifrostConfig, Repo } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
@@ -59,8 +59,8 @@ async function getDefaultBranch(repoPath: string): Promise<string> {
 
 export function removeRepo(
   repoId: string,
-  config: { repos: Repo[]; [key: string]: unknown },
-): typeof config {
+  config: BifrostConfig,
+): BifrostConfig {
   return {
     ...config,
     repos: config.repos.filter((r) => r.id !== repoId),
