@@ -24,7 +24,7 @@ const createWindow = () => {
     height: 800,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#282a36',
     titleBarStyle: 'hiddenInset',
     icon: path.join(__dirname, '../../assets/icon.png'),
     webPreferences: {

@@ -31,7 +31,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
       ref={containerRef}
       className="w-full h-full"
       style={{
-        backgroundColor: '#0f172a',
+        backgroundColor: '#282a36',
         borderTop: focused ? '2px solid #3b82f6' : '2px solid transparent',
       }}
       onMouseDown={onFocusRequest}

@@ -6,11 +6,59 @@ import { MakerRpm } from '@electron-forge/maker-rpm';
 import { VitePlugin } from '@electron-forge/plugin-vite';
 import { FusesPlugin } from '@electron-forge/plugin-fuses';
 import { FuseV1Options, FuseVersion } from '@electron/fuses';
+import { execSync } from 'node:child_process';
+import path from 'node:path';
+import fs from 'node:fs';
 
 const config: ForgeConfig = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '**/{node-pty,node-pty/**}',
+    },
     icon: './assets/icon',
+    name: 'Bifrost',
+    executableName: 'Bifrost',
+  },
+  hooks: {
+    // Patch the stock Electron.app bundle during development so the macOS dock
+    // and app-switcher display "Bifrost" (with our icon) instead of "Electron".
+    preStart: async () => {
+      if (process.platform !== 'darwin') return;
+      const electronApp = path.join(
+        __dirname, 'node_modules', 'electron', 'dist', 'Electron.app',
+      );
+      const plistPath = path.join(electronApp, 'Contents', 'Info.plist');
+      if (!fs.existsSync(plistPath)) return;
+      try {
+        execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName Bifrost" "${plistPath}"`);
+        execSync(`/usr/libexec/PlistBuddy -c "Set :CFBundleName Bifrost" "${plistPath}"`);
+      } catch {
+        // Fields may not exist yet — try Add instead
+        try {
+          execSync(`/usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string Bifrost" "${plistPath}"`);
+        } catch { /* already set */ }
+        try {
+          execSync(`/usr/libexec/PlistBuddy -c "Add :CFBundleName string Bifrost" "${plistPath}"`);
+        } catch { /* already set */ }
+      }
+      // Copy our icon into the Electron bundle so the dock shows it
+      const src = path.join(__dirname, 'assets', 'icon.icns');
+      const dest = path.join(electronApp, 'Contents', 'Resources', 'electron.icns');
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, dest);
+      }
+    },
+    // Copy native modules into the packaged app so they can be unpacked from the asar
+    packageAfterCopy: async (_config, buildPath) => {
+      const nativeModules = ['node-pty'];
+      for (const mod of nativeModules) {
+        const src = path.join(__dirname, 'node_modules', mod);
+        const dest = path.join(buildPath, 'node_modules', mod);
+        if (fs.existsSync(src)) {
+          fs.cpSync(src, dest, { recursive: true });
+        }
+      }
+    },
   },
   rebuildConfig: {},
   makers: [
