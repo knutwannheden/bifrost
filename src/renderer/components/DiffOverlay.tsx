@@ -654,7 +654,8 @@ export default function DiffOverlay() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-30 bg-slate-900 flex flex-col focus:outline-none"
+      className="fixed inset-0 z-30 flex flex-col focus:outline-none"
+      style={{ backgroundColor: '#282a36' }}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >

@@ -128,7 +128,20 @@ export function useTerminal(
     });
     resizeObserver.observe(containerRef.current);
 
+    // Force a delayed resize to trigger PTY redraw (SIGWINCH).
+    // Data arriving before the listener was set up is lost, so this
+    // causes the CLI to repaint its output.
+    const redrawTimer = setTimeout(() => {
+      try {
+        fitAddon.fit();
+        window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
+      } catch {
+        // ignore
+      }
+    }, 150);
+
     return () => {
+      clearTimeout(redrawTimer);
       resizeObserver.disconnect();
       removeDataListener();
       removeExitListener();
