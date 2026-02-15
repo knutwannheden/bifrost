@@ -40,33 +40,32 @@ function decodeProjectPath(dirName: string): string {
   return resolved;
 }
 
-function readFirstLine(filePath: string): string | null {
+function parseSessionInfo(filePath: string): { sessionId: string; cwd: string; slug?: string } | null {
   try {
     const fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(4096);
-    const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);
+    const buf = Buffer.alloc(16384);
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
     fs.closeSync(fd);
     if (bytesRead === 0) return null;
-    const text = buf.toString('utf-8', 0, bytesRead);
-    const newline = text.indexOf('\n');
-    return newline >= 0 ? text.slice(0, newline) : text;
-  } catch {
-    return null;
-  }
-}
 
-function parseSessionInfo(firstLine: string): { sessionId: string; cwd: string; slug?: string } | null {
-  try {
-    const parsed = JSON.parse(firstLine);
-    if (!parsed.sessionId || !parsed.cwd) return null;
-    return {
-      sessionId: parsed.sessionId,
-      cwd: parsed.cwd,
-      slug: parsed.slug,
-    };
+    // Scan the first few lines — the session metadata line with sessionId/cwd
+    // may not be the first line (e.g. file-history-snapshot can come first).
+    const text = buf.toString('utf-8', 0, bytesRead);
+    for (const line of text.split('\n').slice(0, 10)) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line);
+        if (parsed.sessionId && parsed.cwd) {
+          return { sessionId: parsed.sessionId, cwd: parsed.cwd, slug: parsed.slug };
+        }
+      } catch {
+        // skip malformed lines
+      }
+    }
   } catch {
-    return null;
+    // ignore read errors
   }
+  return null;
 }
 
 export function scanClaudeSessions(excludePaths: Set<string>): ClaudeSession[] {
@@ -117,10 +116,7 @@ export function scanClaudeSessions(excludePaths: Set<string>): ClaudeSession[] {
         // Skip old sessions
         if (now - fileStat.mtimeMs > MAX_AGE_MS) continue;
 
-        const firstLine = readFirstLine(filePath);
-        if (!firstLine) continue;
-
-        const info = parseSessionInfo(firstLine);
+        const info = parseSessionInfo(filePath);
         if (!info) continue;
 
         // Deduplicate by sessionId (a session may span multiple JSONL files)
