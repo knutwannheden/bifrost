@@ -1,13 +1,11 @@
 import { app, BrowserWindow, globalShortcut, Menu, nativeImage, shell } from 'electron';
 import path from 'node:path';
-import fs from 'node:fs';
-import os from 'node:os';
-import { execSync } from 'node:child_process';
 import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
 import { initNotificationService } from './notification-service';
 import { startApi, stopApi } from './bifrost-api';
+import { refreshMcpServer } from './integration-installer';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 if (started) {
@@ -49,28 +47,6 @@ const createWindow = () => {
   }
 };
 
-function installMcpServer(): void {
-  try {
-    const destDir = path.join(os.homedir(), '.bifrost', 'mcp');
-    const srcDir = path.join(app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..', '..'), 'src', 'mcp-server');
-
-    if (!fs.existsSync(srcDir)) return;
-    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-
-    // Copy server.mjs and package.json
-    for (const file of ['server.mjs', 'package.json']) {
-      fs.copyFileSync(path.join(srcDir, file), path.join(destDir, file));
-    }
-
-    // Install deps if node_modules is missing or package.json changed
-    const destModules = path.join(destDir, 'node_modules');
-    if (!fs.existsSync(destModules)) {
-      execSync('npm install --production', { cwd: destDir, stdio: 'ignore', timeout: 30000 });
-    }
-  } catch {
-    // Best-effort — MCP server is optional
-  }
-}
 
 let lastQuitAttempt = 0;
 const DOUBLE_TAP_MS = 500;
@@ -170,9 +146,9 @@ app.on('ready', async () => {
   buildMenu();
   createWindow();
 
-  // Start HTTP API and install MCP server
+  // Start HTTP API and refresh MCP server inside plugin (if installed)
   await startApi();
-  installMcpServer();
+  refreshMcpServer();
 
   if (mainWindow) {
     registerIpcHandlers(mainWindow);

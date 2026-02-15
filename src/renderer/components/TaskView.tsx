@@ -58,7 +58,7 @@ export default function TaskView() {
   useEffect(() => {
     if (!activeTask && state.tasksLoaded && openTasks.length === 0) {
       window.bifrost.checkIntegration().then((status) => {
-        setIntegrationNeeded(!status.mcpInstalled);
+        setIntegrationNeeded(!status.installed);
       });
     }
   }, [activeTask, state.tasksLoaded, openTasks.length]);
