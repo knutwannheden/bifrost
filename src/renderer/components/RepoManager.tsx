@@ -67,9 +67,13 @@ export default function RepoManager() {
     window.bifrost.getRecentRepos().then(setRecentRepos).catch(() => undefined);
   }, []);
 
-  // Filter out repos already managed
+  // Filter out repos already managed, and apply search filter
   const repoPaths = new Set(state.repos.map((r) => r.path));
-  const suggestions = recentRepos.filter((r) => !repoPaths.has(r.path));
+  const suggestions = recentRepos.filter((r) => {
+    if (repoPaths.has(r.path)) return false;
+    if (!searchLower) return true;
+    return `${r.githubPath ?? r.name} ${r.path}`.toLowerCase().includes(searchLower);
+  });
 
   const handleAddSuggestion = async (repoPath: string) => {
     setError(null);
