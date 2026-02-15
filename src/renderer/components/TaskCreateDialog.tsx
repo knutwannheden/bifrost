@@ -1,7 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import type { Repo } from '../../shared/types';
 import { generateTaskName } from '../utils/name-generator';
 import ActionLabel from './ActionLabel';
+
+function repoDisplayName(repo: Repo): string {
+  return repo.githubPath ?? repo.name;
+}
+
+function shortPath(p: string): string {
+  const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+)/);
+  return m ? '~' + p.slice(m[1].length) : p;
+}
+
+function matchesSearch(repo: Repo, search: string): boolean {
+  if (!search) return true;
+  const haystack = `${repoDisplayName(repo)} ${repo.path}`.toLowerCase();
+  return search.toLowerCase().split(/\s+/).filter(Boolean).every((term) => haystack.includes(term));
+}
 
 export default function TaskCreateDialog() {
   const { state, dispatch } = useApp();
@@ -10,7 +26,7 @@ export default function TaskCreateDialog() {
     return state.repos[0];
   })();
   const [repoId, setRepoId] = useState(initialRepo?.id ?? '');
-  const [repoSearch, setRepoSearch] = useState(initialRepo?.name ?? '');
+  const [repoSearch, setRepoSearch] = useState(initialRepo ? repoDisplayName(initialRepo) : '');
   const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
   const [repoFocusedIdx, setRepoFocusedIdx] = useState(0);
   const [taskName, setTaskName] = useState('');
@@ -40,7 +56,7 @@ export default function TaskCreateDialog() {
 
   const filteredRepos = state.repos.filter((r) => {
     if (!repoSearch || inputFullySelected) return true;
-    return r.name.toLowerCase().includes(repoSearch.toLowerCase());
+    return matchesSearch(r, repoSearch);
   });
 
   // Keep focused index in bounds and auto-select first match
@@ -83,7 +99,7 @@ export default function TaskCreateDialog() {
     const repo = state.repos.find((r) => r.id === id);
     if (repo) {
       setRepoId(id);
-      setRepoSearch(repo.name);
+      setRepoSearch(repoDisplayName(repo));
       setRepoDropdownOpen(false);
       nameRef.current?.focus();
     }
@@ -153,7 +169,7 @@ export default function TaskCreateDialog() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[450px] shadow-xl"
+        className="bg-slate-800 rounded-lg border border-slate-600 w-[550px] shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
@@ -200,7 +216,7 @@ export default function TaskCreateDialog() {
                 setRepoDropdownOpen(true);
                 // Clear selection if search no longer matches
                 const match = state.repos.find((r) => r.id === repoId);
-                if (match && !match.name.toLowerCase().includes(e.target.value.toLowerCase())) {
+                if (match && !matchesSearch(match, e.target.value)) {
                   setRepoId('');
                 }
               }}
@@ -268,13 +284,16 @@ export default function TaskCreateDialog() {
                     key={repo.id}
                     onMouseDown={() => selectRepo(repo.id)}
                     onMouseEnter={() => setRepoFocusedIdx(idx)}
-                    className={`px-3 py-1.5 text-sm cursor-pointer ${
+                    className={`px-3 py-1.5 cursor-pointer ${
                       idx === repoFocusedIdx
                         ? 'bg-blue-600 text-white'
                         : 'text-slate-200 hover:bg-slate-600'
                     }`}
                   >
-                    {repo.name}
+                    <div className="text-sm">{repoDisplayName(repo)}</div>
+                    <div className={`text-xs ${idx === repoFocusedIdx ? 'text-blue-200' : 'text-slate-400'}`}>
+                      {shortPath(repo.path)}
+                    </div>
                   </div>
                 ))}
               </div>

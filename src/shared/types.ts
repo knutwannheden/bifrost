@@ -5,6 +5,7 @@ export interface Repo {
   name: string;
   path: string;
   defaultBranch: string;
+  githubPath?: string; // e.g. "openrewrite/hibernate"
 }
 
 export interface Task {

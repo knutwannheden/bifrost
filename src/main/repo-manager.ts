@@ -18,12 +18,14 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
 
     const defaultBranch = await getDefaultBranch(repoPath);
     const name = path.basename(repoPath);
+    const githubPath = await getGitHubPath(repoPath);
 
     return {
       id: randomUUID(),
       name,
       path: repoPath,
       defaultBranch,
+      ...(githubPath && { githubPath }),
     };
   }
 
@@ -34,16 +36,35 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
 
     await execFile('git', ['clone', url, clonePath]);
     const defaultBranch = await getDefaultBranch(clonePath);
+    const githubPath = await getGitHubPath(clonePath);
 
     return {
       id: randomUUID(),
       name: repoName,
       path: clonePath,
       defaultBranch,
+      ...(githubPath && { githubPath }),
     };
   }
 
   throw new Error(`Unknown repo type: ${params.type}`);
+}
+
+async function getGitHubPath(repoPath: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFile('git', ['config', '--get', 'remote.origin.url'], {
+      cwd: repoPath,
+    });
+    const url = stdout.trim();
+    // git@github.com:org/repo.git or https://github.com/org/repo.git
+    const sshMatch = url.match(/github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
+    if (sshMatch) return sshMatch[1];
+    const httpsMatch = url.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+    if (httpsMatch) return httpsMatch[1];
+  } catch {
+    // no remote or not a git repo
+  }
+  return undefined;
 }
 
 async function getDefaultBranch(repoPath: string): Promise<string> {

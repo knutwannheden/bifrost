@@ -1,7 +1,16 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { RecentRepo } from '../../shared/types';
+import type { Repo, RecentRepo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import ActionLabel from './ActionLabel';
+
+function repoDisplayName(repo: Repo): string {
+  return repo.githubPath ?? repo.name;
+}
+
+function shortPath(p: string): string {
+  const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+)/);
+  return m ? '~' + p.slice(m[1].length) : p;
+}
 
 export default function RepoManager() {
   const { state, dispatch } = useApp();
@@ -29,7 +38,7 @@ export default function RepoManager() {
   const searchLower = search.toLowerCase();
   const filteredRepos = state.repos.filter((r) => {
     if (!searchLower) return true;
-    return `${r.name} ${r.path}`.toLowerCase().includes(searchLower);
+    return `${repoDisplayName(r)} ${r.path}`.toLowerCase().includes(searchLower);
   });
 
   // Reset focus when search changes
@@ -324,8 +333,8 @@ export default function RepoManager() {
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-200 truncate">{repo.name}</p>
-                    <p className="text-xs text-slate-400 truncate">{repo.path}</p>
+                    <p className="text-sm text-slate-200 truncate">{repoDisplayName(repo)}</p>
+                    <p className="text-xs text-slate-400 truncate">{shortPath(repo.path)}</p>
                   </div>
                   <div className="flex items-center gap-1 ml-3">
                     <button
