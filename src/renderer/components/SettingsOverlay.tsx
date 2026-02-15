@@ -132,6 +132,26 @@ export default function SettingsOverlay() {
               />
             </button>
           </div>
+
+          {/* Hide terminal on switch */}
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-sm text-slate-300">Hide terminal on switch</label>
+              <p className="text-xs text-slate-500">&#8984;/ hides dev terminal when switching to Claude</p>
+            </div>
+            <button
+              onClick={() => updateConfig({ hideTerminalOnSwitch: !config.hideTerminalOnSwitch })}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                config.hideTerminalOnSwitch ? 'bg-blue-600' : 'bg-slate-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  config.hideTerminalOnSwitch ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
     </div>

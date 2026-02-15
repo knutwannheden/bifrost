@@ -347,8 +347,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             dispatch({ type: 'SHOW_PANE', taskId, pane: 'dev' });
             dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: 'dev' });
           } else {
-            // Both visible — toggle focus
+            // Both visible — toggle focus (optionally hide dev pane)
             const newFocus: PaneTarget = ps.focusedPane === 'claude' ? 'dev' : 'claude';
+            if (newFocus === 'claude' && state.config?.hideTerminalOnSwitch) {
+              dispatch({ type: 'HIDE_PANE', taskId, pane: 'dev' });
+            }
             dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: newFocus });
           }
           break;

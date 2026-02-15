@@ -42,6 +42,7 @@ export interface BifrostConfig {
   fontSize: number;
   sandbox: boolean;
   groupHistoryByRepo: boolean;
+  hideTerminalOnSwitch: boolean;
 }
 
 export interface CreateTaskParams {
@@ -152,4 +153,5 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   fontSize: 14,
   sandbox: false,
   groupHistoryByRepo: false,
+  hideTerminalOnSwitch: false,
 };
