@@ -50,7 +50,7 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
   throw new Error(`Unknown repo type: ${params.type}`);
 }
 
-async function getGitHubPath(repoPath: string): Promise<string | undefined> {
+export async function getGitHubPath(repoPath: string): Promise<string | undefined> {
   try {
     const { stdout } = await execFile('git', ['config', '--get', 'remote.origin.url'], {
       cwd: repoPath,

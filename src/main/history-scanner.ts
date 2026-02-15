@@ -2,11 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { RecentRepo } from '../shared/types';
+import { getGitHubPath } from './repo-manager';
 
 const HISTORY_PATH = path.join(os.homedir(), '.claude', 'history.jsonl');
 const MAX_RESULTS = 5;
 
-export function scanRecentRepos(excludePaths: Set<string>): RecentRepo[] {
+export async function scanRecentRepos(excludePaths: Set<string>): Promise<RecentRepo[]> {
   if (!fs.existsSync(HISTORY_PATH)) return [];
 
   const content = fs.readFileSync(HISTORY_PATH, 'utf-8');
@@ -29,7 +30,7 @@ export function scanRecentRepos(excludePaths: Set<string>): RecentRepo[] {
   }
 
   // Sort by recency, filter, validate
-  return Array.from(projectMap.entries())
+  const candidates = Array.from(projectMap.entries())
     .sort((a, b) => b[1] - a[1])
     .filter(([p]) => !excludePaths.has(p))
     .filter(([p]) => {
@@ -39,10 +40,14 @@ export function scanRecentRepos(excludePaths: Set<string>): RecentRepo[] {
         return false;
       }
     })
-    .slice(0, MAX_RESULTS)
-    .map(([p, ts]) => ({
+    .slice(0, MAX_RESULTS);
+
+  return Promise.all(
+    candidates.map(async ([p, ts]) => ({
       path: p,
       name: path.basename(p),
       lastUsed: ts,
-    }));
+      ...(await getGitHubPath(p).then((g) => (g ? { githubPath: g } : {}))),
+    })),
+  );
 }

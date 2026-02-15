@@ -294,8 +294,8 @@ export default function RepoManager() {
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-slate-300">{repo.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{repo.path}</p>
+                        <p className="text-sm text-slate-300">{repo.githubPath ?? repo.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{shortPath(repo.path)}</p>
                       </div>
                       <button
                         onClick={() => handleAddSuggestion(repo.path)}

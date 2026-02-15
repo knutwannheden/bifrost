@@ -146,6 +146,7 @@ export interface RecentRepo {
   path: string;
   name: string;
   lastUsed: number;
+  githubPath?: string;
 }
 
 export const DEFAULT_CONFIG: BifrostConfig = {
