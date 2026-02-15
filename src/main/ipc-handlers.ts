@@ -9,7 +9,7 @@ const execFile = promisify(execFileCb);
 import { IPC, IPC_STREAM } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
-import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
+import { addRepo, removeRepo, getRepoBranches, detectBaseBranch } from './repo-manager';
 import { createWorktree, restoreWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff, getDiffStats } from './diff-service';
@@ -44,6 +44,35 @@ function updateTask(taskId: string, updates: Partial<Task>): Task {
   tasks[idx] = { ...tasks[idx], ...updates };
   saveTasks(tasks);
   return tasks[idx];
+}
+
+/**
+ * Resolve the effective base branch for diff/review comparison.
+ * Uses repo.defaultBranch if available and different from the current branch,
+ * otherwise auto-detects from origin/HEAD or main/master.
+ */
+async function resolveBaseBranch(task: Task): Promise<string | undefined> {
+  const config = loadConfig();
+  const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+  let base = repo?.defaultBranch;
+
+  // Check if the stored base branch is the same as the current branch (useless for diff)
+  if (base) {
+    try {
+      const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: task.worktreePath,
+      });
+      if (stdout.trim() === base) base = undefined;
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!base) {
+    base = await detectBaseBranch(task.worktreePath);
+  }
+
+  return base;
 }
 
 async function destroyTask(taskId: string): Promise<void> {
@@ -315,17 +344,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Diff
   ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    const config = loadConfig();
-    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-    return getDiff(task.worktreePath, repo?.defaultBranch);
+    const baseBranch = await resolveBaseBranch(task);
+    return getDiff(task.worktreePath, baseBranch);
   });
 
   // Diff stats
   ipcMain.handle(IPC.GET_DIFF_STATS, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    const config = loadConfig();
-    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-    return getDiffStats(task.worktreePath, repo?.defaultBranch);
+    const baseBranch = await resolveBaseBranch(task);
+    return getDiffStats(task.worktreePath, baseBranch);
   });
 
   // Git log
@@ -476,9 +503,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Review
   ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    const config = loadConfig();
-    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-    const result = await runReview(task.worktreePath, taskId, mainWindow, repo?.defaultBranch);
+    const baseBranch = await resolveBaseBranch(task);
+    const result = await runReview(task.worktreePath, taskId, mainWindow, baseBranch);
     watchReviewFile(taskId, mainWindow);
     return result;
   });

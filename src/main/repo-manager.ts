@@ -67,15 +67,51 @@ export async function getGitHubPath(repoPath: string): Promise<string | undefine
   return undefined;
 }
 
-async function getDefaultBranch(repoPath: string): Promise<string> {
+/**
+ * Detect the default branch for a git repo.
+ * Tries: gh CLI (for GitHub repos) → origin/HEAD → main/master existence.
+ */
+export async function detectBaseBranch(repoPath: string): Promise<string | undefined> {
+  // Try gh CLI (most reliable for GitHub repos)
   try {
-    const { stdout } = await execFile('git', ['symbolic-ref', '--short', 'HEAD'], {
+    const { stdout } = await execFile(
+      'gh', ['repo', 'view', '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name'],
+      { cwd: repoPath, timeout: 5000 },
+    );
+    const branch = stdout.trim();
+    if (branch) return branch;
+  } catch {
+    // gh not installed or not a GitHub repo
+  }
+
+  // Try origin/HEAD
+  try {
+    const { stdout } = await execFile('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
       cwd: repoPath,
     });
-    return stdout.trim();
+    const branch = stdout.trim().replace(/^refs\/remotes\/origin\//, '');
+    if (branch) return branch;
   } catch {
-    return 'main';
+    // origin/HEAD not set
   }
+
+  // Fall back to checking if main or master exist
+  for (const candidate of ['main', 'master']) {
+    try {
+      await execFile('git', ['rev-parse', '--verify', candidate], {
+        cwd: repoPath,
+      });
+      return candidate;
+    } catch {
+      // branch doesn't exist
+    }
+  }
+
+  return undefined;
+}
+
+async function getDefaultBranch(repoPath: string): Promise<string> {
+  return (await detectBaseBranch(repoPath)) ?? 'main';
 }
 
 export function removeRepo(

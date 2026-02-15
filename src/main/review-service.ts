@@ -10,7 +10,7 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 const execFile = promisify(execFileCb);
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
-const REVIEW_TIMEOUT_MS = 120_000;
+const REVIEW_TIMEOUT_MS = 300_000;
 
 const REVIEW_PROMPT = `Review the following git diff. Produce a Markdown document with:
 1. A brief summary paragraph of the changes
@@ -52,15 +52,17 @@ export async function runReview(worktreePath: string, taskId: string, mainWindow
   }
 
   const markdown = await new Promise<string>((resolve, reject) => {
-    const proc = spawn('claude', ['-p', REVIEW_PROMPT], {
+    const proc = spawn('claude', ['-p', '--verbose', '--output-format', 'stream-json', REVIEW_PROMPT], {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: worktreePath,
-      env: { ...process.env },
+      env: { ...process.env, CLAUDECODE: '' },
     });
 
-    let stdout = '';
+    let resultText = '';
+    let thinking = '';
     let stderr = '';
     let settled = false;
+    let lineBuf = '';
 
     const timeout = setTimeout(() => {
       if (!settled) {
@@ -70,10 +72,40 @@ export async function runReview(worktreePath: string, taskId: string, mainWindow
       }
     }, REVIEW_TIMEOUT_MS);
 
-    proc.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
+    const sendProgress = () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_STREAM.REVIEW_PROGRESS, taskId, stdout);
+        mainWindow.webContents.send(IPC_STREAM.REVIEW_PROGRESS, taskId, resultText);
+        if (thinking) {
+          mainWindow.webContents.send(IPC_STREAM.REVIEW_THINKING, taskId, thinking);
+        }
+      }
+    };
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+      lineBuf += chunk.toString();
+      const lines = lineBuf.split('\n');
+      lineBuf = lines.pop() ?? '';
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === 'assistant' && event.message?.content) {
+            for (const block of event.message.content) {
+              if (block.type === 'thinking' && block.thinking) {
+                thinking = block.thinking;
+              } else if (block.type === 'text' && block.text) {
+                resultText = block.text;
+              }
+            }
+            sendProgress();
+          } else if (event.type === 'result' && event.result) {
+            resultText = event.result;
+            sendProgress();
+          }
+        } catch {
+          // not valid JSON, skip
+        }
       }
     });
 
@@ -85,8 +117,8 @@ export async function runReview(worktreePath: string, taskId: string, mainWindow
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (code === 0 && stdout.trim()) {
-        resolve(stdout.trim());
+      if (code === 0 && resultText.trim()) {
+        resolve(resultText.trim());
       } else {
         reject(new Error(stderr.trim() || `claude exited with code ${code}`));
       }

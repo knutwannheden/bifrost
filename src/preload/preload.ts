@@ -94,6 +94,12 @@ const api: BifrostAPI = {
     ipcRenderer.on(IPC_STREAM.REVIEW_PROGRESS, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_PROGRESS, handler);
   },
+  onReviewThinking: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, thinking: string) =>
+      callback(taskId, thinking);
+    ipcRenderer.on(IPC_STREAM.REVIEW_THINKING, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_THINKING, handler);
+  },
 
   // Integration
   checkIntegration: () => ipcRenderer.invoke(IPC.CHECK_INTEGRATION),
