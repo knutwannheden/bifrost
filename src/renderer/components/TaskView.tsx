@@ -7,7 +7,7 @@ const shortcuts = [
   { keys: '⌘R', label: 'Add a repository' },
   { keys: '⌘T', label: 'Create a new task' },
   { keys: '⌘H', label: 'Resume from history' },
-  { keys: '⌘K', label: 'All shortcuts' },
+  { keys: '⌘K', label: 'Command palette' },
 ];
 
 export default function TaskView() {

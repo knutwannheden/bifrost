@@ -10,7 +10,7 @@ import { IPC, IPC_STREAM } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches } from './repo-manager';
-import { createWorktree, removeWorktree } from './worktree-manager';
+import { createWorktree, restoreWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff, getDiffStats } from './diff-service';
 import { getGitLog } from './git-log-service';
@@ -199,7 +199,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return updateTask(taskId, { status: 'stopped' });
   });
 
-  ipcMain.handle(IPC.ARCHIVE_TASK, (_event, taskId: string) => {
+  ipcMain.handle(IPC.ARCHIVE_TASK, async (_event, taskId: string) => {
     const task = getTask(taskId);
 
     stopWatching(taskId);
@@ -209,22 +209,42 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       killSession(task.sessionId);
     }
 
+    // Remove worktree but keep the branch
+    if (!task.isExternal && fs.existsSync(task.worktreePath)) {
+      const config = loadConfig();
+      const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+      if (repo) {
+        try {
+          await removeWorktree(repo.path, task.worktreePath);
+        } catch {
+          // Worktree may already be removed
+        }
+      }
+    }
+
     return updateTask(taskId, {
       status: 'archived',
       archivedAt: Date.now(),
     });
   });
 
-  ipcMain.handle(IPC.REOPEN_TASK, (_event, taskId: string) => {
+  ipcMain.handle(IPC.REOPEN_TASK, async (_event, taskId: string) => {
     const task = getTask(taskId);
+    let worktreePath = task.worktreePath;
 
-    // Check working directory still exists
-    if (!fs.existsSync(task.worktreePath)) {
-      throw new Error(`Directory no longer exists: ${task.worktreePath}`);
+    // Restore worktree from branch if it was removed during archive
+    if (!fs.existsSync(worktreePath)) {
+      if (task.isExternal) {
+        throw new Error(`Directory no longer exists: ${worktreePath}`);
+      }
+      const config = loadConfig();
+      const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+      if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
+      worktreePath = await restoreWorktree(repo.path, task.name);
     }
 
     const sessionId = randomUUID();
-    createSession(sessionId, task.worktreePath, mainWindow, {
+    createSession(sessionId, worktreePath, mainWindow, {
       resume: true,
       claudeSessionId: task.claudeSessionId,
       taskId,
@@ -233,10 +253,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
 
     // Restart file watcher
-    startWatching(taskId, task.worktreePath, mainWindow, claudeCallbacks);
+    startWatching(taskId, worktreePath, mainWindow, claudeCallbacks);
 
     return updateTask(taskId, {
       sessionId,
+      worktreePath,
       status: 'running',
       hasUnread: false,
       archivedAt: undefined,

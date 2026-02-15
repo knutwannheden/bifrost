@@ -26,6 +26,26 @@ export async function createWorktree(
   return worktreePath;
 }
 
+export async function restoreWorktree(
+  repoPath: string,
+  taskName: string,
+): Promise<string> {
+  const repoName = path.basename(repoPath);
+  const worktreePath = path.join(
+    os.homedir(),
+    '.bifrost',
+    'worktrees',
+    repoName,
+    taskName,
+  );
+
+  await execFile('git', ['worktree', 'add', worktreePath, taskName], {
+    cwd: repoPath,
+  });
+
+  return worktreePath;
+}
+
 export async function removeWorktree(
   repoPath: string,
   worktreePath: string,
