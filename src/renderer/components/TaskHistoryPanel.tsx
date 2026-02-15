@@ -426,17 +426,15 @@ export default function TaskHistoryPanel() {
         setFocusedIdx((i) => (i < listLength - 1 ? i + 1 : 0));
         break;
 
-      case 'ArrowLeft': {
-        e.preventDefault();
-        const idx = filters.indexOf(filter);
-        setFilter(filters[idx > 0 ? idx - 1 : filters.length - 1]);
-        break;
-      }
-
+      case 'Tab':
+      case 'ArrowLeft':
       case 'ArrowRight': {
         e.preventDefault();
+        const forward = e.key === 'ArrowRight' || (e.key === 'Tab' && !e.shiftKey);
         const idx = filters.indexOf(filter);
-        setFilter(filters[idx < filters.length - 1 ? idx + 1 : 0]);
+        setFilter(filters[forward
+          ? (idx < filters.length - 1 ? idx + 1 : 0)
+          : (idx > 0 ? idx - 1 : filters.length - 1)]);
         break;
       }
 
@@ -546,7 +544,7 @@ export default function TaskHistoryPanel() {
             </button>
           ))}
           <span className="ml-auto text-xs text-slate-600 self-center">
-            &larr;&rarr; tabs &uarr;&darr; {isSessionsMode ? 'sessions' : 'tasks'}
+            Tab/&larr;&rarr; tabs &uarr;&darr; {isSessionsMode ? 'sessions' : 'tasks'}
           </span>
         </div>
 

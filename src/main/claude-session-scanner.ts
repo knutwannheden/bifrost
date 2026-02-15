@@ -10,7 +10,34 @@ function decodeProjectPath(dirName: string): string {
   // Claude encodes paths: leading / removed, remaining / → -
   // e.g. "-Users-knut-git-foo" → "/Users/knut/git/foo"
   // The leading dash represents the root /
-  return dirName.replace(/^-/, '/').replace(/-/g, '/');
+  //
+  // Ambiguity: dashes in directory names (e.g. "moderne-ast-write") are
+  // indistinguishable from path separators.  We resolve this by greedily
+  // matching the longest existing path segments from left to right.
+  const parts = dirName.replace(/^-/, '').split('-');
+  let resolved = '';
+  let i = 0;
+  while (i < parts.length) {
+    // Try progressively longer dash-joined segments, keeping the longest match.
+    // Don't stop on first failure — "moderne-ast" may not exist while
+    // "moderne-ast-write" does.
+    let best = parts[i];
+    let bestLen = 1;
+    for (let j = i + 1; j < parts.length; j++) {
+      const candidate = parts.slice(i, j + 1).join('-');
+      const testPath = resolved + '/' + candidate;
+      try {
+        fs.statSync(testPath);
+        best = candidate;
+        bestLen = j - i + 1;
+      } catch {
+        // keep trying longer segments
+      }
+    }
+    resolved += '/' + best;
+    i += bestLen;
+  }
+  return resolved;
 }
 
 function readFirstLine(filePath: string): string | null {
