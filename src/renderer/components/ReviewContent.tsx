@@ -135,7 +135,6 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   const { state, dispatch } = useApp();
 
   const content = state.reviewContent[taskId] ?? '';
-  const thinking = state.reviewThinking[taskId] ?? '';
   const status: ReviewStatus = state.reviewStatus[taskId] ?? 'idle';
 
   const checkedLines = useMemo(() => parseCheckedLines(content), [content]);
@@ -172,20 +171,9 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
     return unsub;
   }, [taskId, status, dispatch]);
 
-  // Stream thinking content
-  useEffect(() => {
-    const unsub = window.bifrost.onReviewThinking((tid, thinkingText) => {
-      if (tid === taskId) {
-        dispatch({ type: 'SET_REVIEW_THINKING', taskId, thinking: thinkingText });
-      }
-    });
-    return unsub;
-  }, [taskId, dispatch]);
 
   const handleRunReview = useCallback(async () => {
     dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'running' });
-    dispatch({ type: 'SET_REVIEW_THINKING', taskId, thinking: '' });
-    dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: '' });
     try {
       const result = await window.bifrost.runReview(taskId);
       dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: result });
@@ -256,20 +244,19 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
     );
   }
 
-  // Running state — show spinner + thinking + streaming content
+  // Running state — show spinner + streaming content
   if (status === 'running') {
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 flex-shrink-0 text-slate-400">
           <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin flex-shrink-0" />
-          <span className="text-sm">{thinking && !content ? 'Thinking...' : 'Running review...'}</span>
+          <span className="text-sm">Running review...</span>
         </div>
-        <div className="flex-1 overflow-auto p-4 font-sans">
-          {thinking && !content && (
-            <div className="text-xs text-slate-500 italic whitespace-pre-wrap leading-relaxed mb-4">{thinking}</div>
-          )}
-          {content && lines.map((line, i) => renderMarkdownLine(line, i, new Set(), () => { /* read-only during streaming */ }))}
-        </div>
+        {content && (
+          <div className="flex-1 overflow-auto p-4 font-sans">
+            {lines.map((line, i) => renderMarkdownLine(line, i, new Set(), () => { /* read-only during streaming */ }))}
+          </div>
+        )}
       </div>
     );
   }

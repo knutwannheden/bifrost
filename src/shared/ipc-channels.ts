@@ -94,7 +94,6 @@ export const IPC_STREAM = {
   ACTIVITY_ENTRY: 'activity:entry',
   TASK_SUMMARY: 'task:summary',
   REVIEW_PROGRESS: 'review:progress',
-  REVIEW_THINKING: 'review:thinking',
   MENU_ACTION: 'menu:action',
 } as const;
 
@@ -168,7 +167,6 @@ export interface BifrostAPI {
 
   // Review progress
   onReviewProgress(callback: (taskId: string, content: string) => void): () => void;
-  onReviewThinking(callback: (taskId: string, thinking: string) => void): () => void;
 
   // Integration
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;

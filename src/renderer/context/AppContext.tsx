@@ -28,7 +28,6 @@ export interface AppState {
   diffMode: DiffMode;
   paneStates: Record<string, TaskPaneState>;
   reviewContent: Record<string, string>;
-  reviewThinking: Record<string, string>;
   reviewStatus: Record<string, ReviewStatus>;
   toast: string | null;
   apiPort: number | null;
@@ -61,8 +60,7 @@ export type AppAction =
   | { type: 'SET_API_PORT'; port: number | null }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
   | { type: 'SET_REVIEW_STATUS'; taskId: string; status: ReviewStatus }
-  | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string }
-  | { type: 'SET_REVIEW_THINKING'; taskId: string; thinking: string };
+  | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string };
 
 const initialState: AppState = {
   repos: [],
@@ -80,7 +78,6 @@ const initialState: AppState = {
   diffMode: 'git',
   paneStates: {},
   reviewContent: {},
-  reviewThinking: {},
   reviewStatus: {},
   toast: null,
   apiPort: null,
@@ -217,8 +214,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, reviewStatus: { ...state.reviewStatus, [action.taskId]: action.status } };
     case 'SET_REVIEW_CONTENT':
       return { ...state, reviewContent: { ...state.reviewContent, [action.taskId]: action.content } };
-    case 'SET_REVIEW_THINKING':
-      return { ...state, reviewThinking: { ...state.reviewThinking, [action.taskId]: action.thinking } };
     default:
       return state;
   }

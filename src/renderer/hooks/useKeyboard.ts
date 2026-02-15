@@ -145,7 +145,9 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Alt+U: open/toggle review mode (works without Cmd)
+      // Skip when an overlay is open to avoid closing it via mutual exclusion
       if (e.altKey && !e.metaKey && e.code === 'KeyU') {
+        if (state.showTaskHistory || state.showRepoManager || state.showSettings || state.showKeyboardShortcuts) return;
         e.preventDefault();
         if (state.showDiff && state.diffMode === 'review') {
           dispatch({ type: 'TOGGLE_DIFF' });

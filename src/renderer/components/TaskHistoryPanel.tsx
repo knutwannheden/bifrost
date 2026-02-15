@@ -457,14 +457,6 @@ export default function TaskHistoryPanel() {
         break;
 
       default:
-        // Intercept Alt+U (review toggle) so it doesn't propagate to
-        // the global handler and close the History panel via overlay
-        // mutual exclusion.
-        if (e.altKey && e.code === 'KeyU') {
-          e.preventDefault();
-          e.stopPropagation();
-          break;
-        }
         if (!isSessionsMode) {
           const focusedTask = flatTaskList[focusedIdx];
           // Alt+letter shortcuts (use e.code since Alt produces special chars on macOS)
