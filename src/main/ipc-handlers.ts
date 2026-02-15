@@ -418,7 +418,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return scanClaudeSessions(excludePaths);
   });
 
-  ipcMain.handle(IPC.RESUME_CLAUDE_SESSION, (_event, claudeSessionId: string, cwd: string) => {
+  ipcMain.handle(IPC.RESUME_CLAUDE_SESSION, async (_event, claudeSessionId: string, cwd: string) => {
     if (!fs.existsSync(cwd)) {
       throw new Error(`Directory no longer exists: ${cwd}`);
     }
@@ -427,25 +427,38 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const taskId = randomUUID();
     const name = path.basename(cwd);
 
+    // Try to match cwd to a managed repo
+    const config = loadConfig();
+    const matchedRepo = config.repos.find((r: Repo) => cwd === r.path || cwd.startsWith(r.path + '/'));
+    let branch = '';
+    if (matchedRepo) {
+      try {
+        const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd });
+        branch = stdout.trim();
+      } catch {
+        // ignore
+      }
+    }
+
     createSession(sessionId, cwd, mainWindow, {
       claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
-      sandbox: loadConfig().sandbox,
+      sandbox: config.sandbox,
     });
 
     const task: Task = {
       id: taskId,
       name,
-      repoId: '',
-      branch: '',
+      repoId: matchedRepo?.id ?? '',
+      branch,
       worktreePath: cwd,
       sessionId,
       status: 'running',
       hasUnread: false,
       createdAt: Date.now(),
       claudeSessionId,
-      isExternal: true,
+      isExternal: !matchedRepo,
     };
 
     tasks.push(task);
