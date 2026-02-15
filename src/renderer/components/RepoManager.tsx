@@ -7,13 +7,16 @@ export default function RepoManager() {
   const { state, dispatch } = useApp();
   const [localPath, setLocalPath] = useState('');
   const [search, setSearch] = useState('');
-  const [focusedIdx, setFocusedIdx] = useState(0);
+  const [focusedSection, setFocusedSection] = useState<'suggestions' | 'repos'>('suggestions');
+  const [focusedSuggestionIdx, setFocusedSuggestionIdx] = useState(0);
+  const [focusedRepoIdx, setFocusedRepoIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
   const [recentRepos, setRecentRepos] = useState<RecentRepo[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const repoRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const suggestionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const close = useCallback(() => {
     dispatch({ type: 'TOGGLE_REPO_MANAGER' });
@@ -31,20 +34,24 @@ export default function RepoManager() {
 
   // Reset focus when search changes
   useEffect(() => {
-    setFocusedIdx(0);
+    setFocusedRepoIdx(0);
   }, [search]);
 
-  // Clamp focus index
+  // Clamp focus indices
   useEffect(() => {
-    if (focusedIdx >= filteredRepos.length && filteredRepos.length > 0) {
-      setFocusedIdx(filteredRepos.length - 1);
+    if (focusedRepoIdx >= filteredRepos.length && filteredRepos.length > 0) {
+      setFocusedRepoIdx(filteredRepos.length - 1);
     }
-  }, [filteredRepos.length, focusedIdx]);
+  }, [filteredRepos.length, focusedRepoIdx]);
 
   // Scroll focused item into view
   useEffect(() => {
-    repoRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
-  }, [focusedIdx]);
+    if (focusedSection === 'suggestions') {
+      suggestionRefs.current[focusedSuggestionIdx]?.scrollIntoView({ block: 'nearest' });
+    } else {
+      repoRefs.current[focusedRepoIdx]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [focusedSection, focusedSuggestionIdx, focusedRepoIdx]);
 
   // Fetch recent repos from Claude history
   useEffect(() => {
@@ -89,6 +96,15 @@ export default function RepoManager() {
     dispatch({ type: 'SET_REPOS', repos: state.repos.filter((r) => r.id !== repoId) });
   };
 
+  // Sync section focus with suggestions availability
+  useEffect(() => {
+    if (suggestions.length === 0) {
+      setFocusedSection('repos');
+    } else if (focusedSection === 'repos' && focusedRepoIdx === 0) {
+      setFocusedSection('suggestions');
+    }
+  }, [suggestions.length]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Let the input handle its own keys when focused
     if (inputFocused) {
@@ -97,10 +113,28 @@ export default function RepoManager() {
         inputRef.current?.blur();
         overlayRef.current?.focus();
       }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        inputRef.current?.blur();
+        overlayRef.current?.focus();
+        if (e.shiftKey) {
+          if (filteredRepos.length > 0) {
+            setFocusedSection('repos');
+          } else if (suggestions.length > 0) {
+            setFocusedSection('suggestions');
+          }
+        } else {
+          if (suggestions.length > 0) {
+            setFocusedSection('suggestions');
+          } else if (filteredRepos.length > 0) {
+            setFocusedSection('repos');
+          }
+        }
+      }
       return;
     }
 
-    const focusedRepo = filteredRepos[focusedIdx];
+    const focusedRepo = focusedSection === 'repos' ? filteredRepos[focusedRepoIdx] : undefined;
 
     switch (e.key) {
       case 'Escape':
@@ -115,12 +149,27 @@ export default function RepoManager() {
 
       case 'ArrowUp':
         e.preventDefault();
-        setFocusedIdx((i) => (i > 0 ? i - 1 : filteredRepos.length - 1));
+        if (focusedSection === 'suggestions') {
+          setFocusedSuggestionIdx((i) => (i > 0 ? i - 1 : suggestions.length - 1));
+        } else {
+          setFocusedRepoIdx((i) => (i > 0 ? i - 1 : filteredRepos.length - 1));
+        }
         break;
 
       case 'ArrowDown':
         e.preventDefault();
-        setFocusedIdx((i) => (i < filteredRepos.length - 1 ? i + 1 : 0));
+        if (focusedSection === 'suggestions') {
+          setFocusedSuggestionIdx((i) => (i < suggestions.length - 1 ? i + 1 : 0));
+        } else {
+          setFocusedRepoIdx((i) => (i < filteredRepos.length - 1 ? i + 1 : 0));
+        }
+        break;
+
+      case 'Enter':
+        e.preventDefault();
+        if (focusedSection === 'suggestions' && suggestions[focusedSuggestionIdx]) {
+          handleAddSuggestion(suggestions[focusedSuggestionIdx].path);
+        }
         break;
 
       case 'Backspace':
@@ -130,7 +179,21 @@ export default function RepoManager() {
 
       case 'Tab':
         e.preventDefault();
-        inputRef.current?.focus();
+        if (e.shiftKey) {
+          // Shift+Tab: repos -> suggestions -> input
+          if (focusedSection === 'repos' && suggestions.length > 0) {
+            setFocusedSection('suggestions');
+          } else {
+            inputRef.current?.focus();
+          }
+        } else {
+          // Tab: suggestions -> repos -> input
+          if (focusedSection === 'suggestions' && filteredRepos.length > 0) {
+            setFocusedSection('repos');
+          } else {
+            inputRef.current?.focus();
+          }
+        }
         break;
 
       default:
@@ -203,6 +266,42 @@ export default function RepoManager() {
             </div>
           )}
 
+          {/* Recent from Claude */}
+          {suggestions.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Recent from Claude</label>
+              <div className="space-y-1">
+                {suggestions.map((repo, idx) => {
+                  const isFocused = focusedSection === 'suggestions' && idx === focusedSuggestionIdx;
+                  return (
+                    <div
+                      key={repo.path}
+                      ref={(el) => { suggestionRefs.current[idx] = el; }}
+                      onMouseEnter={() => { setFocusedSection('suggestions'); setFocusedSuggestionIdx(idx); }}
+                      className={`flex items-center justify-between rounded px-3 py-1.5 cursor-default transition-colors ${
+                        isFocused
+                          ? 'bg-slate-700 border border-blue-500/70 ring-1 ring-blue-500/40'
+                          : 'bg-slate-700/30 border border-slate-700'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-slate-300">{repo.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{repo.path}</p>
+                      </div>
+                      <button
+                        onClick={() => handleAddSuggestion(repo.path)}
+                        tabIndex={-1}
+                        className="ml-3 px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+                      >
+                        <ActionLabel text="+ Add" showHint={isFocused} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Repo list */}
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {state.repos.length === 0 && !search && (
@@ -211,69 +310,45 @@ export default function RepoManager() {
             {filteredRepos.length === 0 && search && (
               <p className="text-sm text-slate-500 text-center py-2">No matching repositories.</p>
             )}
-            {filteredRepos.map((repo, idx) => (
-              <div
-                key={repo.id}
-                ref={(el) => { repoRefs.current[idx] = el; }}
-                onMouseEnter={() => setFocusedIdx(idx)}
-                className={`flex items-center justify-between rounded px-3 py-2 cursor-default transition-colors ${
-                  idx === focusedIdx
-                    ? 'bg-slate-700 border border-blue-500/70 ring-1 ring-blue-500/40'
-                    : 'bg-slate-700/50 border border-transparent'
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-slate-200 truncate">{repo.name}</p>
-                  <p className="text-xs text-slate-400 truncate">{repo.path}</p>
-                </div>
-                <div className="flex items-center gap-1 ml-3">
-                  <button
-                    onClick={() => { close(); dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id }); }}
-                    tabIndex={-1}
-                    title="Create task (Alt+T)"
-                    className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
-                  >
-                    <ActionLabel text="Task" showHint={idx === focusedIdx} />
-                  </button>
-                  <button
-                    onClick={() => handleRemove(repo.id)}
-                    tabIndex={-1}
-                    title="Remove (Alt+R)"
-                    className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
-                  >
-                    <ActionLabel text="Remove" showHint={idx === focusedIdx} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Recent from Claude */}
-          {suggestions.length > 0 && (
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Recent from Claude</label>
-              <div className="space-y-1">
-                {suggestions.map((repo) => (
-                  <div
-                    key={repo.path}
-                    className="flex items-center justify-between rounded px-3 py-1.5 bg-slate-700/30 border border-slate-700"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-slate-300">{repo.name}</p>
-                      <p className="text-xs text-slate-500 truncate">{repo.path}</p>
-                    </div>
+            {filteredRepos.map((repo, idx) => {
+              const isFocused = focusedSection === 'repos' && idx === focusedRepoIdx;
+              return (
+                <div
+                  key={repo.id}
+                  ref={(el) => { repoRefs.current[idx] = el; }}
+                  onMouseEnter={() => { setFocusedSection('repos'); setFocusedRepoIdx(idx); }}
+                  className={`flex items-center justify-between rounded px-3 py-2 cursor-default transition-colors ${
+                    isFocused
+                      ? 'bg-slate-700 border border-blue-500/70 ring-1 ring-blue-500/40'
+                      : 'bg-slate-700/50 border border-transparent'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-slate-200 truncate">{repo.name}</p>
+                    <p className="text-xs text-slate-400 truncate">{repo.path}</p>
+                  </div>
+                  <div className="flex items-center gap-1 ml-3">
                     <button
-                      onClick={() => handleAddSuggestion(repo.path)}
+                      onClick={() => { close(); dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id }); }}
                       tabIndex={-1}
-                      className="ml-3 px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+                      title="Create task (Alt+T)"
+                      className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
                     >
-                      + Add
+                      <ActionLabel text="Task" showHint={isFocused} />
+                    </button>
+                    <button
+                      onClick={() => handleRemove(repo.id)}
+                      tabIndex={-1}
+                      title="Remove (Alt+R)"
+                      className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
+                    >
+                      <ActionLabel text="Remove" showHint={isFocused} />
                     </button>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                </div>
+              );
+            })}
+          </div>
 
           {/* Add local repo */}
           <div>
