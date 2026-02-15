@@ -315,13 +315,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Diff
   ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    return getDiff(task.worktreePath);
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+    return getDiff(task.worktreePath, repo?.defaultBranch);
   });
 
   // Diff stats
   ipcMain.handle(IPC.GET_DIFF_STATS, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    return getDiffStats(task.worktreePath);
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+    return getDiffStats(task.worktreePath, repo?.defaultBranch);
   });
 
   // Git log
@@ -472,7 +476,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Review
   ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    const result = await runReview(task.worktreePath, taskId, mainWindow);
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+    const result = await runReview(task.worktreePath, taskId, mainWindow, repo?.defaultBranch);
     watchReviewFile(taskId, mainWindow);
     return result;
   });

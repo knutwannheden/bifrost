@@ -24,7 +24,7 @@ export function getReviewPath(taskId: string): string {
   return path.join(BIFROST_DIR, taskId, 'review.md');
 }
 
-export async function runReview(worktreePath: string, taskId: string, mainWindow?: BrowserWindow): Promise<string> {
+export async function runReview(worktreePath: string, taskId: string, mainWindow?: BrowserWindow, baseBranch?: string): Promise<string> {
   // Gather the diff: uncommitted changes + untracked files
   let diff = '';
   try {
@@ -38,6 +38,14 @@ export async function runReview(worktreePath: string, taskId: string, mainWindow
       diff += '\n' + cached;
     }
   } catch { /* ignore */ }
+
+  // If no uncommitted changes, try committed changes since base branch
+  if (!diff.trim() && baseBranch) {
+    try {
+      const { stdout: branchDiff } = await execFile('git', ['diff', `${baseBranch}...HEAD`], { cwd: worktreePath, maxBuffer: 10 * 1024 * 1024 });
+      diff = branchDiff;
+    } catch { /* base branch may not exist */ }
+  }
 
   if (!diff.trim()) {
     return '## Review\n\nNo changes to review.';

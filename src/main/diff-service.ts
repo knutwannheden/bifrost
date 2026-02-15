@@ -7,7 +7,7 @@ import type { DiffResult, DiffStats } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
-export async function getDiff(worktreePath: string): Promise<DiffResult> {
+export async function getDiff(worktreePath: string, baseBranch?: string): Promise<DiffResult> {
   try {
     // Get diff for tracked files
     const { stdout: trackedDiff } = await execFile('git', ['diff', 'HEAD'], {
@@ -44,13 +44,26 @@ export async function getDiff(worktreePath: string): Promise<DiffResult> {
       // ignore errors listing untracked files
     }
 
-    return { worktreePath, diff: trackedDiff + untrackedDiff };
+    let diff = trackedDiff + untrackedDiff;
+
+    // If no uncommitted changes, try committed changes since base branch
+    if (!diff.trim() && baseBranch) {
+      try {
+        const { stdout: branchDiff } = await execFile('git', ['diff', `${baseBranch}...HEAD`], {
+          cwd: worktreePath,
+          maxBuffer: 10 * 1024 * 1024,
+        });
+        diff = branchDiff;
+      } catch { /* base branch may not exist */ }
+    }
+
+    return { worktreePath, diff };
   } catch {
     return { worktreePath, diff: '' };
   }
 }
 
-export async function getDiffStats(worktreePath: string): Promise<DiffStats | null> {
+export async function getDiffStats(worktreePath: string, baseBranch?: string): Promise<DiffStats | null> {
   try {
     let additions = 0;
     let deletions = 0;
@@ -103,6 +116,24 @@ export async function getDiffStats(worktreePath: string): Promise<DiffStats | nu
       }
     } catch {
       // ignore errors listing untracked files
+    }
+
+    // If no uncommitted changes, try committed changes since base branch
+    if (filesChanged === 0 && additions === 0 && deletions === 0 && baseBranch) {
+      try {
+        const { stdout } = await execFile('git', ['diff', '--shortstat', `${baseBranch}...HEAD`], {
+          cwd: worktreePath,
+        });
+        const trimmed = stdout.trim();
+        if (trimmed) {
+          const filesMatch = trimmed.match(/(\d+) file/);
+          const addMatch = trimmed.match(/(\d+) insertion/);
+          const delMatch = trimmed.match(/(\d+) deletion/);
+          if (filesMatch) filesChanged += parseInt(filesMatch[1], 10);
+          if (addMatch) additions += parseInt(addMatch[1], 10);
+          if (delMatch) deletions += parseInt(delMatch[1], 10);
+        }
+      } catch { /* base branch may not exist */ }
     }
 
     if (filesChanged === 0 && additions === 0 && deletions === 0) return null;
