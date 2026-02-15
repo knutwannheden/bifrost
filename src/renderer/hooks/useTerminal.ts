@@ -135,7 +135,11 @@ export function useTerminal(
     );
 
     // ResizeObserver for auto-fit
-    const resizeObserver = new ResizeObserver(() => {
+    // Skip when container has zero dimensions (pane hidden via display:none)
+    // to avoid truncating xterm scrollback buffer.
+    const resizeObserver = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width === 0 || rect.height === 0) return;
       try {
         fitAddon.fit();
         window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);

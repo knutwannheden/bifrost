@@ -298,6 +298,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             // Other pane is visible — hide current and focus other
             dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
             dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
+          } else if (otherExists && otherHidden) {
+            // Other pane exists but is hidden — swap: show other, hide current
+            dispatch({ type: 'SHOW_PANE', taskId, pane: otherPane });
+            dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
           } else {
             // About to close the tab — require double Cmd+W
             const now = Date.now();

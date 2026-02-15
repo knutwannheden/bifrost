@@ -105,6 +105,10 @@ export default function App() {
           if (otherExists && !otherHidden) {
             dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
             dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
+          } else if (otherExists && otherHidden) {
+            dispatch({ type: 'SHOW_PANE', taskId, pane: otherPane });
+            dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
           } else {
             if (ps.devSessionId) {
               window.bifrost.closeDevTerminal(taskId);
