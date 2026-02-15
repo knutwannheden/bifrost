@@ -181,9 +181,6 @@ export interface BifrostAPI {
   // Notifications
   onNotification(callback: (title: string, body: string) => void): () => void;
 
-  // Platform
-  homeDir: string;
-
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;
 }

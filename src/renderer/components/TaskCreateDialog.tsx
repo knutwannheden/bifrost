@@ -2,15 +2,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import type { Repo } from '../../shared/types';
 import { generateTaskName } from '../utils/name-generator';
+import { shortPath } from '../utils/paths';
 import ActionLabel from './ActionLabel';
 
 function repoDisplayName(repo: Repo): string {
   return repo.githubPath ?? repo.name;
-}
-
-function shortPath(p: string): string {
-  const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+)/);
-  return m ? '~' + p.slice(m[1].length) : p;
 }
 
 function matchesSearch(repo: Repo, search: string): boolean {

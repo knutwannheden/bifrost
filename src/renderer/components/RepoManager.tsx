@@ -1,15 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { Repo, RecentRepo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { shortPath } from '../utils/paths';
 import ActionLabel from './ActionLabel';
 
 function repoDisplayName(repo: Repo): string {
   return repo.githubPath ?? repo.name;
-}
-
-function shortPath(p: string): string {
-  const m = p.match(/^(\/Users\/[^/]+|\/home\/[^/]+)/);
-  return m ? '~' + p.slice(m[1].length) : p;
 }
 
 export default function RepoManager() {

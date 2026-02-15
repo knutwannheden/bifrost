@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
+import { shortPath } from '../utils/paths';
 import type { Task, ClaudeSession, DiffStats } from '../../shared/types';
 
 const statusLabel: Record<string, string> = {
@@ -41,14 +42,6 @@ function formatRelative(ts: number): string {
   return `${days}d ago`;
 }
 
-function shortenPath(cwd: string): string {
-  const home = window.bifrost.homeDir;
-  if (home && cwd.startsWith(home)) {
-    return '~' + cwd.slice(home.length);
-  }
-  return cwd;
-}
-
 interface TaskRowProps {
   task: Task;
   idx: number;
@@ -69,14 +62,14 @@ interface TaskRowProps {
   canReopen: (task: Task) => boolean;
   canArchive: (task: Task) => boolean;
   repoName: (repoId: string) => string;
-  shortenPath: (cwd: string) => string;
+  shortPath: (cwd: string) => string;
 }
 
 function TaskRow({
   task, idx, focusedIdx, editingId, editName, diffStats, setEditName,
   setFocusedIdx, itemRefs, handleActivate, startRename, submitRename,
   setEditingId, handleReopen, handleArchive, handleDelete,
-  canReopen, canArchive, repoName, shortenPath,
+  canReopen, canArchive, repoName, shortPath,
 }: TaskRowProps) {
   return (
     <div
@@ -166,7 +159,7 @@ function TaskRow({
       )}
       <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
         {task.isExternal ? (
-          <span className="font-mono">{shortenPath(task.worktreePath)}</span>
+          <span className="font-mono">{shortPath(task.worktreePath)}</span>
         ) : (
           <>
             <span>{repoName(task.repoId)}</span>
@@ -588,7 +581,7 @@ export default function TaskHistoryPanel() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-slate-200 truncate">
-                      {shortenPath(session.cwd)}
+                      {shortPath(session.cwd)}
                     </span>
                     <span className="text-xs text-blue-400 flex-shrink-0 ml-2">
                       Resume
@@ -639,7 +632,7 @@ export default function TaskHistoryPanel() {
                             canReopen={canReopen}
                             canArchive={canArchive}
                             repoName={repoName}
-                            shortenPath={shortenPath}
+                            shortPath={shortPath}
                           />
                         );
                       })}
@@ -669,7 +662,7 @@ export default function TaskHistoryPanel() {
                     canReopen={canReopen}
                     canArchive={canArchive}
                     repoName={repoName}
-                    shortenPath={shortenPath}
+                    shortPath={shortPath}
                   />
                 ))
               )}
