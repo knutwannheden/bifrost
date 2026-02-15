@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IPC, IPC_STREAM, BifrostAPI } from '../shared/ipc-channels';
 
+// Indirect reference so Vite doesn't statically replace process.env
+const nodeEnv = globalThis.process.env;
+
 const api: BifrostAPI = {
   // Config
   loadConfig: () => ipcRenderer.invoke(IPC.LOAD_CONFIG),
@@ -118,8 +121,8 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.NOTIFICATION, handler);
   },
 
-  // Platform — access via bracket notation so Vite doesn't statically replace it
-  homeDir: process.env['HOME'] || '',
+  // Platform
+  homeDir: nodeEnv.HOME || '',
 
   // Menu actions
   onMenuAction: (callback) => {
