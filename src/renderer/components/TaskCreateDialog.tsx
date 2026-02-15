@@ -31,8 +31,15 @@ export default function TaskCreateDialog() {
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
+  // Treat filter as empty when the entire input is selected (user hasn't typed yet)
+  const inputFullySelected =
+    repoRef.current &&
+    repoRef.current.selectionStart === 0 &&
+    repoRef.current.selectionEnd === repoRef.current.value.length &&
+    repoRef.current.value.length > 0;
+
   const filteredRepos = state.repos.filter((r) => {
-    if (!repoSearch) return true;
+    if (!repoSearch || inputFullySelected) return true;
     return r.name.toLowerCase().includes(repoSearch.toLowerCase());
   });
 
