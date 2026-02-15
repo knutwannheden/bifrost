@@ -411,12 +411,12 @@ export default function TaskHistoryPanel() {
 
       case 'ArrowUp':
         e.preventDefault();
-        setFocusedIdx((i) => (i > 0 ? i - 1 : listLength - 1));
+        setFocusedIdx((i) => Math.max(0, i - 1));
         break;
 
       case 'ArrowDown':
         e.preventDefault();
-        setFocusedIdx((i) => (i < listLength - 1 ? i + 1 : 0));
+        setFocusedIdx((i) => Math.min(listLength - 1, i + 1));
         break;
 
       case 'Tab':
