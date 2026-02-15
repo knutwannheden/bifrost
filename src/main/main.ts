@@ -5,7 +5,6 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
 import { initNotificationService } from './notification-service';
 import { startApi, stopApi } from './bifrost-api';
-import { refreshMcpServer } from './integration-installer';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 if (started) {
@@ -146,9 +145,8 @@ app.on('ready', async () => {
   buildMenu();
   createWindow();
 
-  // Start HTTP API and refresh MCP server inside plugin (if installed)
+  // Start HTTP API
   await startApi();
-  refreshMcpServer();
 
   if (mainWindow) {
     registerIpcHandlers(mainWindow);

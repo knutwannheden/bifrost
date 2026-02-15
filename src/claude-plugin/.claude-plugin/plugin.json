@@ -1,4 +1,5 @@
 {
   "name": "bifrost",
+  "version": "1.0.0",
   "description": "Bifrost integration — MCP tools and skills for multi-task orchestration"
 }

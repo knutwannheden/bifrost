@@ -14,6 +14,7 @@ export default function TaskView() {
   const { state, dispatch } = useApp();
   const [splitRatio, setSplitRatio] = useState(0.7);
   const [integrationNeeded, setIntegrationNeeded] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [justInstalled, setJustInstalled] = useState(false);
 
@@ -59,6 +60,7 @@ export default function TaskView() {
     if (!activeTask && state.tasksLoaded && openTasks.length === 0) {
       window.bifrost.checkIntegration().then((status) => {
         setIntegrationNeeded(!status.installed);
+        setUpdateAvailable(status.updateAvailable);
       });
     }
   }, [activeTask, state.tasksLoaded, openTasks.length]);
@@ -68,8 +70,9 @@ export default function TaskView() {
     try {
       await window.bifrost.installIntegration();
       setIntegrationNeeded(false);
+      setUpdateAvailable(false);
       setJustInstalled(true);
-      dispatch({ type: 'SHOW_TOAST', message: 'Claude integration installed' });
+      dispatch({ type: 'SHOW_TOAST', message: updateAvailable ? 'Claude integration updated' : 'Claude integration installed' });
       setTimeout(() => setJustInstalled(false), 2000);
     } catch (err) {
       dispatch({ type: 'SHOW_TOAST', message: `Install failed: ${err instanceof Error ? err.message : String(err)}` });
@@ -100,21 +103,23 @@ export default function TaskView() {
             Each task runs in its own isolated git worktree, so agents work independently without
             stepping on each other.
           </p>
-          {(integrationNeeded || justInstalled) && (
+          {(integrationNeeded || updateAvailable || justInstalled) && (
             <div className="mb-6 flex flex-col items-center gap-2">
               {justInstalled ? (
-                <span className="text-sm text-green-400">&#10003; Installed</span>
+                <span className="text-sm text-green-400">&#10003; {updateAvailable ? 'Updated' : 'Installed'}</span>
               ) : (
                 <button
                   onClick={handleInstallIntegration}
                   disabled={installing}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                  {installing ? 'Installing...' : 'Install Claude Integration'}
+                  {installing ? (updateAvailable ? 'Updating...' : 'Installing...') : (updateAvailable ? 'Update Claude Integration' : 'Install Claude Integration')}
                 </button>
               )}
               <p className="text-xs text-slate-500 max-w-sm text-center">
-                Adds the Bifrost MCP server and /bifrost: slash commands to your Claude Code configuration.
+                {updateAvailable
+                  ? 'A new version of the Bifrost plugin is available.'
+                  : 'Adds the Bifrost MCP server and skills to your Claude Code configuration.'}
               </p>
             </div>
           )}

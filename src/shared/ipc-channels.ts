@@ -169,7 +169,7 @@ export interface BifrostAPI {
   onReviewProgress(callback: (taskId: string, content: string) => void): () => void;
 
   // Integration
-  checkIntegration(): Promise<{ installed: boolean }>;
+  checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;
   installIntegration(): Promise<void>;
 
   // Dialog
