@@ -8,6 +8,7 @@ import type {
   DiffResult,
   DiffStats,
   GitLogEntry,
+  RecentRepo,
   Repo,
   Task,
 } from './types';
@@ -24,6 +25,7 @@ export const IPC = {
   REMOVE_REPO: 'repo:remove',
   LIST_REPOS: 'repo:list',
   GET_REPO_BRANCHES: 'repo:branches',
+  GET_RECENT_REPOS: 'repo:recent',
 
   // Tasks
   CREATE_TASK: 'task:create',
@@ -38,8 +40,6 @@ export const IPC = {
   // Terminal sessions
   CREATE_DEV_TERMINAL: 'session:create-dev-terminal',
   CLOSE_DEV_TERMINAL: 'session:close-dev-terminal',
-  CREATE_REVIEW_SESSION: 'session:create-review',
-  CLOSE_REVIEW_SESSION: 'session:close-review',
   WRITE_TO_SESSION: 'session:write',
   RESIZE_SESSION: 'session:resize',
   DRAIN_SESSION_BUFFER: 'session:drain-buffer',
@@ -73,6 +73,15 @@ export const IPC = {
   LIST_CLAUDE_SESSIONS: 'claude:list-sessions',
   RESUME_CLAUDE_SESSION: 'claude:resume-session',
 
+  // Review
+  RUN_REVIEW: 'review:run',
+  SAVE_REVIEW: 'review:save',
+  LOAD_REVIEW: 'review:load',
+
+  // Integration
+  CHECK_INTEGRATION: 'integration:check',
+  INSTALL_INTEGRATION: 'integration:install',
+
   // Dialog
   SELECT_DIRECTORY: 'dialog:select-directory',
 } as const;
@@ -84,6 +93,7 @@ export const IPC_STREAM = {
   NOTIFICATION: 'notification',
   ACTIVITY_ENTRY: 'activity:entry',
   TASK_SUMMARY: 'task:summary',
+  REVIEW_PROGRESS: 'review:progress',
   MENU_ACTION: 'menu:action',
 } as const;
 
@@ -99,6 +109,7 @@ export interface BifrostAPI {
   removeRepo(repoId: string): Promise<void>;
   listRepos(): Promise<Repo[]>;
   getRepoBranches(repoId: string): Promise<string[]>;
+  getRecentRepos(): Promise<RecentRepo[]>;
 
   // Tasks
   createTask(params: CreateTaskParams): Promise<Task>;
@@ -113,8 +124,6 @@ export interface BifrostAPI {
   // Terminal
   createDevTerminal(taskId: string): Promise<string>;
   closeDevTerminal(taskId: string): Promise<void>;
-  createReviewSession(taskId: string): Promise<string>;
-  closeReviewSession(taskId: string): Promise<void>;
   writeToSession(sessionId: string, data: string): Promise<void>;
   resizeSession(sessionId: string, cols: number, rows: number): Promise<void>;
   drainSessionBuffer(sessionId: string): Promise<string>;
@@ -150,6 +159,18 @@ export interface BifrostAPI {
   // Claude sessions
   listClaudeSessions(): Promise<ClaudeSession[]>;
   resumeClaudeSession(claudeSessionId: string, cwd: string): Promise<Task>;
+
+  // Review
+  runReview(taskId: string): Promise<string>;
+  saveReview(taskId: string, content: string): Promise<void>;
+  loadReview(taskId: string): Promise<string | null>;
+
+  // Review progress
+  onReviewProgress(callback: (taskId: string, content: string) => void): () => void;
+
+  // Integration
+  checkIntegration(): Promise<{ mcpInstalled: boolean; commandsInstalled: boolean }>;
+  installIntegration(): Promise<void>;
 
   // Dialog
   selectDirectory(): Promise<string | null>;

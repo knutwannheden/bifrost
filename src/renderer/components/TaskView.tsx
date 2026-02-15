@@ -13,6 +13,9 @@ const shortcuts = [
 export default function TaskView() {
   const { state, dispatch } = useApp();
   const [splitRatio, setSplitRatio] = useState(0.7);
+  const [integrationNeeded, setIntegrationNeeded] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [justInstalled, setJustInstalled] = useState(false);
 
   const openTasks = state.tasks.filter((t) => t.status === 'running');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
@@ -51,6 +54,30 @@ export default function TaskView() {
     document.addEventListener('mouseup', onMouseUp);
   }, []);
 
+  // Check integration status when welcome screen would show
+  useEffect(() => {
+    if (!activeTask && state.tasksLoaded && openTasks.length === 0) {
+      window.bifrost.checkIntegration().then((status) => {
+        setIntegrationNeeded(!status.mcpInstalled);
+      });
+    }
+  }, [activeTask, state.tasksLoaded, openTasks.length]);
+
+  const handleInstallIntegration = useCallback(async () => {
+    setInstalling(true);
+    try {
+      await window.bifrost.installIntegration();
+      setIntegrationNeeded(false);
+      setJustInstalled(true);
+      dispatch({ type: 'SHOW_TOAST', message: 'Claude integration installed' });
+      setTimeout(() => setJustInstalled(false), 2000);
+    } catch (err) {
+      dispatch({ type: 'SHOW_TOAST', message: `Install failed: ${err instanceof Error ? err.message : String(err)}` });
+    } finally {
+      setInstalling(false);
+    }
+  }, [dispatch]);
+
   // Set window title from task name when active task changes
   useEffect(() => {
     if (activeTask) {
@@ -73,6 +100,24 @@ export default function TaskView() {
             Each task runs in its own isolated git worktree, so agents work independently without
             stepping on each other.
           </p>
+          {(integrationNeeded || justInstalled) && (
+            <div className="mb-6 flex flex-col items-center gap-2">
+              {justInstalled ? (
+                <span className="text-sm text-green-400">&#10003; Installed</span>
+              ) : (
+                <button
+                  onClick={handleInstallIntegration}
+                  disabled={installing}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  {installing ? 'Installing...' : 'Install Claude Integration'}
+                </button>
+              )}
+              <p className="text-xs text-slate-500 max-w-sm text-center">
+                Adds the Bifrost MCP server and /bifrost: slash commands to your Claude Code configuration.
+              </p>
+            </div>
+          )}
           <div className="inline-grid grid-cols-[auto_auto] gap-x-4 gap-y-1.5 text-left">
             {shortcuts.map((s) => (
               <React.Fragment key={s.keys}>
@@ -110,41 +155,16 @@ export default function TaskView() {
                 minHeight: 0,
                 display: showClaude ? 'block' : 'none',
                 overflow: 'hidden',
-                position: 'relative',
               }}
             >
-              {/* Main terminal */}
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                display: ps.activeSession === 'main' ? 'block' : 'none',
-              }}>
-                <TerminalPane
-                  sessionId={task.sessionId}
-                  active={isActive && ps.activeSession === 'main'}
-                  focused={ps.focusedPane === 'claude'}
-                  hideCursor
-                  onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
-                  onTitleChange={(title) => handleTitleChange(task.id, title)}
-                />
-              </div>
-              {/* Review terminal — rendered when session exists, hidden via CSS */}
-              {ps.reviewSessionId && (
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: ps.activeSession === 'review' ? 'block' : 'none',
-                }}>
-                  <TerminalPane
-                    sessionId={ps.reviewSessionId}
-                    active={isActive && ps.activeSession === 'review'}
-                    focused={ps.focusedPane === 'claude'}
-                    hideCursor
-                    themeBackground="#2d2636"
-                    onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
-                  />
-                </div>
-              )}
+              <TerminalPane
+                sessionId={task.sessionId}
+                active={isActive}
+                focused={ps.focusedPane === 'claude'}
+                hideCursor
+                onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
+                onTitleChange={(title) => handleTitleChange(task.id, title)}
+              />
             </div>
 
             {/* Draggable divider between panes */}

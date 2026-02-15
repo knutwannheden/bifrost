@@ -10,7 +10,6 @@ interface TerminalOptions {
   cursorBlink?: boolean;
   hideCursor?: boolean;
   fontSize?: number;
-  themeBackground?: string;
 }
 
 export function useTerminal(
@@ -28,7 +27,7 @@ export function useTerminal(
     if (!sessionId || !containerRef.current) return;
 
     const hideCursor = options?.hideCursor ?? false;
-    const bg = options?.themeBackground ?? '#282a36';
+    const bg = '#282a36';
     const cursorConfig = hideCursor
       ? { cursorBlink: false, cursorStyle: 'bar' as const, cursorWidth: 1, cursorInactiveStyle: 'none' as const }
       : { cursorBlink: options?.cursorBlink ?? true, cursorStyle: 'block' as const, cursorInactiveStyle: 'outline' as const };
@@ -91,12 +90,14 @@ export function useTerminal(
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && !e.shiftKey) {
         const key = e.key.toLowerCase();
-        if ('atdrhko,lgj'.includes(key)) return false;
+        if ('atdrhko,lg'.includes(key)) return false;
       }
       if (e.metaKey && e.shiftKey) {
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'c') return false;
       }
+      // Let Alt+U through for review mode toggle
+      if (e.altKey && !e.metaKey && e.code === 'KeyU') return false;
       return true;
     });
 

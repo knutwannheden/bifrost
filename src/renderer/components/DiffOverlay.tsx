@@ -8,6 +8,7 @@ import { parseDiff, extFromPath, diffFileStats } from '../utils/diff-parser';
 import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
+import ReviewContent from './ReviewContent';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import type { ActivityEntry, CaptureContextParams, GitLogEntry } from '../../shared/types';
@@ -210,12 +211,13 @@ const modeLabels: Record<DiffMode, { text: string; hintIndex?: number }> = {
   git: { text: 'Git Diff' },
   activity: { text: 'Activity Log' },
   log: { text: 'Git Log', hintIndex: 4 },
+  review: { text: 'Review' },
 };
 
 function ModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (m: DiffMode) => void }) {
   return (
     <div className="flex gap-1">
-      {(['git', 'activity', 'log'] as const).map((m) => (
+      {(['git', 'activity', 'log', 'review'] as const).map((m) => (
         <button
           key={m}
           tabIndex={-1}
@@ -441,6 +443,7 @@ export default function DiffOverlay() {
 
   const isActivity = state.diffMode === 'activity';
   const isLog = state.diffMode === 'log';
+  const isReview = state.diffMode === 'review';
 
   // Fetch activity data at DiffOverlay level for search/navigation
   const activityLog = useActivityLog(
@@ -589,7 +592,7 @@ export default function DiffOverlay() {
       case 'Tab': {
         e.preventDefault();
         e.stopPropagation();
-        const modes: DiffMode[] = ['git', 'activity', 'log'];
+        const modes: DiffMode[] = ['git', 'activity', 'log', 'review'];
         const curIdx = modes.indexOf(state.diffMode);
         const step = e.shiftKey ? modes.length - 1 : 1;
         dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + step) % modes.length] });
@@ -638,6 +641,10 @@ export default function DiffOverlay() {
             case 'KeyL':
               e.preventDefault();
               dispatch({ type: 'SET_DIFF_MODE', mode: 'log' });
+              break;
+            case 'KeyU':
+              e.preventDefault();
+              dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
               break;
           }
         } else if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
@@ -787,6 +794,10 @@ export default function DiffOverlay() {
           </>
         )}
       </div>
+      {state.activeTaskId && isReview && (
+        <ReviewContent taskId={state.activeTaskId} />
+      )}
+
       {!state.activeTaskId && (
         <div className="flex-1 p-4 text-slate-500">No active task</div>
       )}

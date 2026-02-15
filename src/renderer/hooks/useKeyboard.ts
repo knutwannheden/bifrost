@@ -144,6 +144,20 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Alt+U: open/toggle review mode (works without Cmd)
+      if (e.altKey && !e.metaKey && e.code === 'KeyU') {
+        e.preventDefault();
+        if (state.showDiff && state.diffMode === 'review') {
+          dispatch({ type: 'TOGGLE_DIFF' });
+        } else {
+          dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
+          if (!state.showDiff) {
+            dispatch({ type: 'TOGGLE_DIFF' });
+          }
+        }
+        return;
+      }
+
       if (!e.metaKey) return;
 
       const key = e.key.toLowerCase();
@@ -268,36 +282,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: !state.showCreateDialog });
           break;
 
-        case 'j': {
-          e.preventDefault();
-          if (!state.activeTaskId) break;
-          const taskId = state.activeTaskId;
-          const ps = state.paneStates[taskId] ?? defaultPaneState;
-
-          if (!ps.reviewSessionId) {
-            // Create review session on first press
-            window.bifrost.createReviewSession(taskId).then((reviewSessionId) => {
-              dispatch({ type: 'SET_REVIEW_SESSION', taskId, reviewSessionId });
-            });
-          } else {
-            // Toggle between main and review
-            dispatch({ type: 'CYCLE_SESSION', taskId });
-          }
-          break;
-        }
-
         case 'w': {
           e.preventDefault();
           if (!state.activeTaskId) break;
           const taskId = state.activeTaskId;
           const ps = state.paneStates[taskId] ?? defaultPaneState;
-
-          // If the review session is showing, close just the review pane
-          if (ps.reviewSessionId && ps.activeSession === 'review') {
-            window.bifrost.closeReviewSession(taskId);
-            dispatch({ type: 'CLOSE_REVIEW_SESSION', taskId });
-            break;
-          }
 
           // Hide the focused pane
           const hiding = ps.focusedPane;
@@ -322,10 +311,6 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             if (ps.devSessionId) {
               window.bifrost.closeDevTerminal(taskId);
               dispatch({ type: 'CLOSE_DEV_SESSION', taskId });
-            }
-            if (ps.reviewSessionId) {
-              window.bifrost.closeReviewSession(taskId);
-              dispatch({ type: 'CLOSE_REVIEW_SESSION', taskId });
             }
             lastStoppedTaskRef.current = taskId;
             window.bifrost.stopTask(taskId).then((updated) => {

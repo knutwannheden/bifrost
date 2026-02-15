@@ -21,33 +21,12 @@ import { getApiPort } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
+import { runReview, saveReview, loadReview, watchReviewFile } from './review-service';
+import { checkIntegration, installIntegration } from './integration-installer';
+import { scanRecentRepos } from './history-scanner';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
-
-// Review sessions: taskId -> review PTY sessionId
-const reviewSessions = new Map<string, string>();
-// Saved claudeSessionId before review session started, so we can restore it
-const savedClaudeSessionIds = new Map<string, string | undefined>();
-
-/** Kill a review session and restore the task's original claudeSessionId. */
-function cleanupReviewSession(taskId: string): void {
-  const reviewId = reviewSessions.get(taskId);
-  if (reviewId) {
-    killSession(reviewId);
-    reviewSessions.delete(taskId);
-  }
-  const savedId = savedClaudeSessionIds.get(taskId);
-  if (savedId !== undefined) {
-    // Restore the original claudeSessionId so reopening resumes the main session
-    const idx = tasks.findIndex((t) => t.id === taskId);
-    if (idx !== -1) {
-      tasks[idx] = { ...tasks[idx], claudeSessionId: savedId };
-      saveTasks(tasks);
-    }
-    savedClaudeSessionIds.delete(taskId);
-  }
-}
 
 export function getTasks(): Task[] {
   return tasks;
@@ -73,7 +52,6 @@ async function destroyTask(taskId: string): Promise<void> {
   if (task.status === 'running') {
     killSession(task.sessionId);
   }
-  cleanupReviewSession(taskId);
   if (fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
@@ -127,9 +105,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     },
     onSessionChange: (taskId: string, claudeSessionId: string) => {
       try {
-        // Skip if a review session is active — prevents the review JSONL
-        // from overwriting the task's main session ID
-        if (reviewSessions.has(taskId)) return;
         updateTask(taskId, { claudeSessionId });
       } catch { /* task may have been deleted */ }
     },
@@ -169,6 +144,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const repo = config.repos.find((r: Repo) => r.id === repoId);
     if (!repo) throw new Error(`Repo not found: ${repoId}`);
     return getRepoBranches(repo.path);
+  });
+
+  ipcMain.handle(IPC.GET_RECENT_REPOS, () => {
+    const config = loadConfig();
+    const excludePaths = new Set(config.repos.map((r: Repo) => r.path));
+    return scanRecentRepos(excludePaths);
   });
 
   // Tasks
@@ -215,7 +196,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (task.status === 'running') {
       killSession(task.sessionId);
     }
-    cleanupReviewSession(taskId);
     return updateTask(taskId, { status: 'stopped' });
   });
 
@@ -228,8 +208,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (task.status === 'running') {
       killSession(task.sessionId);
     }
-
-    cleanupReviewSession(taskId);
 
     return updateTask(taskId, {
       status: 'archived',
@@ -298,34 +276,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       killSession(devSessionId);
       devSessions.delete(taskId);
     }
-  });
-
-  // Review sessions
-  ipcMain.handle(IPC.CREATE_REVIEW_SESSION, (_event, taskId: string) => {
-    const task = getTask(taskId);
-
-    // Kill existing review session if any
-    const existing = reviewSessions.get(taskId);
-    if (existing) killSession(existing);
-
-    // Save the current claudeSessionId so we can restore it after the review ends
-    if (!savedClaudeSessionIds.has(taskId)) {
-      savedClaudeSessionIds.set(taskId, task.claudeSessionId);
-    }
-
-    const reviewSessionId = randomUUID();
-    const config = loadConfig();
-    createSession(reviewSessionId, task.worktreePath, mainWindow, {
-      sandbox: config.sandbox,
-      prompt: '/review',
-    });
-    reviewSessions.set(taskId, reviewSessionId);
-
-    return reviewSessionId;
-  });
-
-  ipcMain.handle(IPC.CLOSE_REVIEW_SESSION, (_event, taskId: string) => {
-    cleanupReviewSession(taskId);
   });
 
   // Terminal sessions
@@ -484,6 +434,30 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     return task;
   });
+
+  // Review
+  ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    const result = await runReview(task.worktreePath, taskId, mainWindow);
+    watchReviewFile(taskId, mainWindow);
+    return result;
+  });
+
+  ipcMain.handle(IPC.SAVE_REVIEW, (_event, taskId: string, content: string) => {
+    saveReview(taskId, content);
+  });
+
+  ipcMain.handle(IPC.LOAD_REVIEW, (_event, taskId: string) => {
+    const content = loadReview(taskId);
+    if (content) {
+      watchReviewFile(taskId, mainWindow);
+    }
+    return content;
+  });
+
+  // Integration
+  ipcMain.handle(IPC.CHECK_INTEGRATION, () => checkIntegration());
+  ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());
 
   // Dialog
   ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {

@@ -140,6 +140,12 @@ export interface DiffStats {
   filesChanged: number;
 }
 
+export interface RecentRepo {
+  path: string;
+  name: string;
+  lastUsed: number;
+}
+
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',

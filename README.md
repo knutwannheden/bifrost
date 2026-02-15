@@ -17,7 +17,7 @@ Bifrost lets you run multiple Claude Code sessions side-by-side, each in its own
 - **Multi-task orchestration** — each task gets its own git worktree and Claude Code session
 - **Live terminal streaming** — xterm.js terminals with Dracula theme
 - **Split panes** — Claude + dev terminal side by side per task
-- **Review sessions** — Cmd+J spawns a second Claude session to review the primary session's work, with visual purple tint and tab indicator
+- **Code review** — Review tab in the diff overlay runs Claude non-interactively to review changes, renders Markdown with interactive checkboxes, and copies a prompt for addressing selected items
 - **Git diff viewer** — syntax-highlighted diffs with per-file stat badges via Shiki
 - **Git log viewer** — commit history filtered per worktree
 - **Activity log** — file changes, commits, and Claude events tracked in real time
@@ -35,7 +35,6 @@ Bifrost lets you run multiple Claude Code sessions side-by-side, each in its own
 | Cmd+T | New task |
 | Cmd+W | Close pane / stop task |
 | Cmd+/ | Toggle dev terminal |
-| Cmd+J | Review session (create / cycle) |
 | Cmd+D | Git diff |
 | Cmd+A | Activity log |
 | Cmd+L | Git log |

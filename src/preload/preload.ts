@@ -12,6 +12,7 @@ const api: BifrostAPI = {
   removeRepo: (repoId) => ipcRenderer.invoke(IPC.REMOVE_REPO, repoId),
   listRepos: () => ipcRenderer.invoke(IPC.LIST_REPOS),
   getRepoBranches: (repoId) => ipcRenderer.invoke(IPC.GET_REPO_BRANCHES, repoId),
+  getRecentRepos: () => ipcRenderer.invoke(IPC.GET_RECENT_REPOS),
 
   // Tasks
   createTask: (params) => ipcRenderer.invoke(IPC.CREATE_TASK, params),
@@ -26,8 +27,6 @@ const api: BifrostAPI = {
   // Terminal
   createDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CREATE_DEV_TERMINAL, taskId),
   closeDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CLOSE_DEV_TERMINAL, taskId),
-  createReviewSession: (taskId) => ipcRenderer.invoke(IPC.CREATE_REVIEW_SESSION, taskId),
-  closeReviewSession: (taskId) => ipcRenderer.invoke(IPC.CLOSE_REVIEW_SESSION, taskId),
   writeToSession: (sessionId, data) =>
     ipcRenderer.invoke(IPC.WRITE_TO_SESSION, sessionId, data),
   resizeSession: (sessionId, cols, rows) =>
@@ -84,6 +83,21 @@ const api: BifrostAPI = {
   listClaudeSessions: () => ipcRenderer.invoke(IPC.LIST_CLAUDE_SESSIONS),
   resumeClaudeSession: (claudeSessionId, cwd) =>
     ipcRenderer.invoke(IPC.RESUME_CLAUDE_SESSION, claudeSessionId, cwd),
+
+  // Review
+  runReview: (taskId) => ipcRenderer.invoke(IPC.RUN_REVIEW, taskId),
+  saveReview: (taskId, content) => ipcRenderer.invoke(IPC.SAVE_REVIEW, taskId, content),
+  loadReview: (taskId) => ipcRenderer.invoke(IPC.LOAD_REVIEW, taskId),
+  onReviewProgress: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, content: string) =>
+      callback(taskId, content);
+    ipcRenderer.on(IPC_STREAM.REVIEW_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_PROGRESS, handler);
+  },
+
+  // Integration
+  checkIntegration: () => ipcRenderer.invoke(IPC.CHECK_INTEGRATION),
+  installIntegration: () => ipcRenderer.invoke(IPC.INSTALL_INTEGRATION),
 
   // Dialog
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),

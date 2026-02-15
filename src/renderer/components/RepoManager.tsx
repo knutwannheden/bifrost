@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import type { RecentRepo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import ActionLabel from './ActionLabel';
 
@@ -9,6 +10,7 @@ export default function RepoManager() {
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
+  const [recentRepos, setRecentRepos] = useState<RecentRepo[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const repoRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -43,6 +45,25 @@ export default function RepoManager() {
   useEffect(() => {
     repoRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
   }, [focusedIdx]);
+
+  // Fetch recent repos from Claude history
+  useEffect(() => {
+    window.bifrost.getRecentRepos().then(setRecentRepos).catch(() => undefined);
+  }, []);
+
+  // Filter out repos already managed
+  const repoPaths = new Set(state.repos.map((r) => r.path));
+  const suggestions = recentRepos.filter((r) => !repoPaths.has(r.path));
+
+  const handleAddSuggestion = async (repoPath: string) => {
+    setError(null);
+    try {
+      const repo = await window.bifrost.addRepo({ type: 'local', path: repoPath });
+      dispatch({ type: 'SET_REPOS', repos: [...state.repos, repo] });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to add repo');
+    }
+  };
 
   const handleBrowse = async () => {
     const selected = await window.bifrost.selectDirectory();
@@ -226,6 +247,33 @@ export default function RepoManager() {
               </div>
             ))}
           </div>
+
+          {/* Recent from Claude */}
+          {suggestions.length > 0 && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Recent from Claude</label>
+              <div className="space-y-1">
+                {suggestions.map((repo) => (
+                  <div
+                    key={repo.path}
+                    className="flex items-center justify-between rounded px-3 py-1.5 bg-slate-700/30 border border-slate-700"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-slate-300">{repo.name}</p>
+                      <p className="text-xs text-slate-500 truncate">{repo.path}</p>
+                    </div>
+                    <button
+                      onClick={() => handleAddSuggestion(repo.path)}
+                      tabIndex={-1}
+                      className="ml-3 px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+                    >
+                      + Add
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Add local repo */}
           <div>

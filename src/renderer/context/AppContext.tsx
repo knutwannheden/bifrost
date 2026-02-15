@@ -1,13 +1,12 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import type { Repo, Task, BifrostConfig, TaskStatus } from '../../shared/types';
 
-export type DiffMode = 'git' | 'activity' | 'log';
+export type DiffMode = 'git' | 'activity' | 'log' | 'review';
+export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
 export type PaneTarget = 'claude' | 'dev';
 
 export interface TaskPaneState {
   devSessionId: string | null;
-  reviewSessionId: string | null;
-  activeSession: 'main' | 'review';
   claudeHidden: boolean;
   devHidden: boolean;
   focusedPane: PaneTarget;
@@ -28,6 +27,8 @@ export interface AppState {
   showSettings: boolean;
   diffMode: DiffMode;
   paneStates: Record<string, TaskPaneState>;
+  reviewContent: Record<string, string>;
+  reviewStatus: Record<string, ReviewStatus>;
   toast: string | null;
   apiPort: number | null;
 }
@@ -58,9 +59,8 @@ export type AppAction =
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
-  | { type: 'SET_REVIEW_SESSION'; taskId: string; reviewSessionId: string }
-  | { type: 'CLOSE_REVIEW_SESSION'; taskId: string }
-  | { type: 'CYCLE_SESSION'; taskId: string };
+  | { type: 'SET_REVIEW_STATUS'; taskId: string; status: ReviewStatus }
+  | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string };
 
 const initialState: AppState = {
   repos: [],
@@ -77,14 +77,14 @@ const initialState: AppState = {
   showSettings: false,
   diffMode: 'git',
   paneStates: {},
+  reviewContent: {},
+  reviewStatus: {},
   toast: null,
   apiPort: null,
 };
 
 export const defaultPaneState: TaskPaneState = {
   devSessionId: null,
-  reviewSessionId: null,
-  activeSession: 'main',
   claudeHidden: false,
   devHidden: false,
   focusedPane: 'claude',
@@ -210,19 +210,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
           t.id === action.taskId ? { ...t, summary: action.summary } : t,
         ),
       };
-    case 'SET_REVIEW_SESSION': {
-      const ps = getPaneState(state, action.taskId);
-      return setPaneState(state, action.taskId, { ...ps, reviewSessionId: action.reviewSessionId, activeSession: 'review' });
-    }
-    case 'CLOSE_REVIEW_SESSION': {
-      const ps = getPaneState(state, action.taskId);
-      return setPaneState(state, action.taskId, { ...ps, reviewSessionId: null, activeSession: 'main' });
-    }
-    case 'CYCLE_SESSION': {
-      const ps = getPaneState(state, action.taskId);
-      if (!ps.reviewSessionId) return state;
-      return setPaneState(state, action.taskId, { ...ps, activeSession: ps.activeSession === 'main' ? 'review' : 'main' });
-    }
+    case 'SET_REVIEW_STATUS':
+      return { ...state, reviewStatus: { ...state.reviewStatus, [action.taskId]: action.status } };
+    case 'SET_REVIEW_CONTENT':
+      return { ...state, reviewContent: { ...state.reviewContent, [action.taskId]: action.content } };
     default:
       return state;
   }
