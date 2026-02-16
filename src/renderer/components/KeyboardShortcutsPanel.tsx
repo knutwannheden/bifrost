@@ -4,30 +4,42 @@ import { useApp } from '../context/AppContext';
 interface Shortcut {
   key: string;
   label: string;
+  group: string;
   /** Simulated key for synthetic KeyboardEvent (lowercase). Omit for non-executable entries. */
   execKey?: string;
   execShift?: boolean;
   execCode?: string;
 }
 
+const GROUPS = ['Tasks', 'Navigation', 'Views', 'Actions', 'App'] as const;
+
 const shortcuts: Shortcut[] = [
-  { key: 'T', label: 'New task', execKey: 't' },
-  { key: 'W', label: 'Close pane / stop task', execKey: 'w' },
-  { key: 'Shift+W', label: 'Archive task' },
-  { key: '/', label: 'Toggle dev terminal', execKey: '/' },
-  { key: 'D', label: 'Git diff', execKey: 'd' },
-  { key: 'A', label: 'Activity log', execKey: 'a' },
-  { key: 'L', label: 'Git log', execKey: 'l' },
-  { key: 'R', label: 'Repositories', execKey: 'r' },
-  { key: 'H', label: 'Task history', execKey: 'h' },
-  { key: 'O', label: 'Open in IDE', execKey: 'o' },
-  { key: 'G', label: 'Open PR in GitHub', execKey: 'g' },
-  { key: 'K', label: 'Keyboard shortcuts', execKey: 'k' },
-  { key: 'Shift+C', label: 'Capture context', execKey: 'c', execShift: true },
-  { key: ',', label: 'Settings', execKey: ',' },
-  { key: 'Shift+[', label: 'Previous tab', execKey: '[', execShift: true, execCode: 'BracketLeft' },
-  { key: 'Shift+]', label: 'Next tab', execKey: ']', execShift: true, execCode: 'BracketRight' },
-  { key: '1-9', label: 'Switch to tab N' },
+  // Tasks
+  { key: 'T', label: 'New task', group: 'Tasks', execKey: 't' },
+  { key: 'W', label: 'Close pane / stop task', group: 'Tasks', execKey: 'w' },
+  { key: 'Shift+W', label: 'Archive task', group: 'Tasks' },
+
+  // Navigation
+  { key: 'Shift+[', label: 'Previous tab', group: 'Navigation', execKey: '[', execShift: true, execCode: 'BracketLeft' },
+  { key: 'Shift+]', label: 'Next tab', group: 'Navigation', execKey: ']', execShift: true, execCode: 'BracketRight' },
+  { key: '1-9', label: 'Switch to tab N', group: 'Navigation' },
+
+  // Views
+  { key: '/', label: 'Toggle dev terminal', group: 'Views', execKey: '/' },
+  { key: 'D', label: 'Git diff', group: 'Views', execKey: 'd' },
+  { key: 'A', label: 'Activity log', group: 'Views', execKey: 'a' },
+  { key: 'L', label: 'Git log', group: 'Views', execKey: 'l' },
+  { key: 'H', label: 'Task history', group: 'Views', execKey: 'h' },
+  { key: 'R', label: 'Repositories', group: 'Views', execKey: 'r' },
+
+  // Actions
+  { key: 'O', label: 'Open in IDE', group: 'Actions', execKey: 'o' },
+  { key: 'G', label: 'Open PR in GitHub', group: 'Actions', execKey: 'g' },
+  { key: 'Shift+C', label: 'Capture context', group: 'Actions', execKey: 'c', execShift: true },
+
+  // App
+  { key: 'K', label: 'Keyboard shortcuts', group: 'App', execKey: 'k' },
+  { key: ',', label: 'Settings', group: 'App', execKey: ',' },
 ];
 
 export default function KeyboardShortcutsPanel() {
@@ -45,6 +57,34 @@ export default function KeyboardShortcutsPanel() {
     );
   }, [query]);
 
+  // Build a flat list of items (group headers + shortcuts) for rendering and navigation
+  const { items, executableIndices } = useMemo(() => {
+    const items: { type: 'header'; label: string } | { type: 'shortcut'; shortcut: Shortcut; flatIdx: number }[] = [];
+    const executableIndices: number[] = [];
+    const isSearching = !!query;
+
+    if (isSearching) {
+      // Flat list when searching — no group headers
+      filtered.forEach((s, i) => {
+        executableIndices.push(items.length);
+        items.push({ type: 'shortcut', shortcut: s, flatIdx: i });
+      });
+    } else {
+      let flatIdx = 0;
+      for (const group of GROUPS) {
+        const groupItems = filtered.filter((s) => s.group === group);
+        if (groupItems.length === 0) continue;
+        items.push({ type: 'header', label: group });
+        for (const s of groupItems) {
+          executableIndices.push(items.length);
+          items.push({ type: 'shortcut', shortcut: s, flatIdx: flatIdx++ });
+        }
+      }
+    }
+
+    return { items, executableIndices };
+  }, [filtered, query]);
+
   // Reset selection when filter changes
   useEffect(() => {
     setSelectedIndex(0);
@@ -54,9 +94,11 @@ export default function KeyboardShortcutsPanel() {
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
-    const item = list.children[selectedIndex] as HTMLElement | undefined;
+    const itemIdx = executableIndices[selectedIndex];
+    if (itemIdx == null) return;
+    const item = list.children[itemIdx] as HTMLElement | undefined;
     item?.scrollIntoView({ block: 'nearest' });
-  }, [selectedIndex]);
+  }, [selectedIndex, executableIndices]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -91,16 +133,17 @@ export default function KeyboardShortcutsPanel() {
         break;
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex((i) => (i < filtered.length - 1 ? i + 1 : 0));
+        setSelectedIndex((i) => (i < executableIndices.length - 1 ? i + 1 : 0));
         break;
       case 'ArrowUp':
         e.preventDefault();
-        setSelectedIndex((i) => (i > 0 ? i - 1 : filtered.length - 1));
+        setSelectedIndex((i) => (i > 0 ? i - 1 : executableIndices.length - 1));
         break;
       case 'Enter': {
         e.preventDefault();
-        const target = filtered[selectedIndex];
-        if (target) execute(target);
+        const itemIdx = executableIndices[selectedIndex];
+        const item = itemIdx != null ? items[itemIdx] : null;
+        if (item?.type === 'shortcut') execute(item.shortcut);
         break;
       }
     }
@@ -133,25 +176,38 @@ export default function KeyboardShortcutsPanel() {
             &times;
           </button>
         </div>
-        <div ref={listRef} className="p-2 space-y-0.5 overflow-y-auto">
-          {filtered.length === 0 ? (
+        <div ref={listRef} className="p-2 overflow-y-auto">
+          {items.length === 0 ? (
             <div className="px-2 py-3 text-sm text-slate-500 text-center">No matches</div>
           ) : (
-            filtered.map((s, i) => (
-              <div
-                key={s.key}
-                className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer ${
-                  i === selectedIndex ? 'bg-slate-700' : 'hover:bg-slate-700/50'
-                }`}
-                onClick={() => execute(s)}
-                onMouseEnter={() => setSelectedIndex(i)}
-              >
-                <span className="text-sm text-slate-300">{s.label}</span>
-                <kbd className="px-2 py-0.5 text-xs font-mono bg-slate-700 border border-slate-600 rounded text-slate-300">
-                  {s.key.includes('Shift+') ? `⌘⇧${s.key.replace('Shift+', '')}` : `⌘${s.key}`}
-                </kbd>
-              </div>
-            ))
+            items.map((item, i) => {
+              if (item.type === 'header') {
+                return (
+                  <div
+                    key={`group-${item.label}`}
+                    className={`px-2 pt-3 pb-1 text-xs font-semibold text-slate-500 uppercase tracking-wider ${i === 0 ? 'pt-1' : ''}`}
+                  >
+                    {item.label}
+                  </div>
+                );
+              }
+              const navIdx = executableIndices.indexOf(i);
+              return (
+                <div
+                  key={item.shortcut.key}
+                  className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer ${
+                    navIdx === selectedIndex ? 'bg-slate-700' : 'hover:bg-slate-700/50'
+                  }`}
+                  onClick={() => execute(item.shortcut)}
+                  onMouseEnter={() => setSelectedIndex(navIdx)}
+                >
+                  <span className="text-sm text-slate-300">{item.shortcut.label}</span>
+                  <kbd className="px-2 py-0.5 text-xs font-mono bg-slate-700 border border-slate-600 rounded text-slate-300">
+                    {item.shortcut.key.includes('Shift+') ? `\u2318\u21E7${item.shortcut.key.replace('Shift+', '')}` : `\u2318${item.shortcut.key}`}
+                  </kbd>
+                </div>
+              );
+            })
           )}
         </div>
         <div className="px-4 pb-3 pt-2 border-t border-slate-700">
