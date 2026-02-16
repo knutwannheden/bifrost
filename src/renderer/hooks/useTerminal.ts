@@ -14,6 +14,7 @@ interface TerminalOptions {
   cursorBlink?: boolean;
   hideCursor?: boolean;
   fontSize?: number;
+  visible?: boolean;
 }
 
 export function useTerminal(
@@ -188,6 +189,20 @@ export function useTerminal(
       }
     }
   }, [fontSize]);
+
+  // Re-fit when pane becomes visible (e.g. switching tabs) so the PTY
+  // column count stays in sync with xterm after background data writes.
+  const visible = options?.visible ?? true;
+  useEffect(() => {
+    if (visible && sessionId && terminalRef.current && fitAddonRef.current) {
+      try {
+        fitAddonRef.current.fit();
+        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
+      } catch {
+        // ignore fit errors
+      }
+    }
+  }, [visible, sessionId]);
 
   return { terminal: terminalRef, fitAddon: fitAddonRef };
 }

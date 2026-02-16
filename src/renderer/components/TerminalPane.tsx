@@ -19,7 +19,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   const [showSearch, setShowSearch] = useState(false);
 
   const fontSize = state.config?.fontSize ?? 14;
-  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize });
+  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, visible: active });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing
   const anyOverlay = state.showRepoManager || state.showCreateDialog || state.showDiff || state.showTaskHistory;
