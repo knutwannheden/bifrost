@@ -13,6 +13,7 @@ interface Shortcut {
 const shortcuts: Shortcut[] = [
   { key: 'T', label: 'New task', execKey: 't' },
   { key: 'W', label: 'Close pane / stop task', execKey: 'w' },
+  { key: 'Shift+W', label: 'Archive task (double-tap)' },
   { key: '/', label: 'Toggle dev terminal', execKey: '/' },
   { key: 'D', label: 'Git diff', execKey: 'd' },
   { key: 'A', label: 'Activity log', execKey: 'a' },

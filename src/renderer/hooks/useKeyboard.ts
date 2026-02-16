@@ -140,7 +140,7 @@ function findTranscriptText(terminal: Terminal, hasSelection: boolean): string |
 
 export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>) {
   const lastCmdWRef = useRef(0);
-  const lastStoppedTaskRef = useRef<string | null>(null);
+  const lastCmdShiftWRef = useRef(0);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -244,17 +244,31 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         return;
       }
 
-      // Cmd+Shift+W: reopen last stopped task
+      // Cmd+Shift+W: archive current task (double-tap required)
       if (e.shiftKey && key === 'w') {
         e.preventDefault();
-        const taskId = lastStoppedTaskRef.current;
+        const taskId = state.activeTaskId;
         if (!taskId) return;
         const task = state.tasks.find((t) => t.id === taskId);
-        if (!task || task.status === 'running') return;
-        lastStoppedTaskRef.current = null;
-        window.bifrost.reopenTask(taskId).then((updated) => {
+        if (!task || task.status === 'archived') return;
+
+        const now = Date.now();
+        if (now - lastCmdShiftWRef.current >= DOUBLE_PRESS_MS) {
+          lastCmdShiftWRef.current = now;
+          dispatch({ type: 'SHOW_TOAST', message: 'Press \u2318\u21E7W again to archive task' });
+          return;
+        }
+        lastCmdShiftWRef.current = 0;
+
+        window.bifrost.archiveTask(taskId).then((updated) => {
           dispatch({ type: 'UPDATE_TASK', task: updated });
-          dispatch({ type: 'SET_ACTIVE_TASK', taskId: updated.id });
+          const remaining = state.tasks.filter(
+            (t) => t.id !== taskId && t.status === 'running',
+          );
+          dispatch({
+            type: 'SET_ACTIVE_TASK',
+            taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+          });
         });
         return;
       }
@@ -327,7 +341,6 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
               window.bifrost.closeDevTerminal(taskId);
               dispatch({ type: 'CLOSE_DEV_SESSION', taskId });
             }
-            lastStoppedTaskRef.current = taskId;
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
               const remaining = state.tasks.filter(
