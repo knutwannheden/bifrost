@@ -3,7 +3,7 @@ import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 // Use require for node-pty because it's externalized from Vite bundling
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const pty = require('node-pty');
 
 const sessions = new Map<string, IPty>();
@@ -64,7 +64,7 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; sandbox?: boolean },
+  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string },
 ): void {
   const args: string[] = [];
   if (options?.claudeSessionId) {
@@ -72,8 +72,10 @@ export function createSession(
   } else if (options?.resume) {
     args.push('--continue');
   }
-  if (options?.sandbox) {
+  if (options?.permissionMode === 'sandbox') {
     args.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
+  } else if (options?.permissionMode === 'skip-permissions') {
+    args.push('--dangerously-skip-permissions');
   }
   const extraEnv: Record<string, string> = {};
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;

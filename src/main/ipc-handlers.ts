@@ -113,7 +113,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (fs.existsSync(task.worktreePath)) {
       const sessionId = randomUUID();
       createSession(sessionId, task.worktreePath, mainWindow, {
-        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, sandbox: loadConfig().sandbox,
+        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: loadConfig().permissionMode,
       });
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
@@ -195,7 +195,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const taskId = randomUUID();
 
     createSession(sessionId, worktreePath, mainWindow, {
-      taskId, apiPort: getApiPort() ?? undefined, sandbox: config.sandbox,
+      taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode,
     });
 
     const task: Task = {
@@ -293,7 +293,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       claudeSessionId: task.claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
-      sandbox: loadConfig().sandbox,
+      permissionMode: loadConfig().permissionMode,
     });
 
     // Restart file watcher
@@ -495,7 +495,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
-      sandbox: config.sandbox,
+      permissionMode: config.permissionMode,
     });
 
     const task: Task = {

@@ -41,7 +41,7 @@ export interface BifrostConfig {
   repos: Repo[];
   ide: 'code' | 'idea';
   fontSize: number;
-  sandbox: boolean;
+  permissionMode: 'default' | 'sandbox' | 'skip-permissions';
   groupHistoryByRepo: boolean;
   hideTerminalOnSwitch: boolean;
 }
@@ -153,7 +153,7 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',
   fontSize: 14,
-  sandbox: false,
+  permissionMode: 'default',
   groupHistoryByRepo: false,
   hideTerminalOnSwitch: false,
 };
