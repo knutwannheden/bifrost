@@ -14,6 +14,8 @@ interface TerminalOptions {
   cursorBlink?: boolean;
   hideCursor?: boolean;
   fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: number;
   visible?: boolean;
 }
 
@@ -39,8 +41,9 @@ export function useTerminal(
 
     const terminal = new Terminal({
       ...cursorConfig,
+      fontWeight: options?.fontWeight ?? 300,
       fontSize: options?.fontSize ?? 14,
-      fontFamily: '"MesloLGS NF", "MesloLGM Nerd Font", "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font", Menlo, Monaco, "Courier New", monospace',
+      fontFamily: `"${options?.fontFamily ?? 'MesloLGS NF'}", Menlo, Monaco, "Courier New", monospace`,
       linkHandler: {
         activate: (_event, uri) => {
           window.bifrost.openUrl(uri);
@@ -189,6 +192,32 @@ export function useTerminal(
       }
     }
   }, [fontSize]);
+
+  // Update fontWeight dynamically when config changes
+  const fontWeight = options?.fontWeight ?? 300;
+  useEffect(() => {
+    if (terminalRef.current && fitAddonRef.current) {
+      terminalRef.current.options.fontWeight = fontWeight;
+      try {
+        fitAddonRef.current.fit();
+      } catch {
+        // ignore fit errors
+      }
+    }
+  }, [fontWeight]);
+
+  // Update fontFamily dynamically when config changes
+  const fontFamily = options?.fontFamily ?? 'MesloLGS NF';
+  useEffect(() => {
+    if (terminalRef.current && fitAddonRef.current) {
+      terminalRef.current.options.fontFamily = `"${fontFamily}", Menlo, Monaco, "Courier New", monospace`;
+      try {
+        fitAddonRef.current.fit();
+      } catch {
+        // ignore fit errors
+      }
+    }
+  }, [fontFamily]);
 
   // Re-fit when pane becomes visible (e.g. switching tabs) so the PTY
   // column count stays in sync with xterm after background data writes.

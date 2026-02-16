@@ -158,22 +158,21 @@ export default function App() {
     return unsub;
   }, [state, dispatch]);
 
-  // Show toast when an agent finishes and the task is not active
+  // Show toast when an agent finishes (any task, including active)
   useEffect(() => {
-    const unsub = window.bifrost.onAgentNotification((taskId, title, body) => {
-      if (taskId === state.activeTaskId) return; // task is visible, suppress
+    const unsub = window.bifrost.onAgentNotification((_taskId, title, body) => {
       const truncated = body.length > 100 ? body.slice(0, 100) + '...' : body;
-      dispatch({ type: 'SHOW_TOAST', message: `${title}: ${truncated}` });
+      dispatch({ type: 'SHOW_TOAST', message: `${title}: ${truncated}`, duration: 5000 });
     });
     return unsub;
-  }, [state.activeTaskId, dispatch]);
+  }, [dispatch]);
 
   // Auto-dismiss toast after 2s
   useEffect(() => {
     if (!state.toast) return;
-    const timer = setTimeout(() => dispatch({ type: 'HIDE_TOAST' }), 2000);
+    const timer = setTimeout(() => dispatch({ type: 'HIDE_TOAST' }), state.toastDuration);
     return () => clearTimeout(timer);
-  }, [state.toast, dispatch]);
+  }, [state.toast, state.toastDuration, dispatch]);
 
   const handleToggleIde = async () => {
     if (!state.config) return;

@@ -37,6 +37,48 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'fontFamily',
+      category: 'Appearance',
+      label: 'Font Family',
+      render: (config, update) => (
+        <select
+          value={config.fontFamily}
+          onChange={(e) => update({ fontFamily: e.target.value })}
+          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+        >
+          {[
+            { label: 'MesloLGS NF', value: 'MesloLGS NF' },
+            { label: 'JetBrains Mono NF', value: 'JetBrainsMono Nerd Font' },
+            { label: 'Fira Code NF', value: 'FiraCode Nerd Font' },
+            { label: 'Hack NF', value: 'Hack Nerd Font' },
+            { label: 'Menlo', value: 'Menlo' },
+            { label: 'Monaco', value: 'Monaco' },
+          ].map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      ),
+    },
+    {
+      key: 'fontWeight',
+      category: 'Appearance',
+      label: 'Font Weight',
+      render: (config, update) => (
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={100}
+            max={900}
+            step={100}
+            value={config.fontWeight}
+            onChange={(e) => update({ fontWeight: Number(e.target.value) })}
+            className="w-24 accent-blue-500"
+          />
+          <span className="text-sm text-slate-200 w-6 text-center font-mono">{config.fontWeight}</span>
+        </div>
+      ),
+    },
+    {
       key: 'permissionMode',
       category: 'Claude Code',
       label: 'Permission Mode',

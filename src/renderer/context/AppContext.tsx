@@ -30,6 +30,7 @@ export interface AppState {
   reviewContent: Record<string, string>;
   reviewStatus: Record<string, ReviewStatus>;
   toast: string | null;
+  toastDuration: number;
   apiPort: number | null;
 }
 
@@ -55,7 +56,7 @@ export type AppAction =
   | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
   | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
   | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget }
-  | { type: 'SHOW_TOAST'; message: string }
+  | { type: 'SHOW_TOAST'; message: string; duration?: number }
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
@@ -80,6 +81,7 @@ const initialState: AppState = {
   reviewContent: {},
   reviewStatus: {},
   toast: null,
+  toastDuration: 2000,
   apiPort: null,
 };
 
@@ -198,7 +200,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return setPaneState(state, action.taskId, { ...ps, [key]: false });
     }
     case 'SHOW_TOAST':
-      return { ...state, toast: action.message };
+      return { ...state, toast: action.message, toastDuration: action.duration ?? 2000 };
     case 'HIDE_TOAST':
       return { ...state, toast: null };
     case 'SET_API_PORT':
