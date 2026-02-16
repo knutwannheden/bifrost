@@ -23,7 +23,7 @@ import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
 import { runReview, saveReview, loadReview, watchReviewFile } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
-import { handleBellNotification, shouldNotify } from './notification-service';
+import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { getRecentClaudeEntries } from './claude-watcher';
 
 // Track when each task's session was spawned so we can distinguish
@@ -570,10 +570,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
 
     // Debounce: suppress duplicate bells within 10s window
-    if (!shouldNotify(taskId)) return { suppress: true };
+    if (isDebounced(taskId)) return { suppress: true };
 
     // Suppress stale idle notifications: if the last assistant message
     // predates this session, the agent was already idle before we connected.
+    // Don't mark as notified so the next genuine bell isn't debounced.
     const sessionStart = sessionStartTimes.get(taskId);
     if (sessionStart) {
       const entries = getRecentClaudeEntries(taskId, task.worktreePath);
@@ -586,6 +587,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
+    // All checks passed — mark debounce window and notify
+    markNotified(taskId);
     handleBellNotification(taskId, task.name, isActiveTask);
     return { suppress: false };
   });

@@ -10,12 +10,14 @@ export function initNotificationService(window: BrowserWindow): void {
 // Per-task debounce: suppress duplicate notifications within 10s
 const lastNotification = new Map<string, number>();
 
-export function shouldNotify(taskId: string): boolean {
+export function isDebounced(taskId: string): boolean {
   const now = Date.now();
   const last = lastNotification.get(taskId) ?? 0;
-  if (now - last < 10_000) return false;
-  lastNotification.set(taskId, now);
-  return true;
+  return now - last < 10_000;
+}
+
+export function markNotified(taskId: string): void {
+  lastNotification.set(taskId, Date.now());
 }
 
 /** Bell-triggered notification (instant, from xterm.js BEL/OSC). */
