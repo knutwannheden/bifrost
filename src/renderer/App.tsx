@@ -37,7 +37,7 @@ export default function App() {
   useEffect(() => {
     const unsub = window.bifrost.onSessionExit((sessionId, code) => {
       const task = state.tasks.find((t) => t.sessionId === sessionId);
-      if (task) {
+      if (task && task.status !== 'archived') {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
         if (code !== 0 && code !== 143) { // 143 = SIGTERM (intentional kill)
           dispatch({ type: 'SHOW_TOAST', message: `${task.name} exited with code ${code}` });
