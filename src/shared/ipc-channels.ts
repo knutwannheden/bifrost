@@ -95,6 +95,7 @@ export const IPC_STREAM = {
   TASK_SUMMARY: 'task:summary',
   REVIEW_PROGRESS: 'review:progress',
   MENU_ACTION: 'menu:action',
+  AGENT_NOTIFICATION: 'agent-notification',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -180,6 +181,7 @@ export interface BifrostAPI {
 
   // Notifications
   onNotification(callback: (title: string, body: string) => void): () => void;
+  onAgentNotification(callback: (taskId: string, title: string, body: string) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

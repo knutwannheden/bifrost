@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://127.0.0.1:${BIFROST_API_PORT}/notify -H 'Content-Type: application/json' -d \"{\\\"taskId\\\":\\\"${BIFROST_TASK_ID}\\\",\\\"type\\\":\\\"idle_prompt\\\"}\""
+          }
+        ]
+      }
+    ]
+  }
+}

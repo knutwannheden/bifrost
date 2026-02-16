@@ -6,6 +6,7 @@ import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask } from './ipc-handlers';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
+import { handleAgentNotification } from './notification-service';
 
 const PORT_START = 7623;
 const PORT_END = 7632;
@@ -107,6 +108,23 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         const task = getTask(targetId);
         const entries = getActivityLog(targetId, task.worktreePath);
         jsonResponse(res, { entries: entries.slice(-limit) });
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 404);
+      }
+      return;
+    }
+
+    case '/notify': {
+      const taskId = body.taskId as string;
+      const type = body.type as string;
+      if (!taskId) {
+        errorResponse(res, 'Missing taskId');
+        return;
+      }
+      try {
+        const task = getTask(taskId);
+        handleAgentNotification(taskId, task.name, task.worktreePath, type || 'idle_prompt');
+        jsonResponse(res, { ok: true });
       } catch (e) {
         errorResponse(res, (e as Error).message, 404);
       }
