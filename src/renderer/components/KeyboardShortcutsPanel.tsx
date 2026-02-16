@@ -62,7 +62,7 @@ export default function KeyboardShortcutsPanel() {
 
   // Build a flat list of items (group headers + shortcuts) for rendering and navigation
   const { items, executableIndices } = useMemo(() => {
-    const items: { type: 'header'; label: string } | { type: 'shortcut'; shortcut: Shortcut; flatIdx: number }[] = [];
+    const items: ({ type: 'header'; label: string } | { type: 'shortcut'; shortcut: Shortcut; flatIdx: number })[] = [];
     const executableIndices: number[] = [];
     const isSearching = !!query;
 

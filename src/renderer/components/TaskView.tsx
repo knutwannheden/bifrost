@@ -22,6 +22,8 @@ const tips = [
   'Use \u2318K to open the command palette for quick access to all actions.',
   'Press \u2318, to open settings and customize font size, IDE, and more.',
   'Press \u2318/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.',
+  'Press \u2318\u21e7C to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.',
+  'Press \u2325U to run an AI review of your task\u2019s changes \u2014 get actionable feedback before committing.',
 ];
 
 export default function TaskView() {

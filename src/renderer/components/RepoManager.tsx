@@ -60,7 +60,7 @@ export default function RepoManager() {
 
   // Fetch recent repos from Claude history
   useEffect(() => {
-    window.bifrost.getRecentRepos().then(setRecentRepos).catch(() => undefined);
+    window.bifrost.getRecentRepos().then(setRecentRepos).catch(() => { /* ignore */ });
   }, []);
 
   // Filter out repos already managed, and apply search filter
