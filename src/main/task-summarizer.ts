@@ -36,7 +36,8 @@ function findLargestJsonl(projectDir: string): string | null {
 }
 
 /**
- * Read a JSONL file and return first 5 + last 5 lines (deduped if < 10 total).
+ * Read a JSONL file, keep only user/assistant messages, and return
+ * first 5 + last 5 (deduped if < 10 total).
  */
 function readHeadTail(filePath: string): string {
   let content: string;
@@ -46,7 +47,16 @@ function readHeadTail(filePath: string): string {
     return '';
   }
 
-  const lines = content.split('\n').filter((l) => l.trim());
+  const lines = content.split('\n').filter((l) => {
+    if (!l.trim()) return false;
+    try {
+      const type = JSON.parse(l).type;
+      return type === 'user' || type === 'assistant';
+    } catch {
+      return false;
+    }
+  });
+
   if (lines.length <= 10) {
     return lines.join('\n');
   }
@@ -95,7 +105,7 @@ export async function summarizeTask(worktreePath: string): Promise<string | null
     const proc = spawn('claude', [
       '-p',
       '--model', 'haiku',
-      'Summarize what was accomplished in this Claude Code session in one short sentence. Start directly with the action verb (e.g. "Drafted...", "Implemented...", "Fixed..."). Do NOT start with "A Claude Code session", "The user", or similar filler. Output ONLY the summary, nothing else.',
+      'Summarize what was accomplished in this Claude Code session in two short sentences. The first sentence should describe the main goal or task. The second should mention a key detail or secondary accomplishment. Start directly with an action verb (e.g. "Implemented...", "Fixed..."). Do NOT start with "A Claude Code session", "The user", or similar filler. Output ONLY the summary, nothing else.',
     ], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
