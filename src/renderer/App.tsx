@@ -103,13 +103,11 @@ export default function App() {
           const otherHidden = otherPane === 'claude' ? ps.claudeHidden : ps.devHidden;
           const otherExists = otherPane === 'dev' ? !!ps.devSessionId : true;
           if (otherExists && !otherHidden) {
-            dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
-            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
-          } else if (otherExists && otherHidden) {
-            dispatch({ type: 'SHOW_PANE', taskId, pane: otherPane });
+            // Other pane visible — hide focused pane, switch to other
             dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
             dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
           } else {
+            // Other pane hidden or doesn't exist — closing last visible pane stops the task
             if (ps.devSessionId) {
               window.bifrost.closeDevTerminal(taskId);
               dispatch({ type: 'CLOSE_DEV_SESSION', taskId });
@@ -125,6 +123,21 @@ export default function App() {
               });
             });
           }
+          break;
+        }
+        case 'archive-task': {
+          const archiveId = state.activeTaskId;
+          if (!archiveId) break;
+          window.bifrost.archiveTask(archiveId).then((updated) => {
+            dispatch({ type: 'UPDATE_TASK', task: updated });
+            const remaining = state.tasks.filter(
+              (t) => t.id !== archiveId && t.status === 'running',
+            );
+            dispatch({
+              type: 'SET_ACTIVE_TASK',
+              taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+            });
+          });
           break;
         }
         case 'quit-confirm':

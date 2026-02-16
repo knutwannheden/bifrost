@@ -155,7 +155,7 @@ function TaskRow({
         </div>
       </div>
       {task.summary && (
-        <div className="mt-1 text-xs text-slate-500 truncate font-sans">{task.summary}</div>
+        <div className="mt-1 text-xs text-slate-500 font-sans">{task.summary}</div>
       )}
       <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
         {task.isExternal ? (

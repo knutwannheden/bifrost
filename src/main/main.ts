@@ -89,6 +89,7 @@ function buildMenu() {
       submenu: [
         { label: 'New Task', accelerator: 'CommandOrControl+T', registerAccelerator: false, click: () => sendAction('new-task') },
         { label: 'Close Pane', accelerator: 'CommandOrControl+W', registerAccelerator: false, click: () => sendAction('close-pane') },
+        { label: 'Archive Task', accelerator: 'CommandOrControl+Shift+W', registerAccelerator: false, click: () => sendAction('archive-task') },
       ],
     },
     // Edit
