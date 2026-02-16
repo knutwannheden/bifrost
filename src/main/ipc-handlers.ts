@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
 import { IPC, IPC_STREAM } from '../shared/ipc-channels';
-import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams } from '../shared/types';
+import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams, ActivityEntry } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches, detectBaseBranch } from './repo-manager';
 import { createWorktree, restoreWorktree, removeWorktree } from './worktree-manager';
@@ -23,7 +23,7 @@ import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
 import { runReview, saveReview, loadReview, watchReviewFile } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
-import { handleBellNotification } from './notification-service';
+import { handleBellNotification, shouldNotify } from './notification-service';
 import { getRecentClaudeEntries } from './claude-watcher';
 
 // Track when each task's session was spawned so we can distinguish
@@ -560,15 +560,23 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());
 
   // Bell notification (instant, from xterm.js)
+  // Multiple bell events (BEL + OSC 9 + OSC 777) can fire in quick succession.
+  // Debounce here so the renderer fully suppresses duplicates too.
   ipcMain.handle(IPC.NOTIFY_BELL, (_event, taskId: string, isActiveTask: boolean) => {
     const task = getTask(taskId);
+
+    // Debounce: suppress duplicate bells within 10s window
+    if (!shouldNotify(taskId)) return { suppress: true };
 
     // Suppress stale idle notifications: if the last assistant message
     // predates this session, the agent was already idle before we connected.
     const sessionStart = sessionStartTimes.get(taskId);
     if (sessionStart) {
       const entries = getRecentClaudeEntries(taskId, task.worktreePath);
-      const lastAssistant = [...entries].reverse().find((e) => e.claudeEventKind === 'assistant_text');
+      const isAgentOutput = (e: ActivityEntry) =>
+        e.claudeEventKind === 'assistant_text' ||
+        (e.claudeEventKind === 'tool_use' && e.claudeToolName === 'AskUserQuestion');
+      const lastAssistant = [...entries].reverse().find(isAgentOutput);
       if (lastAssistant && lastAssistant.timestamp < sessionStart) {
         return { suppress: true };
       }
@@ -581,7 +589,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.GET_LAST_ASSISTANT_MESSAGE, (_event, taskId: string) => {
     const task = getTask(taskId);
     const entries = getRecentClaudeEntries(taskId, task.worktreePath);
-    const last = [...entries].reverse().find((e) => e.claudeEventKind === 'assistant_text');
+    const isAgentOutput = (e: ActivityEntry) =>
+      e.claudeEventKind === 'assistant_text' ||
+      (e.claudeEventKind === 'tool_use' && e.claudeToolName === 'AskUserQuestion');
+    const last = [...entries].reverse().find(isAgentOutput);
     return last?.claudeText ?? null;
   });
 

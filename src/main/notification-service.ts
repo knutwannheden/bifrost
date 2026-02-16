@@ -10,7 +10,7 @@ export function initNotificationService(window: BrowserWindow): void {
 // Per-task debounce: suppress duplicate notifications within 10s
 const lastNotification = new Map<string, number>();
 
-function shouldNotify(taskId: string): boolean {
+export function shouldNotify(taskId: string): boolean {
   const now = Date.now();
   const last = lastNotification.get(taskId) ?? 0;
   if (now - last < 10_000) return false;
@@ -21,7 +21,6 @@ function shouldNotify(taskId: string): boolean {
 /** Bell-triggered notification (instant, from xterm.js BEL/OSC). */
 export function handleBellNotification(taskId: string, taskName: string, isActiveTask: boolean): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  if (!shouldNotify(taskId)) return;
 
   const focused = mainWindow.isFocused();
 
@@ -37,4 +36,3 @@ export function handleBellNotification(taskId: string, taskName: string, isActiv
     app.dock?.bounce('informational');
   }
 }
-

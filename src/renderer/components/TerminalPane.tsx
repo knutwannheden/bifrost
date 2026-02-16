@@ -36,16 +36,22 @@ export default function TerminalPane({ sessionId, taskId, active, focused, hideC
     if (suppress) return;
 
     if (taskId !== state.activeTaskId) {
-      // Background task: toast + blue ball
-      dispatch({ type: 'SHOW_TOAST', message: `**${task.name}**: Waiting for input`, duration: 5000 });
+      // Background task: blue ball + rich toast
       dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
-      window.bifrost.getLastAssistantMessage(taskId).then((msg) => {
-        if (msg) {
-          const lines = msg.split('\n').slice(0, 3).join('\n');
-          const truncated = lines.length < msg.length ? lines + '...' : lines;
-          dispatch({ type: 'SHOW_TOAST', message: `**${task.name}**\n${truncated}`, duration: 5000 });
-        }
-      }).catch(() => { /* IPC error — keep the fallback toast */ });
+      // Delay briefly so the JSONL entry is written after the BEL
+      setTimeout(() => {
+        window.bifrost.getLastAssistantMessage(taskId).then((msg) => {
+          if (msg) {
+            const lines = msg.split('\n').slice(0, 3).join('\n');
+            const truncated = lines.length < msg.length ? lines + '...' : lines;
+            dispatch({ type: 'SHOW_TOAST', message: `**${task.name}**\n${truncated}`, duration: 5000 });
+          } else {
+            dispatch({ type: 'SHOW_TOAST', message: `**${task.name}**: Waiting for input`, duration: 5000 });
+          }
+        }).catch(() => {
+          dispatch({ type: 'SHOW_TOAST', message: `**${task.name}**: Waiting for input`, duration: 5000 });
+        });
+      }, 500);
     }
   }, [taskId, notifications, state.tasks, state.activeTaskId, dispatch]);
 

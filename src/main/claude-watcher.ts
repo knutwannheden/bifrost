@@ -133,6 +133,10 @@ function summarizeToolInput(toolName: string, input: Record<string, unknown>): s
       return `/${input.pattern as string || ''}/ ${input.path || ''}`;
     case 'Task':
       return input.description as string || '';
+    case 'AskUserQuestion': {
+      const qs = input.questions as Array<{ question: string }> | undefined;
+      return qs?.map((q) => q.question).join('\n') ?? '';
+    }
     default:
       return '';
   }
