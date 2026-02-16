@@ -44,6 +44,7 @@ export interface BifrostConfig {
   permissionMode: 'default' | 'sandbox' | 'skip-permissions';
   groupHistoryByRepo: boolean;
   hideTerminalOnSwitch: boolean;
+  showTips: boolean;
 }
 
 export interface CreateTaskParams {
@@ -156,4 +157,5 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   permissionMode: 'default',
   groupHistoryByRepo: false,
   hideTerminalOnSwitch: false,
+  showTips: true,
 };

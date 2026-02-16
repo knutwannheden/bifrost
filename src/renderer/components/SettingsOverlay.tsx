@@ -110,6 +110,18 @@ function buildSettings(): SettingDef[] {
         />
       ),
     },
+    {
+      key: 'showTips',
+      category: 'General',
+      label: 'Show tips on welcome screen',
+      description: 'Display a rotating tip on the welcome screen',
+      render: (config, update) => (
+        <ToggleSwitch
+          checked={config.showTips !== false}
+          onChange={(v) => update({ showTips: v })}
+        />
+      ),
+    },
   ];
 }
 

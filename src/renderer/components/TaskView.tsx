@@ -10,6 +10,19 @@ const shortcuts = [
   { keys: '⌘K', label: 'Command palette' },
 ];
 
+const tips = [
+  'Most views support instant search \u2014 just start typing to filter. Space-separated terms are ANDed.',
+  'Underlined characters in buttons are mnemonics \u2014 press Option + that letter to activate.',
+  'Double-click a task tab to rename it inline.',
+  'Press \u2318D to view git diff and activity log for the current task.',
+  'Hover over a task tab to see its summary, branch, and current activity.',
+  'Use \u2318F to search within the terminal. Enter/Shift+Enter to navigate matches.',
+  'Each task runs in its own git worktree \u2014 agents work independently without conflicts.',
+  'Press \u2318H to browse task history and resume archived tasks.',
+  'Use \u2318K to open the command palette for quick access to all actions.',
+  'Press \u2318, to open settings and customize font size, IDE, and more.',
+];
+
 export default function TaskView() {
   const { state, dispatch } = useApp();
   const [splitRatio, setSplitRatio] = useState(0.7);
@@ -17,6 +30,7 @@ export default function TaskView() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [justInstalled, setJustInstalled] = useState(false);
+  const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * tips.length));
 
   const openTasks = state.tasks.filter((t) => t.status === 'running');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
@@ -133,6 +147,36 @@ export default function TaskView() {
               </React.Fragment>
             ))}
           </div>
+          {state.config?.showTips !== false && (
+            <div className="mt-6 flex flex-col items-center gap-1.5">
+              <div className="bg-slate-700/50 border border-slate-600/50 rounded-full px-4 py-2 flex items-center gap-2 max-w-sm">
+                <span className="text-amber-400 text-sm flex-shrink-0">&#x1F4A1;</span>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {tips[tipIndex]}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setTipIndex((i) => (i + 1) % tips.length)}
+                  className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  Next tip
+                </button>
+                <span className="text-[10px] text-slate-700">|</span>
+                <button
+                  onClick={async () => {
+                    if (!state.config) return;
+                    const newConfig = { ...state.config, showTips: false };
+                    await window.bifrost.saveConfig(newConfig);
+                    dispatch({ type: 'SET_CONFIG', config: newConfig });
+                  }}
+                  className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
+                >
+                  Don&apos;t show tips
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
