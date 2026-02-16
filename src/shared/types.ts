@@ -46,6 +46,7 @@ export interface BifrostConfig {
   permissionMode: 'default' | 'sandbox' | 'skip-permissions';
   groupHistoryByRepo: boolean;
   hideTerminalOnSwitch: boolean;
+  notifications: boolean;
   showTips: boolean;
   agentTeams: boolean;
 }
@@ -162,6 +163,7 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   permissionMode: 'default',
   groupHistoryByRepo: false,
   hideTerminalOnSwitch: false,
+  notifications: true,
   showTips: true,
   agentTeams: false,
 };

@@ -211,6 +211,7 @@ export default function TaskView() {
             >
               <TerminalPane
                 sessionId={task.sessionId}
+                taskId={task.id}
                 active={isActive}
                 focused={ps.focusedPane === 'claude'}
                 hideCursor

@@ -111,20 +111,7 @@ const api: BifrostAPI = {
   },
 
   // Notifications
-  onNotification: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, title: string, body: string) =>
-      callback(title, body);
-    ipcRenderer.on(IPC_STREAM.NOTIFICATION, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.NOTIFICATION, handler);
-  },
-  onAgentNotification: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, title: string, body: string) =>
-      callback(taskId, title, body);
-    ipcRenderer.on(IPC_STREAM.AGENT_NOTIFICATION, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.AGENT_NOTIFICATION, handler);
-  },
-
-
+  notifyBell: (taskId) => ipcRenderer.invoke(IPC.NOTIFY_BELL, taskId),
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) =>

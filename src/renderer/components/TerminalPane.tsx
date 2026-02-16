@@ -6,6 +6,7 @@ import TerminalSearchBar from './TerminalSearchBar';
 
 interface TerminalPaneProps {
   sessionId: string;
+  taskId?: string;
   active: boolean;
   focused: boolean;
   hideCursor?: boolean;
@@ -13,15 +14,33 @@ interface TerminalPaneProps {
   onTitleChange?: (title: string) => void;
 }
 
-export default function TerminalPane({ sessionId, active, focused, hideCursor = false, onFocusRequest, onTitleChange }: TerminalPaneProps) {
-  const { state } = useApp();
+export default function TerminalPane({ sessionId, taskId, active, focused, hideCursor = false, onFocusRequest, onTitleChange }: TerminalPaneProps) {
+  const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showSearch, setShowSearch] = useState(false);
 
   const fontSize = state.config?.fontSize ?? 14;
   const fontFamily = state.config?.fontFamily;
   const fontWeight = state.config?.fontWeight;
-  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active });
+
+  const notifications = state.config?.notifications !== false;
+
+  const handleBell = useCallback(() => {
+    if (!taskId || !notifications) return;
+    const task = state.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    // Toast + blue ball only for background tasks
+    if (taskId !== state.activeTaskId) {
+      dispatch({ type: 'SHOW_TOAST', message: `${task.name}: Waiting for input`, duration: 5000 });
+      dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
+    }
+
+    // Sound, OS notification, dock bounce via main process
+    window.bifrost.notifyBell(taskId);
+  }, [taskId, notifications, state.tasks, state.activeTaskId, dispatch]);
+
+  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active, onBell: handleBell });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing
   const anyOverlay = state.showRepoManager || state.showCreateDialog || state.showDiff || state.showTaskHistory;

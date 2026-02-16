@@ -82,6 +82,9 @@ export const IPC = {
   CHECK_INTEGRATION: 'integration:check',
   INSTALL_INTEGRATION: 'integration:install',
 
+  // Notifications
+  NOTIFY_BELL: 'notify:bell',
+
   // Dialog
   SELECT_DIRECTORY: 'dialog:select-directory',
 } as const;
@@ -90,12 +93,10 @@ export const IPC = {
 export const IPC_STREAM = {
   SESSION_DATA: 'session:data',
   SESSION_EXIT: 'session:exit',
-  NOTIFICATION: 'notification',
   ACTIVITY_ENTRY: 'activity:entry',
   TASK_SUMMARY: 'task:summary',
   REVIEW_PROGRESS: 'review:progress',
   MENU_ACTION: 'menu:action',
-  AGENT_NOTIFICATION: 'agent-notification',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -180,8 +181,7 @@ export interface BifrostAPI {
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
 
   // Notifications
-  onNotification(callback: (title: string, body: string) => void): () => void;
-  onAgentNotification(callback: (taskId: string, title: string, body: string) => void): () => void;
+  notifyBell(taskId: string): Promise<void>;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

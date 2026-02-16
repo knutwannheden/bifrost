@@ -79,6 +79,18 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'notifications',
+      category: 'Appearance',
+      label: 'Notifications',
+      description: 'Sound, toast, and OS alerts when a task needs input',
+      render: (config, update) => (
+        <ToggleSwitch
+          checked={config.notifications !== false}
+          onChange={(v) => update({ notifications: v })}
+        />
+      ),
+    },
+    {
       key: 'permissionMode',
       category: 'Claude Code',
       label: 'Permission Mode',

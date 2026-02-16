@@ -23,6 +23,7 @@ import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
 import { runReview, saveReview, loadReview, watchReviewFile } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
+import { handleBellNotification } from './notification-service';
 import { scanRecentRepos } from './history-scanner';
 
 // In-memory task list, synced to disk
@@ -548,6 +549,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Integration
   ipcMain.handle(IPC.CHECK_INTEGRATION, () => checkIntegration());
   ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());
+
+  // Bell notification (instant, from xterm.js)
+  ipcMain.handle(IPC.NOTIFY_BELL, (_event, taskId: string) => {
+    const task = getTask(taskId);
+    handleBellNotification(taskId, task.name);
+  });
 
   // Dialog
   ipcMain.handle(IPC.SELECT_DIRECTORY, async () => {
