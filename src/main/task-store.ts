@@ -20,5 +20,7 @@ export function saveTasks(tasks: Task[]): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  fs.writeFileSync(TASKS_PATH, JSON.stringify(tasks, null, 2), 'utf-8');
+  const tmp = TASKS_PATH + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(tasks, null, 2), 'utf-8');
+  fs.renameSync(tmp, TASKS_PATH);
 }

@@ -181,6 +181,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return scanRecentRepos(excludePaths);
   });
 
+  // Dev terminal sessions (taskId -> dev sessionId)
+  const devSessions = new Map<string, string>();
+
   // Tasks
   ipcMain.handle(IPC.CREATE_TASK, async (_event, params: CreateTaskParams) => {
     const config = loadConfig();
@@ -217,6 +220,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
+    const devSessionId = devSessions.get(taskId);
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
     await destroyTask(taskId);
   });
 
@@ -232,6 +240,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
 
     stopWatching(taskId);
+
+    // Kill dev terminal if any
+    const devSessionId = devSessions.get(taskId);
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
 
     // Kill session if still running
     if (task.status === 'running') {
@@ -298,15 +313,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {
+    const devSessionId = devSessions.get(taskId);
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
     await destroyTask(taskId);
   });
 
   ipcMain.handle(IPC.LIST_TASKS, () => {
     return tasks;
   });
-
-  // Dev terminal
-  const devSessions = new Map<string, string>(); // taskId -> dev sessionId
 
   ipcMain.handle(IPC.CREATE_DEV_TERMINAL, (_event, taskId: string) => {
     const task = getTask(taskId);
@@ -378,7 +395,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Shell
-  ipcMain.handle(IPC.OPEN_URL, (_event, url: string) => shell.openExternal(url));
+  ipcMain.handle(IPC.OPEN_URL, (_event, url: string) => {
+    if (!/^https?:\/\//i.test(url)) return;
+    return shell.openExternal(url);
+  });
 
   // IDE
   ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string, filePath?: string, line?: number) => {

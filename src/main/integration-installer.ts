@@ -1,7 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFile = promisify(execFileCb);
 
 interface PluginsFile {
   version: number;
@@ -35,6 +38,12 @@ const OLD_COMMANDS_DIR = path.join(os.homedir(), '.claude', 'commands', 'bifrost
 const OLD_MCP_DIR = path.join(os.homedir(), '.bifrost', 'mcp');
 const OLD_PLUGIN_DIR = path.join(os.homedir(), '.bifrost', 'plugin');
 const OLD_PLUGIN_ID = 'bifrost@local';
+
+function atomicWriteFileSync(filePath: string, data: string): void {
+  const tmp = filePath + '.tmp';
+  fs.writeFileSync(tmp, data, 'utf-8');
+  fs.renameSync(tmp, filePath);
+}
 
 function readPluginVersion(pluginDir: string): string | null {
   try {
@@ -76,7 +85,7 @@ export function checkIntegration(): IntegrationStatus {
   return { installed: false, updateAvailable: false };
 }
 
-export function installIntegration(): void {
+export async function installIntegration(): Promise<void> {
   const root = getSourceRoot();
 
   // --- Deploy plugin files into marketplace directory ---
@@ -115,7 +124,7 @@ export function installIntegration(): void {
   );
 
   // --- Install MCP server dependencies ---
-  installMcpDeps();
+  await installMcpDeps();
 
   // --- Register marketplace in known_marketplaces.json ---
   registerMarketplace();
@@ -152,7 +161,7 @@ function registerMarketplace(): void {
   };
 
   if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-  fs.writeFileSync(KNOWN_MARKETPLACES_FILE, JSON.stringify(marketplaces, null, 2) + '\n', 'utf-8');
+  atomicWriteFileSync(KNOWN_MARKETPLACES_FILE, JSON.stringify(marketplaces, null, 2) + '\n');
 }
 
 function registerPlugin(pluginVersion: string): void {
@@ -186,7 +195,7 @@ function registerPlugin(pluginVersion: string): void {
 
   const pluginsDir = path.dirname(PLUGINS_FILE);
   if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-  fs.writeFileSync(PLUGINS_FILE, JSON.stringify(pluginsData, null, 2) + '\n', 'utf-8');
+  atomicWriteFileSync(PLUGINS_FILE, JSON.stringify(pluginsData, null, 2) + '\n');
 }
 
 function enablePlugin(): void {
@@ -202,17 +211,17 @@ function enablePlugin(): void {
     enabled[PLUGIN_ID] = true;
     // Remove old plugin ID if present
     delete enabled[OLD_PLUGIN_ID];
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n', 'utf-8');
+    atomicWriteFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n');
   } catch {
     // Best-effort — settings may be read-only
   }
 }
 
-function installMcpDeps(): void {
+async function installMcpDeps(): Promise<void> {
   const mcpDest = path.join(PLUGIN_DEPLOY_DIR, 'mcp');
   if (!fs.existsSync(path.join(mcpDest, 'package.json'))) return;
   if (!fs.existsSync(path.join(mcpDest, 'node_modules'))) {
-    execSync('npm install --production', { cwd: mcpDest, stdio: 'ignore', timeout: 30000 });
+    await execFile('npm', ['install', '--production'], { cwd: mcpDest, timeout: 30000 });
   }
 }
 
@@ -224,7 +233,7 @@ function cleanupOldIntegration(): void {
       const config = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
       if (config.mcpServers?.bifrost) {
         delete config.mcpServers.bifrost;
-        fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+        atomicWriteFileSync(MCP_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
       }
     }
   } catch {
@@ -264,7 +273,7 @@ function cleanupOldIntegration(): void {
       const pluginsData = JSON.parse(fs.readFileSync(PLUGINS_FILE, 'utf-8')) as PluginsFile;
       if (pluginsData.plugins?.[OLD_PLUGIN_ID]) {
         delete pluginsData.plugins[OLD_PLUGIN_ID];
-        fs.writeFileSync(PLUGINS_FILE, JSON.stringify(pluginsData, null, 2) + '\n', 'utf-8');
+        atomicWriteFileSync(PLUGINS_FILE, JSON.stringify(pluginsData, null, 2) + '\n');
       }
     }
   } catch {
