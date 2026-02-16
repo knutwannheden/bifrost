@@ -184,7 +184,9 @@ export function useTerminal(
       if (!rect || rect.width === 0 || rect.height === 0) return;
       try {
         fitAddon.fit();
-        window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
+        // Resize all PTYs (including background tabs) so they stay in sync
+        // when the window is resized. Prevents garbled output from stale dimensions.
+        window.bifrost.resizeAllSessions(terminal.cols, terminal.rows);
       } catch {
         // ignore resize errors
       }
