@@ -112,8 +112,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   for (const task of tasksToRestore) {
     if (fs.existsSync(task.worktreePath)) {
       const sessionId = randomUUID();
+      const startupConfig = loadConfig();
       createSession(sessionId, task.worktreePath, mainWindow, {
-        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: loadConfig().permissionMode,
+        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
       });
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
@@ -195,7 +196,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const taskId = randomUUID();
 
     createSession(sessionId, worktreePath, mainWindow, {
-      taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode,
+      taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams,
     });
 
     const task: Task = {
@@ -288,12 +289,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
 
     const sessionId = randomUUID();
+    const reopenConfig = loadConfig();
     createSession(sessionId, worktreePath, mainWindow, {
       resume: true,
       claudeSessionId: task.claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
-      permissionMode: loadConfig().permissionMode,
+      permissionMode: reopenConfig.permissionMode,
+      agentTeams: reopenConfig.agentTeams,
     });
 
     // Restart file watcher
@@ -496,6 +499,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
+      agentTeams: config.agentTeams,
     });
 
     const task: Task = {

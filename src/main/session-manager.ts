@@ -64,7 +64,7 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string },
+  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean },
 ): void {
   const args: string[] = [];
   if (options?.claudeSessionId) {
@@ -80,6 +80,7 @@ export function createSession(
   const extraEnv: Record<string, string> = {};
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
   if (options?.apiPort) extraEnv.BIFROST_API_PORT = String(options.apiPort);
+  if (options?.agentTeams) extraEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
   spawnSession(sessionId, 'claude', args, cwd, mainWindow, { extraEnv });
 }
 

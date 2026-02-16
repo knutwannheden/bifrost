@@ -45,6 +45,7 @@ export interface BifrostConfig {
   groupHistoryByRepo: boolean;
   hideTerminalOnSwitch: boolean;
   showTips: boolean;
+  agentTeams: boolean;
 }
 
 export interface CreateTaskParams {
@@ -158,4 +159,5 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   groupHistoryByRepo: false,
   hideTerminalOnSwitch: false,
   showTips: true,
+  agentTeams: false,
 };

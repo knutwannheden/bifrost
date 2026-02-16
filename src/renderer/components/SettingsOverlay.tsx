@@ -77,6 +77,18 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'agentTeams',
+      category: 'Claude Code',
+      label: 'Agent Teams',
+      description: 'Enable experimental agent teams feature',
+      render: (config, update) => (
+        <ToggleSwitch
+          checked={config.agentTeams}
+          onChange={(v) => update({ agentTeams: v })}
+        />
+      ),
+    },
+    {
       key: 'ide',
       category: 'General',
       label: 'IDE',
