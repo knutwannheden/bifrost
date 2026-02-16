@@ -264,6 +264,12 @@ export function stopWatching(taskId: string): void {
   stopClaudeWatching(taskId);
 }
 
+export function stopAllWatching(): void {
+  for (const taskId of [...watchers.keys()]) {
+    stopWatching(taskId);
+  }
+}
+
 export function getActivityLog(taskId: string, worktreePath: string): ActivityEntry[] {
   const tw = watchers.get(taskId);
   const fileEntries = tw ? tw.entries : loadEntries(taskId);

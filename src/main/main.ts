@@ -5,6 +5,7 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
 import { initNotificationService } from './notification-service';
 import { startApi, stopApi } from './bifrost-api';
+import { stopAllWatching } from './activity-watcher';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 if (started) {
@@ -162,6 +163,7 @@ app.on('ready', async () => {
 });
 
 app.on('before-quit', () => {
+  stopAllWatching();
   killAllSessions();
   stopApi();
 });
