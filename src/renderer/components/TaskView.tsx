@@ -21,6 +21,7 @@ const tips = [
   'Press \u2318H to browse task history and resume archived tasks.',
   'Use \u2318K to open the command palette for quick access to all actions.',
   'Press \u2318, to open settings and customize font size, IDE, and more.',
+  'Press \u2318/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.',
 ];
 
 export default function TaskView() {
