@@ -60,8 +60,16 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
     );
   }
 
+  const tooltip = [
+    task.name,
+    task.summary,
+    `Branch: ${task.branch}`,
+    task.terminalTitle ? `Terminal: ${task.terminalTitle}` : undefined,
+  ].filter(Boolean).join('\n');
+
   return (
     <button
+      title={tooltip}
       className={`flex items-center gap-1.5 px-3 h-full whitespace-nowrap transition-colors ${
         isActive
           ? 'bg-slate-700 border-b-2 border-blue-500 text-slate-200'

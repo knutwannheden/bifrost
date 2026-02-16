@@ -19,11 +19,18 @@ export function loadConfig(): BifrostConfig {
     return { ...DEFAULT_CONFIG };
   }
   const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+  let dirty = false;
 
   // Migrate sandbox: boolean -> permissionMode
-  if ('sandbox' in raw && !('permissionMode' in raw)) {
-    raw.permissionMode = raw.sandbox ? 'sandbox' : 'default';
+  if ('sandbox' in raw) {
+    if (!('permissionMode' in raw)) {
+      raw.permissionMode = raw.sandbox ? 'sandbox' : 'default';
+    }
     delete raw.sandbox;
+    dirty = true;
+  }
+
+  if (dirty) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(raw, null, 2), 'utf-8');
   }
 

@@ -1,10 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+// import { LigaturesAddon } from '@xterm/addon-ligatures';
+import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { WebglAddon } from '@xterm/addon-webgl';
 
 // Global registry so keyboard shortcuts can access terminal instances
 export const terminalRegistry = new Map<string, Terminal>();
+export const searchAddonRegistry = new Map<string, SearchAddon>();
 
 interface TerminalOptions {
   cursorBlink?: boolean;
@@ -71,9 +75,19 @@ export function useTerminal(
       window.bifrost.openUrl(uri);
     });
 
+    const searchAddon = new SearchAddon();
+
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
+    terminal.loadAddon(searchAddon);
     terminal.open(containerRef.current);
+
+    // Use WebGL renderer for better performance with multiple terminals
+    try {
+      terminal.loadAddon(new WebglAddon());
+    } catch {
+      // WebGL not available, fall back to default canvas renderer
+    }
 
     // Initial fit
     try {
@@ -85,12 +99,13 @@ export function useTerminal(
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
     terminalRegistry.set(sessionId, terminal);
+    searchAddonRegistry.set(sessionId, searchAddon);
 
     // Let the app handle these Cmd+key shortcuts instead of xterm
     terminal.attachCustomKeyEventHandler((e) => {
       if (e.metaKey && !e.shiftKey) {
         const key = e.key.toLowerCase();
-        if ('atdrhko,lg'.includes(key)) return false;
+        if ('atdrhko,lgf'.includes(key)) return false;
       }
       if (e.metaKey && e.shiftKey) {
         const key = e.key.toLowerCase();
@@ -153,6 +168,7 @@ export function useTerminal(
       resizeObserver.disconnect();
       removeDataListener();
       removeExitListener();
+      searchAddonRegistry.delete(sessionId);
       terminalRegistry.delete(sessionId);
       terminal.dispose();
       terminalRef.current = null;

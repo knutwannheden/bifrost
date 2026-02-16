@@ -37,6 +37,7 @@ const shortcuts: Shortcut[] = [
   // Actions
   { key: 'O', label: 'Open in IDE', group: 'Actions', execKey: 'o' },
   { key: 'G', label: 'Open PR in GitHub', group: 'Actions', execKey: 'g' },
+  { key: 'F', label: 'Find in terminal', group: 'Actions', execKey: 'f' },
   { key: 'Shift+C', label: 'Capture context', group: 'Actions', execKey: 'c', execShift: true },
 
   // App
