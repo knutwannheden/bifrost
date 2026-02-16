@@ -9,6 +9,8 @@ interface Shortcut {
   execKey?: string;
   execShift?: boolean;
   execCode?: string;
+  /** Direct action — bypasses synthetic keyboard event. */
+  action?: string;
 }
 
 const GROUPS = ['Tasks', 'Navigation', 'Views', 'Actions', 'App'] as const;
@@ -17,7 +19,7 @@ const shortcuts: Shortcut[] = [
   // Tasks
   { key: 'T', label: 'New task', group: 'Tasks', execKey: 't' },
   { key: 'W', label: 'Close pane / stop task', group: 'Tasks', execKey: 'w' },
-  { key: 'Shift+W', label: 'Archive task', group: 'Tasks' },
+  { key: 'Shift+W', label: 'Archive task', group: 'Tasks', action: 'archive-task' },
 
   // Navigation
   { key: 'Shift+[', label: 'Previous tab', group: 'Navigation', execKey: '[', execShift: true, execCode: 'BracketLeft' },
@@ -43,7 +45,7 @@ const shortcuts: Shortcut[] = [
 ];
 
 export default function KeyboardShortcutsPanel() {
-  const { dispatch } = useApp();
+  const { state, dispatch } = useApp();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -106,7 +108,29 @@ export default function KeyboardShortcutsPanel() {
 
   const close = () => dispatch({ type: 'TOGGLE_KEYBOARD_SHORTCUTS' });
 
+  const executeAction = (action: string) => {
+    if (action === 'archive-task') {
+      const taskId = state.activeTaskId;
+      if (!taskId) return;
+      window.bifrost.archiveTask(taskId).then((updated) => {
+        dispatch({ type: 'UPDATE_TASK', task: updated });
+        const remaining = state.tasks.filter(
+          (t) => t.id !== taskId && t.status === 'running',
+        );
+        dispatch({
+          type: 'SET_ACTIVE_TASK',
+          taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+        });
+      });
+    }
+  };
+
   const execute = (shortcut: Shortcut) => {
+    if (shortcut.action) {
+      close();
+      executeAction(shortcut.action);
+      return;
+    }
     const { execKey } = shortcut;
     if (!execKey) return;
     close();
