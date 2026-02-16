@@ -175,11 +175,19 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           const taskMeta = { taskId: activeTask.id, taskName: activeTask.name };
 
           if (state.showDiff) {
-            if (state.diffMode === 'git') {
+            // Use DOM text selection if available (works in any diff/review mode)
+            const domSelection = window.getSelection()?.toString()?.trim();
+            if (domSelection) {
+              params = { type: state.diffMode === 'review' ? 'activity' : state.diffMode as 'diff' | 'activity', content: domSelection, ...taskMeta };
+            } else if (state.diffMode === 'git') {
               const diff = await window.bifrost.getDiff(activeTask.id);
               const content = diff.diff;
               if (!content?.trim()) return;
               params = { type: 'diff', content, ...taskMeta };
+            } else if (state.diffMode === 'review') {
+              const content = state.reviewContent[activeTask.id];
+              if (!content?.trim()) return;
+              params = { type: 'activity', content, ...taskMeta };
             } else {
               const entries = await window.bifrost.getActivityLog(activeTask.id);
               const content = entries.map((e) => {
