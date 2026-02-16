@@ -96,9 +96,11 @@ export function useTerminal(
       // WebGL not available, fall back to default canvas renderer
     }
 
-    // Initial fit
+    // Initial fit — also resize PTY immediately so output produced before
+    // the buffer drain uses correct dimensions instead of the default 120×30.
     try {
       fitAddon.fit();
+      window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
     } catch {
       // container may not be visible yet
     }
@@ -152,10 +154,21 @@ export function useTerminal(
       return true;
     });
 
-    // Replay any buffered output from before this listener was registered
+    // Replay any buffered output from before this listener was registered,
+    // then force a resize to trigger SIGWINCH so Claude Code redraws its
+    // TUI with the correct dimensions (buffer was generated at default 120×30).
     window.bifrost.drainSessionBuffer(sessionId).then((buf) => {
-      if (buf) terminal.write(buf, () => { drainComplete = true; });
-      else drainComplete = true;
+      if (buf) {
+        terminal.write(buf, () => {
+          drainComplete = true;
+          try {
+            fitAddon.fit();
+            window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
+          } catch { /* container may not be visible */ }
+        });
+      } else {
+        drainComplete = true;
+      }
     });
 
     // Receive data from session
