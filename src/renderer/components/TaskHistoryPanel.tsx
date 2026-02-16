@@ -31,6 +31,24 @@ function formatDate(ts: number): string {
   });
 }
 
+function Highlight({ text, search }: { text: string; search: string }) {
+  if (!search) return <>{text}</>;
+  const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return <>{text}</>;
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part)
+          ? <mark key={i} className="bg-yellow-500/30 text-inherit rounded-sm">{part}</mark>
+          : part,
+      )}
+    </>
+  );
+}
+
 function formatRelative(ts: number): string {
   const diff = Date.now() - ts;
   const mins = Math.floor(diff / 60000);
@@ -49,6 +67,7 @@ interface TaskRowProps {
   editingId: string | null;
   editName: string;
   diffStats?: DiffStats | null;
+  search: string;
   setEditName: (name: string) => void;
   setFocusedIdx: (idx: number) => void;
   itemRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
@@ -66,7 +85,7 @@ interface TaskRowProps {
 }
 
 function TaskRow({
-  task, idx, focusedIdx, editingId, editName, diffStats, setEditName,
+  task, idx, focusedIdx, editingId, editName, diffStats, search, setEditName,
   setFocusedIdx, itemRefs, handleActivate, startRename, submitRename,
   setEditingId, handleReopen, handleArchive, handleDelete,
   canReopen, canArchive, repoName, shortPath,
@@ -102,7 +121,7 @@ function TaskRow({
                 task.status === 'archived' ? 'text-slate-400' : 'text-slate-200'
               }`}
             >
-              {task.name}
+              <Highlight text={task.name} search={search} />
             </span>
           )}
           <span className={`text-xs ${statusColor[task.status]}`}>
@@ -155,15 +174,15 @@ function TaskRow({
         </div>
       </div>
       {task.summary && (
-        <div className="mt-1 text-xs text-slate-500 font-sans">{task.summary}</div>
+        <div className="mt-1 text-xs text-slate-500 font-sans"><Highlight text={task.summary} search={search} /></div>
       )}
       <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
         {task.isExternal ? (
           <span className="font-mono">{shortPath(task.worktreePath)}</span>
         ) : (
           <>
-            <span>{repoName(task.repoId)}</span>
-            <span>{task.branch}</span>
+            <span><Highlight text={repoName(task.repoId)} search={search} /></span>
+            <span><Highlight text={task.branch} search={search} /></span>
           </>
         )}
         <span>{formatDate(task.createdAt)}</span>
@@ -224,16 +243,16 @@ export default function TaskHistoryPanel() {
     }
   }, [isSessionsMode]);
 
-  const searchLower = search.toLowerCase();
+  const searchTerms = search.toLowerCase().split(/\s+/).filter(Boolean);
 
   const filteredTasks = isSessionsMode ? [] : state.tasks
     .filter((t) => {
       if (filter === 'active' && t.status === 'archived') return false;
       if (filter === 'archived' && t.status !== 'archived') return false;
-      if (searchLower) {
+      if (searchTerms.length > 0) {
         const repo = state.repos.find((r) => r.id === t.repoId);
-        const haystack = `${t.name} ${t.branch} ${repo?.name ?? ''}`.toLowerCase();
-        return haystack.includes(searchLower);
+        const haystack = `${t.name} ${t.branch} ${repo?.name ?? ''} ${t.summary ?? ''}`.toLowerCase();
+        return searchTerms.every((term) => haystack.includes(term));
       }
       return true;
     })
@@ -241,9 +260,9 @@ export default function TaskHistoryPanel() {
 
   const filteredSessions = isSessionsMode
     ? sessions.filter((s) => {
-        if (!searchLower) return true;
+        if (searchTerms.length === 0) return true;
         const haystack = `${s.cwd} ${s.slug ?? ''}`.toLowerCase();
-        return haystack.includes(searchLower);
+        return searchTerms.every((term) => haystack.includes(term));
       })
     : [];
 
@@ -406,7 +425,11 @@ export default function TaskHistoryPanel() {
 
       case 'Backspace':
         e.preventDefault();
-        setSearch((s) => s.slice(0, -1));
+        if (e.altKey) {
+          setSearch((s) => s.replace(/\S+\s*$/, ''));
+        } else {
+          setSearch((s) => s.slice(0, -1));
+        }
         break;
 
       case 'ArrowUp':
@@ -619,6 +642,7 @@ export default function TaskHistoryPanel() {
                             editingId={editingId}
                             editName={editName}
                             diffStats={diffStatsMap.get(task.id)}
+                            search={search}
                             setEditName={setEditName}
                             setFocusedIdx={setFocusedIdx}
                             itemRefs={itemRefs}
@@ -649,6 +673,7 @@ export default function TaskHistoryPanel() {
                     editingId={editingId}
                     editName={editName}
                     diffStats={diffStatsMap.get(task.id)}
+                    search={search}
                     setEditName={setEditName}
                     setFocusedIdx={setFocusedIdx}
                     itemRefs={itemRefs}
