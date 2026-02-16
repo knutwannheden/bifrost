@@ -121,11 +121,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_REPOS':
       return { ...state, repos: action.repos };
     case 'SET_TASKS': {
-      // Auto-select first running task (prefer running over stopped)
+      // Restore persisted active task, or auto-select first running task
+      const persisted = localStorage.getItem('bifrost:activeTaskId');
       const autoSelect = !state.activeTaskId
-        ? (action.tasks.find((t) => t.status === 'running')?.id
-           ?? action.tasks.find((t) => t.status !== 'archived')?.id
-           ?? null)
+        ? (persisted && action.tasks.some((t) => t.id === persisted && t.status !== 'archived')
+           ? persisted
+           : action.tasks.find((t) => t.status === 'running')?.id
+             ?? action.tasks.find((t) => t.status !== 'archived')?.id
+             ?? null)
         : state.activeTaskId;
       return { ...state, tasks: action.tasks, tasksLoaded: true, activeTaskId: autoSelect };
     }
@@ -245,6 +248,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
     return () => { unsubSummary(); };
   }, []);
+
+  // Persist active task selection across restarts
+  useEffect(() => {
+    if (!state.tasksLoaded) return; // Don't clear before tasks load
+    if (state.activeTaskId) {
+      localStorage.setItem('bifrost:activeTaskId', state.activeTaskId);
+    } else {
+      localStorage.removeItem('bifrost:activeTaskId');
+    }
+  }, [state.activeTaskId, state.tasksLoaded]);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>

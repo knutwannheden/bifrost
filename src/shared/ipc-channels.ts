@@ -84,6 +84,7 @@ export const IPC = {
 
   // Notifications
   NOTIFY_BELL: 'notify:bell',
+  GET_LAST_ASSISTANT_MESSAGE: 'notify:last-assistant-message',
 
   // Dialog
   SELECT_DIRECTORY: 'dialog:select-directory',
@@ -181,7 +182,8 @@ export interface BifrostAPI {
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
 
   // Notifications
-  notifyBell(taskId: string): Promise<void>;
+  notifyBell(taskId: string, isActiveTask: boolean): Promise<{ suppress: boolean }>;
+  getLastAssistantMessage(taskId: string): Promise<string | null>;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

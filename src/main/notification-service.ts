@@ -18,16 +18,21 @@ function shouldNotify(taskId: string): boolean {
   return true;
 }
 
-/** Bell-triggered notification (instant, from xterm.js BEL). */
-export function handleBellNotification(taskId: string, taskName: string): void {
+/** Bell-triggered notification (instant, from xterm.js BEL/OSC). */
+export function handleBellNotification(taskId: string, taskName: string, isActiveTask: boolean): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (!shouldNotify(taskId)) return;
 
-  // Sound always plays so the user notices even when focused
+  const focused = mainWindow.isFocused();
+
+  // Skip entirely if the user is focused on this task
+  if (focused && isActiveTask) return;
+
+  // Sound for background tasks or when unfocused
   execFile('afplay', ['/System/Library/Sounds/Glass.aiff'], () => {});
 
   // OS notification + dock bounce only when window is not focused
-  if (!mainWindow.isFocused()) {
+  if (!focused) {
     new Notification({ title: taskName, body: 'Waiting for input' }).show();
     app.dock?.bounce('informational');
   }

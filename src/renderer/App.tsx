@@ -19,6 +19,38 @@ declare global {
   }
 }
 
+/** Render basic inline markdown: bold, italic, inline code, and newlines. */
+function SimpleMarkdown({ text }: { text: string }) {
+  const lines = text.split('\n');
+  return (
+    <div className="whitespace-pre-wrap">
+      {lines.map((line, i) => (
+        <React.Fragment key={i}>
+          {i > 0 && <br />}
+          {renderInline(line)}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+function renderInline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  // Match **bold**, *italic*, `code`
+  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    if (match[2]) parts.push(<strong key={match.index}>{match[2]}</strong>);
+    else if (match[3]) parts.push(<em key={match.index}>{match[3]}</em>);
+    else if (match[4]) parts.push(<code key={match.index} className="bg-slate-600 px-1 rounded text-xs">{match[4]}</code>);
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
 export default function App() {
   const { state, dispatch } = useApp();
 
@@ -207,8 +239,8 @@ export default function App() {
 
       {/* Toast notification */}
       {state.toast && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-700 text-slate-200 text-sm rounded shadow-lg animate-fade-in">
-          {state.toast}
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-700 text-slate-200 text-sm rounded shadow-lg animate-fade-in max-w-lg">
+          <SimpleMarkdown text={state.toast} />
         </div>
       )}
     </div>

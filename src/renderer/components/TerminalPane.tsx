@@ -25,19 +25,28 @@ export default function TerminalPane({ sessionId, taskId, active, focused, hideC
 
   const notifications = state.config?.notifications !== false;
 
-  const handleBell = useCallback(() => {
+  const handleBell = useCallback(async () => {
     if (!taskId || !notifications) return;
     const task = state.tasks.find((t) => t.id === taskId);
     if (!task) return;
 
-    // Toast + blue ball only for background tasks
-    if (taskId !== state.activeTaskId) {
-      dispatch({ type: 'SHOW_TOAST', message: `${task.name}: Waiting for input`, duration: 5000 });
-      dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
-    }
+    // Ask main process to handle sound/OS notification and check staleness.
+    // Stale = agent was already idle before this session started.
+    const { suppress } = await window.bifrost.notifyBell(taskId, taskId === state.activeTaskId);
+    if (suppress) return;
 
-    // Sound, OS notification, dock bounce via main process
-    window.bifrost.notifyBell(taskId);
+    if (taskId !== state.activeTaskId) {
+      // Background task: toast + blue ball
+      dispatch({ type: 'SHOW_TOAST', message: `**${task.name}**: Waiting for input`, duration: 5000 });
+      dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
+      window.bifrost.getLastAssistantMessage(taskId).then((msg) => {
+        if (msg) {
+          const lines = msg.split('\n').slice(0, 3).join('\n');
+          const truncated = lines.length < msg.length ? lines + '...' : lines;
+          dispatch({ type: 'SHOW_TOAST', message: `**${task.name}**\n${truncated}`, duration: 5000 });
+        }
+      }).catch(() => { /* IPC error — keep the fallback toast */ });
+    }
   }, [taskId, notifications, state.tasks, state.activeTaskId, dispatch]);
 
   const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active, onBell: handleBell });
