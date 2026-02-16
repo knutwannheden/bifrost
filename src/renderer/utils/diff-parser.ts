@@ -4,6 +4,7 @@ export interface DiffFile {
   oldPath: string;
   newPath: string;
   status: DiffFileStatus;
+  binary: boolean;
   hunks: DiffHunk[];
 }
 
@@ -38,11 +39,12 @@ export function parseDiff(raw: string): DiffFile[] {
       oldPath: match?.[1] ?? '',
       newPath: match?.[2] ?? '',
       status: 'modified',
+      binary: false,
       hunks: [],
     };
     i++;
 
-    // Skip index, --- and +++ lines, detecting file status
+    // Skip index, --- and +++ lines, detecting file status and binary markers
     while (i < lines.length && !lines[i].startsWith('@@') && !lines[i].startsWith('diff --git ')) {
       if (lines[i].startsWith('new file mode') || lines[i] === '--- /dev/null') {
         file.status = 'added';
@@ -50,6 +52,10 @@ export function parseDiff(raw: string): DiffFile[] {
         file.status = 'deleted';
       } else if (lines[i].startsWith('rename from') || lines[i].startsWith('rename to')) {
         file.status = 'renamed';
+      } else if (lines[i].startsWith('Binary files ')) {
+        file.binary = true;
+      } else if (lines[i] === 'GIT binary patch') {
+        file.binary = true;
       }
       if (lines[i].startsWith('--- a/')) {
         file.oldPath = lines[i].slice(6);

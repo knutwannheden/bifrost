@@ -32,12 +32,22 @@ export async function getDiff(worktreePath: string, baseBranch?: string): Promis
         if (stat.isDirectory() || stat.size > 1024 * 1024) continue; // skip dirs and large files
 
         try {
+          // Check for binary content (null bytes in first 8KB)
+          const fd = fs.openSync(fullPath, 'r');
+          const probe = Buffer.alloc(8192);
+          const bytesRead = fs.readSync(fd, probe, 0, probe.length, 0);
+          fs.closeSync(fd);
+          if (probe.subarray(0, bytesRead).includes(0)) {
+            untrackedDiff += `diff --git a/${file} b/${file}\nnew file mode 100644\nBinary files /dev/null and b/${file} differ\n`;
+            continue;
+          }
+
           const content = fs.readFileSync(fullPath, 'utf-8');
           const lines = content.split('\n');
           untrackedDiff += `diff --git a/${file} b/${file}\nnew file mode 100644\n--- /dev/null\n+++ b/${file}\n@@ -0,0 +1,${lines.length} @@\n`;
           untrackedDiff += lines.map((l) => `+${l}`).join('\n') + '\n';
         } catch {
-          // skip binary or unreadable files
+          // skip unreadable files
         }
       }
     } catch {

@@ -105,27 +105,33 @@ function FileSection({ data }: { data: HighlightedFile }) {
       <div className="sticky top-0 z-10 bg-slate-800 border border-slate-600 rounded-t px-3 py-1.5 text-xs font-semibold text-slate-300">
         {file.newPath || file.oldPath}
       </div>
-      <div className="border border-t-0 border-slate-700 rounded-b overflow-x-auto font-mono">
-        {file.hunks.map((hunk, hi) => (
-          <React.Fragment key={hi}>
-            {hi > 0 && (
-              <div className="border-t border-slate-700/50 bg-slate-800/50 px-3 py-0.5 text-xs text-blue-400">
-                {hunk.header}
-              </div>
-            )}
-            {hunk.lines.map((line, li) => {
-              const idx = lineIdx++;
-              return (
-                <DiffLineRow
-                  key={`${hi}-${li}`}
-                  line={line}
-                  tokens={tokensByLine[idx] ?? [{ content: line.content, color: '#e2e8f0' }]}
-                />
-              );
-            })}
-          </React.Fragment>
-        ))}
-      </div>
+      {file.binary ? (
+        <div className="border border-t-0 border-slate-700 rounded-b px-3 py-2 text-xs text-slate-500 italic">
+          Binary file not shown
+        </div>
+      ) : (
+        <div className="border border-t-0 border-slate-700 rounded-b overflow-x-auto font-mono">
+          {file.hunks.map((hunk, hi) => (
+            <React.Fragment key={hi}>
+              {hi > 0 && (
+                <div className="border-t border-slate-700/50 bg-slate-800/50 px-3 py-0.5 text-xs text-blue-400">
+                  {hunk.header}
+                </div>
+              )}
+              {hunk.lines.map((line, li) => {
+                const idx = lineIdx++;
+                return (
+                  <DiffLineRow
+                    key={`${hi}-${li}`}
+                    line={line}
+                    tokens={tokensByLine[idx] ?? [{ content: line.content, color: '#e2e8f0' }]}
+                  />
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -320,7 +326,10 @@ function FileListSidebar({
               <div className="text-slate-200 truncate">{basename}</div>
               {dirname && <div className="text-slate-500 truncate">{dirname}</div>}
             </div>
-            <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0" />
+            {data.file.binary
+              ? <span className="text-xs text-slate-600 italic flex-shrink-0">binary</span>
+              : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0" />
+            }
           </div>
         );
       })}
