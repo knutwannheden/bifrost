@@ -93,3 +93,6 @@ out/
 
 # Build output
 dist/
+
+# Git worktrees
+.worktrees/
