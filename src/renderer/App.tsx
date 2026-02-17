@@ -12,6 +12,7 @@ import DiffOverlay from './components/DiffOverlay';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
 import SettingsOverlay from './components/SettingsOverlay';
+import PermissionPanel from './components/PermissionPanel';
 
 declare global {
   interface Window {
@@ -123,6 +124,14 @@ export default function App() {
     );
     return unsub;
   }, [state.activeTaskId, dispatch]);
+
+  // Listen for permission prompts from main process
+  useEffect(() => {
+    const unsub = window.bifrost.onPermissionPrompt((request) => {
+      dispatch({ type: 'PUSH_PERMISSION', request });
+    });
+    return unsub;
+  }, [dispatch]);
 
   // Listen for menu actions from the main process
   useEffect(() => {
@@ -270,6 +279,9 @@ export default function App() {
 
       {/* Diff overlay */}
       <DiffOverlay />
+
+      {/* Permission approval panel */}
+      <PermissionPanel />
 
       {/* Toast notification */}
       {state.toast && (
