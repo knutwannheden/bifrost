@@ -11,7 +11,7 @@ import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, Captur
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches, detectBaseBranch } from './repo-manager';
 import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree } from './worktree-manager';
-import { createSession, createShellSession, writeToSession, resizeSession, resizeAllSessions, killSession, drainSessionBuffer } from './session-manager';
+import { createSession, createTmuxSession, createShellSession, writeToSession, resizeSession, resizeAllSessions, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff, getDiffStats } from './diff-service';
 import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
@@ -82,7 +82,7 @@ async function destroyTask(taskId: string): Promise<void> {
   const task = getTask(taskId);
   stopWatching(taskId);
   if (task.status === 'running') {
-    killSession(task.sessionId);
+    killSession(task.sessionId, task.tmuxSessionName);
   }
   if (!task.inPlace && fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
@@ -116,13 +116,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (fs.existsSync(task.worktreePath)) {
       const sessionId = randomUUID();
       const startupConfig = loadConfig();
-      createSession(sessionId, task.worktreePath, mainWindow, {
+      const restoreOpts = {
         resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
-      });
+      };
+
+      let tmuxSessionName: string | undefined;
+      if (startupConfig.agentTeams) {
+        tmuxSessionName = createTmuxSession(sessionId, task.worktreePath, mainWindow, restoreOpts);
+      } else {
+        createSession(sessionId, task.worktreePath, mainWindow, restoreOpts);
+      }
 
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
-        tasks[idx] = { ...tasks[idx], sessionId, status: 'running', hasUnread: false };
+        tasks[idx] = { ...tasks[idx], sessionId, status: 'running', hasUnread: false, ...(tmuxSessionName && { tmuxSessionName }) };
       }
     }
   }
@@ -231,11 +238,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     const sessionId = randomUUID();
     const taskId = randomUUID();
-
-    createSession(sessionId, worktreePath, mainWindow, {
+    const sessionOpts = {
       taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams,
-    });
+    };
 
+    let tmuxSessionName: string | undefined;
+    if (config.agentTeams) {
+      tmuxSessionName = createTmuxSession(sessionId, worktreePath, mainWindow, sessionOpts);
+    } else {
+      createSession(sessionId, worktreePath, mainWindow, sessionOpts);
+    }
 
     const task: Task = {
       id: taskId,
@@ -248,6 +260,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       hasUnread: false,
       createdAt: Date.now(),
       ...(inPlace && { inPlace: true }),
+      ...(tmuxSessionName && { tmuxSessionName }),
     };
 
     tasks.push(task);
@@ -272,7 +285,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     if (task.status === 'running') {
       cancelTaskRequests(taskId);
-      killSession(task.sessionId);
+      killSession(task.sessionId, task.tmuxSessionName);
     }
     return updateTask(taskId, { status: 'stopped' });
   });
@@ -292,7 +305,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Kill session if still running
     if (task.status === 'running') {
-      killSession(task.sessionId);
+      killSession(task.sessionId, task.tmuxSessionName);
     }
 
     // Remove worktree but keep the branch
@@ -342,15 +355,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     const sessionId = randomUUID();
     const reopenConfig = loadConfig();
-    createSession(sessionId, worktreePath, mainWindow, {
+    const reopenOpts = {
       resume: true,
       claudeSessionId: task.claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: reopenConfig.permissionMode,
       agentTeams: reopenConfig.agentTeams,
-    });
+    };
 
+    let tmuxSessionName: string | undefined;
+    if (reopenConfig.agentTeams) {
+      tmuxSessionName = createTmuxSession(sessionId, worktreePath, mainWindow, reopenOpts);
+    } else {
+      createSession(sessionId, worktreePath, mainWindow, reopenOpts);
+    }
 
     // Restart file watcher
     startWatching(taskId, worktreePath, mainWindow, claudeCallbacks);
@@ -362,6 +381,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       status: 'running',
       hasUnread: false,
       archivedAt: undefined,
+      ...(tmuxSessionName && { tmuxSessionName }),
     });
   });
 
@@ -552,14 +572,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
-    createSession(sessionId, cwd, mainWindow, {
+    const resumeOpts = {
       claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
       agentTeams: config.agentTeams,
-    });
+    };
 
+    let tmuxSessionName: string | undefined;
+    if (config.agentTeams) {
+      tmuxSessionName = createTmuxSession(sessionId, cwd, mainWindow, resumeOpts);
+    } else {
+      createSession(sessionId, cwd, mainWindow, resumeOpts);
+    }
 
     const task: Task = {
       id: taskId,
@@ -573,6 +599,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       createdAt: Date.now(),
       claudeSessionId,
       isExternal: !matchedRepo,
+      ...(tmuxSessionName && { tmuxSessionName }),
     };
 
     tasks.push(task);

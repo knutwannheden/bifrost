@@ -1,6 +1,7 @@
 import type {
   ActivityEntry,
   AddRepoParams,
+  AgentTeam,
   BifrostConfig,
   CaptureContextParams,
   ClaudeSession,
@@ -102,6 +103,9 @@ export const IPC = {
 
   // Permission
   RESOLVE_PERMISSION: 'permission:resolve',
+
+  // Agent Teams
+  GET_AGENT_TEAM: 'teams:get',
 } as const;
 
 // Streaming channels (send/on)
@@ -114,6 +118,8 @@ export const IPC_STREAM = {
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
+  TEAM_UPDATED: 'teams:updated',
+  TEAM_REMOVED: 'teams:removed',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -219,4 +225,9 @@ export interface BifrostAPI {
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;
+
+  // Agent Teams
+  getAgentTeam(teamName: string): Promise<AgentTeam | null>;
+  onTeamUpdated(callback: (team: AgentTeam) => void): () => void;
+  onTeamRemoved(callback: (teamName: string) => void): () => void;
 }

@@ -29,6 +29,60 @@ export interface Task {
   isExternal?: boolean;
   /** True if this task uses the main repo directory instead of a separate worktree */
   inPlace?: boolean;
+  /** Set when task's Claude session leads an agent team */
+  agentTeamName?: string;
+  /** The tmux session name wrapping this task (e.g. "bifrost-{taskId}") */
+  tmuxSessionName?: string;
+}
+
+// Agent Teams types
+
+export interface TeamMember {
+  agentId: string;       // "name@team-slug"
+  name: string;
+  agentType: 'team-lead' | 'general-purpose';
+  model: string;
+  color: string;
+  tmuxPaneId: string;    // "" | "in-process" | actual pane ID like "%3"
+  cwd: string;
+  backendType?: 'in-process' | 'tmux';
+}
+
+export interface TeamConfig {
+  name: string;
+  leadAgentId: string;
+  leadSessionId: string;  // links to Task.claudeSessionId
+  members: TeamMember[];
+}
+
+export interface TeamMessage {
+  from: string;
+  text: string;
+  summary: string;
+  timestamp: string;
+  color: string;
+  read: boolean;
+}
+
+export interface TeamTask {
+  id: string;
+  subject: string;
+  description: string;
+  status: string;
+  owner?: string;
+  blocks?: string[];
+  blockedBy?: string[];
+  activeForm?: string;
+}
+
+export interface AgentTeam {
+  teamName: string;
+  config: TeamConfig;
+  leadTaskId: string;
+  tmuxSessionName: string;
+  memberSessions: Record<string, string>;  // memberName → bifrost sessionId
+  memberMessages: Record<string, TeamMessage[]>;
+  tasks: TeamTask[];
 }
 
 export interface ClaudeSession {
