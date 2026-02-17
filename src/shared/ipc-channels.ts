@@ -8,6 +8,8 @@ import type {
   DiffResult,
   DiffStats,
   GitLogEntry,
+  PermissionDecision,
+  PermissionPromptData,
   PrInfo,
   RecentRepo,
   Repo,
@@ -97,6 +99,9 @@ export const IPC = {
   // PR
   FETCH_PR_INFO: 'pr:fetch-info',
   CHECK_GH_AVAILABLE: 'gh:check',
+
+  // Permission
+  RESOLVE_PERMISSION: 'permission:resolve',
 } as const;
 
 // Streaming channels (send/on)
@@ -108,6 +113,7 @@ export const IPC_STREAM = {
   REVIEW_PROGRESS: 'review:progress',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
+  PERMISSION_PROMPT: 'permission:prompt',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -206,6 +212,10 @@ export interface BifrostAPI {
   // Hook notifications
   onHookNotification(callback: (taskId: string, taskName: string, message: string,
     title: string, notificationType: string) => void): () => void;
+
+  // Permission prompts
+  onPermissionPrompt(callback: (request: PermissionPromptData) => void): () => void;
+  resolvePermission(requestId: string, decision: PermissionDecision): Promise<void>;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

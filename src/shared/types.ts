@@ -184,3 +184,26 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   agentTeams: false,
   localWorktrees: false,
 };
+
+// Permission approval types
+
+export interface RuleOption {
+  label: string;
+  pattern: string;
+}
+
+export interface PermissionPromptData {
+  requestId: string;
+  taskId: string;
+  taskName: string;
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  ruleOptions: RuleOption[];
+}
+
+export interface PermissionDecision {
+  action: 'allow' | 'deny';
+  persist: boolean;
+  scope?: 'local' | 'project' | 'user';
+  rulePattern?: string;
+}
