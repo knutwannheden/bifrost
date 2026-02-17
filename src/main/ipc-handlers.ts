@@ -23,12 +23,7 @@ import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
 import { runReview, saveReview, loadReview, watchReviewFile } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
-import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { getRecentClaudeEntries } from './claude-watcher';
-
-// Track when each task's session was spawned so we can distinguish
-// stale idle BELs (from before the session) from genuine ones.
-const sessionStartTimes = new Map<string, number>();
 import { scanRecentRepos } from './history-scanner';
 
 // In-memory task list, synced to disk
@@ -122,7 +117,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       createSession(sessionId, task.worktreePath, mainWindow, {
         resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
       });
-      sessionStartTimes.set(task.id, Date.now());
+
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
         tasks[idx] = { ...tasks[idx], sessionId, status: 'running', hasUnread: false };
@@ -235,7 +230,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     createSession(sessionId, worktreePath, mainWindow, {
       taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams,
     });
-    sessionStartTimes.set(taskId, Date.now());
+
 
     const task: Task = {
       id: taskId,
@@ -348,7 +343,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       permissionMode: reopenConfig.permissionMode,
       agentTeams: reopenConfig.agentTeams,
     });
-    sessionStartTimes.set(taskId, Date.now());
+
 
     // Restart file watcher
     startWatching(taskId, worktreePath, mainWindow, claudeCallbacks);
@@ -557,7 +552,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       permissionMode: config.permissionMode,
       agentTeams: config.agentTeams,
     });
-    sessionStartTimes.set(taskId, Date.now());
+
 
     const task: Task = {
       id: taskId,
@@ -605,36 +600,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Integration
   ipcMain.handle(IPC.CHECK_INTEGRATION, () => checkIntegration());
   ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());
-
-  // Bell notification (instant, from xterm.js)
-  // Multiple bell events (BEL + OSC 9 + OSC 777) can fire in quick succession.
-  // Debounce here so the renderer fully suppresses duplicates too.
-  ipcMain.handle(IPC.NOTIFY_BELL, (_event, taskId: string, isActiveTask: boolean) => {
-    const task = getTask(taskId);
-
-    // Debounce: suppress duplicate bells within 10s window
-    if (isDebounced(taskId)) return { suppress: true };
-
-    // Suppress stale idle notifications: if the last assistant message
-    // predates this session, the agent was already idle before we connected.
-    // Don't mark as notified so the next genuine bell isn't debounced.
-    const sessionStart = sessionStartTimes.get(taskId);
-    if (sessionStart) {
-      const entries = getRecentClaudeEntries(taskId, task.worktreePath);
-      const isAgentOutput = (e: ActivityEntry) =>
-        e.claudeEventKind === 'assistant_text' ||
-        (e.claudeEventKind === 'tool_use' && e.claudeToolName === 'AskUserQuestion');
-      const lastAssistant = [...entries].reverse().find(isAgentOutput);
-      if (lastAssistant && lastAssistant.timestamp < sessionStart) {
-        return { suppress: true };
-      }
-    }
-
-    // All checks passed — mark debounce window and notify
-    markNotified(taskId);
-    handleBellNotification(taskId, task.name, isActiveTask);
-    return { suppress: false };
-  });
 
   ipcMain.handle(IPC.GET_LAST_ASSISTANT_MESSAGE, (_event, taskId: string) => {
     const task = getTask(taskId);

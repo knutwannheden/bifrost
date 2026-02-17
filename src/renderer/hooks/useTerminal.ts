@@ -17,7 +17,6 @@ interface TerminalOptions {
   fontFamily?: string;
   fontWeight?: number;
   visible?: boolean;
-  onBell?: () => void;
 }
 
 export function useTerminal(
@@ -30,9 +29,6 @@ export function useTerminal(
   const fitAddonRef = useRef<FitAddon | null>(null);
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
-  const onBellRef = useRef(options?.onBell);
-  onBellRef.current = options?.onBell;
-
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
 
@@ -147,39 +143,17 @@ export function useTerminal(
       onTitleChangeRef.current?.(title);
     });
 
-    // Suppress bell/OSC notifications during initial buffer drain
-    let drainComplete = false;
-
-    // Listen for terminal bell (BEL) — used for instant idle notifications
-    terminal.onBell(() => {
-      if (drainComplete) onBellRef.current?.();
-    });
-
-    // Listen for OSC 9 (iTerm2) and OSC 777 (rxvt) desktop notifications
-    // Claude Code uses one of these for idle notifications
-    terminal.parser.registerOscHandler(9, () => {
-      if (drainComplete) onBellRef.current?.();
-      return true;
-    });
-    terminal.parser.registerOscHandler(777, () => {
-      if (drainComplete) onBellRef.current?.();
-      return true;
-    });
-
     // Replay any buffered output from before this listener was registered,
     // then force a resize to trigger SIGWINCH so Claude Code redraws its
     // TUI with the correct dimensions (buffer was generated at default 120×30).
     window.bifrost.drainSessionBuffer(sessionId).then((buf) => {
       if (buf) {
         terminal.write(buf, () => {
-          drainComplete = true;
           try {
             fitAddon.fit();
             window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
           } catch { /* container may not be visible */ }
         });
-      } else {
-        drainComplete = true;
       }
     });
 

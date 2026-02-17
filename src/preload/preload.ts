@@ -121,8 +121,16 @@ const api: BifrostAPI = {
   },
 
   // Notifications
-  notifyBell: (taskId, isActiveTask) => ipcRenderer.invoke(IPC.NOTIFY_BELL, taskId, isActiveTask),
   getLastAssistantMessage: (taskId) => ipcRenderer.invoke(IPC.GET_LAST_ASSISTANT_MESSAGE, taskId),
+
+  // Hook notifications
+  onHookNotification: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, taskName: string, message: string, title: string, notificationType: string) =>
+      callback(taskId, taskName, message, title, notificationType);
+    ipcRenderer.on(IPC_STREAM.HOOK_NOTIFICATION, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.HOOK_NOTIFICATION, handler);
+  },
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) =>

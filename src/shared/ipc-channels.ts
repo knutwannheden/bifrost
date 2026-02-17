@@ -86,7 +86,6 @@ export const IPC = {
   INSTALL_INTEGRATION: 'integration:install',
 
   // Notifications
-  NOTIFY_BELL: 'notify:bell',
   GET_LAST_ASSISTANT_MESSAGE: 'notify:last-assistant-message',
 
   // Dialog
@@ -108,6 +107,7 @@ export const IPC_STREAM = {
   TASK_SUMMARY: 'task:summary',
   REVIEW_PROGRESS: 'review:progress',
   MENU_ACTION: 'menu:action',
+  HOOK_NOTIFICATION: 'hook:notification',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -201,8 +201,11 @@ export interface BifrostAPI {
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
 
   // Notifications
-  notifyBell(taskId: string, isActiveTask: boolean): Promise<{ suppress: boolean }>;
   getLastAssistantMessage(taskId: string): Promise<string | null>;
+
+  // Hook notifications
+  onHookNotification(callback: (taskId: string, taskName: string, message: string,
+    title: string, notificationType: string) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

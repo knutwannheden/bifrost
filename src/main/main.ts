@@ -4,7 +4,7 @@ import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
 import { initNotificationService } from './notification-service';
-import { startApi, stopApi } from './bifrost-api';
+import { startApi, stopApi, initApi } from './bifrost-api';
 import { stopAllWatching } from './activity-watcher';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
@@ -153,6 +153,7 @@ app.on('ready', async () => {
   if (mainWindow) {
     registerIpcHandlers(mainWindow);
     initNotificationService(mainWindow);
+    initApi(mainWindow);
   }
 
   globalShortcut.register('CommandOrControl+Shift+B', () => {

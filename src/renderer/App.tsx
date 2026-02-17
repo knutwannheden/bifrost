@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useApp, defaultPaneState } from './context/AppContext';
 import type { PaneTarget } from './context/AppContext';
 import type { BifrostAPI } from '../shared/ipc-channels';
@@ -58,6 +58,9 @@ export default function App() {
 
   const activeTask = state.tasks.find((t) => t.id === state.activeTaskId) ?? null;
 
+  // Buffer last assistant text per task for hook notifications
+  const lastAssistantText = useRef(new Map<string, string>());
+
   // Mark active task as read when switching to it
   useEffect(() => {
     if (state.activeTaskId) {
@@ -81,12 +84,43 @@ export default function App() {
 
   // Mark non-active tasks as unread when new JSONL activity arrives
   // (actual Claude interactions, not terminal noise).
+  // Also buffer last assistant text per task for hook notifications.
   useEffect(() => {
     const unsub = window.bifrost.onActivityEntry((entry) => {
-      if (entry.type === 'claude_event' && entry.taskId !== state.activeTaskId) {
-        dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
+      if (entry.type === 'claude_event') {
+        if (entry.claudeEventKind === 'assistant_text' && entry.claudeText) {
+          lastAssistantText.current.set(entry.taskId, entry.claudeText);
+        }
+        if (entry.taskId !== state.activeTaskId) {
+          dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
+        }
       }
     });
+    return unsub;
+  }, [state.activeTaskId, dispatch]);
+
+  // Listen for hook-based notifications (from Claude Code plugin)
+  useEffect(() => {
+    const unsub = window.bifrost.onHookNotification(
+      (taskId, taskName, message) => {
+        if (taskId === state.activeTaskId) return;
+        dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
+        if (message) {
+          // Notification hook provides message directly
+          const lines = message.split('\n').slice(0, 3).join('\n');
+          const truncated = lines.length < message.length ? lines + '...' : lines;
+          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000 });
+        } else {
+          // Stop hook — delay briefly so the activity watcher streams the final entry
+          setTimeout(() => {
+            const text = lastAssistantText.current.get(taskId) || 'Waiting for input';
+            const lines = text.split('\n').slice(0, 3).join('\n');
+            const truncated = lines.length < text.length ? lines + '...' : lines;
+            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000 });
+          }, 500);
+        }
+      },
+    );
     return unsub;
   }, [state.activeTaskId, dispatch]);
 

@@ -2,11 +2,19 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask } from './ipc-handlers';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
+import { isDebounced, markNotified, handleBellNotification } from './notification-service';
+import { IPC_STREAM } from '../shared/ipc-channels';
 
+let mainWindow: BrowserWindow | null = null;
+
+export function initApi(window: BrowserWindow): void {
+  mainWindow = window;
+}
 
 const PORT_START = 7623;
 const PORT_END = 7632;
@@ -111,6 +119,35 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       } catch (e) {
         errorResponse(res, (e as Error).message, 404);
       }
+      return;
+    }
+
+    case '/hook': {
+      const cwd = body.cwd as string;
+      if (!cwd) {
+        errorResponse(res, 'Missing cwd');
+        return;
+      }
+      const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+      if (!task) {
+        errorResponse(res, 'No matching task', 404);
+        return;
+      }
+      if (isDebounced(task.id)) {
+        jsonResponse(res, { ok: true, debounced: true });
+        return;
+      }
+      markNotified(task.id);
+      handleBellNotification(task.id, task.name, false);
+      const message = (body.message as string) || '';
+      const title = (body.title as string) || '';
+      const notificationType = (body.notification_type as string) || '';
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(
+          IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType,
+        );
+      }
+      jsonResponse(res, { ok: true });
       return;
     }
 
