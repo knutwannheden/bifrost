@@ -1,23 +1,29 @@
 import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
 const execFile = promisify(execFileCb);
 
+function resolveWorktreePath(repoPath: string, taskName: string, local?: boolean): string {
+  if (local) {
+    return path.join(repoPath, '.worktrees', taskName);
+  }
+  return path.join(os.homedir(), '.bifrost', 'worktrees', path.basename(repoPath), taskName);
+}
+
 export async function createWorktree(
   repoPath: string,
   taskName: string,
   branch: string,
+  localWorktrees?: boolean,
 ): Promise<string> {
-  const repoName = path.basename(repoPath);
-  const worktreePath = path.join(
-    os.homedir(),
-    '.bifrost',
-    'worktrees',
-    repoName,
-    taskName,
-  );
+  const worktreePath = resolveWorktreePath(repoPath, taskName, localWorktrees);
+
+  if (localWorktrees) {
+    await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
+  }
 
   await execFile('git', ['worktree', 'add', worktreePath, '-b', taskName, branch], {
     cwd: repoPath,
@@ -29,15 +35,13 @@ export async function createWorktree(
 export async function restoreWorktree(
   repoPath: string,
   taskName: string,
+  localWorktrees?: boolean,
 ): Promise<string> {
-  const repoName = path.basename(repoPath);
-  const worktreePath = path.join(
-    os.homedir(),
-    '.bifrost',
-    'worktrees',
-    repoName,
-    taskName,
-  );
+  const worktreePath = resolveWorktreePath(repoPath, taskName, localWorktrees);
+
+  if (localWorktrees) {
+    await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
+  }
 
   await execFile('git', ['worktree', 'add', worktreePath, taskName], {
     cwd: repoPath,

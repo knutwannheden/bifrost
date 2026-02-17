@@ -49,6 +49,7 @@ export interface BifrostConfig {
   notifications: boolean;
   showTips: boolean;
   agentTeams: boolean;
+  localWorktrees: boolean;
 }
 
 export interface CreateTaskParams {
@@ -166,4 +167,5 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   notifications: true,
   showTips: true,
   agentTeams: false,
+  localWorktrees: false,
 };

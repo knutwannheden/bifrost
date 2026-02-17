@@ -177,6 +177,18 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'localWorktrees',
+      category: 'General',
+      label: 'Local worktrees',
+      description: 'Create worktrees inside the repo directory (.worktrees/)',
+      render: (config, update) => (
+        <ToggleSwitch
+          checked={config.localWorktrees}
+          onChange={(v) => update({ localWorktrees: v })}
+        />
+      ),
+    },
+    {
       key: 'showTips',
       category: 'General',
       label: 'Show tips on welcome screen',

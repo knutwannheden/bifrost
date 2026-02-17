@@ -198,7 +198,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const repo = config.repos.find((r: Repo) => r.id === params.repoId);
     if (!repo) throw new Error(`Repo not found: ${params.repoId}`);
 
-    const worktreePath = await createWorktree(repo.path, params.name, params.branch);
+    const worktreePath = await createWorktree(repo.path, params.name, params.branch, config.localWorktrees);
     const sessionId = randomUUID();
     const taskId = randomUUID();
 
@@ -293,7 +293,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const config = loadConfig();
       const repo = config.repos.find((r: Repo) => r.id === task.repoId);
       if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
-      worktreePath = await restoreWorktree(repo.path, task.name);
+      worktreePath = await restoreWorktree(repo.path, task.name, config.localWorktrees);
     }
 
     const sessionId = randomUUID();
