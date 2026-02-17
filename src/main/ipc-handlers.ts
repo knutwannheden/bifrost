@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
 import { IPC, IPC_STREAM } from '../shared/ipc-channels';
-import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams, ActivityEntry } from '../shared/types';
+import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams, ActivityEntry, PermissionDecision } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches, detectBaseBranch } from './repo-manager';
 import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree } from './worktree-manager';
@@ -25,6 +25,7 @@ import { runReview, saveReview, loadReview, watchReviewFile } from './review-ser
 import { checkIntegration, installIntegration } from './integration-installer';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { scanRecentRepos } from './history-scanner';
+import { resolveRequest, cancelTaskRequests, setWorktreePathResolver } from './permission-manager';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -77,6 +78,7 @@ async function resolveBaseBranch(task: Task): Promise<string | undefined> {
 }
 
 async function destroyTask(taskId: string): Promise<void> {
+  cancelTaskRequests(taskId);
   const task = getTask(taskId);
   stopWatching(taskId);
   if (task.status === 'running') {
@@ -126,6 +128,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   }
 
   saveTasks(tasks);
+
+  // Permission manager: provide worktree path resolver
+  setWorktreePathResolver((taskId) => getTask(taskId).worktreePath);
 
   // Claude watcher callbacks
   const claudeCallbacks = {
@@ -266,6 +271,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.STOP_TASK, (_event, taskId: string) => {
     const task = getTask(taskId);
     if (task.status === 'running') {
+      cancelTaskRequests(taskId);
       killSession(task.sessionId);
     }
     return updateTask(taskId, { status: 'stopped' });
@@ -700,5 +706,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       headRepoName: '',
       isFork: false,
     };
+  });
+
+  // Permission
+  ipcMain.handle(IPC.RESOLVE_PERMISSION, (_event, requestId: string, decision: PermissionDecision) => {
+    resolveRequest(requestId, decision);
   });
 }

@@ -8,6 +8,7 @@ import { getTasks, getTask } from './ipc-handlers';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification } from './notification-service';
+import { createRequest } from './permission-manager';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 let mainWindow: BrowserWindow | null = null;
@@ -119,6 +120,39 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       } catch (e) {
         errorResponse(res, (e as Error).message, 404);
       }
+      return;
+    }
+
+    case '/permission': {
+      const cwd = body.cwd as string;
+      const toolName = body.tool_name as string;
+      const toolInput = (body.tool_input as Record<string, unknown>) || {};
+
+      if (!cwd || !toolName) {
+        errorResponse(res, 'Missing cwd or tool_name');
+        return;
+      }
+
+      const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+      if (!task) {
+        // No matching task — fall back to Claude default
+        jsonResponse(res, {});
+        return;
+      }
+
+      const { promptData, response } = createRequest(task.id, task.name, toolName, toolInput);
+
+      // Send to renderer
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_STREAM.PERMISSION_PROMPT, promptData);
+      }
+
+      // Notify user
+      handleBellNotification(task.id, task.name, false);
+
+      // Hold connection open until resolved
+      const result = await response;
+      jsonResponse(res, result);
       return;
     }
 
