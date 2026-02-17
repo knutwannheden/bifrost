@@ -1,9 +1,23 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import type { Repo } from '../../shared/types';
+import type { PrInfo, Repo } from '../../shared/types';
 import { generateTaskName } from '../utils/name-generator';
 import { shortPath } from '../utils/paths';
 import ActionLabel from './ActionLabel';
+
+interface ParsedPrUrl {
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+function parsePrUrl(text: string): ParsedPrUrl | null {
+  const match = text.trim().match(
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?(?:[?#].*)?$/,
+  );
+  if (!match) return null;
+  return { owner: match[1], repo: match[2], number: parseInt(match[3], 10) };
+}
 
 function repoDisplayName(repo: Repo): string {
   return repo.githubPath ?? repo.name;
@@ -30,6 +44,8 @@ export default function TaskCreateDialog() {
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prBanner, setPrBanner] = useState<{ number: number; title?: string; repoId?: string; headBranch?: string; message?: string } | null>(null);
+  const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
 
   const repoRef = useRef<HTMLInputElement>(null);
   const repoListRef = useRef<HTMLDivElement>(null);
@@ -73,6 +89,43 @@ export default function TaskCreateDialog() {
     }
   }, [state.repos.length]);
 
+  // Detect PR URL on clipboard when dialog opens
+  useEffect(() => {
+    (async () => {
+      try {
+        const text = await window.bifrost.readClipboard();
+        const parsed = parsePrUrl(text);
+        if (!parsed) return;
+
+        // Find matching repo
+        const matchedRepo = state.repos.find(
+          (r) => r.githubPath?.toLowerCase() === `${parsed.owner}/${parsed.repo}`.toLowerCase(),
+        );
+
+        if (!matchedRepo) {
+          setPrBanner({ number: parsed.number, message: `PR #${parsed.number} detected but ${parsed.owner}/${parsed.repo} is not managed in Bifrost` });
+          return;
+        }
+
+        // Fetch PR metadata
+        const info = await window.bifrost.fetchPrInfo(matchedRepo.id, parsed.number);
+        setPrInfo(info);
+
+        // Auto-fill: select repo and set branch
+        setRepoId(matchedRepo.id);
+        setRepoSearch(repoDisplayName(matchedRepo));
+        setPrBanner({
+          number: info.number,
+          title: info.title,
+          repoId: matchedRepo.id,
+          headBranch: info.headBranch,
+        });
+      } catch {
+        // Clipboard read failed or PR fetch failed — silently ignore
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     if (!repoId) {
       setBranches([]);
@@ -87,6 +140,13 @@ export default function TaskCreateDialog() {
         setBranch(repo.defaultBranch);
       } else if (b.length > 0) {
         setBranch(b[0]);
+      }
+      // If PR detected, select the PR branch (add to list if not present)
+      if (prBanner?.headBranch && prBanner?.repoId === repoId) {
+        if (!b.includes(prBanner.headBranch)) {
+          setBranches([prBanner.headBranch, ...b]);
+        }
+        setBranch(prBanner.headBranch);
       }
     });
   }, [repoId, state.repos]);
@@ -115,6 +175,7 @@ export default function TaskCreateDialog() {
         repoId,
         name: taskName.trim(),
         branch,
+        ...(prInfo && { prInfo }),
       });
       dispatch({ type: 'ADD_TASK', task });
       dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
@@ -182,6 +243,31 @@ export default function TaskCreateDialog() {
         </div>
 
         <div className="p-4 space-y-4">
+          {/* PR detection banner */}
+          {prBanner && (
+            <div className="flex items-center justify-between bg-blue-900/40 border border-blue-700/50 rounded px-3 py-2">
+              <p className="text-xs text-blue-300">
+                {prBanner.message
+                  ? prBanner.message
+                  : `PR #${prBanner.number}${prBanner.title ? `: ${prBanner.title}` : ''}`}
+              </p>
+              <button
+                onClick={() => {
+                  setPrBanner(null);
+                  setPrInfo(null);
+                  // Reset to default branch
+                  const repo = state.repos.find((r) => r.id === repoId);
+                  if (repo && branches.includes(repo.defaultBranch)) {
+                    setBranch(repo.defaultBranch);
+                  }
+                }}
+                className="text-xs text-blue-400 hover:text-blue-200 ml-3 whitespace-nowrap"
+              >
+                Ignore
+              </button>
+            </div>
+          )}
+
           {/* No repos message */}
           {state.repos.length === 0 && (
             <div className="text-center py-2">
