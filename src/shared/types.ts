@@ -56,6 +56,17 @@ export interface CreateTaskParams {
   repoId: string;
   name: string;
   branch: string;
+  /** PR info for PR-sourced tasks — triggers fetch + upstream setup */
+  prInfo?: PrInfo;
+}
+
+export interface PrInfo {
+  number: number;
+  title?: string; // unavailable in git-only fallback
+  headBranch: string;
+  headRepoOwner: string;
+  headRepoName: string;
+  isFork: boolean;
 }
 
 export interface AddRepoParams {
