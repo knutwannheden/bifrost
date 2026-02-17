@@ -112,6 +112,18 @@ export function useTerminal(
 
     // Let the app handle these Cmd+key shortcuts instead of xterm
     terminal.attachCustomKeyEventHandler((e) => {
+      // Cmd+Left/Right/Backspace: emulate macOS terminal behavior
+      if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Backspace') {
+          if (e.type === 'keydown') {
+            const seq = e.key === 'ArrowLeft' ? '\x1bOH'  // Home
+              : e.key === 'ArrowRight' ? '\x1bOF'         // End
+              : '\x15';                                     // Ctrl+U (kill line)
+            window.bifrost.writeToSession(sessionId!, seq);
+          }
+          return false;
+        }
+      }
       if (e.metaKey && !e.shiftKey) {
         const key = e.key.toLowerCase();
         if ('atdrhko,lgf'.includes(key)) return false;

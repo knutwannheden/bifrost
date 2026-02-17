@@ -128,6 +128,6 @@ export async function getRepoBranches(repoPath: string): Promise<string[]> {
   const { stdout } = await execFile('git', ['branch', '-a'], { cwd: repoPath });
   return stdout
     .split('\n')
-    .map((line) => line.replace(/^\*?\s+/, '').trim())
+    .map((line) => line.replace(/^\s*[*+]?\s+/, '').trim())
     .filter((line) => line.length > 0 && !line.includes('->'));
 }

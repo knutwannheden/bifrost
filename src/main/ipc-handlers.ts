@@ -87,7 +87,7 @@ async function destroyTask(taskId: string): Promise<void> {
   if (task.status === 'running') {
     killSession(task.sessionId);
   }
-  if (fs.existsSync(task.worktreePath)) {
+  if (!task.inPlace && fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
     if (repo) {
@@ -183,6 +183,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return getRepoBranches(repo.path);
   });
 
+  ipcMain.handle(IPC.GET_CURRENT_BRANCH, async (_event, repoId: string) => {
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === repoId);
+    if (!repo) throw new Error(`Repo not found: ${repoId}`);
+    const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo.path });
+    return stdout.trim();
+  });
+
   ipcMain.handle(IPC.GET_RECENT_REPOS, () => {
     const config = loadConfig();
     const excludePaths = new Set(config.repos.map((r: Repo) => r.path));
@@ -198,9 +206,29 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const repo = config.repos.find((r: Repo) => r.id === params.repoId);
     if (!repo) throw new Error(`Repo not found: ${params.repoId}`);
 
-    const worktreePath = params.prInfo
-      ? await createWorktreeFromPr(repo.path, params.name, params.prInfo, config.localWorktrees)
-      : await createWorktree(repo.path, params.name, params.branch, config.localWorktrees);
+    let worktreePath: string;
+    let branch = params.branch;
+    let inPlace = false;
+
+    if (params.inPlace) {
+      // Conflict check: only one non-archived in-place task per repo
+      const conflict = tasks.find(
+        (t) => t.status !== 'archived' && t.worktreePath === repo.path,
+      );
+      if (conflict) {
+        throw new Error(`An active task "${conflict.name}" already uses the main worktree for this repo`);
+      }
+      worktreePath = repo.path;
+      // Auto-detect current branch
+      const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo.path });
+      branch = stdout.trim();
+      inPlace = true;
+    } else {
+      worktreePath = params.prInfo
+        ? await createWorktreeFromPr(repo.path, params.name, params.prInfo, config.localWorktrees)
+        : await createWorktree(repo.path, params.name, params.branch, config.localWorktrees);
+    }
+
     const sessionId = randomUUID();
     const taskId = randomUUID();
 
@@ -213,12 +241,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       id: taskId,
       name: params.name,
       repoId: params.repoId,
-      branch: params.branch,
+      branch,
       worktreePath,
       sessionId,
       status: 'running',
       hasUnread: false,
       createdAt: Date.now(),
+      ...(inPlace && { inPlace: true }),
     };
 
     tasks.push(task);
@@ -265,7 +294,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
 
     // Remove worktree but keep the branch
-    if (!task.isExternal && fs.existsSync(task.worktreePath)) {
+    if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
       const config = loadConfig();
       const repo = config.repos.find((r: Repo) => r.id === task.repoId);
       if (repo) {
@@ -286,16 +315,27 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.REOPEN_TASK, async (_event, taskId: string) => {
     const task = getTask(taskId);
     let worktreePath = task.worktreePath;
+    let branch = task.branch;
 
     // Restore worktree from branch if it was removed during archive
     if (!fs.existsSync(worktreePath)) {
-      if (task.isExternal) {
+      if (task.isExternal || task.inPlace) {
         throw new Error(`Directory no longer exists: ${worktreePath}`);
       }
       const config = loadConfig();
       const repo = config.repos.find((r: Repo) => r.id === task.repoId);
       if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
       worktreePath = await restoreWorktree(repo.path, task.name, config.localWorktrees);
+    }
+
+    // Re-detect current branch for in-place tasks (user may have switched)
+    if (task.inPlace) {
+      try {
+        const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: worktreePath });
+        branch = stdout.trim();
+      } catch {
+        // ignore — keep existing branch
+      }
     }
 
     const sessionId = randomUUID();
@@ -316,6 +356,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return updateTask(taskId, {
       sessionId,
       worktreePath,
+      branch,
       status: 'running',
       hasUnread: false,
       archivedAt: undefined,

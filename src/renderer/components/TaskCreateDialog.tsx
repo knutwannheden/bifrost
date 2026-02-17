@@ -41,16 +41,22 @@ export default function TaskCreateDialog() {
   const [repoFocusedIdx, setRepoFocusedIdx] = useState(0);
   const [taskName, setTaskName] = useState('');
   const [branch, setBranch] = useState('');
+  const [branchSearch, setBranchSearch] = useState('');
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
+  const [branchFocusedIdx, setBranchFocusedIdx] = useState(0);
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prBanner, setPrBanner] = useState<{ number: number; title?: string; repoId?: string; headBranch?: string; message?: string } | null>(null);
   const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
+  const [inPlace, setInPlace] = useState(false);
+  const [currentBranch, setCurrentBranch] = useState<string | null>(null);
 
   const repoRef = useRef<HTMLInputElement>(null);
   const repoListRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  const branchRef = useRef<HTMLSelectElement>(null);
+  const branchRef = useRef<HTMLInputElement>(null);
+  const branchListRef = useRef<HTMLDivElement>(null);
   const createRef = useRef<HTMLButtonElement>(null);
 
   const close = useCallback(() => {
@@ -71,6 +77,26 @@ export default function TaskCreateDialog() {
     return matchesSearch(r, repoSearch);
   });
 
+  const branchInputFullySelected =
+    branchRef.current &&
+    branchRef.current.selectionStart === 0 &&
+    branchRef.current.selectionEnd === branchRef.current.value.length &&
+    branchRef.current.value.length > 0;
+
+  const filteredBranches = branches.filter((b) => {
+    if (!branchSearch || branchInputFullySelected) return true;
+    return b.toLowerCase().includes(branchSearch.toLowerCase());
+  });
+
+  const existingTask = repoId && branch && !inPlace
+    ? state.tasks.find((t) => t.repoId === repoId && t.branch === branch && t.status !== 'archived')
+    : undefined;
+
+  const repo = state.repos.find((r) => r.id === repoId);
+  const existingInPlaceTask = inPlace && repo
+    ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path)
+    : undefined;
+
   // Keep focused index in bounds and auto-select first match
   useEffect(() => {
     setRepoFocusedIdx(0);
@@ -78,6 +104,13 @@ export default function TaskCreateDialog() {
       setRepoId(filteredRepos[0].id);
     }
   }, [repoSearch]);
+
+  useEffect(() => {
+    setBranchFocusedIdx(0);
+    if (filteredBranches.length > 0 && branchDropdownOpen) {
+      setBranch(filteredBranches[0]);
+    }
+  }, [branchSearch]);
 
   // Focus the repo input on open and select text
   useEffect(() => {
@@ -126,10 +159,20 @@ export default function TaskCreateDialog() {
     })();
   }, []);
 
+  // Fetch current branch when in-place mode is enabled
+  useEffect(() => {
+    if (inPlace && repoId) {
+      window.bifrost.getCurrentBranch(repoId).then(setCurrentBranch).catch(() => setCurrentBranch(null));
+    } else {
+      setCurrentBranch(null);
+    }
+  }, [inPlace, repoId]);
+
   useEffect(() => {
     if (!repoId) {
       setBranches([]);
       setBranch('');
+      setBranchSearch('');
       return;
     }
     setTaskName(generateTaskName());
@@ -138,8 +181,10 @@ export default function TaskCreateDialog() {
       const repo = state.repos.find((r) => r.id === repoId);
       if (repo && b.includes(repo.defaultBranch)) {
         setBranch(repo.defaultBranch);
+        setBranchSearch(repo.defaultBranch);
       } else if (b.length > 0) {
         setBranch(b[0]);
+        setBranchSearch(b[0]);
       }
       // If PR detected, select the PR branch (add to list if not present)
       if (prBanner?.headBranch && prBanner?.repoId === repoId) {
@@ -147,6 +192,7 @@ export default function TaskCreateDialog() {
           setBranches([prBanner.headBranch, ...b]);
         }
         setBranch(prBanner.headBranch);
+        setBranchSearch(prBanner.headBranch);
       }
     });
   }, [repoId, state.repos]);
@@ -161,21 +207,29 @@ export default function TaskCreateDialog() {
     }
   };
 
+  const selectBranch = (b: string) => {
+    setBranch(b);
+    setBranchSearch(b);
+    setBranchDropdownOpen(false);
+    createRef.current?.focus();
+  };
+
   const regenerateName = () => {
     setTaskName(generateTaskName());
     nameRef.current?.focus();
   };
 
   const handleSubmit = async () => {
-    if (!repoId || !taskName.trim() || !branch) return;
+    if (!repoId || !taskName.trim() || (!inPlace && !branch)) return;
     setLoading(true);
     setError(null);
     try {
       const task = await window.bifrost.createTask({
         repoId,
         name: taskName.trim(),
-        branch,
-        ...(prInfo && { prInfo }),
+        branch: inPlace ? '' : branch,
+        ...(prInfo && !inPlace && { prInfo }),
+        ...(inPlace && { inPlace: true }),
       });
       dispatch({ type: 'ADD_TASK', task });
       dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
@@ -259,11 +313,30 @@ export default function TaskCreateDialog() {
                   const repo = state.repos.find((r) => r.id === repoId);
                   if (repo && branches.includes(repo.defaultBranch)) {
                     setBranch(repo.defaultBranch);
+                    setBranchSearch(repo.defaultBranch);
                   }
                 }}
                 className="text-xs text-blue-400 hover:text-blue-200 ml-3 whitespace-nowrap"
               >
                 Ignore
+              </button>
+            </div>
+          )}
+
+          {/* Existing task banner */}
+          {existingTask && (
+            <div className="flex items-center justify-between bg-amber-900/40 border border-amber-700/50 rounded px-3 py-2">
+              <p className="text-xs text-amber-300">
+                Task &ldquo;{existingTask.name}&rdquo; already uses this branch
+              </p>
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_ACTIVE_TASK', taskId: existingTask.id });
+                  close();
+                }}
+                className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
+              >
+                Open
               </button>
             </div>
           )}
@@ -408,23 +481,129 @@ export default function TaskCreateDialog() {
             </div>
           </div>
 
+          {/* In-place checkbox */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={inPlace}
+              onChange={(e) => {
+                setInPlace(e.target.checked);
+                if (e.target.checked) {
+                  setPrBanner(null);
+                  setPrInfo(null);
+                }
+              }}
+              className="rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+            />
+            <span className="text-xs text-slate-400">Use main worktree (no separate checkout)</span>
+          </label>
+
+          {/* In-place conflict banner */}
+          {existingInPlaceTask && (
+            <div className="flex items-center justify-between bg-amber-900/40 border border-amber-700/50 rounded px-3 py-2">
+              <p className="text-xs text-amber-300">
+                Task &ldquo;{existingInPlaceTask.name}&rdquo; already uses the main worktree
+              </p>
+              <button
+                onClick={() => {
+                  dispatch({ type: 'SET_ACTIVE_TASK', taskId: existingInPlaceTask.id });
+                  close();
+                }}
+                className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
+              >
+                Open
+              </button>
+            </div>
+          )}
+
           {/* Branch select */}
-          <div>
+          <div className="relative">
             <label className="block text-xs text-slate-400 mb-1">Branch</label>
-            <select
+            {inPlace ? (
+              <div className="w-full px-3 py-1.5 bg-slate-700/50 border border-slate-600 rounded text-sm text-slate-400">
+                {currentBranch ?? 'Detecting...'}
+              </div>
+            ) : (
+            <>
+            <input
               ref={branchRef}
-              value={branch}
-              onChange={(e) => setBranch(e.target.value)}
+              type="text"
+              value={branchSearch}
+              onChange={(e) => {
+                setBranchSearch(e.target.value);
+                setBranchDropdownOpen(true);
+                if (branch && !branch.toLowerCase().includes(e.target.value.toLowerCase())) {
+                  setBranch('');
+                }
+              }}
+              onFocus={() => {
+                branchRef.current?.select();
+              }}
+              onBlur={() => {
+                setTimeout(() => setBranchDropdownOpen(false), 150);
+              }}
+              onKeyDown={(e) => {
+                if (filteredBranches.length === 0) return;
+                switch (e.key) {
+                  case 'ArrowDown':
+                    e.preventDefault();
+                    if (!branchDropdownOpen) {
+                      setBranchDropdownOpen(true);
+                    } else {
+                      setBranchFocusedIdx((i) => i < filteredBranches.length - 1 ? i + 1 : 0);
+                    }
+                    break;
+                  case 'ArrowUp':
+                    e.preventDefault();
+                    if (!branchDropdownOpen) {
+                      setBranchDropdownOpen(true);
+                    } else {
+                      setBranchFocusedIdx((i) => i > 0 ? i - 1 : filteredBranches.length - 1);
+                    }
+                    break;
+                  case 'Enter':
+                    if (branchDropdownOpen) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (filteredBranches[branchFocusedIdx]) {
+                        selectBranch(filteredBranches[branchFocusedIdx]);
+                      }
+                    }
+                    break;
+                  case 'Tab':
+                    if (branchDropdownOpen && filteredBranches[branchFocusedIdx]) {
+                      selectBranch(filteredBranches[branchFocusedIdx]);
+                    }
+                    break;
+                }
+              }}
+              placeholder={branches.length === 0 ? 'Select a repo first' : 'Type to search...'}
               disabled={branches.length === 0}
-              className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {branches.length === 0 && <option value="">Select a repo first</option>}
-              {branches.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
-              ))}
-            </select>
+              className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+            />
+            {branchDropdownOpen && filteredBranches.length > 0 && (
+              <div
+                ref={branchListRef}
+                className="absolute z-10 mt-1 w-full bg-slate-700 border border-slate-600 rounded shadow-lg max-h-[200px] overflow-y-auto"
+              >
+                {filteredBranches.map((b, idx) => (
+                  <div
+                    key={b}
+                    onMouseDown={() => selectBranch(b)}
+                    onMouseEnter={() => setBranchFocusedIdx(idx)}
+                    className={`px-3 py-1.5 cursor-pointer text-sm ${
+                      idx === branchFocusedIdx
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-200 hover:bg-slate-600'
+                    }`}
+                  >
+                    {b}
+                  </div>
+                ))}
+              </div>
+            )}
+            </>
+            )}
           </div>
 
           {error && <p className="text-xs text-red-400">{error}</p>}
@@ -439,7 +618,7 @@ export default function TaskCreateDialog() {
             <button
               ref={createRef}
               onClick={handleSubmit}
-              disabled={loading || !repoId || !taskName.trim() || !branch}
+              disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}

@@ -133,6 +133,9 @@ function TaskRow({
           {task.isExternal && (
             <span className="text-xs text-slate-600">external</span>
           )}
+          {task.inPlace && (
+            <span className="text-xs text-slate-600">in-place</span>
+          )}
         </div>
         <div className="flex items-center gap-1 ml-2 flex-shrink-0">
           <button
@@ -165,7 +168,7 @@ function TaskRow({
           )}
           <button
             onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
-            title="Delete task and worktree (Alt+D)"
+            title={task.inPlace || task.isExternal ? 'Delete task (Alt+D)' : 'Delete task and worktree (Alt+D)'}
             tabIndex={-1}
             className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
           >

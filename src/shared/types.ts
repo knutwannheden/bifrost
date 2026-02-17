@@ -27,6 +27,8 @@ export interface Task {
   claudeSessionId?: string;
   /** True if this task has no managed worktree (e.g. resumed external session) */
   isExternal?: boolean;
+  /** True if this task uses the main repo directory instead of a separate worktree */
+  inPlace?: boolean;
 }
 
 export interface ClaudeSession {
@@ -58,6 +60,8 @@ export interface CreateTaskParams {
   branch: string;
   /** PR info for PR-sourced tasks — triggers fetch + upstream setup */
   prInfo?: PrInfo;
+  /** Use the main repo directory instead of creating a separate worktree */
+  inPlace?: boolean;
 }
 
 export interface PrInfo {

@@ -26,6 +26,7 @@ export const IPC = {
   REMOVE_REPO: 'repo:remove',
   LIST_REPOS: 'repo:list',
   GET_REPO_BRANCHES: 'repo:branches',
+  GET_CURRENT_BRANCH: 'repo:current-branch',
   GET_RECENT_REPOS: 'repo:recent',
 
   // Tasks
@@ -121,6 +122,7 @@ export interface BifrostAPI {
   removeRepo(repoId: string): Promise<void>;
   listRepos(): Promise<Repo[]>;
   getRepoBranches(repoId: string): Promise<string[]>;
+  getCurrentBranch(repoId: string): Promise<string>;
   getRecentRepos(): Promise<RecentRepo[]>;
 
   // Tasks

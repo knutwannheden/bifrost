@@ -12,6 +12,7 @@ const api: BifrostAPI = {
   removeRepo: (repoId) => ipcRenderer.invoke(IPC.REMOVE_REPO, repoId),
   listRepos: () => ipcRenderer.invoke(IPC.LIST_REPOS),
   getRepoBranches: (repoId) => ipcRenderer.invoke(IPC.GET_REPO_BRANCHES, repoId),
+  getCurrentBranch: (repoId) => ipcRenderer.invoke(IPC.GET_CURRENT_BRANCH, repoId),
   getRecentRepos: () => ipcRenderer.invoke(IPC.GET_RECENT_REPOS),
 
   // Tasks
