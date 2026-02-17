@@ -38,8 +38,9 @@ export default function PermissionPanel() {
     if (!request) return;
 
     const handler = (e: KeyboardEvent) => {
-      // Don't capture if user is typing in an input
+      // Don't capture if user is typing in an input or terminal
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if ((e.target as HTMLElement)?.closest('.xterm')) return;
 
       switch (e.key) {
         case 'a':

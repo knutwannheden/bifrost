@@ -278,6 +278,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.ARCHIVE_TASK, async (_event, taskId: string) => {
+    cancelTaskRequests(taskId);
     const task = getTask(taskId);
 
     stopWatching(taskId);

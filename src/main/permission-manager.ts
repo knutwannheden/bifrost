@@ -34,7 +34,9 @@ export function computeRuleOptions(toolName: string, toolInput: Record<string, u
     const command = (toolInput.command as string) || '';
     const firstWord = command.split(/\s+/)[0] || '';
 
-    options.push({ label: `Allow this exact command`, pattern: `Bash(${command})` });
+    if (command) {
+      options.push({ label: `Allow this exact command`, pattern: `Bash(${command})` });
+    }
     if (firstWord) {
       options.push({ label: `Allow all ${firstWord} commands`, pattern: `Bash(${firstWord}:*)` });
     }
