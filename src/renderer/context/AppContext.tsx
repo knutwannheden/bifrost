@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { Repo, Task, BifrostConfig, TaskStatus } from '../../shared/types';
+import type { Repo, Task, BifrostConfig, TaskStatus, PermissionPromptData } from '../../shared/types';
 
 export type DiffMode = 'git' | 'activity' | 'log' | 'review';
 export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
@@ -31,6 +31,7 @@ export interface AppState {
   reviewStatus: Record<string, ReviewStatus>;
   toast: string | null;
   toastDuration: number;
+  permissionQueue: PermissionPromptData[];
   apiPort: number | null;
 }
 
@@ -59,6 +60,8 @@ export type AppAction =
   | { type: 'SHOW_TOAST'; message: string; duration?: number }
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
+  | { type: 'PUSH_PERMISSION'; request: PermissionPromptData }
+  | { type: 'SHIFT_PERMISSION' }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
   | { type: 'SET_REVIEW_STATUS'; taskId: string; status: ReviewStatus }
   | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string };
@@ -82,6 +85,7 @@ const initialState: AppState = {
   reviewStatus: {},
   toast: null,
   toastDuration: 2000,
+  permissionQueue: [],
   apiPort: null,
 };
 
@@ -219,6 +223,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, reviewStatus: { ...state.reviewStatus, [action.taskId]: action.status } };
     case 'SET_REVIEW_CONTENT':
       return { ...state, reviewContent: { ...state.reviewContent, [action.taskId]: action.content } };
+    case 'PUSH_PERMISSION':
+      return { ...state, permissionQueue: [...state.permissionQueue, action.request] };
+    case 'SHIFT_PERMISSION':
+      return { ...state, permissionQueue: state.permissionQueue.slice(1) };
     default:
       return state;
   }
