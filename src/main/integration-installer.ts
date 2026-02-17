@@ -74,8 +74,12 @@ export function checkIntegration(): IntegrationStatus {
     if (!installed) return { installed: false, updateAvailable: false };
 
     const deployedVersion = readPluginVersion(PLUGIN_DEPLOY_DIR);
-    const root = getSourceRoot();
-    const sourceVersion = readPluginVersion(path.join(root, 'src', 'claude-plugin'));
+    let sourceVersion: string | null = null;
+    try {
+      sourceVersion = readPluginVersion(getPluginSourceDir());
+    } catch {
+      // Plugin source not found in packaged app
+    }
     const updateAvailable = !!(sourceVersion && sourceVersion !== deployedVersion);
 
     return { installed: true, updateAvailable };
@@ -86,13 +90,8 @@ export function checkIntegration(): IntegrationStatus {
 }
 
 export async function installIntegration(): Promise<void> {
-  const root = getSourceRoot();
-
   // --- Deploy plugin files into marketplace directory ---
-  const pluginSrc = path.join(root, 'src', 'claude-plugin');
-  if (!fs.existsSync(pluginSrc)) {
-    throw new Error(`Plugin source not found: ${pluginSrc}`);
-  }
+  const pluginSrc = getPluginSourceDir();
   copyDirSync(pluginSrc, PLUGIN_DEPLOY_DIR);
 
   // --- Create marketplace manifest ---
@@ -281,10 +280,17 @@ function cleanupOldIntegration(): void {
   }
 }
 
-function getSourceRoot(): string {
+function getPluginSourceDir(): string {
+  // In dev: __dirname is .vite/build, so ../../src/claude-plugin exists
   const devRoot = path.resolve(__dirname, '..', '..');
-  if (fs.existsSync(path.join(devRoot, 'src'))) return devRoot;
-  return process.resourcesPath;
+  const devPlugin = path.join(devRoot, 'src', 'claude-plugin');
+  if (fs.existsSync(devPlugin)) return devPlugin;
+
+  // In production: asar root contains claude-plugin/ (copied by forge hook)
+  const asarPlugin = path.join(devRoot, 'claude-plugin');
+  if (fs.existsSync(asarPlugin)) return asarPlugin;
+
+  throw new Error('Plugin source not found');
 }
 
 function copyDirSync(src: string, dest: string): void {

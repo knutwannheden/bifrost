@@ -48,7 +48,7 @@ const config: ForgeConfig = {
         fs.copyFileSync(src, dest);
       }
     },
-    // Copy native modules into the packaged app so they can be unpacked from the asar
+    // Copy native modules and plugin source into the packaged app
     packageAfterCopy: async (_config, buildPath) => {
       const nativeModules = ['node-pty'];
       for (const mod of nativeModules) {
@@ -57,6 +57,13 @@ const config: ForgeConfig = {
         if (fs.existsSync(src)) {
           fs.cpSync(src, dest, { recursive: true });
         }
+      }
+
+      // Copy the Claude Code plugin source so it can be deployed at runtime
+      const pluginSrc = path.join(__dirname, 'src', 'claude-plugin');
+      const pluginDest = path.join(buildPath, 'claude-plugin');
+      if (fs.existsSync(pluginSrc)) {
+        fs.cpSync(pluginSrc, pluginDest, { recursive: true });
       }
     },
   },
