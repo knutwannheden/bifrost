@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { Repo, Task, BifrostConfig, TaskStatus, PermissionPromptData } from '../../shared/types';
+import type { Repo, Task, BifrostConfig, TaskStatus, PermissionPromptData, AppNotification } from '../../shared/types';
 
 export type DiffMode = 'git' | 'activity' | 'log' | 'review';
 export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
@@ -32,6 +32,8 @@ export interface AppState {
   toast: string | null;
   toastDuration: number;
   permissionQueue: PermissionPromptData[];
+  notifications: AppNotification[];
+  showNotificationPopover: boolean;
   apiPort: number | null;
 }
 
@@ -62,6 +64,10 @@ export type AppAction =
   | { type: 'SET_API_PORT'; port: number | null }
   | { type: 'PUSH_PERMISSION'; request: PermissionPromptData }
   | { type: 'SHIFT_PERMISSION' }
+  | { type: 'PUSH_NOTIFICATION'; notification: AppNotification }
+  | { type: 'DISMISS_NOTIFICATION'; id: string }
+  | { type: 'MARK_NOTIFICATIONS_READ' }
+  | { type: 'TOGGLE_NOTIFICATION_POPOVER' }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
   | { type: 'SET_REVIEW_STATUS'; taskId: string; status: ReviewStatus }
   | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string };
@@ -86,6 +92,8 @@ const initialState: AppState = {
   toast: null,
   toastDuration: 2000,
   permissionQueue: [],
+  notifications: [],
+  showNotificationPopover: false,
   apiPort: null,
 };
 
@@ -227,6 +235,23 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, permissionQueue: [...state.permissionQueue, action.request] };
     case 'SHIFT_PERMISSION':
       return { ...state, permissionQueue: state.permissionQueue.slice(1) };
+    case 'PUSH_NOTIFICATION':
+      if (state.notifications.some((n) => n.type === action.notification.type && n.type !== 'info')) {
+        return state;
+      }
+      return { ...state, notifications: [...state.notifications, action.notification] };
+    case 'DISMISS_NOTIFICATION':
+      return { ...state, notifications: state.notifications.filter((n) => n.id !== action.id) };
+    case 'MARK_NOTIFICATIONS_READ':
+      return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
+    case 'TOGGLE_NOTIFICATION_POPOVER': {
+      const opening = !state.showNotificationPopover;
+      return {
+        ...state,
+        showNotificationPopover: opening,
+        notifications: opening ? state.notifications.map((n) => ({ ...n, read: true })) : state.notifications,
+      };
+    }
     default:
       return state;
   }
