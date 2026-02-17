@@ -57,6 +57,15 @@ export interface CreateTaskParams {
   branch: string;
 }
 
+export interface PrInfo {
+  number: number;
+  title?: string; // unavailable in git-only fallback
+  headBranch: string;
+  headRepoOwner: string;
+  headRepoName: string;
+  isFork: boolean;
+}
+
 export interface AddRepoParams {
   type: 'local' | 'clone';
   path?: string;

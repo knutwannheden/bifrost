@@ -8,6 +8,7 @@ import type {
   DiffResult,
   DiffStats,
   GitLogEntry,
+  PrInfo,
   RecentRepo,
   Repo,
   Task,
@@ -89,6 +90,13 @@ export const IPC = {
 
   // Dialog
   SELECT_DIRECTORY: 'dialog:select-directory',
+
+  // Clipboard
+  READ_CLIPBOARD: 'clipboard:read',
+
+  // PR
+  FETCH_PR_INFO: 'pr:fetch-info',
+  CHECK_GH_AVAILABLE: 'gh:check',
 } as const;
 
 // Streaming channels (send/on)
@@ -179,6 +187,13 @@ export interface BifrostAPI {
 
   // Dialog
   selectDirectory(): Promise<string | null>;
+
+  // Clipboard
+  readClipboard(): Promise<string>;
+
+  // PR
+  fetchPrInfo(repoId: string, prNumber: number): Promise<PrInfo>;
+  checkGhAvailable(): Promise<boolean>;
 
   // Task summary
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;

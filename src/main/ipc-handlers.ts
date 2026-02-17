@@ -612,4 +612,85 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (result.canceled || result.filePaths.length === 0) return null;
     return result.filePaths[0];
   });
+
+  // Clipboard
+  ipcMain.handle(IPC.READ_CLIPBOARD, () => {
+    return clipboard.readText();
+  });
+
+  // gh CLI availability
+  ipcMain.handle(IPC.CHECK_GH_AVAILABLE, async () => {
+    try {
+      await execFile('gh', ['--version'], { timeout: 5000 });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+  // PR info fetch
+  ipcMain.handle(IPC.FETCH_PR_INFO, async (_event, repoId: string, prNumber: number) => {
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === repoId);
+    if (!repo) throw new Error(`Repo not found: ${repoId}`);
+
+    // Try gh CLI first
+    try {
+      const { stdout } = await execFile(
+        'gh',
+        ['pr', 'view', String(prNumber), '--json', 'headRefName,headRepositoryOwner,headRepository,title,number'],
+        { cwd: repo.path, timeout: 10000 },
+      );
+      const data = JSON.parse(stdout);
+      const headRepoOwner = data.headRepositoryOwner?.login ?? '';
+      const headRepoName = data.headRepository?.name ?? '';
+      const repoOwner = repo.githubPath?.split('/')[0] ?? '';
+      return {
+        number: data.number,
+        title: data.title,
+        headBranch: data.headRefName,
+        headRepoOwner,
+        headRepoName,
+        isFork: headRepoOwner !== '' && headRepoOwner !== repoOwner,
+      };
+    } catch {
+      // gh not available or failed — fall back to git
+    }
+
+    // Fallback: git ls-remote
+    const { stdout: prRef } = await execFile(
+      'git',
+      ['ls-remote', 'origin', `refs/pull/${prNumber}/head`],
+      { cwd: repo.path, timeout: 10000 },
+    );
+    const prSha = prRef.split('\t')[0];
+    if (!prSha) throw new Error(`PR #${prNumber} not found`);
+
+    // Try to find the branch name by matching SHA against remote refs
+    let headBranch = `pull/${prNumber}/head`;
+    try {
+      const { stdout: refs } = await execFile(
+        'git',
+        ['ls-remote', '--heads', 'origin'],
+        { cwd: repo.path, timeout: 10000 },
+      );
+      for (const line of refs.split('\n')) {
+        const [sha, ref] = line.split('\t');
+        if (sha === prSha && ref) {
+          headBranch = ref.replace('refs/heads/', '');
+          break;
+        }
+      }
+    } catch {
+      // ignore, use fallback branch name
+    }
+
+    return {
+      number: prNumber,
+      headBranch,
+      headRepoOwner: '',
+      headRepoName: '',
+      isFork: false,
+    };
+  });
 }

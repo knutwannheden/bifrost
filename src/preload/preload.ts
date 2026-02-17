@@ -104,6 +104,13 @@ const api: BifrostAPI = {
   // Dialog
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
 
+  // Clipboard
+  readClipboard: () => ipcRenderer.invoke(IPC.READ_CLIPBOARD),
+
+  // PR
+  fetchPrInfo: (repoId, prNumber) => ipcRenderer.invoke(IPC.FETCH_PR_INFO, repoId, prNumber),
+  checkGhAvailable: () => ipcRenderer.invoke(IPC.CHECK_GH_AVAILABLE),
+
   // Task summary
   onTaskSummary: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string, summary: string) =>
