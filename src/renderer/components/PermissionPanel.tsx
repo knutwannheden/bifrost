@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import type { PermissionDecision } from '../../shared/types';
 
@@ -7,6 +7,7 @@ type Scope = 'local' | 'project' | 'user';
 export default function PermissionPanel() {
   const { state, dispatch } = useApp();
   const request = state.permissionQueue[0];
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const [selectedRule, setSelectedRule] = useState(0);
   const [scope, setScope] = useState<Scope>('local');
@@ -33,53 +34,62 @@ export default function PermissionPanel() {
     dispatch({ type: 'SHIFT_PERMISSION' });
   }, [request, persist, scope, selectedRule, dispatch]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
+  const handleDenyOnce = useCallback(() => {
+    if (!request) return;
+    window.bifrost.resolvePermission(request.requestId, { action: 'deny', persist: false });
+    dispatch({ type: 'SHIFT_PERMISSION' });
+  }, [request, dispatch]);
+
+  // Keyboard shortcuts — only active when the panel has focus.
+  // The user clicks the panel (or any button in it) to engage.
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!request) return;
 
-    const handler = (e: KeyboardEvent) => {
-      // Don't capture if user is typing in an input or terminal
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if ((e.target as HTMLElement)?.closest('.xterm')) return;
+    switch (e.key) {
+      case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
+        handleDenyOnce();
+        break;
+      case 'a':
+      case 'A':
+        e.preventDefault();
+        handleDecision('allow');
+        break;
+      case 'd':
+      case 'D':
+        e.preventDefault();
+        handleDecision('deny');
+        break;
+      case '1':
+        e.preventDefault();
+        setScope('local');
+        break;
+      case '2':
+        e.preventDefault();
+        setScope('project');
+        break;
+      case '3':
+        e.preventDefault();
+        setScope('user');
+        break;
+      case 'Tab':
+        e.preventDefault();
+        setSelectedRule((prev) => (prev + 1) % request.ruleOptions.length);
+        break;
+      case 'p':
+      case 'P':
+        e.preventDefault();
+        setPersist((prev) => !prev);
+        break;
+    }
+  }, [request, handleDecision, handleDenyOnce]);
 
-      switch (e.key) {
-        case 'a':
-        case 'A':
-          e.preventDefault();
-          handleDecision('allow');
-          break;
-        case 'd':
-        case 'D':
-          e.preventDefault();
-          handleDecision('deny');
-          break;
-        case '1':
-          e.preventDefault();
-          setScope('local');
-          break;
-        case '2':
-          e.preventDefault();
-          setScope('project');
-          break;
-        case '3':
-          e.preventDefault();
-          setScope('user');
-          break;
-        case 'Tab':
-          e.preventDefault();
-          setSelectedRule((prev) => (prev + 1) % request.ruleOptions.length);
-          break;
-        case 'p':
-        case 'P':
-          e.preventDefault();
-          setPersist((prev) => !prev);
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [request, handleDecision]);
+  // Focus the panel container when the user clicks anywhere inside it,
+  // so keyboard shortcuts activate without needing to click a specific spot.
+  const handleClick = useCallback(() => {
+    panelRef.current?.focus();
+  }, []);
 
   if (!request) return null;
 
@@ -91,8 +101,15 @@ export default function PermissionPanel() {
     : JSON.stringify(request.toolInput, null, 2).slice(0, 200);
 
   return (
-    <div className="fixed bottom-14 right-4 z-40 w-96 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl"
-         style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
+    <div
+      ref={panelRef}
+      tabIndex={-1}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      data-permission-panel
+      className="fixed bottom-14 right-4 z-40 w-96 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+      style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
         <div className="flex items-center gap-2">
@@ -100,6 +117,7 @@ export default function PermissionPanel() {
           <span className="text-xs font-semibold text-slate-300">
             Permission Request
           </span>
+          <span className="text-xs text-slate-600">Tab to focus</span>
         </div>
         <div className="flex items-center gap-2">
           {queueCount > 1 && (

@@ -108,6 +108,15 @@ export function useTerminal(
 
     // Let the app handle these Cmd+key shortcuts instead of xterm
     terminal.attachCustomKeyEventHandler((e) => {
+      // Tab: focus the permission panel when one is visible
+      if (e.key === 'Tab' && e.type === 'keydown' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const panel = document.querySelector<HTMLElement>('[data-permission-panel]');
+        if (panel) {
+          e.preventDefault();
+          panel.focus();
+          return false;
+        }
+      }
       // Cmd+Left/Right/Backspace: emulate macOS terminal behavior
       if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Backspace') {

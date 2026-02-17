@@ -24,6 +24,7 @@ const tips = [
   'Press \u2318/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.',
   'Press \u2318\u21e7C to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.',
   'Press \u2325U to run an AI review of your task\u2019s changes \u2014 get actionable feedback before committing.',
+  'When a permission prompt appears, press Tab to focus it \u2014 then use A/D to allow/deny, Esc to deny once.',
 ];
 
 export default function TaskView() {
