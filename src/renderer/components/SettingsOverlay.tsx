@@ -7,6 +7,7 @@ interface SettingDef {
   category: string;
   label: string;
   description?: string;
+  tooltip?: string;
   render: (config: BifrostConfig, update: (updates: Partial<BifrostConfig>) => void) => React.ReactNode;
 }
 
@@ -18,6 +19,7 @@ function buildSettings(): SettingDef[] {
       key: 'fontSize',
       category: 'Appearance',
       label: 'Font Size',
+      tooltip: 'Terminal font size in pixels. Affects all task terminals and dev terminals.',
       render: (config, update) => (
         <div className="flex items-center gap-2">
           <button
@@ -40,6 +42,7 @@ function buildSettings(): SettingDef[] {
       key: 'fontFamily',
       category: 'Appearance',
       label: 'Font Family',
+      tooltip: 'Monospace font used in terminals. Nerd Font variants include icons used by many CLI tools.',
       render: (config, update) => (
         <select
           value={config.fontFamily}
@@ -63,6 +66,7 @@ function buildSettings(): SettingDef[] {
       key: 'fontWeight',
       category: 'Appearance',
       label: 'Font Weight',
+      tooltip: 'Font weight from 100 (thin) to 900 (black). 300 is light, 400 is regular, 700 is bold.',
       render: (config, update) => (
         <div className="flex items-center gap-2">
           <input
@@ -83,6 +87,7 @@ function buildSettings(): SettingDef[] {
       category: 'Appearance',
       label: 'Notifications',
       description: 'Sound, toast, and OS alerts when a task needs input',
+      tooltip: 'When enabled, background tasks that stop or need input trigger a system bell sound and a toast popup. Disable if you prefer to check task status manually.',
       render: (config, update) => (
         <ToggleSwitch
           checked={config.notifications !== false}
@@ -94,6 +99,7 @@ function buildSettings(): SettingDef[] {
       key: 'permissionMode',
       category: 'Claude Code',
       label: 'Permission Mode',
+      tooltip: 'Controls how Claude Code handles tool permissions.\n\nDefault: Claude asks before running tools that could modify files or execute commands.\n\nSandbox: Restricts file system and network access to a safe subset, reducing the need for manual approvals.\n\nSkip Permissions: Auto-approves all tool use without asking. Use with caution — Claude can run any command.',
       render: (config, update) => (
         <div className="flex flex-col gap-1.5 mt-1">
           {([
@@ -123,6 +129,7 @@ function buildSettings(): SettingDef[] {
       category: 'Claude Code',
       label: 'Manage permissions',
       description: 'Handle tool permission prompts in Bifrost instead of Claude Code',
+      tooltip: 'When enabled, tool permission prompts appear as a floating panel in Bifrost rather than in the terminal. You can allow/deny with keyboard shortcuts and persist rules across sessions.\n\nWhen disabled, Claude Code handles permissions natively in its own TUI.',
       render: (config, update) => (
         <ToggleSwitch
           checked={config.managePermissions}
@@ -135,6 +142,7 @@ function buildSettings(): SettingDef[] {
       category: 'Claude Code',
       label: 'Hide terminal on switch',
       description: '\u2318/ hides dev terminal when switching to Claude',
+      tooltip: 'When you press \u2318/ to switch focus from the dev terminal to the Claude pane, this setting also hides the dev terminal to give Claude the full screen. Press \u2318/ again to bring it back.',
       render: (config, update) => (
         <ToggleSwitch
           checked={config.hideTerminalOnSwitch}
@@ -147,6 +155,7 @@ function buildSettings(): SettingDef[] {
       category: 'Claude Code',
       label: 'Agent Teams',
       description: 'Enable experimental agent teams feature',
+      tooltip: 'Sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 for new sessions. This enables Claude Code\u2019s built-in multi-agent coordination where subagents can run in parallel.',
       render: (config, update) => (
         <ToggleSwitch
           checked={config.agentTeams}
@@ -158,6 +167,7 @@ function buildSettings(): SettingDef[] {
       key: 'ide',
       category: 'General',
       label: 'IDE',
+      tooltip: 'Which IDE to open when you press \u2318O. VS Code uses the "code" CLI, IntelliJ uses the "idea" CLI. The IDE opens the task\u2019s worktree directory.',
       render: (config, update) => (
         <div className="flex gap-1">
           {(['code', 'idea'] as const).map((ide) => (
@@ -181,6 +191,7 @@ function buildSettings(): SettingDef[] {
       category: 'General',
       label: 'Group history by repo',
       description: 'Group tasks by repository in history view',
+      tooltip: 'When enabled, the task history panel (\u2318H) organizes archived tasks under collapsible repository headings instead of a flat chronological list.',
       render: (config, update) => (
         <ToggleSwitch
           checked={config.groupHistoryByRepo}
@@ -193,6 +204,7 @@ function buildSettings(): SettingDef[] {
       category: 'General',
       label: 'Local worktrees',
       description: 'Create worktrees inside the repo directory (.worktrees/)',
+      tooltip: 'By default, worktrees are created in a sibling directory next to your repo. With this enabled, they go into a .worktrees/ folder inside the repo instead.\n\nUseful when your IDE or tools expect everything under one root directory. Make sure to add .worktrees/ to your .gitignore.',
       render: (config, update) => (
         <ToggleSwitch
           checked={config.localWorktrees}
@@ -205,6 +217,7 @@ function buildSettings(): SettingDef[] {
       category: 'General',
       label: 'Show tips on welcome screen',
       description: 'Display a rotating tip on the welcome screen',
+      tooltip: 'Shows a random keyboard shortcut or workflow tip on the welcome screen when no tasks are open. Click the tip to cycle through them.',
       render: (config, update) => (
         <ToggleSwitch
           checked={config.showTips !== false}
@@ -357,7 +370,7 @@ export default function SettingsOverlay() {
                   <div className="space-y-4">
                     {catSettings.map((setting) => (
                       <div key={setting.key} className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
+                        <div className="min-w-0" title={setting.tooltip}>
                           <label className="text-sm text-slate-300">{setting.label}</label>
                           {setting.description && (
                             <p className="text-xs text-slate-500">{setting.description}</p>
