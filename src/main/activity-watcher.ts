@@ -1,5 +1,4 @@
 import { BrowserWindow } from 'electron';
-import { watch as chokidarWatch, type FSWatcher } from 'chokidar';
 import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -13,12 +12,13 @@ import { startClaudeWatching, stopClaudeWatching, getRecentClaudeEntries, type C
 const execFile = promisify(execFileCb);
 
 const ACTIVITY_DIR = path.join(os.homedir(), '.bifrost', 'activity');
+const POLL_INTERVAL_MS = 2000;
 
 interface TaskWatcher {
-  watcher: FSWatcher;
+  pollTimer: ReturnType<typeof setInterval>;
   entries: ActivityEntry[];
   headSha: string | null;
-  debounceTimers: Map<string, ReturnType<typeof setTimeout>>;
+  knownFiles: Set<string>;
 }
 
 const watchers = new Map<string, TaskWatcher>();
@@ -103,6 +103,22 @@ async function getCommitMessage(worktreePath: string, sha: string): Promise<stri
   }
 }
 
+async function getChangedFiles(worktreePath: string): Promise<string[]> {
+  try {
+    const { stdout } = await execFile('git', ['status', '--porcelain'], {
+      cwd: worktreePath,
+    });
+    if (!stdout.trim()) return [];
+    return stdout
+      .trim()
+      .split('\n')
+      .map((line) => line.substring(3).trim())
+      .filter((f) => f.length > 0);
+  } catch {
+    return [];
+  }
+}
+
 export function startWatching(
   taskId: string,
   worktreePath: string,
@@ -115,110 +131,26 @@ export function startWatching(
   const entries = loadEntries(taskId);
 
   const tw: TaskWatcher = {
-    watcher: null as unknown as FSWatcher,
+    pollTimer: null as unknown as ReturnType<typeof setInterval>,
     entries,
     headSha: null,
-    debounceTimers: new Map(),
+    knownFiles: new Set<string>(),
   };
 
-  // Get initial HEAD SHA
-  getHeadSha(worktreePath).then((sha) => {
+  // Get initial HEAD SHA and file state before starting the poll loop
+  Promise.all([
+    getHeadSha(worktreePath),
+    getChangedFiles(worktreePath),
+  ]).then(([sha, files]) => {
     tw.headSha = sha;
-  });
-
-  const watcher = chokidarWatch(worktreePath, {
-    ignored: [
-      /(^|[/\\])\../, // dotfiles (includes .git)
-      '**/node_modules/**',
-      '**/.git/**',
-    ],
-    ignoreInitial: true,
-    awaitWriteFinish: {
-      stabilityThreshold: 300,
-      pollInterval: 100,
-    },
-  });
-
-  tw.watcher = watcher;
-
-  const handleFileChange = (filePath: string) => {
-    const relative = path.relative(worktreePath, filePath);
-
-    // Debounce per file
-    const existing = tw.debounceTimers.get(relative);
-    if (existing) clearTimeout(existing);
-
-    tw.debounceTimers.set(
-      relative,
-      setTimeout(async () => {
-        tw.debounceTimers.delete(relative);
-
-        // Check for new commit first
-        const currentSha = await getHeadSha(worktreePath);
-        if (currentSha && tw.headSha && currentSha !== tw.headSha) {
-          // A commit happened — add commit marker and clear file entries
-          const commitMsg = await getCommitMessage(worktreePath, currentSha);
-          const commitEntry: ActivityEntry = {
-            id: randomUUID(),
-            taskId,
-            timestamp: Date.now(),
-            type: 'commit',
-            commitSha: currentSha,
-            commitMessage: commitMsg,
-          };
-          tw.entries = [commitEntry];
-          tw.headSha = currentSha;
-          saveEntries(taskId, tw.entries);
-          mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
-          return;
-        }
-
-        const diff = await getFileDiff(worktreePath, relative);
-        if (!diff) return;
-
-        const entry: ActivityEntry = {
-          id: randomUUID(),
-          taskId,
-          timestamp: Date.now(),
-          type: 'file_change',
-          filePath: relative,
-          diff,
-        };
-
-        tw.entries.push(entry);
-        saveEntries(taskId, tw.entries);
-        mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
-      }, 500),
-    );
-  };
-
-  watcher.on('add', handleFileChange);
-  watcher.on('change', handleFileChange);
-
-  // Also watch for git HEAD changes (commit detection)
-  const gitHeadPath = path.join(worktreePath, '.git');
-  // For worktrees, .git is a file pointing to the real .git dir
-  let gitDir: string;
-  try {
-    const stat = fs.statSync(gitHeadPath);
-    if (stat.isFile()) {
-      const content = fs.readFileSync(gitHeadPath, 'utf-8').trim();
-      const match = content.match(/^gitdir: (.+)$/);
-      gitDir = match ? path.resolve(worktreePath, match[1]) : gitHeadPath;
-    } else {
-      gitDir = gitHeadPath;
+    for (const f of files) {
+      tw.knownFiles.add(f);
     }
-  } catch {
-    gitDir = gitHeadPath;
-  }
+  });
 
-  // Watch the HEAD ref file for commit detection
-  const headRefPath = path.join(gitDir, 'HEAD');
-  if (fs.existsSync(headRefPath)) {
-    const headWatcher = chokidarWatch(headRefPath, {
-      ignoreInitial: true,
-    });
-    headWatcher.on('change', async () => {
+  const poll = async () => {
+    try {
+      // 1. Check for new commit
       const currentSha = await getHeadSha(worktreePath);
       if (currentSha && tw.headSha && currentSha !== tw.headSha) {
         const commitMsg = await getCommitMessage(worktreePath, currentSha);
@@ -230,22 +162,55 @@ export function startWatching(
           commitSha: currentSha,
           commitMessage: commitMsg,
         };
-        // Clear file change entries, keep only the commit marker
         tw.entries = [commitEntry];
         tw.headSha = currentSha;
+        tw.knownFiles.clear();
         saveEntries(taskId, tw.entries);
         mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
+        return;
       }
-    });
+      if (currentSha) {
+        tw.headSha = currentSha;
+      }
 
-    // Store reference for cleanup
-    const origClose = tw.watcher.close.bind(tw.watcher);
-    tw.watcher.close = async () => {
-      await headWatcher.close();
-      return origClose();
-    };
-  }
+      // 2. Check for file changes via git status
+      const changedFiles = await getChangedFiles(worktreePath);
+      const currentSet = new Set(changedFiles);
 
+      // Remove files no longer in git status
+      for (const f of tw.knownFiles) {
+        if (!currentSet.has(f)) {
+          tw.knownFiles.delete(f);
+        }
+      }
+
+      // Emit entries for new files
+      for (const file of changedFiles) {
+        if (!tw.knownFiles.has(file)) {
+          tw.knownFiles.add(file);
+          const diff = await getFileDiff(worktreePath, file);
+          if (!diff) continue;
+
+          const entry: ActivityEntry = {
+            id: randomUUID(),
+            taskId,
+            timestamp: Date.now(),
+            type: 'file_change',
+            filePath: file,
+            diff,
+          };
+          tw.entries.push(entry);
+          saveEntries(taskId, tw.entries);
+          mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
+        }
+      }
+    } catch (err) {
+      // Worktree may have been deleted or git state is broken — skip this cycle
+      console.error(`[activity-watcher] poll error for task ${taskId}:`, err);
+    }
+  };
+
+  tw.pollTimer = setInterval(poll, POLL_INTERVAL_MS);
   watchers.set(taskId, tw);
 
   // Also watch Claude Code JSONL session files
@@ -255,10 +220,7 @@ export function startWatching(
 export function stopWatching(taskId: string): void {
   const tw = watchers.get(taskId);
   if (tw) {
-    tw.watcher.close();
-    for (const timer of tw.debounceTimers.values()) {
-      clearTimeout(timer);
-    }
+    clearInterval(tw.pollTimer);
     watchers.delete(taskId);
   }
   stopClaudeWatching(taskId);
