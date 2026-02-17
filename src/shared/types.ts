@@ -55,6 +55,8 @@ export interface CreateTaskParams {
   repoId: string;
   name: string;
   branch: string;
+  /** PR info for PR-sourced tasks — triggers fetch + upstream setup */
+  prInfo?: PrInfo;
 }
 
 export interface PrInfo {

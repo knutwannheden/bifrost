@@ -10,7 +10,7 @@ import { IPC, IPC_STREAM } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams, ActivityEntry } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches, detectBaseBranch } from './repo-manager';
-import { createWorktree, restoreWorktree, removeWorktree } from './worktree-manager';
+import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, resizeAllSessions, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff, getDiffStats } from './diff-service';
 import { getGitLog } from './git-log-service';
@@ -198,7 +198,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const repo = config.repos.find((r: Repo) => r.id === params.repoId);
     if (!repo) throw new Error(`Repo not found: ${params.repoId}`);
 
-    const worktreePath = await createWorktree(repo.path, params.name, params.branch);
+    const worktreePath = params.prInfo
+      ? await createWorktreeFromPr(repo.path, params.name, params.prInfo)
+      : await createWorktree(repo.path, params.name, params.branch);
     const sessionId = randomUUID();
     const taskId = randomUUID();
 
