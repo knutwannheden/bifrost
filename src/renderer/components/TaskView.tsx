@@ -34,6 +34,7 @@ export default function TaskView() {
   const [installing, setInstalling] = useState(false);
   const [justInstalled, setJustInstalled] = useState(false);
   const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * tips.length));
+  const [ghMissing, setGhMissing] = useState(false);
 
   const openTasks = state.tasks.filter((t) => t.status === 'running');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
@@ -78,6 +79,9 @@ export default function TaskView() {
       window.bifrost.checkIntegration().then((status) => {
         setIntegrationNeeded(!status.installed);
         setUpdateAvailable(status.updateAvailable);
+      });
+      window.bifrost.checkGhAvailable().then((available) => {
+        setGhMissing(!available);
       });
     }
   }, [activeTask, state.tasksLoaded, openTasks.length]);
@@ -138,6 +142,15 @@ export default function TaskView() {
                   ? 'A new version of the Bifrost plugin is available.'
                   : 'Adds the Bifrost MCP server and skills to your Claude Code configuration.'}
               </p>
+            </div>
+          )}
+          {ghMissing && (
+            <div className="mb-6">
+              <div className="inline-flex items-center gap-2 bg-amber-900/30 border border-amber-700/40 rounded-full px-4 py-2">
+                <span className="text-xs text-amber-300">
+                  Install <a href="https://cli.github.com" onClick={(e) => { e.preventDefault(); window.bifrost.openUrl('https://cli.github.com'); }} className="underline hover:text-amber-200">GitHub CLI</a> to enable PR-based task creation
+                </span>
+              </div>
             </div>
           )}
           <div className="inline-grid grid-cols-[auto_auto] gap-x-4 gap-y-1.5 text-left">
