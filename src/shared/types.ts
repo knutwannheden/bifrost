@@ -207,3 +207,15 @@ export interface PermissionDecision {
   scope?: 'local' | 'project' | 'user';
   rulePattern?: string;
 }
+
+// Notification types
+
+export interface AppNotification {
+  id: string;
+  type: 'plugin-update' | 'info';
+  title: string;
+  message: string;
+  action?: { label: string; handler: string };
+  read: boolean;
+  timestamp: number;
+}
