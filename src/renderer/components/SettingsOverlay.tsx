@@ -119,6 +119,18 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'managePermissions',
+      category: 'Claude Code',
+      label: 'Manage permissions',
+      description: 'Handle tool permission prompts in Bifrost instead of Claude Code',
+      render: (config, update) => (
+        <ToggleSwitch
+          checked={config.managePermissions}
+          onChange={(v) => update({ managePermissions: v })}
+        />
+      ),
+    },
+    {
       key: 'hideTerminalOnSwitch',
       category: 'Claude Code',
       label: 'Hide terminal on switch',

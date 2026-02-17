@@ -8,7 +8,8 @@ import { getTasks, getTask } from './ipc-handlers';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification } from './notification-service';
-import { createRequest } from './permission-manager';
+import { createRequest, checkExistingRules } from './permission-manager';
+import { loadConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 let mainWindow: BrowserWindow | null = null;
@@ -133,10 +134,26 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
+      // If permission management is disabled, let Claude Code handle it
+      const config = loadConfig();
+      if (!config.managePermissions) {
+        jsonResponse(res, {});
+        return;
+      }
+
       const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
       if (!task) {
         // No matching task — fall back to Claude default
         jsonResponse(res, {});
+        return;
+      }
+
+      // Check existing allow/deny rules before prompting
+      const existingDecision = checkExistingRules(cwd, toolName, toolInput);
+      if (existingDecision) {
+        jsonResponse(res, {
+          hookSpecificOutput: { permissionDecision: existingDecision },
+        });
         return;
       }
 

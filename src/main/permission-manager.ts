@@ -25,6 +25,112 @@ export function setWorktreePathResolver(resolver: (taskId: string) => string): v
 }
 
 /**
+ * Extract the relevant input value for pattern matching based on tool type.
+ */
+function getToolInputValue(toolName: string, toolInput: Record<string, unknown>): string | null {
+  if (toolName === 'Bash') {
+    return (toolInput.command as string) || null;
+  }
+  if (toolName === 'Write' || toolName === 'Edit' || toolName === 'Read') {
+    return (toolInput.file_path as string) || (toolInput.filePath as string) || null;
+  }
+  return null;
+}
+
+/**
+ * Check if a single rule pattern matches a tool call.
+ *
+ * Pattern formats:
+ *  - "ToolName"             → matches all uses of that tool
+ *  - "ToolName(exact)"      → matches if the tool's primary input equals exact
+ *  - "ToolName(prefix:*)"   → matches if the tool's primary input starts with prefix
+ *  - "prefix*"  (no parens) → matches if toolName starts with prefix (e.g. mcp__server__*)
+ */
+function matchesPattern(pattern: string, toolName: string, toolInput: Record<string, unknown>): boolean {
+  // Exact tool name match (e.g. "Bash" matches all Bash calls)
+  if (pattern === toolName) return true;
+
+  // Wildcard suffix on tool name (e.g. "mcp__server__*")
+  if (pattern.endsWith('*') && !pattern.includes('(')) {
+    const prefix = pattern.slice(0, -1);
+    return toolName.startsWith(prefix);
+  }
+
+  // Parameterized: ToolName(value) or ToolName(prefix:*)
+  const parenIdx = pattern.indexOf('(');
+  if (parenIdx > 0 && pattern.endsWith(')')) {
+    const patternTool = pattern.slice(0, parenIdx);
+    if (patternTool !== toolName) return false;
+
+    const paramValue = pattern.slice(parenIdx + 1, -1);
+    const inputValue = getToolInputValue(toolName, toolInput);
+    if (!inputValue) return false;
+
+    if (paramValue.endsWith(':*')) {
+      const prefix = paramValue.slice(0, -2);
+      return inputValue.startsWith(prefix);
+    }
+
+    return inputValue === paramValue;
+  }
+
+  return false;
+}
+
+/**
+ * Read allow/deny rule arrays from a Claude Code settings file.
+ */
+function readSettingsRules(settingsPath: string): { allow: string[]; deny: string[] } {
+  try {
+    const content = fs.readFileSync(settingsPath, 'utf-8');
+    const settings = JSON.parse(content);
+    return {
+      allow: Array.isArray(settings.allow) ? settings.allow : [],
+      deny: Array.isArray(settings.deny) ? settings.deny : [],
+    };
+  } catch {
+    return { allow: [], deny: [] };
+  }
+}
+
+/**
+ * Check existing allow/deny rules across all settings scopes for a task.
+ * Returns 'allow' or 'deny' if a rule matches, or null if no rule applies.
+ * Deny rules take precedence over allow rules.
+ */
+export function checkExistingRules(
+  worktreePath: string,
+  toolName: string,
+  toolInput: Record<string, unknown>,
+): 'allow' | 'deny' | null {
+  const settingsFiles = [
+    path.join(worktreePath, '.claude', 'settings.local.json'),
+    path.join(worktreePath, '.claude', 'settings.json'),
+    path.join(os.homedir(), '.claude', 'settings.json'),
+  ];
+
+  const allAllow: string[] = [];
+  const allDeny: string[] = [];
+
+  for (const file of settingsFiles) {
+    const rules = readSettingsRules(file);
+    allAllow.push(...rules.allow);
+    allDeny.push(...rules.deny);
+  }
+
+  // Deny takes precedence
+  for (const pattern of allDeny) {
+    if (matchesPattern(pattern, toolName, toolInput)) return 'deny';
+  }
+
+  for (const pattern of allAllow) {
+    if (matchesPattern(pattern, toolName, toolInput)) return 'allow';
+  }
+
+  return null;
+}
+
+/**
  * Compute pre-set rule options for a given tool name and input.
  */
 export function computeRuleOptions(toolName: string, toolInput: Record<string, unknown>): RuleOption[] {
