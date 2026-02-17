@@ -13,6 +13,8 @@ import TaskHistoryPanel from './components/TaskHistoryPanel';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
 import SettingsOverlay from './components/SettingsOverlay';
 import PermissionPanel from './components/PermissionPanel';
+import RightIconBar from './components/RightIconBar';
+import NotificationPopover from './components/NotificationPopover';
 
 declare global {
   interface Window {
@@ -131,6 +133,26 @@ export default function App() {
       dispatch({ type: 'PUSH_PERMISSION', request });
     });
     return unsub;
+  }, [dispatch]);
+
+  // Check for plugin updates on startup
+  useEffect(() => {
+    window.bifrost.checkIntegration().then(({ updateAvailable }) => {
+      if (updateAvailable) {
+        dispatch({
+          type: 'PUSH_NOTIFICATION',
+          notification: {
+            id: 'plugin-update',
+            type: 'plugin-update',
+            title: 'Plugin Update Available',
+            message: 'A new version of the Bifrost plugin is available.',
+            action: { label: 'Install', handler: 'install-plugin' },
+            read: false,
+            timestamp: Date.now(),
+          },
+        });
+      }
+    });
   }, [dispatch]);
 
   // Listen for menu actions from the main process
@@ -255,20 +277,29 @@ export default function App() {
         <span className="text-xs font-semibold tracking-wide text-slate-500">BIFROST</span>
       </div>
 
-      {/* Task tab bar */}
-      <TaskBar />
+      {/* Main area: content + right icon bar */}
+      <div className="flex flex-1 min-h-0">
+        {/* Content column */}
+        <div className="flex flex-col flex-1 min-w-0">
+          {/* Task tab bar */}
+          <TaskBar />
 
-      {/* Main content: terminal */}
-      <TaskView />
+          {/* Main content: terminal */}
+          <TaskView />
 
-      {/* Status bar */}
-      <StatusBar
-        activeTask={activeTask}
-        config={state.config}
-        repos={state.repos}
-        apiPort={state.apiPort}
-        onToggleIde={handleToggleIde}
-      />
+          {/* Status bar */}
+          <StatusBar
+            activeTask={activeTask}
+            config={state.config}
+            repos={state.repos}
+            apiPort={state.apiPort}
+            onToggleIde={handleToggleIde}
+          />
+        </div>
+
+        {/* Right icon bar */}
+        <RightIconBar />
+      </div>
 
       {/* Modals */}
       {state.showRepoManager && <RepoManager />}
@@ -282,6 +313,9 @@ export default function App() {
 
       {/* Permission approval panel */}
       <PermissionPanel />
+
+      {/* Notification popover */}
+      <NotificationPopover />
 
       {/* Toast notification */}
       {state.toast && (
