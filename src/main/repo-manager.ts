@@ -10,7 +10,12 @@ const execFile = promisify(execFileCb);
 
 export async function addRepo(params: AddRepoParams): Promise<Repo> {
   if (params.type === 'local') {
-    const repoPath = params.path ?? '';
+    let repoPath = params.path ?? '';
+    // Expand leading ~ to home directory
+    if (repoPath.startsWith('~/') || repoPath === '~') {
+      repoPath = path.join(os.homedir(), repoPath.slice(1));
+    }
+    repoPath = path.resolve(repoPath);
     const gitDir = path.join(repoPath, '.git');
     if (!fs.existsSync(gitDir)) {
       throw new Error(`Not a git repository: ${repoPath}`);
