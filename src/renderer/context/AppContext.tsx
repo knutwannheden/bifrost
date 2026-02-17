@@ -10,6 +10,8 @@ export interface TaskPaneState {
   claudeHidden: boolean;
   devHidden: boolean;
   focusedPane: PaneTarget;
+  showDiff: boolean;
+  diffMode: DiffMode;
 }
 
 export interface AppState {
@@ -21,11 +23,9 @@ export interface AppState {
   showRepoManager: boolean;
   showCreateDialog: boolean;
   createDialogRepoId: string | null;
-  showDiff: boolean;
   showTaskHistory: boolean;
   showKeyboardShortcuts: boolean;
   showSettings: boolean;
-  diffMode: DiffMode;
   paneStates: Record<string, TaskPaneState>;
   reviewContent: Record<string, string>;
   reviewStatus: Record<string, ReviewStatus>;
@@ -80,11 +80,9 @@ const initialState: AppState = {
   showRepoManager: false,
   showCreateDialog: false,
   createDialogRepoId: null,
-  showDiff: false,
   showTaskHistory: false,
   showKeyboardShortcuts: false,
   showSettings: false,
-  diffMode: 'git',
   paneStates: {},
   reviewContent: {},
   reviewStatus: {},
@@ -101,6 +99,8 @@ export const defaultPaneState: TaskPaneState = {
   claudeHidden: false,
   devHidden: false,
   focusedPane: 'claude',
+  showDiff: false,
+  diffMode: 'git',
 };
 
 function getPaneState(state: AppState, taskId: string): TaskPaneState {
@@ -115,15 +115,29 @@ function hiddenKey(pane: PaneTarget): 'claudeHidden' | 'devHidden' {
   return pane === 'claude' ? 'claudeHidden' : 'devHidden';
 }
 
-/** Close all overlays — used when toggling one open so only one shows at a time */
+/** Close all global overlays — used when toggling one open so only one shows at a time */
 const allOverlaysClosed = {
   showRepoManager: false,
   showCreateDialog: false,
-  showDiff: false,
   showTaskHistory: false,
   showKeyboardShortcuts: false,
   showSettings: false,
 };
+
+/** Close the active task's diff overlay */
+function closeActiveTaskDiff(state: AppState): AppState {
+  if (!state.activeTaskId) return state;
+  const ps = getPaneState(state, state.activeTaskId);
+  if (!ps.showDiff) return state;
+  return setPaneState(state, state.activeTaskId, { ...ps, showDiff: false });
+}
+
+/** Get diff state for the active task (convenience for consumers) */
+export function getActiveDiffState(state: AppState): { showDiff: boolean; diffMode: DiffMode } {
+  if (!state.activeTaskId) return { showDiff: false, diffMode: 'git' };
+  const ps = state.paneStates[state.activeTaskId] ?? defaultPaneState;
+  return { showDiff: ps.showDiff, diffMode: ps.diffMode };
+}
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -178,19 +192,27 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ),
       };
     case 'TOGGLE_REPO_MANAGER':
-      return { ...state, ...allOverlaysClosed, showRepoManager: !state.showRepoManager };
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showRepoManager: !state.showRepoManager });
     case 'SHOW_CREATE_TASK_DIALOG':
-      return { ...state, ...allOverlaysClosed, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null };
-    case 'TOGGLE_DIFF':
-      return { ...state, ...allOverlaysClosed, showDiff: !state.showDiff };
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null });
+    case 'TOGGLE_DIFF': {
+      if (!state.activeTaskId) return state;
+      const ps = getPaneState(state, state.activeTaskId);
+      const opening = !ps.showDiff;
+      const base = opening ? { ...state, ...allOverlaysClosed } : state;
+      return setPaneState(base, state.activeTaskId, { ...ps, showDiff: opening });
+    }
     case 'TOGGLE_TASK_HISTORY':
-      return { ...state, ...allOverlaysClosed, showTaskHistory: !state.showTaskHistory };
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showTaskHistory: !state.showTaskHistory });
     case 'TOGGLE_KEYBOARD_SHORTCUTS':
-      return { ...state, ...allOverlaysClosed, showKeyboardShortcuts: !state.showKeyboardShortcuts };
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showKeyboardShortcuts: !state.showKeyboardShortcuts });
     case 'TOGGLE_SETTINGS':
-      return { ...state, ...allOverlaysClosed, showSettings: !state.showSettings };
-    case 'SET_DIFF_MODE':
-      return { ...state, diffMode: action.mode };
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showSettings: !state.showSettings });
+    case 'SET_DIFF_MODE': {
+      if (!state.activeTaskId) return state;
+      const ps = getPaneState(state, state.activeTaskId);
+      return setPaneState(state, state.activeTaskId, { ...ps, diffMode: action.mode });
+    }
     case 'SET_DEV_SESSION': {
       const ps = getPaneState(state, action.taskId);
       return setPaneState(state, action.taskId, { ...ps, devSessionId: action.devSessionId, devHidden: false, focusedPane: 'dev' });

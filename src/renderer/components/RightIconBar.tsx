@@ -1,5 +1,5 @@
 import React from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, getActiveDiffState } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
 
 function BellIcon() {
@@ -77,11 +77,11 @@ function IconButton({ active, badge, title, onClick, children, ...rest }: IconBu
 export default function RightIconBar() {
   const { state, dispatch } = useApp();
 
-  const isDiffActive = state.showDiff;
+  const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
 
   const toggleDiffMode = (mode: DiffMode) => {
-    if (isDiffActive && state.diffMode === mode) {
+    if (isDiffActive && diffMode === mode) {
       dispatch({ type: 'TOGGLE_DIFF' });
     } else {
       dispatch({ type: 'SET_DIFF_MODE', mode });
@@ -105,7 +105,7 @@ export default function RightIconBar() {
 
       <IconButton
         title="Diff (⌘D)"
-        active={isDiffActive && state.diffMode === 'git'}
+        active={isDiffActive && diffMode === 'git'}
         onClick={() => toggleDiffMode('git')}
       >
         <DiffIcon />
@@ -113,7 +113,7 @@ export default function RightIconBar() {
 
       <IconButton
         title="Activity (⌘A)"
-        active={isDiffActive && state.diffMode === 'activity'}
+        active={isDiffActive && diffMode === 'activity'}
         onClick={() => toggleDiffMode('activity')}
       >
         <ActivityIcon />
@@ -121,7 +121,7 @@ export default function RightIconBar() {
 
       <IconButton
         title="Review (⌥U)"
-        active={isDiffActive && state.diffMode === 'review'}
+        active={isDiffActive && diffMode === 'review'}
         onClick={() => toggleDiffMode('review')}
       >
         <ReviewIcon />

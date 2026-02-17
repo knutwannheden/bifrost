@@ -176,7 +176,7 @@ export default function KeyboardShortcutsPanel() {
 
   return (
     <div
-      className="fixed inset-0 z-20 flex items-center justify-center bg-black/30 backdrop-blur-sm focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 focus:outline-none"
       onClick={close}
       onKeyDown={handleKeyDown}
     >

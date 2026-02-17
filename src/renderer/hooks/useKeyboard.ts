@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import type { Terminal } from '@xterm/xterm';
 import type { AppState, AppAction, PaneTarget } from '../context/AppContext';
 import type { CaptureContextParams } from '../../shared/types';
-import { defaultPaneState } from '../context/AppContext';
+import { defaultPaneState, getActiveDiffState } from '../context/AppContext';
 import { terminalRegistry } from './useTerminal';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
@@ -144,16 +144,18 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      const { showDiff, diffMode } = getActiveDiffState(state);
+
       // Alt+U: open/toggle review mode (works without Cmd)
       // Skip when an overlay is open to avoid closing it via mutual exclusion
       if (e.altKey && !e.metaKey && e.code === 'KeyU') {
         if (state.showTaskHistory || state.showRepoManager || state.showSettings || state.showKeyboardShortcuts) return;
         e.preventDefault();
-        if (state.showDiff && state.diffMode === 'review') {
+        if (showDiff && diffMode === 'review') {
           dispatch({ type: 'TOGGLE_DIFF' });
         } else {
           dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
-          if (!state.showDiff) {
+          if (!showDiff) {
             dispatch({ type: 'TOGGLE_DIFF' });
           }
         }
@@ -174,17 +176,17 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           let params: CaptureContextParams | null = null;
           const taskMeta = { taskId: activeTask.id, taskName: activeTask.name };
 
-          if (state.showDiff) {
+          if (showDiff) {
             // Use DOM text selection if available (works in any diff/review mode)
             const domSelection = window.getSelection()?.toString()?.trim();
             if (domSelection) {
-              params = { type: state.diffMode === 'review' ? 'activity' : state.diffMode as 'diff' | 'activity', content: domSelection, ...taskMeta };
-            } else if (state.diffMode === 'git') {
+              params = { type: diffMode === 'review' ? 'activity' : diffMode as 'diff' | 'activity', content: domSelection, ...taskMeta };
+            } else if (diffMode === 'git') {
               const diff = await window.bifrost.getDiff(activeTask.id);
               const content = diff.diff;
               if (!content?.trim()) return;
               params = { type: 'diff', content, ...taskMeta };
-            } else if (state.diffMode === 'review') {
+            } else if (diffMode === 'review') {
               const content = state.reviewContent[activeTask.id];
               if (!content?.trim()) return;
               params = { type: 'activity', content, ...taskMeta };
@@ -402,11 +404,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
         case 'a':
           e.preventDefault();
-          if (state.showDiff && state.diffMode === 'activity') {
+          if (showDiff && diffMode === 'activity') {
             dispatch({ type: 'TOGGLE_DIFF' });
           } else {
             dispatch({ type: 'SET_DIFF_MODE', mode: 'activity' });
-            if (!state.showDiff) {
+            if (!showDiff) {
               dispatch({ type: 'TOGGLE_DIFF' });
             }
           }
@@ -414,11 +416,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
         case 'l':
           e.preventDefault();
-          if (state.showDiff && state.diffMode === 'log') {
+          if (showDiff && diffMode === 'log') {
             dispatch({ type: 'TOGGLE_DIFF' });
           } else {
             dispatch({ type: 'SET_DIFF_MODE', mode: 'log' });
-            if (!state.showDiff) {
+            if (!showDiff) {
               dispatch({ type: 'TOGGLE_DIFF' });
             }
           }

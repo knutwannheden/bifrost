@@ -279,13 +279,24 @@ export default function App() {
 
       {/* Main area: content + right icon bar */}
       <div className="flex flex-1 min-h-0">
-        {/* Content column */}
-        <div className="flex flex-col flex-1 min-w-0">
+        {/* Content column — relative for overlay positioning */}
+        <div className="flex flex-col flex-1 min-w-0 relative">
           {/* Task tab bar */}
           <TaskBar />
 
-          {/* Main content: terminal */}
-          <TaskView />
+          {/* Task content area — relative container for content-scoped overlays */}
+          <div className="flex-1 min-h-0 relative flex flex-col">
+            {/* Main content: terminal */}
+            <TaskView />
+
+            {/* Content-scoped overlays (absolute within content area) */}
+            <DiffOverlay />
+            {state.showSettings && <SettingsOverlay />}
+            {state.showRepoManager && <RepoManager />}
+            {state.showCreateDialog && <TaskCreateDialog />}
+            {state.showTaskHistory && <TaskHistoryPanel />}
+            {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
+          </div>
 
           {/* Status bar */}
           <StatusBar
@@ -300,16 +311,6 @@ export default function App() {
         {/* Right icon bar */}
         <RightIconBar />
       </div>
-
-      {/* Modals */}
-      {state.showRepoManager && <RepoManager />}
-      {state.showCreateDialog && <TaskCreateDialog />}
-      {state.showTaskHistory && <TaskHistoryPanel />}
-      {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
-      {state.showSettings && <SettingsOverlay />}
-
-      {/* Diff overlay */}
-      <DiffOverlay />
 
       {/* Permission approval panel */}
       <PermissionPanel />

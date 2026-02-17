@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import '@xterm/xterm/css/xterm.css';
-import { useApp } from '../context/AppContext';
+import { useApp, getActiveDiffState } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
 import TerminalSearchBar from './TerminalSearchBar';
 
@@ -26,7 +26,8 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing
-  const anyOverlay = state.showRepoManager || state.showCreateDialog || state.showDiff || state.showTaskHistory;
+  const { showDiff } = getActiveDiffState(state);
+  const anyOverlay = state.showRepoManager || state.showCreateDialog || showDiff || state.showTaskHistory;
   useEffect(() => {
     if (!anyOverlay && active && focused && terminal.current && !showSearch) {
       terminal.current.focus();

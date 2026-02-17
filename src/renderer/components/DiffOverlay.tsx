@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
+import { getActiveDiffState } from '../context/AppContext';
 import { useDiff } from '../hooks/useDiff';
 import { useActivityLog } from '../hooks/useActivityLog';
 import { useGitLog } from '../hooks/useGitLog';
@@ -450,13 +451,14 @@ export default function DiffOverlay() {
   const [gitFileIdx, setGitFileIdx] = useState(0);
   const [gitFileCount, setGitFileCount] = useState(0);
 
-  const isActivity = state.diffMode === 'activity';
-  const isLog = state.diffMode === 'log';
-  const isReview = state.diffMode === 'review';
+  const { showDiff, diffMode } = getActiveDiffState(state);
+  const isActivity = diffMode === 'activity';
+  const isLog = diffMode === 'log';
+  const isReview = diffMode === 'review';
 
   // Fetch activity data at DiffOverlay level for search/navigation
   const activityLog = useActivityLog(
-    state.showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null,
+    showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null,
   );
 
   const filteredEntries = useMemo(() => {
@@ -467,7 +469,7 @@ export default function DiffOverlay() {
 
   // Fetch git log data at DiffOverlay level for search/navigation
   const gitLog = useGitLog(
-    state.showDiff && isLog && state.activeTaskId ? state.activeTaskId : null,
+    showDiff && isLog && state.activeTaskId ? state.activeTaskId : null,
   );
 
   const filteredLogEntries = useMemo(() => {
@@ -481,7 +483,7 @@ export default function DiffOverlay() {
     setSearch('');
     setFocusedIdx(0);
     setGitFileIdx(0);
-  }, [state.diffMode]);
+  }, [diffMode]);
 
   // Reset focus when search changes
   useEffect(() => {
@@ -514,12 +516,12 @@ export default function DiffOverlay() {
   }, [focusedIdx, isActivity, isLog]);
 
   useEffect(() => {
-    if (state.showDiff) {
+    if (showDiff) {
       containerRef.current?.focus();
     }
-  }, [state.showDiff]);
+  }, [showDiff]);
 
-  if (!state.showDiff) return null;
+  if (!showDiff) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Cmd+O: open the focused entry's file in the IDE
@@ -602,7 +604,7 @@ export default function DiffOverlay() {
         e.preventDefault();
         e.stopPropagation();
         const modes: DiffMode[] = ['git', 'activity', 'log', 'review'];
-        const curIdx = modes.indexOf(state.diffMode);
+        const curIdx = modes.indexOf(diffMode);
         const step = e.shiftKey ? modes.length - 1 : 1;
         dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + step) % modes.length] });
         break;
@@ -619,7 +621,7 @@ export default function DiffOverlay() {
           setFocusedIdx((i) => (i > 0 ? i - 1 : filteredEntries.length - 1));
         } else if (isLog && filteredLogEntries.length > 0) {
           setFocusedIdx((i) => (i > 0 ? i - 1 : filteredLogEntries.length - 1));
-        } else if (state.diffMode === 'git' && gitFileCount > 0) {
+        } else if (diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i > 0 ? i - 1 : gitFileCount - 1));
         }
         break;
@@ -630,7 +632,7 @@ export default function DiffOverlay() {
           setFocusedIdx((i) => (i < filteredEntries.length - 1 ? i + 1 : 0));
         } else if (isLog && filteredLogEntries.length > 0) {
           setFocusedIdx((i) => (i < filteredLogEntries.length - 1 ? i + 1 : 0));
-        } else if (state.diffMode === 'git' && gitFileCount > 0) {
+        } else if (diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i < gitFileCount - 1 ? i + 1 : 0));
         }
         break;
@@ -668,17 +670,16 @@ export default function DiffOverlay() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-30 flex flex-col focus:outline-none"
+      className="absolute inset-0 z-30 flex flex-col focus:outline-none"
       style={{ backgroundColor: '#282a36' }}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
-      <div className="flex items-center justify-between h-10 px-4 border-b border-slate-700 flex-shrink-0"
-           style={{ paddingLeft: 78 }}>
+      <div className="flex items-center justify-between h-10 px-4 border-b border-slate-700 flex-shrink-0">
         <div className="flex items-center gap-4">
           <span className="text-sm font-semibold text-slate-300">Diff</span>
           <ModeToggle
-            mode={state.diffMode}
+            mode={diffMode}
             onChange={(m) => dispatch({ type: 'SET_DIFF_MODE', mode: m })}
           />
         </div>
@@ -707,14 +708,14 @@ export default function DiffOverlay() {
           {isLog && (
             <span className="text-xs text-slate-600">{filteredLogEntries.length} commit{filteredLogEntries.length !== 1 ? 's' : ''}</span>
           )}
-          {state.diffMode === 'git' && (
+          {diffMode === 'git' && (
             <span className="text-xs text-slate-600">{gitFileCount} file{gitFileCount !== 1 ? 's' : ''}</span>
           )}
           <span className="ml-auto text-xs text-slate-600">Esc to clear</span>
         </div>
       )}
 
-      {state.activeTaskId && state.diffMode === 'git' && (
+      {state.activeTaskId && diffMode === 'git' && (
         <div className="flex-1 flex min-h-0">
           <GitDiffContent
             taskId={state.activeTaskId}
