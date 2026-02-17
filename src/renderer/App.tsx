@@ -152,7 +152,7 @@ export default function App() {
           },
         });
       }
-    });
+    }).catch(() => {});
   }, [dispatch]);
 
   // Listen for menu actions from the main process

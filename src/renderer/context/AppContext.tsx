@@ -66,7 +66,6 @@ export type AppAction =
   | { type: 'SHIFT_PERMISSION' }
   | { type: 'PUSH_NOTIFICATION'; notification: AppNotification }
   | { type: 'DISMISS_NOTIFICATION'; id: string }
-  | { type: 'MARK_NOTIFICATIONS_READ' }
   | { type: 'TOGGLE_NOTIFICATION_POPOVER' }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
   | { type: 'SET_REVIEW_STATUS'; taskId: string; status: ReviewStatus }
@@ -242,8 +241,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, notifications: [...state.notifications, action.notification] };
     case 'DISMISS_NOTIFICATION':
       return { ...state, notifications: state.notifications.filter((n) => n.id !== action.id) };
-    case 'MARK_NOTIFICATIONS_READ':
-      return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
     case 'TOGGLE_NOTIFICATION_POPOVER': {
       const opening = !state.showNotificationPopover;
       return {

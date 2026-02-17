@@ -46,7 +46,7 @@ function GearIcon() {
   );
 }
 
-interface IconButtonProps {
+interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
   badge?: boolean;
   title: string;
@@ -54,11 +54,12 @@ interface IconButtonProps {
   children: React.ReactNode;
 }
 
-function IconButton({ active, badge, title, onClick, children }: IconButtonProps) {
+function IconButton({ active, badge, title, onClick, children, ...rest }: IconButtonProps) {
   return (
     <button
       onClick={onClick}
       title={title}
+      {...rest}
       className={`relative w-full flex items-center justify-center h-9 transition-colors ${
         active
           ? 'text-blue-400 bg-slate-700/50 border-l-2 border-blue-400'
@@ -95,6 +96,7 @@ export default function RightIconBar() {
         active={state.showNotificationPopover}
         badge={hasUnreadNotifications}
         onClick={() => dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' })}
+        data-notification-bell
       >
         <BellIcon />
       </IconButton>
