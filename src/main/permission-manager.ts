@@ -235,6 +235,7 @@ export function resolveRequest(requestId: string, decision: PermissionDecision):
 
   pending.resolve({
     hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
       permissionDecision: decision.action,
     },
   });

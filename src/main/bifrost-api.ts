@@ -134,9 +134,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // If permission management is disabled, let Claude Code handle it
+      // If permission management is disabled or permissions are bypassed, let Claude Code handle it
       const config = loadConfig();
-      if (!config.managePermissions) {
+      if (!config.managePermissions || config.permissionMode === 'skip-permissions') {
         jsonResponse(res, {});
         return;
       }
@@ -152,7 +152,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const existingDecision = checkExistingRules(cwd, toolName, toolInput);
       if (existingDecision) {
         jsonResponse(res, {
-          hookSpecificOutput: { permissionDecision: existingDecision },
+          hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: existingDecision },
         });
         return;
       }
