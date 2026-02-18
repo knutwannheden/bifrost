@@ -312,6 +312,16 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         return;
       }
 
+      // Cmd+=: switch to last notified tab
+      if (key === '=' && !e.shiftKey) {
+        e.preventDefault();
+        const notifId = state.lastNotifiedTaskId;
+        if (notifId && notifId !== state.activeTaskId && state.tasks.some((t) => t.id === notifId && t.status === 'running')) {
+          dispatch({ type: 'SET_ACTIVE_TASK', taskId: notifId });
+        }
+        return;
+      }
+
       switch (key) {
         case 't':
           e.preventDefault();

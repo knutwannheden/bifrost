@@ -20,6 +20,7 @@ export interface AppState {
   tasksLoaded: boolean;
   activeTaskId: string | null;
   previousActiveTaskId: string | null;
+  lastNotifiedTaskId: string | null;
   config: BifrostConfig | null;
   showRepoManager: boolean;
   showCreateDialog: boolean;
@@ -78,6 +79,7 @@ const initialState: AppState = {
   tasksLoaded: false,
   activeTaskId: null,
   previousActiveTaskId: null,
+  lastNotifiedTaskId: null,
   config: null,
   showRepoManager: false,
   showCreateDialog: false,
@@ -189,6 +191,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         tasks: state.tasks.map((t) =>
           t.id === action.taskId ? { ...t, hasUnread: action.hasUnread } : t,
         ),
+        ...(action.hasUnread && { lastNotifiedTaskId: action.taskId }),
       };
     case 'SET_TASK_STATUS':
       return {

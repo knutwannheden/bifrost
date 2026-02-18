@@ -26,6 +26,7 @@ const shortcuts: Shortcut[] = [
   { key: 'Shift+]', label: 'Next tab', group: 'Navigation', execKey: ']', execShift: true, execCode: 'BracketRight' },
   { key: '1-9', label: 'Switch to tab N', group: 'Navigation' },
   { key: '-', label: 'Switch to last active tab', group: 'Navigation', execKey: '-' },
+  { key: '=', label: 'Switch to last notified tab', group: 'Navigation', execKey: '=' },
 
   // Views
   { key: '/', label: 'Toggle dev terminal', group: 'Views', execKey: '/' },
