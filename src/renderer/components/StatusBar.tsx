@@ -21,7 +21,7 @@ export default function StatusBar({
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {activeTask && (
           <>
-            <span className="truncate max-w-[300px]" title={activeTask.worktreePath}>
+            <span className="truncate" title={activeTask.worktreePath}>
               {shortPath(activeTask.worktreePath)}
             </span>
             <span className="capitalize">{activeTask.status}</span>

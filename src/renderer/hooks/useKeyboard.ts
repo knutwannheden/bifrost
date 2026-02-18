@@ -302,6 +302,16 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         return;
       }
 
+      // Cmd+-: switch to previous active tab
+      if (key === '-' && !e.shiftKey) {
+        e.preventDefault();
+        const prevId = state.previousActiveTaskId;
+        if (prevId && state.tasks.some((t) => t.id === prevId && t.status === 'running')) {
+          dispatch({ type: 'SET_ACTIVE_TASK', taskId: prevId });
+        }
+        return;
+      }
+
       switch (key) {
         case 't':
           e.preventDefault();
