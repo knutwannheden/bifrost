@@ -9,6 +9,8 @@ interface TaskTabProps {
   onClick: () => void;
   onClose: () => void;
   onRename: (name: string) => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }
 
 const statusColors: Record<string, string> = {
@@ -17,7 +19,7 @@ const statusColors: Record<string, string> = {
   error: 'bg-red-400',
 };
 
-export default function TaskTab({ task, repoName, isActive, onClick, onClose, onRename }: TaskTabProps) {
+export default function TaskTab({ task, repoName, isActive, onClick, onClose, onRename, onDragStart, onDragEnd }: TaskTabProps) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(task.name);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -93,6 +95,7 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
     <>
       <button
         ref={buttonRef}
+        draggable
         className={`group flex items-center gap-1.5 px-3 h-full whitespace-nowrap transition-colors ${
           isActive
             ? 'bg-slate-700 border-b-2 border-blue-500 text-slate-200'
@@ -102,6 +105,12 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
         onDoubleClick={startEdit}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
+        onDragStart={(e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', task.id);
+          onDragStart(e);
+        }}
+        onDragEnd={onDragEnd}
       >
         <span className="flex flex-col items-center min-w-0 max-w-[200px]">
           <span className="flex items-center gap-1.5">

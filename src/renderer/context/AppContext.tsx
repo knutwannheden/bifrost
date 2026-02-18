@@ -71,7 +71,8 @@ export type AppAction =
   | { type: 'TOGGLE_NOTIFICATION_POPOVER' }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
   | { type: 'SET_REVIEW_STATUS'; taskId: string; status: ReviewStatus }
-  | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string };
+  | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string }
+  | { type: 'REORDER_TASKS'; taskIds: string[] };
 
 const initialState: AppState = {
   repos: [],
@@ -261,6 +262,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, reviewStatus: { ...state.reviewStatus, [action.taskId]: action.status } };
     case 'SET_REVIEW_CONTENT':
       return { ...state, reviewContent: { ...state.reviewContent, [action.taskId]: action.content } };
+    case 'REORDER_TASKS': {
+      const idSet = new Set(action.taskIds);
+      const reordered = action.taskIds.map((id) => state.tasks.find((t) => t.id === id)!).filter(Boolean);
+      let ri = 0;
+      return { ...state, tasks: state.tasks.map((t) => idSet.has(t.id) ? reordered[ri++] : t) };
+    }
     case 'PUSH_PERMISSION':
       return { ...state, permissionQueue: [...state.permissionQueue, action.request] };
     case 'SHIFT_PERMISSION':

@@ -24,6 +24,7 @@ const api: BifrostAPI = {
   renameTask: (taskId, name) => ipcRenderer.invoke(IPC.RENAME_TASK, taskId, name),
   deleteTask: (taskId) => ipcRenderer.invoke(IPC.DELETE_TASK, taskId),
   listTasks: () => ipcRenderer.invoke(IPC.LIST_TASKS),
+  reorderTasks: (taskIds) => ipcRenderer.invoke(IPC.REORDER_TASKS, taskIds),
 
   // Terminal
   createDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CREATE_DEV_TERMINAL, taskId),

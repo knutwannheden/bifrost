@@ -382,6 +382,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return tasks;
   });
 
+  ipcMain.handle(IPC.REORDER_TASKS, (_event, taskIds: string[]) => {
+    const idSet = new Set(taskIds);
+    const reordered = taskIds.map((id) => tasks.find((t) => t.id === id)!).filter(Boolean);
+    let ri = 0;
+    tasks = tasks.map((t) => idSet.has(t.id) ? reordered[ri++] : t);
+    saveTasks(tasks);
+  });
+
   ipcMain.handle(IPC.CREATE_DEV_TERMINAL, (_event, taskId: string) => {
     const task = getTask(taskId);
     // Kill existing dev session if any

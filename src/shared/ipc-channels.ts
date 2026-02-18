@@ -40,6 +40,7 @@ export const IPC = {
   RENAME_TASK: 'task:rename',
   DELETE_TASK: 'task:delete',
   LIST_TASKS: 'task:list',
+  REORDER_TASKS: 'tasks:reorder',
 
   // Terminal sessions
   CREATE_DEV_TERMINAL: 'session:create-dev-terminal',
@@ -140,6 +141,7 @@ export interface BifrostAPI {
   renameTask(taskId: string, name: string): Promise<Task>;
   deleteTask(taskId: string): Promise<void>;
   listTasks(): Promise<Task[]>;
+  reorderTasks(taskIds: string[]): Promise<void>;
 
   // Terminal
   createDevTerminal(taskId: string): Promise<string>;
