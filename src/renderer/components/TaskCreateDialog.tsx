@@ -513,7 +513,10 @@ export default function TaskCreateDialog() {
           </div>
 
           {/* In-place checkbox */}
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label
+            className="flex items-center gap-2 cursor-pointer"
+            title="Run the task directly in the repository's main worktree instead of creating a separate git worktree. Useful for tasks that don't need branch isolation."
+          >
             <input
               type="checkbox"
               checked={inPlace}

@@ -58,7 +58,7 @@ const lineNumWidth = 'w-12';
 
 function LineNumber({ num }: { num: number | null }) {
   return (
-    <span className={`${lineNumWidth} inline-block text-right pr-2 select-none text-slate-600 text-xs leading-5`}>
+    <span className={`${lineNumWidth} inline-block text-right pr-2 select-none text-slate-600 text-xs leading-5 flex-shrink-0`}>
       {num ?? ''}
     </span>
   );
