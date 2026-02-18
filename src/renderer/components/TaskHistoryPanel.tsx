@@ -206,6 +206,7 @@ export default function TaskHistoryPanel() {
   const [sessions, setSessions] = useState<ClaudeSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [diffStatsMap, setDiffStatsMap] = useState<Map<string, DiffStats>>(new Map());
+  const [branchConfirm, setBranchConfirm] = useState<{ task: Task; currentBranch: string } | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
@@ -302,9 +303,10 @@ export default function TaskHistoryPanel() {
 
   const listLength = isSessionsMode ? filteredSessions.length : flatTaskList.length;
 
-  // Reset focus when filter or search changes
+  // Reset focus and branch confirm when filter or search changes
   useEffect(() => {
     setFocusedIdx(0);
+    setBranchConfirm(null);
   }, [filter, search]);
 
   // Clamp focus index when list shrinks
@@ -326,8 +328,9 @@ export default function TaskHistoryPanel() {
 
   const close = useCallback(() => dispatch({ type: 'TOGGLE_TASK_HISTORY' }), [dispatch]);
 
-  const handleReopen = async (task: Task) => {
+  const doReopen = async (task: Task) => {
     setError(null);
+    setBranchConfirm(null);
     try {
       const updated = await window.bifrost.reopenTask(task.id);
       dispatch({ type: 'UPDATE_TASK', task: updated });
@@ -336,6 +339,22 @@ export default function TaskHistoryPanel() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to reopen task');
     }
+  };
+
+  const handleReopen = async (task: Task) => {
+    setError(null);
+    if (task.inPlace) {
+      try {
+        const currentBranch = await window.bifrost.getCurrentBranch(task.repoId);
+        if (currentBranch !== task.branch) {
+          setBranchConfirm({ task, currentBranch });
+          return;
+        }
+      } catch {
+        // If we can't detect the branch, proceed with reopen
+      }
+    }
+    doReopen(task);
   };
 
   const handleArchive = async (task: Task) => {
@@ -569,6 +588,26 @@ export default function TaskHistoryPanel() {
 
         {error && (
           <p className="text-xs text-red-400 px-4 pt-2">{error}</p>
+        )}
+
+        {branchConfirm && (
+          <div className="mx-4 mt-3 px-3 py-2 bg-yellow-900/30 border border-yellow-600/50 rounded flex items-center gap-3">
+            <span className="text-xs text-yellow-300 flex-1">
+              Branch changed from <span className="font-mono font-medium">{branchConfirm.task.branch}</span> to <span className="font-mono font-medium">{branchConfirm.currentBranch}</span>
+            </span>
+            <button
+              onClick={() => doReopen(branchConfirm.task)}
+              className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded"
+            >
+              Reopen on {branchConfirm.currentBranch}
+            </button>
+            <button
+              onClick={() => setBranchConfirm(null)}
+              className="px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+            >
+              Cancel
+            </button>
+          </div>
         )}
 
         {/* Search indicator */}
