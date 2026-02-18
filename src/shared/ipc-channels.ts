@@ -53,6 +53,7 @@ export const IPC = {
   // Diff
   GET_DIFF: 'diff:get',
   GET_DIFF_STATS: 'diff:stats',
+  GET_FILE_STATUSES: 'diff:file-statuses',
   GET_GIT_LOG: 'git:log',
   GET_PR_URL: 'git:pr-url',
 
@@ -154,8 +155,9 @@ export interface BifrostAPI {
   onSessionExit(callback: (sessionId: string, code: number) => void): () => void;
 
   // Diff
-  getDiff(taskId: string): Promise<DiffResult>;
+  getDiff(taskId: string, scope?: 'working' | 'all'): Promise<DiffResult>;
   getDiffStats(taskId: string): Promise<DiffStats | null>;
+  getFileStatuses(taskId: string): Promise<Record<string, string[]>>;
   getGitLog(taskId: string): Promise<GitLogEntry[]>;
   getPrUrl(taskId: string): Promise<string | null>;
 

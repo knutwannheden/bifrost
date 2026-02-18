@@ -12,7 +12,7 @@ import { loadConfig, saveConfig } from './config';
 import { addRepo, removeRepo, getRepoBranches, detectBaseBranch } from './repo-manager';
 import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, resizeAllSessions, killSession, drainSessionBuffer } from './session-manager';
-import { getDiff, getDiffStats } from './diff-service';
+import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
 import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
@@ -428,10 +428,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Diff
-  ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string) => {
+  ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
     const baseBranch = await resolveBaseBranch(task);
-    return getDiff(task.worktreePath, baseBranch);
+    return getDiff(task.worktreePath, baseBranch, scope);
+  });
+
+  // File statuses (staged/unstaged/committed/untracked)
+  ipcMain.handle(IPC.GET_FILE_STATUSES, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    const baseBranch = await resolveBaseBranch(task);
+    return getFileStatuses(task.worktreePath, baseBranch);
   });
 
   // Diff stats

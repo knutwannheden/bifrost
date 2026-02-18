@@ -7,7 +7,7 @@ interface UseDiffResult {
   refetch: () => void;
 }
 
-export function useDiff(taskId: string | null): UseDiffResult {
+export function useDiff(taskId: string | null, scope: 'working' | 'all' = 'working'): UseDiffResult {
   const [diff, setDiff] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,14 +22,14 @@ export function useDiff(taskId: string | null): UseDiffResult {
     setError(null);
 
     try {
-      const result = await window.bifrost.getDiff(taskId);
+      const result = await window.bifrost.getDiff(taskId, scope);
       setDiff(result.diff);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch diff');
     } finally {
       setLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, scope]);
 
   useEffect(() => {
     fetchDiff();

@@ -270,14 +270,25 @@ const statusConfig: Record<DiffFileStatus, { letter: string; color: string }> = 
   renamed: { letter: 'R', color: 'text-blue-400' },
 };
 
+type GitFileStage = 'unstaged' | 'staged' | 'committed' | 'untracked';
+
+const stageIndicator: Record<GitFileStage, { label: string; color: string; title: string }> = {
+  staged: { label: 'S', color: 'text-green-400', title: 'Staged' },
+  unstaged: { label: 'U', color: 'text-yellow-400', title: 'Unstaged' },
+  committed: { label: 'C', color: 'text-blue-400', title: 'Committed' },
+  untracked: { label: '?', color: 'text-slate-500', title: 'Untracked' },
+};
+
 function FileListSidebar({
   files,
   selectedIndex,
   onSelectFile,
+  fileStatuses,
 }: {
   files: HighlightedFile[];
   selectedIndex: number;
   onSelectFile: (index: number) => void;
+  fileStatuses: Record<string, GitFileStage[]>;
 }) {
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -309,6 +320,7 @@ function FileListSidebar({
         const dirname = lastSlash >= 0 ? path.slice(0, lastSlash) : '';
         const stats = diffFileStats(data.file);
         const cfg = statusConfig[data.file.status];
+        const stages = fileStatuses[path] ?? [];
         const isSelected = idx === selectedIndex;
 
         return (
@@ -327,6 +339,16 @@ function FileListSidebar({
               <div className="text-slate-200 truncate">{basename}</div>
               {dirname && <div className="text-slate-500 truncate">{dirname}</div>}
             </div>
+            {stages.length > 0 && (
+              <span className="flex gap-0.5 flex-shrink-0">
+                {stages.map((stage) => {
+                  const si = stageIndicator[stage as GitFileStage];
+                  return si ? (
+                    <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
+                  ) : null;
+                })}
+              </span>
+            )}
             {data.file.binary
               ? <span className="text-xs text-slate-600 italic flex-shrink-0">binary</span>
               : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0" />
@@ -338,11 +360,43 @@ function FileListSidebar({
   );
 }
 
+type DiffScope = 'working' | 'all';
+
+function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: DiffScope) => void }) {
+  return (
+    <div className="flex gap-1 px-3 py-2 border-b border-slate-700 flex-shrink-0">
+      {(['working', 'all'] as const).map((s) => (
+        <button
+          key={s}
+          tabIndex={-1}
+          onClick={() => onChange(s)}
+          className={`px-2 py-0.5 text-xs rounded ${
+            scope === s
+              ? 'bg-slate-600 text-slate-200'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+          }`}
+        >
+          {s === 'working' ? 'Working tree' : 'All changes'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCount, filesRef }: { taskId: string; search: string; gitFileIdx: number; onSetGitFileIdx: (idx: number) => void; onFileCount: (count: number) => void; filesRef: React.MutableRefObject<HighlightedFile[]> }) {
-  const { diff, loading, error } = useDiff(taskId);
+  const [scope, setScope] = useState<DiffScope>('working');
+  const { diff, loading, error } = useDiff(taskId, scope);
   const highlighted = useHighlightedFiles(diff);
+  const [fileStatuses, setFileStatuses] = useState<Record<string, GitFileStage[]>>({});
 
   const fileSectionRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // Fetch file statuses alongside the diff
+  useEffect(() => {
+    window.bifrost.getFileStatuses(taskId).then(
+      (statuses) => setFileStatuses(statuses as Record<string, GitFileStage[]>),
+    ).catch(() => setFileStatuses({}));
+  }, [taskId, diff]);
 
   const filtered = useMemo(() => {
     if (!highlighted || !search) return highlighted;
@@ -371,42 +425,64 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-slate-400 p-4">
-        <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
-        <span>Loading diff...</span>
+      <div className="flex-1 flex flex-col">
+        <ScopeToggle scope={scope} onChange={setScope} />
+        <div className="flex items-center gap-2 text-slate-400 p-4">
+          <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+          <span>Loading diff...</span>
+        </div>
       </div>
     );
   }
 
   if (error) {
-    return <div className="text-red-400 p-4">Error: {error}</div>;
+    return (
+      <div className="flex-1 flex flex-col">
+        <ScopeToggle scope={scope} onChange={setScope} />
+        <div className="text-red-400 p-4">Error: {error}</div>
+      </div>
+    );
   }
 
   if (diff === null || diff === '') {
-    return <div className="text-slate-500 p-4">No changes</div>;
+    return (
+      <div className="flex-1 flex flex-col">
+        <ScopeToggle scope={scope} onChange={setScope} />
+        <div className="text-slate-500 p-4">No changes</div>
+      </div>
+    );
   }
 
   if (filtered && filtered.length === 0 && search) {
-    return <div className="text-slate-500 p-4">No matching files</div>;
+    return (
+      <div className="flex-1 flex flex-col">
+        <ScopeToggle scope={scope} onChange={setScope} />
+        <div className="text-slate-500 p-4">No matching files</div>
+      </div>
+    );
   }
 
   if (!filtered) return null;
 
   return (
-    <>
-      <FileListSidebar
-        files={filtered}
-        selectedIndex={gitFileIdx}
-        onSelectFile={onSetGitFileIdx}
-      />
-      <div className="flex-1 overflow-auto p-4">
-        {filtered.map((data, i) => (
-          <div key={i} ref={(el) => { fileSectionRefs.current[i] = el; }}>
-            <FileSection data={data} />
-          </div>
-        ))}
+    <div className="flex-1 flex flex-col min-h-0">
+      <ScopeToggle scope={scope} onChange={setScope} />
+      <div className="flex-1 flex min-h-0">
+        <FileListSidebar
+          files={filtered}
+          selectedIndex={gitFileIdx}
+          onSelectFile={onSetGitFileIdx}
+          fileStatuses={fileStatuses}
+        />
+        <div className="flex-1 overflow-auto p-4">
+          {filtered.map((data, i) => (
+            <div key={i} ref={(el) => { fileSectionRefs.current[i] = el; }}>
+              <FileSection data={data} />
+            </div>
+          ))}
+        </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -716,16 +792,14 @@ export default function DiffOverlay() {
       )}
 
       {state.activeTaskId && diffMode === 'git' && (
-        <div className="flex-1 flex min-h-0">
-          <GitDiffContent
-            taskId={state.activeTaskId}
-            search={search}
-            gitFileIdx={gitFileIdx}
-            onSetGitFileIdx={setGitFileIdx}
-            onFileCount={setGitFileCount}
-            filesRef={gitFilesRef}
-          />
-        </div>
+        <GitDiffContent
+          taskId={state.activeTaskId}
+          search={search}
+          gitFileIdx={gitFileIdx}
+          onSetGitFileIdx={setGitFileIdx}
+          onFileCount={setGitFileCount}
+          filesRef={gitFilesRef}
+        />
       )}
 
       {state.activeTaskId && isLog && (

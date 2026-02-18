@@ -7,10 +7,15 @@ import type { DiffResult, DiffStats } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
-export async function getDiff(worktreePath: string, baseBranch?: string): Promise<DiffResult> {
+export async function getDiff(worktreePath: string, baseBranch?: string, scope: 'working' | 'all' = 'working'): Promise<DiffResult> {
   try {
+    // Determine git diff command based on scope
+    const diffArgs = scope === 'all' && baseBranch
+      ? ['diff', `${baseBranch}...`]
+      : ['diff', 'HEAD'];
+
     // Get diff for tracked files
-    const { stdout: trackedDiff } = await execFile('git', ['diff', 'HEAD'], {
+    const { stdout: trackedDiff } = await execFile('git', diffArgs, {
       cwd: worktreePath,
       maxBuffer: 10 * 1024 * 1024,
     });
@@ -56,8 +61,8 @@ export async function getDiff(worktreePath: string, baseBranch?: string): Promis
 
     let diff = trackedDiff + untrackedDiff;
 
-    // If no uncommitted changes, try committed changes since base branch
-    if (!diff.trim() && baseBranch) {
+    // If showing working tree only and no uncommitted changes, fall back to branch diff
+    if (scope === 'working' && !diff.trim() && baseBranch) {
       try {
         const { stdout: branchDiff } = await execFile('git', ['diff', `${baseBranch}...HEAD`], {
           cwd: worktreePath,
@@ -71,6 +76,45 @@ export async function getDiff(worktreePath: string, baseBranch?: string): Promis
   } catch {
     return { worktreePath, diff: '' };
   }
+}
+
+export type GitFileStage = 'unstaged' | 'staged' | 'committed' | 'untracked';
+
+export async function getFileStatuses(worktreePath: string, baseBranch?: string): Promise<Record<string, GitFileStage[]>> {
+  const result: Record<string, GitFileStage[]> = {};
+
+  const addStage = (filePath: string, stage: GitFileStage) => {
+    if (!result[filePath]) result[filePath] = [];
+    if (!result[filePath].includes(stage)) result[filePath].push(stage);
+  };
+
+  // Unstaged tracked changes
+  try {
+    const { stdout } = await execFile('git', ['diff', '--name-only'], { cwd: worktreePath });
+    for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'unstaged');
+  } catch { /* ignore */ }
+
+  // Staged changes
+  try {
+    const { stdout } = await execFile('git', ['diff', '--cached', '--name-only'], { cwd: worktreePath });
+    for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'staged');
+  } catch { /* ignore */ }
+
+  // Untracked files
+  try {
+    const { stdout } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], { cwd: worktreePath });
+    for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'untracked');
+  } catch { /* ignore */ }
+
+  // Committed changes since base branch
+  if (baseBranch) {
+    try {
+      const { stdout } = await execFile('git', ['diff', '--name-only', `${baseBranch}...HEAD`], { cwd: worktreePath });
+      for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'committed');
+    } catch { /* ignore */ }
+  }
+
+  return result;
 }
 
 export async function getDiffStats(worktreePath: string, baseBranch?: string): Promise<DiffStats | null> {
