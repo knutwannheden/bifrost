@@ -4,7 +4,7 @@ import type { DiffMode } from '../context/AppContext';
 
 function BellIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M10 13.5a2 2 0 0 1-4 0" />
       <path d="M4.5 6a3.5 3.5 0 0 1 7 0c0 3.5 1.5 4.5 1.5 4.5H3S4.5 9.5 4.5 6z" />
     </svg>
@@ -13,7 +13,7 @@ function BellIcon() {
 
 function DiffIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z" />
       <path d="M8 6v4M6 8h4" />
     </svg>
@@ -22,7 +22,7 @@ function DiffIcon() {
 
 function ActivityIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 8h2.5l2-4 3 8 2-4H14" />
     </svg>
   );
@@ -30,7 +30,7 @@ function ActivityIcon() {
 
 function ReviewIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
       <path d="M6 5h4M6 8h4M6 11h2" />
     </svg>
@@ -39,7 +39,7 @@ function ReviewIcon() {
 
 function GearIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="8" cy="8" r="2" />
       <path d="M13.5 8a5.5 5.5 0 0 0-.1-.8l1.2-1-.8-1.4-1.5.5a5.5 5.5 0 0 0-1.2-.7L10.8 3H9.2l-.3 1.6c-.5.1-.9.4-1.2.7l-1.5-.5-.8 1.4 1.2 1a5.5 5.5 0 0 0 0 1.6l-1.2 1 .8 1.4 1.5-.5c.3.3.7.5 1.2.7l.3 1.6h1.6l.3-1.6c.5-.1.9-.4 1.2-.7l1.5.5.8-1.4-1.2-1a5.5 5.5 0 0 0 .1-.8z" />
     </svg>
@@ -60,7 +60,7 @@ function IconButton({ active, badge, title, onClick, children, ...rest }: IconBu
       onClick={onClick}
       title={title}
       {...rest}
-      className={`relative w-full flex items-center justify-center h-9 transition-colors ${
+      className={`relative w-full flex items-center justify-center h-10 transition-colors ${
         active
           ? 'text-blue-400 bg-slate-700/50 border-l-2 border-blue-400'
           : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/30 border-l-2 border-transparent'
@@ -90,7 +90,7 @@ export default function RightIconBar() {
   };
 
   return (
-    <div className="flex flex-col w-9 bg-slate-800 border-l border-slate-700 shrink-0">
+    <div className="flex flex-col w-11 bg-slate-800 border-l border-slate-700 shrink-0">
       <IconButton
         title="Notifications"
         active={state.showNotificationPopover}
