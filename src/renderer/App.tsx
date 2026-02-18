@@ -64,8 +64,9 @@ export default function App() {
   // Buffer last assistant text per task for hook notifications
   const lastAssistantText = useRef(new Map<string, string>());
 
-  // Mark active task as read when switching to it
+  // Mark active task as read when switching to it, and sync to main process
   useEffect(() => {
+    window.bifrost.setActiveTaskId(state.activeTaskId);
     if (state.activeTaskId) {
       dispatch({ type: 'SET_TASK_UNREAD', taskId: state.activeTaskId, hasUnread: false });
     }

@@ -26,6 +26,7 @@ import { checkIntegration, installIntegration } from './integration-installer';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { scanRecentRepos } from './history-scanner';
 import { resolveRequest, cancelTaskRequests, setWorktreePathResolver } from './permission-manager';
+import { setActiveTaskId } from './notification-service';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -622,6 +623,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Integration
   ipcMain.handle(IPC.CHECK_INTEGRATION, () => checkIntegration());
   ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());
+
+  ipcMain.handle(IPC.SET_ACTIVE_TASK_ID, (_event, taskId: string | null) => {
+    setActiveTaskId(taskId);
+  });
 
   ipcMain.handle(IPC.GET_LAST_ASSISTANT_MESSAGE, (_event, taskId: string) => {
     const task = getTask(taskId);

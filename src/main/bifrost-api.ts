@@ -7,7 +7,7 @@ import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask } from './ipc-handlers';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
-import { isDebounced, markNotified, handleBellNotification } from './notification-service';
+import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
 import { createRequest, checkExistingRules } from './permission-manager';
 import { loadConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
@@ -165,7 +165,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
 
       // Notify user
-      handleBellNotification(task.id, task.name, false);
+      handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
 
       // Hold connection open until resolved
       const result = await response;
@@ -189,7 +189,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       markNotified(task.id);
-      handleBellNotification(task.id, task.name, false);
+      handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
       const message = (body.message as string) || '';
       const title = (body.title as string) || '';
       const notificationType = (body.notification_type as string) || '';

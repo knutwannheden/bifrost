@@ -232,6 +232,17 @@ export default function TaskCreateDialog() {
     nameRef.current?.focus();
   };
 
+  const openExistingTask = async (taskId: string, status: string) => {
+    if (status === 'running') {
+      dispatch({ type: 'SET_ACTIVE_TASK', taskId });
+    } else {
+      const updated = await window.bifrost.reopenTask(taskId);
+      dispatch({ type: 'UPDATE_TASK', task: updated });
+      dispatch({ type: 'SET_ACTIVE_TASK', taskId: updated.id });
+    }
+    close();
+  };
+
   const handleSubmit = async () => {
     if (!repoId || !taskName.trim() || (!inPlace && !branch)) return;
     setLoading(true);
@@ -282,6 +293,14 @@ export default function TaskCreateDialog() {
           e.preventDefault();
           regenerateName();
           break;
+        case 'KeyO': {
+          const openTask = existingTask ?? existingInPlaceTask;
+          if (openTask) {
+            e.preventDefault();
+            openExistingTask(openTask.id, openTask.status);
+          }
+          break;
+        }
       }
     }
   };
@@ -345,13 +364,10 @@ export default function TaskCreateDialog() {
                 Task &ldquo;{existingTask.name}&rdquo; already uses this branch
               </p>
               <button
-                onClick={() => {
-                  dispatch({ type: 'SET_ACTIVE_TASK', taskId: existingTask.id });
-                  close();
-                }}
+                onClick={() => openExistingTask(existingTask.id, existingTask.status)}
                 className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
               >
-                Open
+                <span className="underline underline-offset-2">O</span>pen
               </button>
             </div>
           )}
@@ -520,13 +536,10 @@ export default function TaskCreateDialog() {
                 Task &ldquo;{existingInPlaceTask.name}&rdquo; already uses the main worktree
               </p>
               <button
-                onClick={() => {
-                  dispatch({ type: 'SET_ACTIVE_TASK', taskId: existingInPlaceTask.id });
-                  close();
-                }}
+                onClick={() => openExistingTask(existingInPlaceTask.id, existingInPlaceTask.status)}
                 className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
               >
-                Open
+                <span className="underline underline-offset-2">O</span>pen
               </button>
             </div>
           )}

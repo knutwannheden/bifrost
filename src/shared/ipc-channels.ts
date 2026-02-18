@@ -90,6 +90,7 @@ export const IPC = {
   INSTALL_INTEGRATION: 'integration:install',
 
   // Notifications
+  SET_ACTIVE_TASK_ID: 'notify:set-active-task',
   GET_LAST_ASSISTANT_MESSAGE: 'notify:last-assistant-message',
 
   // Dialog
@@ -211,6 +212,7 @@ export interface BifrostAPI {
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
 
   // Notifications
+  setActiveTaskId(taskId: string | null): Promise<void>;
   getLastAssistantMessage(taskId: string): Promise<string | null>;
 
   // Hook notifications

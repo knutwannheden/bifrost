@@ -123,6 +123,7 @@ const api: BifrostAPI = {
   },
 
   // Notifications
+  setActiveTaskId: (taskId) => ipcRenderer.invoke(IPC.SET_ACTIVE_TASK_ID, taskId),
   getLastAssistantMessage: (taskId) => ipcRenderer.invoke(IPC.GET_LAST_ASSISTANT_MESSAGE, taskId),
 
   // Hook notifications

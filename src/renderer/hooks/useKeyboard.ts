@@ -334,23 +334,12 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           const taskId = state.activeTaskId;
           const ps = state.paneStates[taskId] ?? defaultPaneState;
 
-          // Hide the focused pane
-          const hiding = ps.focusedPane;
-          const otherPane: PaneTarget = hiding === 'claude' ? 'dev' : 'claude';
-          const otherHidden = otherPane === 'claude' ? ps.claudeHidden : ps.devHidden;
-          const otherExists = otherPane === 'dev' ? !!ps.devSessionId : true;
-
-          if (otherExists && !otherHidden) {
-            // Other pane is visible — hide current and focus other
-            dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
-            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
-          } else if (otherExists && otherHidden) {
-            // Other pane exists but is hidden — swap: show other, hide current
-            dispatch({ type: 'SHOW_PANE', taskId, pane: otherPane });
-            dispatch({ type: 'HIDE_PANE', taskId, pane: hiding });
-            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: otherPane });
+          if (ps.focusedPane === 'dev') {
+            // Hide dev pane, focus Claude
+            dispatch({ type: 'HIDE_PANE', taskId, pane: 'dev' });
+            dispatch({ type: 'SET_PANE_FOCUS', taskId, pane: 'claude' });
           } else {
-            // About to close the tab — require double Cmd+W
+            // Claude focused — double Cmd+W to close task
             const now = Date.now();
             if (now - lastCmdWRef.current >= DOUBLE_PRESS_MS) {
               lastCmdWRef.current = now;

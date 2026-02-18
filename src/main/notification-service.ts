@@ -2,9 +2,18 @@ import { app, BrowserWindow, Notification } from 'electron';
 import { execFile } from 'node:child_process';
 
 let mainWindow: BrowserWindow | null = null;
+let activeTaskId: string | null = null;
 
 export function initNotificationService(window: BrowserWindow): void {
   mainWindow = window;
+}
+
+export function setActiveTaskId(taskId: string | null): void {
+  activeTaskId = taskId;
+}
+
+export function getActiveTaskId(): string | null {
+  return activeTaskId;
 }
 
 // Per-task debounce: suppress duplicate notifications within 10s
