@@ -33,6 +33,11 @@ export default function TaskCreateDialog() {
   const { state, dispatch } = useApp();
   const initialRepo = (() => {
     if (state.createDialogRepoId) return state.repos.find((r) => r.id === state.createDialogRepoId);
+    const lastRepoId = localStorage.getItem('bifrost:lastRepoId');
+    if (lastRepoId) {
+      const found = state.repos.find((r) => r.id === lastRepoId);
+      if (found) return found;
+    }
     return state.repos[0];
   })();
   const [repoId, setRepoId] = useState(initialRepo?.id ?? '');
@@ -178,13 +183,21 @@ export default function TaskCreateDialog() {
     setTaskName(generateTaskName());
     window.bifrost.getRepoBranches(repoId).then((b) => {
       setBranches(b);
-      const repo = state.repos.find((r) => r.id === repoId);
-      if (repo && b.includes(repo.defaultBranch)) {
-        setBranch(repo.defaultBranch);
-        setBranchSearch(repo.defaultBranch);
-      } else if (b.length > 0) {
-        setBranch(b[0]);
-        setBranchSearch(b[0]);
+      // Restore last-used branch if it exists for this repo
+      const lastRepoId = localStorage.getItem('bifrost:lastRepoId');
+      const lastBranch = localStorage.getItem('bifrost:lastBranch');
+      if (lastRepoId === repoId && lastBranch && b.includes(lastBranch)) {
+        setBranch(lastBranch);
+        setBranchSearch(lastBranch);
+      } else {
+        const repo = state.repos.find((r) => r.id === repoId);
+        if (repo && b.includes(repo.defaultBranch)) {
+          setBranch(repo.defaultBranch);
+          setBranchSearch(repo.defaultBranch);
+        } else if (b.length > 0) {
+          setBranch(b[0]);
+          setBranchSearch(b[0]);
+        }
       }
       // If PR detected, select the PR branch (add to list if not present)
       if (prBanner?.headBranch && prBanner?.repoId === repoId) {
@@ -231,6 +244,8 @@ export default function TaskCreateDialog() {
         ...(prInfo && !inPlace && { prInfo }),
         ...(inPlace && { inPlace: true }),
       });
+      localStorage.setItem('bifrost:lastRepoId', repoId);
+      if (!inPlace && branch) localStorage.setItem('bifrost:lastBranch', branch);
       dispatch({ type: 'ADD_TASK', task });
       dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
       close();
