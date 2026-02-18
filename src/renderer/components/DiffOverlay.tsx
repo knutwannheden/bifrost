@@ -334,21 +334,19 @@ function FileListSidebar({
                 : 'border-l-2 border-transparent hover:bg-slate-800'
             }`}
           >
-            <span className={`${cfg.color} font-bold flex-shrink-0 w-4 text-center`}>{cfg.letter}</span>
+            <span className="flex gap-0.5 flex-shrink-0">
+              <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
+              {stages.map((stage) => {
+                const si = stageIndicator[stage as GitFileStage];
+                return si ? (
+                  <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
+                ) : null;
+              })}
+            </span>
             <div className="flex-1 min-w-0">
               <div className="text-slate-200 truncate">{basename}</div>
               {dirname && <div className="text-slate-500 truncate">{dirname}</div>}
             </div>
-            {stages.length > 0 && (
-              <span className="flex gap-0.5 flex-shrink-0">
-                {stages.map((stage) => {
-                  const si = stageIndicator[stage as GitFileStage];
-                  return si ? (
-                    <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
-                  ) : null;
-                })}
-              </span>
-            )}
             {data.file.binary
               ? <span className="text-xs text-slate-600 italic flex-shrink-0">binary</span>
               : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0" />
@@ -472,7 +470,10 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
           files={filtered}
           selectedIndex={gitFileIdx}
           onSelectFile={onSetGitFileIdx}
-          fileStatuses={fileStatuses}
+          fileStatuses={scope === 'working'
+            ? Object.fromEntries(Object.entries(fileStatuses).map(([k, v]) => [k, v.filter((s) => s !== 'committed')]))
+            : fileStatuses
+          }
         />
         <div className="flex-1 overflow-auto p-4">
           {filtered.map((data, i) => (
