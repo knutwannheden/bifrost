@@ -10,9 +10,16 @@ const execFile = promisify(execFileCb);
 export async function getDiff(worktreePath: string, baseBranch?: string, scope: 'working' | 'all' = 'working'): Promise<DiffResult> {
   try {
     // Determine git diff command based on scope
-    const diffArgs = scope === 'all' && baseBranch
-      ? ['diff', `${baseBranch}...`]
-      : ['diff', 'HEAD'];
+    let diffArgs: string[];
+    if (scope === 'all' && baseBranch) {
+      // Diff merge-base against working tree (committed + staged + unstaged)
+      const { stdout: mergeBaseOut } = await execFile('git', ['merge-base', baseBranch, 'HEAD'], {
+        cwd: worktreePath,
+      });
+      diffArgs = ['diff', mergeBaseOut.trim()];
+    } else {
+      diffArgs = ['diff', 'HEAD'];
+    }
 
     // Get diff for tracked files
     const { stdout: trackedDiff } = await execFile('git', diffArgs, {
@@ -59,18 +66,7 @@ export async function getDiff(worktreePath: string, baseBranch?: string, scope: 
       // ignore errors listing untracked files
     }
 
-    let diff = trackedDiff + untrackedDiff;
-
-    // If showing working tree only and no uncommitted changes, fall back to branch diff
-    if (scope === 'working' && !diff.trim() && baseBranch) {
-      try {
-        const { stdout: branchDiff } = await execFile('git', ['diff', `${baseBranch}...HEAD`], {
-          cwd: worktreePath,
-          maxBuffer: 10 * 1024 * 1024,
-        });
-        diff = branchDiff;
-      } catch { /* base branch may not exist */ }
-    }
+    const diff = trackedDiff + untrackedDiff;
 
     return { worktreePath, diff };
   } catch {
@@ -117,15 +113,26 @@ export async function getFileStatuses(worktreePath: string, baseBranch?: string)
   return result;
 }
 
-export async function getDiffStats(worktreePath: string, baseBranch?: string): Promise<DiffStats | null> {
+export async function getDiffStats(worktreePath: string, baseBranch?: string, scope: 'working' | 'all' = 'working'): Promise<DiffStats | null> {
   try {
     let additions = 0;
     let deletions = 0;
     let filesChanged = 0;
 
+    // Determine diff base based on scope
+    let diffArgs: string[];
+    if (scope === 'all' && baseBranch) {
+      const { stdout: mergeBaseOut } = await execFile('git', ['merge-base', baseBranch, 'HEAD'], {
+        cwd: worktreePath,
+      });
+      diffArgs = ['diff', '--shortstat', mergeBaseOut.trim()];
+    } else {
+      diffArgs = ['diff', '--shortstat', 'HEAD'];
+    }
+
     // Get stats for tracked changes
     try {
-      const { stdout } = await execFile('git', ['diff', '--shortstat', 'HEAD'], {
+      const { stdout } = await execFile('git', diffArgs, {
         cwd: worktreePath,
       });
       const trimmed = stdout.trim();
@@ -170,24 +177,6 @@ export async function getDiffStats(worktreePath: string, baseBranch?: string): P
       }
     } catch {
       // ignore errors listing untracked files
-    }
-
-    // If no uncommitted changes, try committed changes since base branch
-    if (filesChanged === 0 && additions === 0 && deletions === 0 && baseBranch) {
-      try {
-        const { stdout } = await execFile('git', ['diff', '--shortstat', `${baseBranch}...HEAD`], {
-          cwd: worktreePath,
-        });
-        const trimmed = stdout.trim();
-        if (trimmed) {
-          const filesMatch = trimmed.match(/(\d+) file/);
-          const addMatch = trimmed.match(/(\d+) insertion/);
-          const delMatch = trimmed.match(/(\d+) deletion/);
-          if (filesMatch) filesChanged += parseInt(filesMatch[1], 10);
-          if (addMatch) additions += parseInt(addMatch[1], 10);
-          if (delMatch) deletions += parseInt(delMatch[1], 10);
-        }
-      } catch { /* base branch may not exist */ }
     }
 
     if (filesChanged === 0 && additions === 0 && deletions === 0) return null;

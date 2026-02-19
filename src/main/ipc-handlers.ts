@@ -443,10 +443,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Diff stats
-  ipcMain.handle(IPC.GET_DIFF_STATS, async (_event, taskId: string) => {
+  ipcMain.handle(IPC.GET_DIFF_STATS, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
     const baseBranch = await resolveBaseBranch(task);
-    return getDiffStats(task.worktreePath, baseBranch);
+    return getDiffStats(task.worktreePath, baseBranch, scope);
   });
 
   // Git log

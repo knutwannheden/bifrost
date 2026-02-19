@@ -158,7 +158,7 @@ export interface BifrostAPI {
 
   // Diff
   getDiff(taskId: string, scope?: 'working' | 'all'): Promise<DiffResult>;
-  getDiffStats(taskId: string): Promise<DiffStats | null>;
+  getDiffStats(taskId: string, scope?: 'working' | 'all'): Promise<DiffStats | null>;
   getFileStatuses(taskId: string): Promise<Record<string, string[]>>;
   getGitLog(taskId: string): Promise<GitLogEntry[]>;
   getPrUrl(taskId: string): Promise<string | null>;

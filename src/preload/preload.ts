@@ -52,7 +52,7 @@ const api: BifrostAPI = {
 
   // Diff
   getDiff: (taskId, scope) => ipcRenderer.invoke(IPC.GET_DIFF, taskId, scope),
-  getDiffStats: (taskId) => ipcRenderer.invoke(IPC.GET_DIFF_STATS, taskId),
+  getDiffStats: (taskId, scope) => ipcRenderer.invoke(IPC.GET_DIFF_STATS, taskId, scope),
   getFileStatuses: (taskId) => ipcRenderer.invoke(IPC.GET_FILE_STATUSES, taskId),
   getGitLog: (taskId) => ipcRenderer.invoke(IPC.GET_GIT_LOG, taskId),
   getPrUrl: (taskId) => ipcRenderer.invoke(IPC.GET_PR_URL, taskId),
