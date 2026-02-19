@@ -64,13 +64,11 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string },
+  options?: { claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string },
 ): void {
   const args: string[] = [];
   if (options?.claudeSessionId) {
     args.push('--resume', options.claudeSessionId);
-  } else if (options?.resume) {
-    args.push('--continue');
   }
   if (options?.permissionMode === 'sandbox') {
     args.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));

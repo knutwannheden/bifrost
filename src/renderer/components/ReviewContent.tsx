@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ReviewStatus } from '../context/AppContext';
+import type { DiffStats } from '../../shared/types';
 import ActionLabel from './ActionLabel';
+import DiffStatsBadge from './DiffStatsBadge';
 import TerminalPane from './TerminalPane';
 
 type ReviewScope = 'working' | 'all';
@@ -11,7 +13,7 @@ const scopeLabels: Record<ReviewScope, { text: string; hintIndex: number }> = {
   all: { text: 'All changes', hintIndex: 4 },
 };
 
-function ReviewScopeToggle({ scope, onChange }: { scope: ReviewScope; onChange: (s: ReviewScope) => void }) {
+function ReviewScopeToggle({ scope, onChange, stats }: { scope: ReviewScope; onChange: (s: ReviewScope) => void; stats: Record<ReviewScope, DiffStats | null> }) {
   return (
     <div className="flex gap-1 px-3 py-2 border-b border-slate-700 flex-shrink-0">
       {(['working', 'all'] as const).map((s) => (
@@ -19,13 +21,14 @@ function ReviewScopeToggle({ scope, onChange }: { scope: ReviewScope; onChange: 
           key={s}
           tabIndex={-1}
           onClick={() => onChange(s)}
-          className={`px-2 py-0.5 text-xs rounded ${
+          className={`px-2 py-0.5 text-xs rounded inline-flex items-center gap-1.5 ${
             scope === s
               ? 'bg-slate-600 text-slate-200'
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
           }`}
         >
-          <ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} />
+          <span><ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} /></span>
+          {stats[s] && <DiffStatsBadge additions={stats[s].additions} deletions={stats[s].deletions} />}
         </button>
       ))}
     </div>
@@ -174,6 +177,19 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   const [reviewPtySessionId, setReviewPtySessionId] = useState<string | null>(null);
   const [showDiscussion, setShowDiscussion] = useState(false);
 
+  // Diff stats for both scopes
+  const [scopeStats, setScopeStats] = useState<Record<ReviewScope, DiffStats | null>>({ working: null, all: null });
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      window.bifrost.getDiffStats(taskId, 'working'),
+      window.bifrost.getDiffStats(taskId, 'all'),
+    ]).then(([working, all]) => {
+      if (!cancelled) setScopeStats({ working, all });
+    });
+    return () => { cancelled = true; };
+  }, [taskId]);
+
   const checkedLines = useMemo(() => parseCheckedLines(content), [content]);
   const hasChecked = checkedLines.size > 0;
 
@@ -312,7 +328,7 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   if (status === 'idle' && !content) {
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} />
+        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <button
             onClick={handleRunReview}
@@ -333,7 +349,7 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   if (status === 'running') {
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} />
+        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 flex-shrink-0 text-slate-400">
           <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin flex-shrink-0" />
           <span className="text-sm">Running review...</span>
@@ -365,7 +381,7 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   // Done state — render markdown with checkboxes, or discussion terminal
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} />
+      <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
       {/* View toggle tabs when discussion is available */}
       {reviewPtySessionId && (
         <div className="flex items-center gap-0 px-4 border-b border-slate-700 flex-shrink-0">

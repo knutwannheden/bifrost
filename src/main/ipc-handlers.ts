@@ -118,7 +118,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const sessionId = randomUUID();
       const startupConfig = loadConfig();
       createSession(sessionId, task.worktreePath, mainWindow, {
-        resume: true, claudeSessionId: task.claudeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
+        claudeSessionId: task.claudeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
       });
 
       const idx = tasks.findIndex((t) => t.id === task.id);
@@ -344,7 +344,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const sessionId = randomUUID();
     const reopenConfig = loadConfig();
     createSession(sessionId, worktreePath, mainWindow, {
-      resume: true,
       claudeSessionId: task.claudeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
