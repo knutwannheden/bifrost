@@ -843,7 +843,6 @@ export default function DiffOverlay() {
     >
       <div className="flex items-center justify-between h-10 px-4 border-b border-slate-700 flex-shrink-0">
         <div className="flex items-center gap-4">
-          <span className="text-sm font-semibold text-slate-300">Diff</span>
           <ModeToggle
             mode={diffMode}
             onChange={(m) => dispatch({ type: 'SET_DIFF_MODE', mode: m })}
