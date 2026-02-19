@@ -29,6 +29,8 @@ export interface Task {
   isExternal?: boolean;
   /** True if this task uses the main repo directory instead of a separate worktree */
   inPlace?: boolean;
+  /** Session ID of the last review run (for resuming interactive discussion) */
+  reviewSessionId?: string;
 }
 
 export interface ClaudeSession {

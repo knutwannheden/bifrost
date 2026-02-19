@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
-import { getTasks, getTask } from './ipc-handlers';
+import { getTasks, getTask, updateTask } from './ipc-handlers';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
@@ -197,6 +197,32 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         mainWindow.webContents.send(
           IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType,
         );
+      }
+      jsonResponse(res, { ok: true });
+      return;
+    }
+
+    case '/session-start': {
+      const sessionId = body.session_id as string;
+      const cwd = body.cwd as string;
+      const context = body.bifrost_context as string;
+      const taskId = body.bifrost_task_id as string;
+      if (!sessionId || !cwd) {
+        errorResponse(res, 'Missing session_id or cwd');
+        return;
+      }
+      // Look up task by ID first (most reliable), then fall back to CWD matching
+      const task = taskId
+        ? (() => { try { return getTask(taskId); } catch { return undefined; } })()
+        : getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+      if (!task) {
+        jsonResponse(res, { ok: false, reason: 'no matching task' });
+        return;
+      }
+      if (context === 'review') {
+        updateTask(task.id, { reviewSessionId: sessionId });
+      } else if (!task.claudeSessionId) {
+        updateTask(task.id, { claudeSessionId: sessionId });
       }
       jsonResponse(res, { ok: true });
       return;

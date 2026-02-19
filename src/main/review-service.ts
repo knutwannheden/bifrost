@@ -1,61 +1,45 @@
-import { spawn, execFile as execFileCb } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import type { BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { promisify } from 'node:util';
 
 import { IPC_STREAM } from '../shared/ipc-channels';
-
-const execFile = promisify(execFileCb);
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
 const REVIEW_TIMEOUT_MS = 300_000;
 
-const REVIEW_PROMPT = `Review the following git diff. Produce a Markdown document with:
+const REVIEW_INSTRUCTIONS = `Produce a Markdown document with:
 1. A brief summary paragraph of the changes
-2. A "## Review Items" section with a checkbox list (- [ ]) of actionable findings:
+2. A "## Review Items" section with a checked checkbox list (- [x]) of actionable findings:
    bugs, logic errors, security issues, missing edge cases, code quality concerns.
    Each item should be specific and actionable.
 If the code looks good, say so and use fewer items.
 Output ONLY the Markdown, no preamble.`;
 
+const REVIEW_PROMPTS: Record<string, string> = {
+  working: `Review the uncommitted changes in this worktree (git diff HEAD). ${REVIEW_INSTRUCTIONS}`,
+  all: `Review all changes in this worktree since the base branch (use git to find the merge-base and diff against it). ${REVIEW_INSTRUCTIONS}`,
+};
+
 export function getReviewPath(taskId: string): string {
   return path.join(BIFROST_DIR, taskId, 'review.md');
 }
 
-export async function runReview(worktreePath: string, taskId: string, mainWindow?: BrowserWindow, baseBranch?: string): Promise<string> {
-  // Gather the diff: uncommitted changes + untracked files
-  let diff = '';
-  try {
-    const { stdout: unstaged } = await execFile('git', ['diff', 'HEAD'], { cwd: worktreePath, maxBuffer: 10 * 1024 * 1024 });
-    diff += unstaged;
-  } catch { /* no HEAD or no changes */ }
-
-  try {
-    const { stdout: cached } = await execFile('git', ['diff', '--cached', 'HEAD'], { cwd: worktreePath, maxBuffer: 10 * 1024 * 1024 });
-    if (cached.trim() && !diff.includes(cached.trim())) {
-      diff += '\n' + cached;
-    }
-  } catch { /* ignore */ }
-
-  // If no uncommitted changes, try committed changes since base branch
-  if (!diff.trim() && baseBranch) {
-    try {
-      const { stdout: branchDiff } = await execFile('git', ['diff', `${baseBranch}...HEAD`], { cwd: worktreePath, maxBuffer: 10 * 1024 * 1024 });
-      diff = branchDiff;
-    } catch { /* base branch may not exist */ }
-  }
-
-  if (!diff.trim()) {
-    return '## Review\n\nNo changes to review.';
-  }
-
+export async function runReview(worktreePath: string, taskId: string, mainWindow?: BrowserWindow, scope: 'working' | 'all' = 'working'): Promise<string> {
   const markdown = await new Promise<string>((resolve, reject) => {
-    const proc = spawn('claude', ['-p', REVIEW_PROMPT], {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const env = { ...process.env } as Record<string, string>;
+    delete env.CLAUDECODE;
+    env.BIFROST_CONTEXT = 'review';
+    env.BIFROST_TASK_ID = taskId;
+    // Ensure the SessionStart hook can reach the Bifrost API
+    const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
+    try { env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
+
+    const proc = spawn('claude', ['-p', REVIEW_PROMPTS[scope]], {
+      stdio: ['ignore', 'pipe', 'pipe'],
       cwd: worktreePath,
-      env: { ...process.env },
+      env,
     });
 
     let stdout = '';
@@ -98,9 +82,6 @@ export async function runReview(worktreePath: string, taskId: string, mainWindow
       clearTimeout(timeout);
       reject(err);
     });
-
-    proc.stdin.write(diff);
-    proc.stdin.end();
   });
 
   // Save to disk

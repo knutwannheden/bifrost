@@ -146,22 +146,6 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
     const handler = (e: KeyboardEvent) => {
       const { showDiff, diffMode } = getActiveDiffState(state);
 
-      // Alt+U: open/toggle review mode (works without Cmd)
-      // Skip when an overlay is open to avoid closing it via mutual exclusion
-      if (e.altKey && !e.metaKey && e.code === 'KeyU') {
-        if (state.showTaskHistory || state.showRepoManager || state.showSettings || state.showKeyboardShortcuts) return;
-        e.preventDefault();
-        if (showDiff && diffMode === 'review') {
-          dispatch({ type: 'TOGGLE_DIFF' });
-        } else {
-          dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
-          if (!showDiff) {
-            dispatch({ type: 'TOGGLE_DIFF' });
-          }
-        }
-        return;
-      }
-
       if (!e.metaKey) return;
 
       const key = e.key.toLowerCase();
@@ -419,6 +403,18 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             dispatch({ type: 'TOGGLE_DIFF' });
           } else {
             dispatch({ type: 'SET_DIFF_MODE', mode: 'log' });
+            if (!showDiff) {
+              dispatch({ type: 'TOGGLE_DIFF' });
+            }
+          }
+          break;
+
+        case 'u':
+          e.preventDefault();
+          if (showDiff && diffMode === 'review') {
+            dispatch({ type: 'TOGGLE_DIFF' });
+          } else {
+            dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
             if (!showDiff) {
               dispatch({ type: 'TOGGLE_DIFF' });
             }

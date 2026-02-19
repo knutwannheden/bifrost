@@ -64,7 +64,7 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean },
+  options?: { resume?: boolean; claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string },
 ): void {
   const args: string[] = [];
   if (options?.claudeSessionId) {
@@ -78,6 +78,7 @@ export function createSession(
     args.push('--dangerously-skip-permissions');
   }
   const extraEnv: Record<string, string> = {};
+  extraEnv.BIFROST_CONTEXT = options?.context ?? 'code';
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
   if (options?.apiPort) extraEnv.BIFROST_API_PORT = String(options.apiPort);
   if (options?.agentTeams) extraEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
@@ -90,7 +91,7 @@ export function createShellSession(
   mainWindow: BrowserWindow,
 ): void {
   const shellPath = process.env.SHELL || '/bin/zsh';
-  spawnSession(sessionId, shellPath, ['-l'], cwd, mainWindow, { rows: 15 });
+  spawnSession(sessionId, shellPath, ['-l'], cwd, mainWindow, { rows: 15, extraEnv: { BIFROST_CONTEXT: 'dev' } });
 }
 
 export function writeToSession(sessionId: string, data: string): void {

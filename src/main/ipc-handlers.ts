@@ -41,7 +41,7 @@ export function getTask(taskId: string): Task {
   return task;
 }
 
-function updateTask(taskId: string, updates: Partial<Task>): Task {
+export function updateTask(taskId: string, updates: Partial<Task>): Task {
   const idx = tasks.findIndex((t) => t.id === taskId);
   if (idx === -1) throw new Error(`Task not found: ${taskId}`);
   tasks[idx] = { ...tasks[idx], ...updates };
@@ -200,6 +200,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Dev terminal sessions (taskId -> dev sessionId)
   const devSessions = new Map<string, string>();
+  // Review terminal sessions (taskId -> review PTY sessionId)
+  const reviewSessions = new Map<string, string>();
 
   // Tasks
   ipcMain.handle(IPC.CREATE_TASK, async (_event, params: CreateTaskParams) => {
@@ -262,10 +264,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
     const devSessionId = devSessions.get(taskId);
-    if (devSessionId) {
-      killSession(devSessionId);
-      devSessions.delete(taskId);
-    }
+    if (devSessionId) { killSession(devSessionId); devSessions.delete(taskId); }
+    const reviewPtyId = reviewSessions.get(taskId);
+    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
     await destroyTask(taskId);
   });
 
@@ -286,10 +287,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Kill dev terminal if any
     const devSessionId = devSessions.get(taskId);
-    if (devSessionId) {
-      killSession(devSessionId);
-      devSessions.delete(taskId);
-    }
+    if (devSessionId) { killSession(devSessionId); devSessions.delete(taskId); }
+    const reviewPtyId = reviewSessions.get(taskId);
+    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
 
     // Kill session if still running
     if (task.status === 'running') {
@@ -372,10 +372,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {
     const devSessionId = devSessions.get(taskId);
-    if (devSessionId) {
-      killSession(devSessionId);
-      devSessions.delete(taskId);
-    }
+    if (devSessionId) { killSession(devSessionId); devSessions.delete(taskId); }
+    const reviewPtyId = reviewSessions.get(taskId);
+    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
     await destroyTask(taskId);
   });
 
@@ -596,12 +595,13 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Review
-  ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string) => {
+  ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
-    const baseBranch = await resolveBaseBranch(task);
-    const result = await runReview(task.worktreePath, taskId, mainWindow, baseBranch);
+    const markdown = await runReview(task.worktreePath, taskId, mainWindow, scope);
     watchReviewFile(taskId, mainWindow);
-    return result;
+    // reviewSessionId is set asynchronously via the SessionStart hook → /session-start API
+    const reviewSessionId = getTask(taskId).reviewSessionId;
+    return { markdown, reviewSessionId };
   });
 
   ipcMain.handle(IPC.SAVE_REVIEW, (_event, taskId: string, content: string) => {
@@ -614,6 +614,27 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       watchReviewFile(taskId, mainWindow);
     }
     return content;
+  });
+
+  ipcMain.handle(IPC.RESUME_REVIEW, (_event, taskId: string) => {
+    const task = getTask(taskId);
+    if (!task.reviewSessionId) throw new Error('No review session to resume');
+
+    // Kill existing review session if any
+    const existing = reviewSessions.get(taskId);
+    if (existing) killSession(existing);
+
+    const reviewPtySessionId = randomUUID();
+    const config = loadConfig();
+    createSession(reviewPtySessionId, task.worktreePath, mainWindow, {
+      claudeSessionId: task.reviewSessionId,
+      taskId,
+      apiPort: getApiPort() ?? undefined,
+      permissionMode: config.permissionMode,
+      context: 'review',
+    });
+    reviewSessions.set(taskId, reviewPtySessionId);
+    return reviewPtySessionId;
   });
 
   // Integration

@@ -34,6 +34,7 @@ const shortcuts: Shortcut[] = [
   { key: 'L', label: 'Git log', group: 'Views', execKey: 'l' },
   { key: 'H', label: 'Task history', group: 'Views', execKey: 'h' },
   { key: 'R', label: 'Repositories', group: 'Views', execKey: 'r' },
+  { key: 'U', label: 'Review', group: 'Views', execKey: 'u' },
 
   // Actions
   { key: 'O', label: 'Open in IDE', group: 'Actions', execKey: 'o' },

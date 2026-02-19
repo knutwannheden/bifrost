@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { useApp, defaultPaneState } from './context/AppContext';
+import { useApp, defaultPaneState, getActiveDiffState } from './context/AppContext';
 import type { PaneTarget } from './context/AppContext';
 import type { BifrostAPI } from '../shared/ipc-channels';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -169,6 +169,16 @@ export default function App() {
         case 'diff':
           dispatch({ type: 'TOGGLE_DIFF' });
           break;
+        case 'review': {
+          const { showDiff: sd, diffMode: dm } = getActiveDiffState(state);
+          if (sd && dm === 'review') {
+            dispatch({ type: 'TOGGLE_DIFF' });
+          } else {
+            dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
+            if (!sd) dispatch({ type: 'TOGGLE_DIFF' });
+          }
+          break;
+        }
         case 'task-history':
           dispatch({ type: 'TOGGLE_TASK_HISTORY' });
           break;

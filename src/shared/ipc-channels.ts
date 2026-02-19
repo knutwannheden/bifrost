@@ -83,6 +83,7 @@ export const IPC = {
   RUN_REVIEW: 'review:run',
   SAVE_REVIEW: 'review:save',
   LOAD_REVIEW: 'review:load',
+  RESUME_REVIEW: 'review:resume',
 
   // Integration
   CHECK_INTEGRATION: 'integration:check',
@@ -186,9 +187,10 @@ export interface BifrostAPI {
   resumeClaudeSession(claudeSessionId: string, cwd: string): Promise<Task>;
 
   // Review
-  runReview(taskId: string): Promise<string>;
+  runReview(taskId: string, scope?: 'working' | 'all'): Promise<{ markdown: string; reviewSessionId?: string }>;
   saveReview(taskId: string, content: string): Promise<void>;
   loadReview(taskId: string): Promise<string | null>;
+  resumeReview(taskId: string): Promise<string>;
 
   // Review progress
   onReviewProgress(callback: (taskId: string, content: string) => void): () => void;

@@ -88,9 +88,10 @@ const api: BifrostAPI = {
     ipcRenderer.invoke(IPC.RESUME_CLAUDE_SESSION, claudeSessionId, cwd),
 
   // Review
-  runReview: (taskId) => ipcRenderer.invoke(IPC.RUN_REVIEW, taskId),
+  runReview: (taskId, scope) => ipcRenderer.invoke(IPC.RUN_REVIEW, taskId, scope),
   saveReview: (taskId, content) => ipcRenderer.invoke(IPC.SAVE_REVIEW, taskId, content),
   loadReview: (taskId) => ipcRenderer.invoke(IPC.LOAD_REVIEW, taskId),
+  resumeReview: (taskId) => ipcRenderer.invoke(IPC.RESUME_REVIEW, taskId),
   onReviewProgress: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string, content: string) =>
       callback(taskId, content);

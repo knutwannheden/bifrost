@@ -1,6 +1,36 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ReviewStatus } from '../context/AppContext';
+import ActionLabel from './ActionLabel';
+import TerminalPane from './TerminalPane';
+
+type ReviewScope = 'working' | 'all';
+
+const scopeLabels: Record<ReviewScope, { text: string; hintIndex: number }> = {
+  working: { text: 'Working tree', hintIndex: 8 },
+  all: { text: 'All changes', hintIndex: 4 },
+};
+
+function ReviewScopeToggle({ scope, onChange }: { scope: ReviewScope; onChange: (s: ReviewScope) => void }) {
+  return (
+    <div className="flex gap-1 px-3 py-2 border-b border-slate-700 flex-shrink-0">
+      {(['working', 'all'] as const).map((s) => (
+        <button
+          key={s}
+          tabIndex={-1}
+          onClick={() => onChange(s)}
+          className={`px-2 py-0.5 text-xs rounded ${
+            scope === s
+              ? 'bg-slate-600 text-slate-200'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+          }`}
+        >
+          <ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} />
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /**
  * Lightweight Markdown renderer for structured review output.
@@ -136,6 +166,13 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
 
   const content = state.reviewContent[taskId] ?? '';
   const status: ReviewStatus = state.reviewStatus[taskId] ?? 'idle';
+  const task = state.tasks.find((t) => t.id === taskId);
+  const hasReviewSession = !!task?.reviewSessionId;
+
+  // Scope and discussion terminal state
+  const [reviewScope, setReviewScope] = useState<ReviewScope>('working');
+  const [reviewPtySessionId, setReviewPtySessionId] = useState<string | null>(null);
+  const [showDiscussion, setShowDiscussion] = useState(false);
 
   const checkedLines = useMemo(() => parseCheckedLines(content), [content]);
   const hasChecked = checkedLines.size > 0;
@@ -174,15 +211,22 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
 
   const handleRunReview = useCallback(async () => {
     dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'running' });
+    // Reset discussion state on re-run
+    setReviewPtySessionId(null);
+    setShowDiscussion(false);
     try {
-      const result = await window.bifrost.runReview(taskId);
-      dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: result });
+      const { markdown, reviewSessionId } = await window.bifrost.runReview(taskId, reviewScope);
+      dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: markdown });
       dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'done' });
+      // Update the task in renderer state so the Discuss button appears
+      if (reviewSessionId && task) {
+        dispatch({ type: 'UPDATE_TASK', task: { ...task, reviewSessionId } });
+      }
     } catch (err) {
       dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'error' });
       dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: `Error: ${err instanceof Error ? err.message : String(err)}` });
     }
-  }, [taskId, dispatch]);
+  }, [taskId, task, reviewScope, dispatch]);
 
   const handleToggle = useCallback((lineIndex: number) => {
     const newLines = [...lines];
@@ -202,43 +246,84 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
     dispatch({ type: 'SHOW_TOAST', message: 'Copied /bifrost:review-fix \u2014 paste into Claude session' });
   }, [dispatch]);
 
-  // Enter / Cmd+Enter: run review or copy prompt
+  const handleDiscuss = useCallback(async () => {
+    if (reviewPtySessionId) {
+      // Already have a session, just toggle to it
+      setShowDiscussion(true);
+      return;
+    }
+    try {
+      const ptySessionId = await window.bifrost.resumeReview(taskId);
+      setReviewPtySessionId(ptySessionId);
+      setShowDiscussion(true);
+    } catch (err) {
+      dispatch({ type: 'SHOW_TOAST', message: `Failed to resume review: ${err instanceof Error ? err.message : String(err)}` });
+    }
+  }, [taskId, reviewPtySessionId, dispatch]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Scope toggle: left/right arrows, Option+T (working Tree), Option+C (all Changes)
+      if (!showDiscussion) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          setReviewScope(e.key === 'ArrowLeft' ? 'working' : 'all');
+          return;
+        }
+        if (e.altKey && !e.metaKey && !e.ctrlKey) {
+          if (e.key === 't') {
+            e.preventDefault();
+            setReviewScope('working');
+            return;
+          }
+          if (e.key === 'c') {
+            e.preventDefault();
+            setReviewScope('all');
+            return;
+          }
+        }
+      }
+
       if (e.key !== 'Enter') return;
-      // Plain Enter in idle/error state → run review (default action)
-      if (!e.metaKey && (status === 'idle' || status === 'error') && !content) {
+      // Don't intercept Enter when discussion terminal is active
+      if (showDiscussion) return;
+
+      if (e.metaKey) {
+        if (status === 'done' && hasChecked) {
+          e.preventDefault();
+          handleCopyPrompt();
+        }
+      } else if (status === 'done' && hasReviewSession) {
+        // Review done with session available → open discussion
+        e.preventDefault();
+        handleDiscuss();
+      } else if (status !== 'running') {
+        // Idle/error/done without session → run review
         e.preventDefault();
         handleRunReview();
-        return;
-      }
-      // Cmd+Enter: run review or copy prompt
-      if (e.metaKey) {
-        e.preventDefault();
-        if (status === 'done' && hasChecked) {
-          handleCopyPrompt();
-        } else if (status === 'idle' || status === 'done' || status === 'error') {
-          handleRunReview();
-        }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [status, content, hasChecked, handleCopyPrompt, handleRunReview]);
+  }, [status, showDiscussion, hasChecked, hasReviewSession, handleCopyPrompt, handleDiscuss, handleRunReview]);
 
   // Idle state — no existing review
   if (status === 'idle' && !content) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <button
-          onClick={handleRunReview}
-          className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
-        >
-          R<span className="underline underline-offset-2">u</span>n Review
-        </button>
-        <div className="max-w-sm text-center text-xs text-slate-500 leading-relaxed">
-          Runs Claude on the current git diff to produce a review with actionable items.
-          Check the items you want to address, then copy a prompt to paste into the main session.
+      <div className="flex-1 flex flex-col min-h-0">
+        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <button
+            onClick={handleRunReview}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            R<span className="underline underline-offset-2">u</span>n Review
+          </button>
+          <div className="max-w-sm text-center text-xs text-slate-500 leading-relaxed">
+            Runs Claude on the current git diff to produce a review with actionable items.
+            Check the items you want to address, then copy a prompt to paste into the main session.
+          </div>
         </div>
       </div>
     );
@@ -248,6 +333,7 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   if (status === 'running') {
     return (
       <div className="flex-1 flex flex-col min-h-0">
+        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} />
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 flex-shrink-0 text-slate-400">
           <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin flex-shrink-0" />
           <span className="text-sm">Running review...</span>
@@ -276,37 +362,88 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
     );
   }
 
-  // Done state — render markdown with checkboxes
+  // Done state — render markdown with checkboxes, or discussion terminal
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="flex-1 overflow-auto p-4 font-sans">
-        {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
+      <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} />
+      {/* View toggle tabs when discussion is available */}
+      {reviewPtySessionId && (
+        <div className="flex items-center gap-0 px-4 border-b border-slate-700 flex-shrink-0">
+          <button
+            onClick={() => setShowDiscussion(false)}
+            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+              !showDiscussion
+                ? 'border-blue-500 text-slate-200'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            Review
+          </button>
+          <button
+            onClick={() => setShowDiscussion(true)}
+            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+              showDiscussion
+                ? 'border-blue-500 text-slate-200'
+                : 'border-transparent text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            Discussion
+          </button>
+        </div>
+      )}
+
+      {/* Markdown review view — hidden (not unmounted) when discussion is active */}
+      <div className="flex-1 flex flex-col min-h-0" style={{ display: showDiscussion ? 'none' : undefined }}>
+        <div className="flex-1 overflow-auto p-4 font-sans">
+          {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3 border-t border-slate-700 flex-shrink-0">
+          <button
+            onClick={handleRunReview}
+            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs transition-colors"
+          >
+            Re-run
+          </button>
+          <button
+            onClick={handleCopyPrompt}
+            disabled={!hasChecked}
+            className={`px-3 py-1.5 rounded text-xs transition-colors ${
+              hasChecked
+                ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+            }`}
+          >
+            Copy Prompt
+          </button>
+          {hasReviewSession && !reviewPtySessionId && (
+            <button
+              onClick={handleDiscuss}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition-colors"
+            >
+              Discuss
+            </button>
+          )}
+          {hasChecked && (
+            <span className="text-xs text-slate-500">{checkedLines.size} item{checkedLines.size !== 1 ? 's' : ''} selected</span>
+          )}
+          <span className="ml-auto text-xs text-slate-500">
+            <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
+            {' '}{hasReviewSession ? 'discuss' : 'run review'}
+            {hasChecked && <>{' · '}<kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">{'\u2318'}Enter</kbd> copy prompt</>}
+          </span>
+        </div>
       </div>
-      <div className="flex items-center gap-3 px-4 py-3 border-t border-slate-700 flex-shrink-0">
-        <button
-          onClick={handleRunReview}
-          className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs transition-colors"
-        >
-          Re-run Review
-        </button>
-        <button
-          onClick={handleCopyPrompt}
-          disabled={!hasChecked}
-          className={`px-3 py-1.5 rounded text-xs transition-colors ${
-            hasChecked
-              ? 'bg-blue-600 hover:bg-blue-500 text-white'
-              : 'bg-slate-800 text-slate-600 cursor-not-allowed'
-          }`}
-        >
-          Copy Prompt
-        </button>
-        {hasChecked && (
-          <span className="text-xs text-slate-500">{checkedLines.size} item{checkedLines.size !== 1 ? 's' : ''} selected</span>
-        )}
-        <span className="ml-auto text-xs text-slate-600">
-          &#8984;Enter {status === 'done' && hasChecked ? 'copy prompt' : 'run review'}
-        </span>
-      </div>
+
+      {/* Discussion terminal — kept mounted when toggled away */}
+      {reviewPtySessionId && (
+        <div className="flex-1 min-h-0" style={{ display: showDiscussion ? undefined : 'none' }}>
+          <TerminalPane
+            sessionId={reviewPtySessionId}
+            active={showDiscussion}
+            focused={showDiscussion}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -114,6 +114,7 @@ function buildMenu() {
         { label: 'Diff', accelerator: 'CommandOrControl+D', registerAccelerator: false, click: () => sendAction('diff') },
         { label: 'Task History', accelerator: 'CommandOrControl+H', registerAccelerator: false, click: () => sendAction('task-history') },
         { label: 'Repositories', accelerator: 'CommandOrControl+R', registerAccelerator: false, click: () => sendAction('repositories') },
+        { label: 'Review', accelerator: 'CommandOrControl+U', registerAccelerator: false, click: () => sendAction('review') },
         { type: 'separator' },
         { label: 'Open in IDE', accelerator: 'CommandOrControl+O', registerAccelerator: false, click: () => sendAction('open-in-ide') },
         { type: 'separator' },
