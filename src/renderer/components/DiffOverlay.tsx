@@ -20,6 +20,11 @@ interface HighlightedFile {
   tokensByLine: HighlightedToken[][];
 }
 
+function plainTokens(lines: DiffLine[]): HighlightedToken[][] {
+  return lines.map((l) => [{ content: l.content, color: '#e2e8f0' }]);
+}
+
+/** Used only for small inline diffs (activity log entries) */
 function useHighlightedFiles(diff: string | null): HighlightedFile[] | null {
   const [highlighted, setHighlighted] = useState<HighlightedFile[] | null>(null);
 
@@ -133,6 +138,60 @@ function FileSection({ data }: { data: HighlightedFile }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Only renders diff content + highlights when scrolled near the viewport */
+function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (el: HTMLDivElement | null) => void }) {
+  const [visible, setVisible] = useState(false);
+  const [tokens, setTokens] = useState<HighlightedToken[][] | null>(null);
+  const observerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = observerRef.current;
+    if (!el) return;
+
+    let cancelled = false;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        observer.disconnect();
+        setVisible(true);
+        const ext = extFromPath(file.newPath || file.oldPath);
+        const allLines = file.hunks.flatMap((h) => h.lines);
+        highlightLines(allLines.map((l) => l.content), ext).then((result) => {
+          if (!cancelled) setTokens(result);
+        });
+      }
+    }, { rootMargin: '300px' });
+
+    observer.observe(el);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [file]);
+
+  if (!visible) {
+    // Estimated height: 20px per line (leading-5) + hunk separator headers
+    const totalLines = file.hunks.reduce((sum, h) => sum + h.lines.length, 0);
+    const hunkHeaders = file.hunks.length > 1 ? (file.hunks.length - 1) * 24 : 0;
+    const estimatedHeight = file.binary ? 32 : totalLines * 20 + hunkHeaders;
+
+    return (
+      <div ref={(el) => { observerRef.current = el; sectionRef?.(el); }} className="mb-6">
+        <div className="sticky top-0 z-10 bg-slate-800 border border-slate-600 rounded-t px-3 py-1.5 text-xs font-semibold text-slate-300">
+          {file.newPath || file.oldPath}
+        </div>
+        <div className="border border-t-0 border-slate-700 rounded-b" style={{ height: estimatedHeight }} />
+      </div>
+    );
+  }
+
+  const allLines = file.hunks.flatMap((h) => h.lines);
+  const displayTokens = tokens ?? plainTokens(allLines);
+
+  return (
+    <div ref={(el) => { observerRef.current = el; sectionRef?.(el); }}>
+      <FileSection data={{ file, tokensByLine: displayTokens }} />
     </div>
   );
 }
@@ -285,7 +344,7 @@ function FileListSidebar({
   onSelectFile,
   fileStatuses,
 }: {
-  files: HighlightedFile[];
+  files: DiffFile[];
   selectedIndex: number;
   onSelectFile: (index: number) => void;
   fileStatuses: Record<string, GitFileStage[]>;
@@ -300,7 +359,7 @@ function FileListSidebar({
     let additions = 0;
     let deletions = 0;
     for (const f of files) {
-      const s = diffFileStats(f.file);
+      const s = diffFileStats(f);
       additions += s.additions;
       deletions += s.deletions;
     }
@@ -313,13 +372,13 @@ function FileListSidebar({
         <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
         <DiffStatsBadge additions={totalStats.additions} deletions={totalStats.deletions} />
       </div>
-      {files.map((data, idx) => {
-        const path = data.file.newPath || data.file.oldPath;
+      {files.map((file, idx) => {
+        const path = file.newPath || file.oldPath;
         const lastSlash = path.lastIndexOf('/');
         const basename = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
         const dirname = lastSlash >= 0 ? path.slice(0, lastSlash) : '';
-        const stats = diffFileStats(data.file);
-        const cfg = statusConfig[data.file.status];
+        const stats = diffFileStats(file);
+        const cfg = statusConfig[file.status];
         const stages = fileStatuses[path] ?? [];
         const isSelected = idx === selectedIndex;
 
@@ -347,7 +406,7 @@ function FileListSidebar({
               <div className="text-slate-200 truncate">{basename}</div>
               {dirname && <div className="text-slate-500 truncate">{dirname}</div>}
             </div>
-            {data.file.binary
+            {file.binary
               ? <span className="text-xs text-slate-600 italic flex-shrink-0">binary</span>
               : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0" />
             }
@@ -359,6 +418,11 @@ function FileListSidebar({
 }
 
 type DiffScope = 'working' | 'all';
+
+const scopeLabels: Record<DiffScope, { text: string; hintIndex: number }> = {
+  working: { text: 'Working tree', hintIndex: 8 },
+  all: { text: 'All changes', hintIndex: 4 },
+};
 
 function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: DiffScope) => void }) {
   return (
@@ -374,20 +438,20 @@ function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: Diff
               : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
           }`}
         >
-          {s === 'working' ? 'Working tree' : 'All changes'}
+          <ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} />
         </button>
       ))}
     </div>
   );
 }
 
-function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCount, filesRef }: { taskId: string; search: string; gitFileIdx: number; onSetGitFileIdx: (idx: number) => void; onFileCount: (count: number) => void; filesRef: React.MutableRefObject<HighlightedFile[]> }) {
-  const [scope, setScope] = useState<DiffScope>('working');
+function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCount, filesRef, scope, onSetScope }: { taskId: string; search: string; gitFileIdx: number; onSetGitFileIdx: (idx: number) => void; onFileCount: (count: number) => void; filesRef: React.MutableRefObject<DiffFile[]>; scope: DiffScope; onSetScope: (s: DiffScope) => void }) {
   const { diff, loading, error } = useDiff(taskId, scope);
-  const highlighted = useHighlightedFiles(diff);
   const [fileStatuses, setFileStatuses] = useState<Record<string, GitFileStage[]>>({});
 
   const fileSectionRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  const files = useMemo(() => diff ? parseDiff(diff) : null, [diff]);
 
   // Fetch file statuses alongside the diff
   useEffect(() => {
@@ -397,16 +461,16 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
   }, [taskId, diff]);
 
   const filtered = useMemo(() => {
-    if (!highlighted || !search) return highlighted;
+    if (!files || !search) return files;
     const s = search.toLowerCase();
-    return highlighted.filter((data) => {
-      const path = (data.file.newPath || data.file.oldPath).toLowerCase();
+    return files.filter((file) => {
+      const path = (file.newPath || file.oldPath).toLowerCase();
       if (path.includes(s)) return true;
-      return data.file.hunks.some((h) =>
+      return file.hunks.some((h) =>
         h.lines.some((l) => l.content.toLowerCase().includes(s)),
       );
     });
-  }, [highlighted, search]);
+  }, [files, search]);
 
   // Report file list to parent for search indicator and Cmd+O
   useEffect(() => {
@@ -414,17 +478,19 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
     onFileCount(filtered ? filtered.length : 0);
   }, [filtered, onFileCount, filesRef]);
 
-  // Scroll to selected file when gitFileIdx changes
+  // Scroll to selected file only when user navigates
+  const prevGitFileIdx = useRef(gitFileIdx);
   useEffect(() => {
-    if (filtered && filtered.length > 0) {
+    if (prevGitFileIdx.current !== gitFileIdx) {
       fileSectionRefs.current[gitFileIdx]?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      prevGitFileIdx.current = gitFileIdx;
     }
   }, [gitFileIdx, filtered]);
 
   if (loading) {
     return (
       <div className="flex-1 flex flex-col">
-        <ScopeToggle scope={scope} onChange={setScope} />
+        <ScopeToggle scope={scope} onChange={onSetScope} />
         <div className="flex items-center gap-2 text-slate-400 p-4">
           <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
           <span>Loading diff...</span>
@@ -436,7 +502,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
   if (error) {
     return (
       <div className="flex-1 flex flex-col">
-        <ScopeToggle scope={scope} onChange={setScope} />
+        <ScopeToggle scope={scope} onChange={onSetScope} />
         <div className="text-red-400 p-4">Error: {error}</div>
       </div>
     );
@@ -445,7 +511,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
   if (diff === null || diff === '') {
     return (
       <div className="flex-1 flex flex-col">
-        <ScopeToggle scope={scope} onChange={setScope} />
+        <ScopeToggle scope={scope} onChange={onSetScope} />
         <div className="text-slate-500 p-4">No changes</div>
       </div>
     );
@@ -454,7 +520,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
   if (filtered && filtered.length === 0 && search) {
     return (
       <div className="flex-1 flex flex-col">
-        <ScopeToggle scope={scope} onChange={setScope} />
+        <ScopeToggle scope={scope} onChange={onSetScope} />
         <div className="text-slate-500 p-4">No matching files</div>
       </div>
     );
@@ -464,7 +530,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <ScopeToggle scope={scope} onChange={setScope} />
+      <ScopeToggle scope={scope} onChange={onSetScope} />
       <div className="flex-1 flex min-h-0">
         <FileListSidebar
           files={filtered}
@@ -475,11 +541,13 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
             : fileStatuses
           }
         />
-        <div className="flex-1 overflow-auto p-4">
-          {filtered.map((data, i) => (
-            <div key={i} ref={(el) => { fileSectionRefs.current[i] = el; }}>
-              <FileSection data={data} />
-            </div>
+        <div className="flex-1 overflow-auto px-4 pb-4">
+          {filtered.map((file, i) => (
+            <LazyFileSection
+              key={`${file.newPath || file.oldPath}-${i}`}
+              file={file}
+              sectionRef={(el) => { fileSectionRefs.current[i] = el; }}
+            />
           ))}
         </div>
       </div>
@@ -521,12 +589,13 @@ export default function DiffOverlay() {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const gitFilesRef = useRef<HighlightedFile[]>([]);
+  const gitFilesRef = useRef<DiffFile[]>([]);
 
   const [search, setSearch] = useState('');
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [gitFileIdx, setGitFileIdx] = useState(0);
   const [gitFileCount, setGitFileCount] = useState(0);
+  const [diffScope, setDiffScope] = useState<DiffScope>('working');
 
   const { showDiff, diffMode } = getActiveDiffState(state);
   const isActivity = diffMode === 'activity';
@@ -610,7 +679,7 @@ export default function DiffOverlay() {
           const entry = filteredEntries[focusedIdx];
           filePath = entry?.filePath;
         } else if (!isActivity && gitFilesRef.current.length > 0) {
-          const file = gitFilesRef.current[gitFileIdx]?.file;
+          const file = gitFilesRef.current[gitFileIdx];
           filePath = file?.newPath || file?.oldPath;
         }
         if (filePath) {
@@ -714,6 +783,14 @@ export default function DiffOverlay() {
         }
         break;
 
+      case 'ArrowLeft':
+      case 'ArrowRight':
+        if (diffMode === 'git') {
+          e.preventDefault();
+          setDiffScope(e.key === 'ArrowLeft' ? 'working' : 'all');
+        }
+        break;
+
       default:
         // Alt+letter shortcuts
         if (e.altKey) {
@@ -733,6 +810,18 @@ export default function DiffOverlay() {
             case 'KeyU':
               e.preventDefault();
               dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
+              break;
+            case 'KeyT':
+              if (diffMode === 'git') {
+                e.preventDefault();
+                setDiffScope('working');
+              }
+              break;
+            case 'KeyC':
+              if (diffMode === 'git') {
+                e.preventDefault();
+                setDiffScope('all');
+              }
               break;
           }
         } else if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
@@ -800,6 +889,8 @@ export default function DiffOverlay() {
           onSetGitFileIdx={setGitFileIdx}
           onFileCount={setGitFileCount}
           filesRef={gitFilesRef}
+          scope={diffScope}
+          onSetScope={setDiffScope}
         />
       )}
 
