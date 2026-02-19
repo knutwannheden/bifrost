@@ -107,16 +107,6 @@ export function resizeSession(sessionId: string, cols: number, rows: number): vo
   }
 }
 
-/** Resize all PTY sessions to the given dimensions.
- *  Keeps background PTYs in sync when the window is resized. */
-export function resizeAllSessions(cols: number, rows: number): void {
-  for (const session of sessions.values()) {
-    try {
-      session.resize(cols, rows);
-    } catch { /* ignore errors from exiting sessions */ }
-  }
-}
-
 /** Return buffered output and clear it (one-time replay for renderer connect). */
 export function drainSessionBuffer(sessionId: string): string {
   const buf = sessionBuffers.get(sessionId) ?? '';

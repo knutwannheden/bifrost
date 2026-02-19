@@ -187,21 +187,27 @@ export function useTerminal(
     // ResizeObserver for auto-fit
     // Skip when container has zero dimensions (pane hidden via display:none)
     // to avoid truncating xterm scrollback buffer.
+    // Debounce PTY resizes to avoid flooding the process with SIGWINCHes
+    // during rapid window/pane drags — each one causes a full TUI redraw.
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width === 0 || rect.height === 0) return;
       try {
         fitAddon.fit();
-        // Resize all PTYs (including background tabs) so they stay in sync
-        // when the window is resized. Prevents garbled output from stale dimensions.
-        window.bifrost.resizeAllSessions(terminal.cols, terminal.rows);
       } catch {
-        // ignore resize errors
+        // ignore fit errors
       }
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        resizeTimer = null;
+        window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
+      }, 100);
     });
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
       resizeObserver.disconnect();
       removeDataListener();
       removeExitListener();
@@ -216,41 +222,44 @@ export function useTerminal(
   // Update fontSize dynamically when config changes
   const fontSize = options?.fontSize ?? 14;
   useEffect(() => {
-    if (terminalRef.current && fitAddonRef.current) {
+    if (sessionId && terminalRef.current && fitAddonRef.current) {
       terminalRef.current.options.fontSize = fontSize;
       try {
         fitAddonRef.current.fit();
+        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
       } catch {
         // ignore fit errors
       }
     }
-  }, [fontSize]);
+  }, [sessionId, fontSize]);
 
   // Update fontWeight dynamically when config changes
   const fontWeight = options?.fontWeight ?? 300;
   useEffect(() => {
-    if (terminalRef.current && fitAddonRef.current) {
+    if (sessionId && terminalRef.current && fitAddonRef.current) {
       terminalRef.current.options.fontWeight = fontWeight;
       try {
         fitAddonRef.current.fit();
+        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
       } catch {
         // ignore fit errors
       }
     }
-  }, [fontWeight]);
+  }, [sessionId, fontWeight]);
 
   // Update fontFamily dynamically when config changes
   const fontFamily = options?.fontFamily ?? 'MesloLGS NF';
   useEffect(() => {
-    if (terminalRef.current && fitAddonRef.current) {
+    if (sessionId && terminalRef.current && fitAddonRef.current) {
       terminalRef.current.options.fontFamily = `"${fontFamily}", Menlo, Monaco, "Courier New", monospace`;
       try {
         fitAddonRef.current.fit();
+        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
       } catch {
         // ignore fit errors
       }
     }
-  }, [fontFamily]);
+  }, [sessionId, fontFamily]);
 
   // Re-fit when pane becomes visible (e.g. switching tabs) so the PTY
   // column count stays in sync with xterm after background data writes.

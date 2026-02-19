@@ -33,8 +33,6 @@ const api: BifrostAPI = {
     ipcRenderer.invoke(IPC.WRITE_TO_SESSION, sessionId, data),
   resizeSession: (sessionId, cols, rows) =>
     ipcRenderer.invoke(IPC.RESIZE_SESSION, sessionId, cols, rows),
-  resizeAllSessions: (cols, rows) =>
-    ipcRenderer.invoke(IPC.RESIZE_ALL_SESSIONS, cols, rows),
   drainSessionBuffer: (sessionId) =>
     ipcRenderer.invoke(IPC.DRAIN_SESSION_BUFFER, sessionId),
   onSessionData: (callback) => {
