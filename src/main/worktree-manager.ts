@@ -3,6 +3,7 @@ import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { getRemotes } from './repo-manager';
 
 const execFile = promisify(execFileCb);
 
@@ -44,42 +45,48 @@ export async function createWorktreeFromPr(
     await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
   }
 
-  if (prInfo.isFork && prInfo.headRepoOwner) {
-    // Add fork remote if not already present
-    const remoteName = prInfo.headRepoOwner;
-    try {
-      await execFile('git', ['remote', 'get-url', remoteName], { cwd: repoPath });
-    } catch {
-      // Remote doesn't exist, add it
-      const url = `https://github.com/${prInfo.headRepoOwner}/${prInfo.headRepoName}.git`;
-      await execFile('git', ['remote', 'add', remoteName, url], { cwd: repoPath });
+  // Find which remote hosts the PR head branch
+  const headGhPath = prInfo.headRepoOwner && prInfo.headRepoName
+    ? `${prInfo.headRepoOwner}/${prInfo.headRepoName}`
+    : '';
+  let remoteName = 'origin';
+
+  if (headGhPath) {
+    const remotes = await getRemotes(repoPath);
+    const match = remotes.find(
+      (r) => r.githubPath.toLowerCase() === headGhPath.toLowerCase(),
+    );
+    if (match) {
+      remoteName = match.name;
+    } else {
+      // Add a new remote for the fork
+      const url = `https://github.com/${headGhPath}.git`;
+      remoteName = prInfo.headRepoOwner;
+      // Check if a remote with this name already exists but points elsewhere
+      const existing = remotes.find((r) => r.name === remoteName);
+      if (existing) {
+        // Name collision — use owner-repo as the remote name
+        remoteName = `${prInfo.headRepoOwner}-${prInfo.headRepoName}`;
+      }
+      try {
+        await execFile('git', ['remote', 'get-url', remoteName], { cwd: repoPath });
+      } catch {
+        await execFile('git', ['remote', 'add', remoteName, url], { cwd: repoPath });
+      }
     }
-    await execFile('git', ['fetch', remoteName, prInfo.headBranch], { cwd: repoPath });
-    await execFile(
-      'git',
-      ['worktree', 'add', worktreePath, '-b', taskName, `${remoteName}/${prInfo.headBranch}`],
-      { cwd: repoPath },
-    );
-    // Set upstream for pulling updates
-    await execFile(
-      'git',
-      ['branch', '--set-upstream-to', `${remoteName}/${prInfo.headBranch}`, taskName],
-      { cwd: worktreePath },
-    );
-  } else {
-    // Same-repo PR — fetch branch from origin
-    await execFile('git', ['fetch', 'origin', prInfo.headBranch], { cwd: repoPath });
-    await execFile(
-      'git',
-      ['worktree', 'add', worktreePath, '-b', taskName, `origin/${prInfo.headBranch}`],
-      { cwd: repoPath },
-    );
-    await execFile(
-      'git',
-      ['branch', '--set-upstream-to', `origin/${prInfo.headBranch}`, taskName],
-      { cwd: worktreePath },
-    );
   }
+
+  await execFile('git', ['fetch', remoteName, prInfo.headBranch], { cwd: repoPath });
+  await execFile(
+    'git',
+    ['worktree', 'add', worktreePath, '-b', taskName, `${remoteName}/${prInfo.headBranch}`],
+    { cwd: repoPath },
+  );
+  await execFile(
+    'git',
+    ['branch', '--set-upstream-to', `${remoteName}/${prInfo.headBranch}`, taskName],
+    { cwd: worktreePath },
+  );
 
   return worktreePath;
 }

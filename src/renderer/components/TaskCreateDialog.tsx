@@ -136,17 +136,24 @@ export default function TaskCreateDialog() {
         if (!parsed) return;
 
         // Find matching repo
-        const matchedRepo = state.repos.find(
+        let matchedRepo = state.repos.find(
           (r) => r.githubPath?.toLowerCase() === `${parsed.owner}/${parsed.repo}`.toLowerCase(),
         );
+
+        if (!matchedRepo) {
+          // Fallback: check if any repo has a remote matching this GitHub path
+          const matchedId = await window.bifrost.matchRepoForPr(parsed.owner, parsed.repo);
+          if (matchedId) matchedRepo = state.repos.find((r) => r.id === matchedId);
+        }
 
         if (!matchedRepo) {
           setPrBanner({ number: parsed.number, message: `PR #${parsed.number} detected but ${parsed.owner}/${parsed.repo} is not managed in Bifrost` });
           return;
         }
 
-        // Fetch PR metadata
-        const info = await window.bifrost.fetchPrInfo(matchedRepo.id, parsed.number);
+        // Fetch PR metadata (pass ghRepo so gh queries the right repo even if origin is a fork)
+        const ghRepo = `${parsed.owner}/${parsed.repo}`;
+        const info = await window.bifrost.fetchPrInfo(matchedRepo.id, parsed.number, ghRepo);
         setPrInfo(info);
 
         // Auto-fill: select repo and set branch

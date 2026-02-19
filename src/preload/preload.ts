@@ -111,7 +111,8 @@ const api: BifrostAPI = {
   readClipboard: () => ipcRenderer.invoke(IPC.READ_CLIPBOARD),
 
   // PR
-  fetchPrInfo: (repoId, prNumber) => ipcRenderer.invoke(IPC.FETCH_PR_INFO, repoId, prNumber),
+  fetchPrInfo: (repoId, prNumber, ghRepo?) => ipcRenderer.invoke(IPC.FETCH_PR_INFO, repoId, prNumber, ghRepo),
+  matchRepoForPr: (owner, repo) => ipcRenderer.invoke(IPC.MATCH_REPO_FOR_PR, owner, repo),
   checkGhAvailable: () => ipcRenderer.invoke(IPC.CHECK_GH_AVAILABLE),
 
   // Task summary

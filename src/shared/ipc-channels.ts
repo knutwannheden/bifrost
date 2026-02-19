@@ -101,6 +101,7 @@ export const IPC = {
 
   // PR
   FETCH_PR_INFO: 'pr:fetch-info',
+  MATCH_REPO_FOR_PR: 'pr:match-repo',
   CHECK_GH_AVAILABLE: 'gh:check',
 
   // Permission
@@ -205,7 +206,8 @@ export interface BifrostAPI {
   readClipboard(): Promise<string>;
 
   // PR
-  fetchPrInfo(repoId: string, prNumber: number): Promise<PrInfo>;
+  fetchPrInfo(repoId: string, prNumber: number, ghRepo?: string): Promise<PrInfo>;
+  matchRepoForPr(owner: string, repo: string): Promise<string | null>;
   checkGhAvailable(): Promise<boolean>;
 
   // Task summary

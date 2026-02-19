@@ -9,7 +9,7 @@ const execFile = promisify(execFileCb);
 import { IPC, IPC_STREAM } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams, ActivityEntry, PermissionDecision } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
-import { addRepo, removeRepo, getRepoBranches, detectBaseBranch } from './repo-manager';
+import { addRepo, removeRepo, getRepoBranches, detectBaseBranch, getRemotes } from './repo-manager';
 import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, resizeAllSessions, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
@@ -664,22 +664,24 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // PR info fetch
-  ipcMain.handle(IPC.FETCH_PR_INFO, async (_event, repoId: string, prNumber: number) => {
+  ipcMain.handle(IPC.FETCH_PR_INFO, async (_event, repoId: string, prNumber: number, ghRepo?: string) => {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === repoId);
     if (!repo) throw new Error(`Repo not found: ${repoId}`);
 
     // Try gh CLI first
     try {
+      const ghArgs = ['pr', 'view', String(prNumber), '--json', 'headRefName,headRepositoryOwner,headRepository,title,number'];
+      if (ghRepo) ghArgs.push('--repo', ghRepo);
       const { stdout } = await execFile(
         'gh',
-        ['pr', 'view', String(prNumber), '--json', 'headRefName,headRepositoryOwner,headRepository,title,number'],
+        ghArgs,
         { cwd: repo.path, timeout: 10000 },
       );
       const data = JSON.parse(stdout);
       const headRepoOwner = data.headRepositoryOwner?.login ?? '';
       const headRepoName = data.headRepository?.name ?? '';
-      const repoOwner = repo.githubPath?.split('/')[0] ?? '';
+      const repoOwner = (ghRepo ?? repo.githubPath)?.split('/')[0] ?? '';
       return {
         number: data.number,
         title: data.title,
@@ -693,9 +695,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
 
     // Fallback: git ls-remote
+    const lsRemoteTarget = ghRepo ? `https://github.com/${ghRepo}.git` : 'origin';
     const { stdout: prRef } = await execFile(
       'git',
-      ['ls-remote', 'origin', `refs/pull/${prNumber}/head`],
+      ['ls-remote', lsRemoteTarget, `refs/pull/${prNumber}/head`],
       { cwd: repo.path, timeout: 10000 },
     );
     const prSha = prRef.split('\t')[0];
@@ -706,7 +709,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     try {
       const { stdout: refs } = await execFile(
         'git',
-        ['ls-remote', '--heads', 'origin'],
+        ['ls-remote', '--heads', lsRemoteTarget],
         { cwd: repo.path, timeout: 10000 },
       );
       for (const line of refs.split('\n')) {
@@ -727,6 +730,19 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       headRepoName: '',
       isFork: false,
     };
+  });
+
+  // Match repo for PR (checks all remotes across configured repos)
+  ipcMain.handle(IPC.MATCH_REPO_FOR_PR, async (_event, owner: string, repoName: string) => {
+    const config = loadConfig();
+    const target = `${owner}/${repoName}`.toLowerCase();
+    for (const repo of config.repos) {
+      const remotes = await getRemotes(repo.path);
+      if (remotes.some((r) => r.githubPath.toLowerCase() === target)) {
+        return repo.id;
+      }
+    }
+    return null;
   });
 
   // Permission

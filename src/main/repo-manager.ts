@@ -129,6 +129,29 @@ export function removeRepo(
   };
 }
 
+export async function getRemotes(repoPath: string): Promise<Array<{ name: string; githubPath: string }>> {
+  try {
+    const { stdout } = await execFile('git', ['remote', '-v'], { cwd: repoPath });
+    const seen = new Set<string>();
+    const remotes: Array<{ name: string; githubPath: string }> = [];
+    for (const line of stdout.split('\n')) {
+      const parts = line.split(/\s+/);
+      if (parts.length < 2) continue;
+      const name = parts[0];
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const url = parts[1];
+      const sshMatch = url.match(/github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
+      if (sshMatch) { remotes.push({ name, githubPath: sshMatch[1] }); continue; }
+      const httpsMatch = url.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
+      if (httpsMatch) { remotes.push({ name, githubPath: httpsMatch[1] }); continue; }
+    }
+    return remotes;
+  } catch {
+    return [];
+  }
+}
+
 export async function getRepoBranches(repoPath: string): Promise<string[]> {
   const { stdout } = await execFile('git', ['branch', '-a'], { cwd: repoPath });
   return stdout
