@@ -4,8 +4,8 @@ import type { DiffMode } from '../context/AppContext';
 
 function BellIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 13.5a2 2 0 0 1-4 0" />
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 11.5a2 2 0 0 1-4 0" />
       <path d="M4.5 6a3.5 3.5 0 0 1 7 0c0 3.5 1.5 4.5 1.5 4.5H3S4.5 9.5 4.5 6z" />
     </svg>
   );
@@ -13,7 +13,7 @@ function BellIcon() {
 
 function DiffIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z" />
       <path d="M8 6v4M6 8h4" />
     </svg>
@@ -22,7 +22,7 @@ function DiffIcon() {
 
 function ActivityIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 8h2.5l2-4 3 8 2-4H14" />
     </svg>
   );
@@ -30,7 +30,7 @@ function ActivityIcon() {
 
 function ReviewIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
       <path d="M6 5h4M6 8h4M6 11h2" />
     </svg>
@@ -39,9 +39,9 @@ function ReviewIcon() {
 
 function GearIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="8" cy="8" r="2" />
-      <path d="M13.5 8a5.5 5.5 0 0 0-.1-.8l1.2-1-.8-1.4-1.5.5a5.5 5.5 0 0 0-1.2-.7L10.8 3H9.2l-.3 1.6c-.5.1-.9.4-1.2.7l-1.5-.5-.8 1.4 1.2 1a5.5 5.5 0 0 0 0 1.6l-1.2 1 .8 1.4 1.5-.5c.3.3.7.5 1.2.7l.3 1.6h1.6l.3-1.6c.5-.1.9-.4 1.2-.7l1.5.5.8-1.4-1.2-1a5.5 5.5 0 0 0 .1-.8z" />
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
     </svg>
   );
 }
@@ -49,18 +49,18 @@ function GearIcon() {
 interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
   badge?: boolean;
-  title: string;
+  label: string;
+  shortcut?: string;
   onClick: () => void;
   children: React.ReactNode;
 }
 
-function IconButton({ active, badge, title, onClick, children, ...rest }: IconButtonProps) {
+function IconButton({ active, badge, label, shortcut, onClick, children, ...rest }: IconButtonProps) {
   return (
     <button
       onClick={onClick}
-      title={title}
       {...rest}
-      className={`relative w-full flex items-center justify-center h-10 transition-colors ${
+      className={`group relative w-full flex items-center justify-center h-8 transition-colors ${
         active
           ? 'text-blue-400 bg-slate-700/50 border-l-2 border-blue-400'
           : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/30 border-l-2 border-transparent'
@@ -68,8 +68,12 @@ function IconButton({ active, badge, title, onClick, children, ...rest }: IconBu
     >
       {children}
       {badge && (
-        <span className="absolute top-1.5 right-2 w-2 h-2 rounded-full bg-amber-400" />
+        <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-amber-400" />
       )}
+      <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 border border-slate-700 shadow-lg whitespace-nowrap z-50">
+        <span className="text-xs text-slate-200">{label}</span>
+        {shortcut && <kbd className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded border border-slate-600">{shortcut}</kbd>}
+      </span>
     </button>
   );
 }
@@ -92,7 +96,7 @@ export default function RightIconBar() {
   return (
     <div className="flex flex-col w-11 bg-slate-800 border-l border-slate-700 shrink-0">
       <IconButton
-        title="Notifications"
+        label="Notifications"
         active={state.showNotificationPopover}
         badge={hasUnreadNotifications}
         onClick={() => dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' })}
@@ -101,10 +105,11 @@ export default function RightIconBar() {
         <BellIcon />
       </IconButton>
 
-      <div className="mx-2 border-t border-slate-700" />
+      <div className="mx-2 my-1 border-t border-slate-700" />
 
       <IconButton
-        title="Diff (⌘D)"
+        label="Diff"
+        shortcut="⌘D"
         active={isDiffActive && diffMode === 'git'}
         onClick={() => toggleDiffMode('git')}
       >
@@ -112,7 +117,8 @@ export default function RightIconBar() {
       </IconButton>
 
       <IconButton
-        title="Activity (⌘A)"
+        label="Activity"
+        shortcut="⌘A"
         active={isDiffActive && diffMode === 'activity'}
         onClick={() => toggleDiffMode('activity')}
       >
@@ -120,7 +126,8 @@ export default function RightIconBar() {
       </IconButton>
 
       <IconButton
-        title="Review (⌥U)"
+        label="Review"
+        shortcut="⌥U"
         active={isDiffActive && diffMode === 'review'}
         onClick={() => toggleDiffMode('review')}
       >
@@ -129,15 +136,17 @@ export default function RightIconBar() {
 
       <div className="flex-1" />
 
-      <div className="mx-2 border-t border-slate-700" />
+      <div className="mx-2 my-1 border-t border-slate-700" />
 
       <IconButton
-        title="Settings (⌘,)"
+        label="Settings"
+        shortcut="⌘,"
         active={state.showSettings}
         onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
       >
         <GearIcon />
       </IconButton>
+      <div className="h-1" />
     </div>
   );
 }
