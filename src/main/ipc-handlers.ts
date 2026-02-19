@@ -118,7 +118,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const sessionId = randomUUID();
       const startupConfig = loadConfig();
       createSession(sessionId, task.worktreePath, mainWindow, {
-        resume: true, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
+        resume: true, claudeSessionId: task.claudeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
       });
 
       const idx = tasks.findIndex((t) => t.id === task.id);
