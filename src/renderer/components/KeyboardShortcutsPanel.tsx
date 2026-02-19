@@ -31,7 +31,6 @@ const shortcuts: Shortcut[] = [
   // Views
   { key: '/', label: 'Toggle dev terminal', group: 'Views', execKey: '/' },
   { key: 'D', label: 'Git diff', group: 'Views', execKey: 'd' },
-  { key: 'A', label: 'Activity log', group: 'Views', execKey: 'a' },
   { key: 'L', label: 'Git log', group: 'Views', execKey: 'l' },
   { key: 'H', label: 'Task history', group: 'Views', execKey: 'h' },
   { key: 'R', label: 'Repositories', group: 'Views', execKey: 'r' },

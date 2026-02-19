@@ -102,10 +102,20 @@ export async function summarizeTask(worktreePath: string): Promise<string | null
   if (!input) return null;
 
   return new Promise<string | null>((resolve) => {
+    const jsonSchema = JSON.stringify({
+      type: 'object',
+      properties: {
+        summary: { type: 'string' },
+      },
+      required: ['summary'],
+    });
+
     const proc = spawn('claude', [
       '-p',
       '--model', 'haiku',
-      'Summarize what was accomplished in this Claude Code session in two short sentences. The first sentence should describe the main goal or task. The second should mention a key detail or secondary accomplishment. Start directly with an action verb (e.g. "Implemented...", "Fixed..."). Do NOT start with "A Claude Code session", "The user", or similar filler. Output ONLY the summary, nothing else.',
+      '--output-format', 'json',
+      '--json-schema', jsonSchema,
+      'Summarize what was accomplished in this Claude Code session. The summary will be shown as a tooltip when hovering over the task tab, and is searchable in the task history panel. Write one or two short sentences. Start with an action verb (e.g. "Implemented...", "Fixed...", "Refactored..."). Do not start with "A Claude Code session", "The user", or similar filler.',
     ], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env },
@@ -131,7 +141,13 @@ export async function summarizeTask(worktreePath: string): Promise<string | null
       settled = true;
       clearTimeout(timeout);
       if (code === 0 && stdout.trim()) {
-        resolve(stdout.trim());
+        try {
+          const wrapper = JSON.parse(stdout);
+          const inner = JSON.parse(wrapper.result);
+          resolve(inner.summary ?? null);
+        } catch {
+          resolve(null);
+        }
       } else {
         resolve(null);
       }

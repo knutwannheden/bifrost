@@ -262,15 +262,17 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         }
         lastCmdShiftWRef.current = 0;
 
+        // Select next task immediately — archiveTask is async (worktree
+        // removal) and the session-exit event would clear the tab first.
+        const remaining = state.tasks.filter(
+          (t) => t.id !== taskId && t.status === 'running',
+        );
+        dispatch({
+          type: 'SET_ACTIVE_TASK',
+          taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+        });
         window.bifrost.archiveTask(taskId).then((updated) => {
           dispatch({ type: 'UPDATE_TASK', task: updated });
-          const remaining = state.tasks.filter(
-            (t) => t.id !== taskId && t.status === 'running',
-          );
-          dispatch({
-            type: 'SET_ACTIVE_TASK',
-            taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-          });
         });
         return;
       }
@@ -409,18 +411,6 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         case 'h':
           e.preventDefault();
           dispatch({ type: 'TOGGLE_TASK_HISTORY' });
-          break;
-
-        case 'a':
-          e.preventDefault();
-          if (showDiff && diffMode === 'activity') {
-            dispatch({ type: 'TOGGLE_DIFF' });
-          } else {
-            dispatch({ type: 'SET_DIFF_MODE', mode: 'activity' });
-            if (!showDiff) {
-              dispatch({ type: 'TOGGLE_DIFF' });
-            }
-          }
           break;
 
         case 'l':

@@ -226,15 +226,15 @@ export default function App() {
         case 'archive-task': {
           const archiveId = state.activeTaskId;
           if (!archiveId) break;
+          const remaining = state.tasks.filter(
+            (t) => t.id !== archiveId && t.status === 'running',
+          );
+          dispatch({
+            type: 'SET_ACTIVE_TASK',
+            taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+          });
           window.bifrost.archiveTask(archiveId).then((updated) => {
             dispatch({ type: 'UPDATE_TASK', task: updated });
-            const remaining = state.tasks.filter(
-              (t) => t.id !== archiveId && t.status === 'running',
-            );
-            dispatch({
-              type: 'SET_ACTIVE_TASK',
-              taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-            });
           });
           break;
         }
