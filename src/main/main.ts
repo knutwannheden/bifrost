@@ -116,6 +116,8 @@ function buildMenu() {
         { label: 'Repositories', accelerator: 'CommandOrControl+R', registerAccelerator: false, click: () => sendAction('repositories') },
         { type: 'separator' },
         { label: 'Open in IDE', accelerator: 'CommandOrControl+O', registerAccelerator: false, click: () => sendAction('open-in-ide') },
+        { type: 'separator' },
+        { role: 'toggleDevTools' },
       ],
     },
     // Window
