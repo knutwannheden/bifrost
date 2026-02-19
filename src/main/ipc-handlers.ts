@@ -594,9 +594,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Review
-  ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string, scope?: 'working' | 'all') => {
+  ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string, scope?: 'working' | 'all', instructions?: string) => {
     const task = getTask(taskId);
-    const markdown = await runReview(task.worktreePath, taskId, mainWindow, scope);
+    const markdown = await runReview(task.worktreePath, taskId, mainWindow, scope, instructions);
     watchReviewFile(taskId, mainWindow);
     // reviewSessionId is set asynchronously via the SessionStart hook → /session-start API
     const reviewSessionId = getTask(taskId).reviewSessionId;

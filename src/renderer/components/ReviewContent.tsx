@@ -13,7 +13,7 @@ const scopeLabels: Record<ReviewScope, { text: string; hintIndex: number }> = {
   all: { text: 'All changes', hintIndex: 4 },
 };
 
-function ReviewScopeToggle({ scope, onChange, stats }: { scope: ReviewScope; onChange: (s: ReviewScope) => void; stats: Record<ReviewScope, DiffStats | null> }) {
+function ReviewScopeToggle({ scope, onChange, stats }: { scope: ReviewScope; onChange: (s: ReviewScope) => void; stats: Record<ReviewScope, DiffStats | null | undefined> }) {
   return (
     <div className="flex gap-1 px-3 py-2 border-b border-slate-700 flex-shrink-0">
       {(['working', 'all'] as const).map((s) => (
@@ -172,13 +172,14 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   const task = state.tasks.find((t) => t.id === taskId);
   const hasReviewSession = !!task?.reviewSessionId;
 
-  // Scope and discussion terminal state
+  // Scope, instructions, and discussion terminal state
   const [reviewScope, setReviewScope] = useState<ReviewScope>('working');
+  const [reviewInstructions, setReviewInstructions] = useState('');
   const [reviewPtySessionId, setReviewPtySessionId] = useState<string | null>(null);
   const [showDiscussion, setShowDiscussion] = useState(false);
 
   // Diff stats for both scopes
-  const [scopeStats, setScopeStats] = useState<Record<ReviewScope, DiffStats | null>>({ working: null, all: null });
+  const [scopeStats, setScopeStats] = useState<Record<ReviewScope, DiffStats | null | undefined>>({ working: undefined, all: undefined });
   useEffect(() => {
     let cancelled = false;
     Promise.all([
@@ -231,7 +232,7 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
     setReviewPtySessionId(null);
     setShowDiscussion(false);
     try {
-      const { markdown, reviewSessionId } = await window.bifrost.runReview(taskId, reviewScope);
+      const { markdown, reviewSessionId } = await window.bifrost.runReview(taskId, reviewScope, reviewInstructions || undefined);
       dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: markdown });
       dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'done' });
       // Update the task in renderer state so the Discuss button appears
@@ -242,7 +243,7 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
       dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'error' });
       dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: `Error: ${err instanceof Error ? err.message : String(err)}` });
     }
-  }, [taskId, task, reviewScope, dispatch]);
+  }, [taskId, task, reviewScope, reviewInstructions, dispatch]);
 
   const handleToggle = useCallback((lineIndex: number) => {
     const newLines = [...lines];
@@ -302,8 +303,9 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
       }
 
       if (e.key !== 'Enter') return;
-      // Don't intercept Enter when discussion terminal is active
+      // Don't intercept Enter when discussion terminal is active or typing in an input
       if (showDiscussion) return;
+      if (document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement) return;
 
       if (e.metaKey) {
         if (status === 'done' && hasChecked) {
@@ -326,20 +328,42 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
 
   // Idle state — no existing review
   if (status === 'idle' && !content) {
+    const currentStats = scopeStats[reviewScope];
+    // null means no changes (getDiffStats returns null for zero diff); undefined means still loading
+    const hasChanges = currentStats === undefined || (currentStats !== null && (currentStats.additions > 0 || currentStats.deletions > 0));
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <button
-            onClick={handleRunReview}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            R<span className="underline underline-offset-2">u</span>n Review
-          </button>
-          <div className="max-w-sm text-center text-xs text-slate-500 leading-relaxed">
-            Runs Claude on the current git diff to produce a review with actionable items.
-            Check the items you want to address, then copy a prompt to paste into the main session.
-          </div>
+          {hasChanges ? (
+            <>
+              <textarea
+                value={reviewInstructions}
+                onChange={(e) => setReviewInstructions(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleRunReview();
+                  }
+                }}
+                placeholder="Additional instructions for the reviewer (optional)"
+                className="w-full max-w-md px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500"
+                rows={2}
+              />
+              <button
+                onClick={handleRunReview}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                R<span className="underline underline-offset-2">u</span>n Review
+              </button>
+              <div className="max-w-sm text-center text-xs text-slate-500 leading-relaxed">
+                Runs Claude on the current git diff to produce a review with actionable items.
+                Check the items you want to address, then copy a prompt to paste into the main session.
+              </div>
+            </>
+          ) : (
+            <div className="text-sm text-slate-500">No changes to review.</div>
+          )}
         </div>
       </div>
     );

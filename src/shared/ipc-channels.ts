@@ -187,7 +187,7 @@ export interface BifrostAPI {
   resumeClaudeSession(claudeSessionId: string, cwd: string): Promise<Task>;
 
   // Review
-  runReview(taskId: string, scope?: 'working' | 'all'): Promise<{ markdown: string; reviewSessionId?: string }>;
+  runReview(taskId: string, scope?: 'working' | 'all', instructions?: string): Promise<{ markdown: string; reviewSessionId?: string }>;
   saveReview(taskId: string, content: string): Promise<void>;
   loadReview(taskId: string): Promise<string | null>;
   resumeReview(taskId: string): Promise<string>;

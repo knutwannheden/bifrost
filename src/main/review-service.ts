@@ -26,7 +26,12 @@ export function getReviewPath(taskId: string): string {
   return path.join(BIFROST_DIR, taskId, 'review.md');
 }
 
-export async function runReview(worktreePath: string, taskId: string, mainWindow?: BrowserWindow, scope: 'working' | 'all' = 'working'): Promise<string> {
+export async function runReview(worktreePath: string, taskId: string, mainWindow?: BrowserWindow, scope: 'working' | 'all' = 'working', instructions?: string): Promise<string> {
+  let prompt = REVIEW_PROMPTS[scope];
+  if (instructions?.trim()) {
+    prompt += `\n\nAdditional reviewer instructions:\n${instructions.trim()}`;
+  }
+
   const markdown = await new Promise<string>((resolve, reject) => {
     const env = { ...process.env } as Record<string, string>;
     delete env.CLAUDECODE;
@@ -36,7 +41,7 @@ export async function runReview(worktreePath: string, taskId: string, mainWindow
     const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
     try { env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
 
-    const proc = spawn('claude', ['-p', REVIEW_PROMPTS[scope]], {
+    const proc = spawn('claude', ['-p', prompt], {
       stdio: ['ignore', 'pipe', 'pipe'],
       cwd: worktreePath,
       env,
