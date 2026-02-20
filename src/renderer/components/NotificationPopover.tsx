@@ -58,7 +58,7 @@ export default function NotificationPopover() {
     <div
       ref={popoverRef}
       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
-      className="fixed right-11 top-20 z-50 w-72 max-h-[300px] flex flex-col bg-slate-800/80 backdrop-blur-md border border-slate-600/50 rounded-xl shadow-2xl overflow-hidden"
+      className="fixed right-11 top-20 z-50 w-72 max-h-[300px] flex flex-col bg-slate-900/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
     >
       <div className="px-3 py-2 border-b border-slate-700">
         <span className="text-xs font-semibold text-slate-300">Notifications</span>

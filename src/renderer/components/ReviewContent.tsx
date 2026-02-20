@@ -206,6 +206,10 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     return () => { cancelled = true; };
   }, [taskId]);
 
+  // Whether current scope has changes (for enabling Run Review)
+  const currentScopeStats = scopeStats[reviewScope];
+  const canRunReview = currentScopeStats === undefined || (currentScopeStats !== null && (currentScopeStats.additions > 0 || currentScopeStats.deletions > 0));
+
   const checkedLines = useMemo(() => parseCheckedLines(content), [content]);
   const hasChecked = checkedLines.size > 0;
   const lines = useMemo(() => content.split('\n'), [content]);
@@ -339,7 +343,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       } else if (status === 'done' && hasReviewSession && !showDiscussion) {
         e.preventDefault();
         handleDiscuss();
-      } else if (!reviewId && !showDiscussion) {
+      } else if (!reviewId && !showDiscussion && canRunReview) {
         // New review form → run review
         e.preventDefault();
         handleRunReview();
@@ -347,13 +351,11 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [reviewId, status, showDiscussion, hasChecked, hasReviewSession, handleCopyPrompt, handleDiscuss, handleRunReview]);
+  }, [reviewId, status, showDiscussion, hasChecked, hasReviewSession, canRunReview, handleCopyPrompt, handleDiscuss, handleRunReview]);
 
   // === New Review Form ===
   if (!reviewId) {
     const isRunning = state.reviewStatus['__pending__'] === 'running';
-    const currentStats = scopeStats[reviewScope];
-    const hasChanges = currentStats === undefined || (currentStats !== null && (currentStats.additions > 0 || currentStats.deletions > 0));
 
     if (isRunning) {
       return (
@@ -367,41 +369,44 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
-          {hasChanges ? (
-            <>
-              <div className="flex flex-col gap-2 w-full max-w-md">
-                <div className="text-xs text-slate-400 font-medium">Scope:</div>
-                <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
-              </div>
-              <div className="flex flex-col gap-2 w-full max-w-md">
-                <div className="text-xs text-slate-400 font-medium">Instructions (optional):</div>
-                <textarea
-                  value={reviewInstructions}
-                  onChange={(e) => setReviewInstructions(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleRunReview();
-                    }
-                  }}
-                  placeholder="Focus on error handling, security..."
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500"
-                  rows={2}
-                />
-              </div>
-              <button
-                onClick={handleRunReview}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                Run Review
-              </button>
-              <span className="text-xs text-slate-500">
-                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
-                {' '}to run
-              </span>
-            </>
+          <div className="flex flex-col gap-2 w-full max-w-md">
+            <div className="text-xs text-slate-400 font-medium">Scope:</div>
+            <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
+          </div>
+          <div className="flex flex-col gap-2 w-full max-w-md">
+            <div className="text-xs text-slate-400 font-medium">Instructions (optional):</div>
+            <textarea
+              value={reviewInstructions}
+              onChange={(e) => setReviewInstructions(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && canRunReview) {
+                  e.preventDefault();
+                  handleRunReview();
+                }
+              }}
+              placeholder="Focus on error handling, security..."
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500"
+              rows={2}
+            />
+          </div>
+          <button
+            onClick={handleRunReview}
+            disabled={!canRunReview}
+            className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${
+              canRunReview
+                ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+            }`}
+          >
+            Run Review
+          </button>
+          {canRunReview ? (
+            <span className="text-xs text-slate-500">
+              <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
+              {' '}to run
+            </span>
           ) : (
-            <div className="text-sm text-slate-500">No changes to review.</div>
+            <span className="text-xs text-slate-500">No changes to review for this scope.</span>
           )}
         </div>
       </div>

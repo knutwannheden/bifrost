@@ -379,7 +379,7 @@ export default function App() {
 
       {/* Toast notification */}
       {state.toast && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-800/80 backdrop-blur-md text-slate-200 text-sm rounded-xl shadow-2xl border border-slate-600/50 animate-fade-in max-w-lg"
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-900/60 backdrop-blur-xl text-slate-200 text-sm rounded-xl shadow-2xl border border-white/10 animate-fade-in max-w-lg"
              style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
           <SimpleMarkdown text={state.toast} />
         </div>
