@@ -93,6 +93,8 @@ export default function App() {
   // Mark non-active tasks as unread when new JSONL activity arrives
   // (actual Claude interactions, not terminal noise).
   // Also buffer last assistant text per task for hook notifications.
+  // Detect agent busy state early via JSONL events (assistant_text/tool_use).
+  // The reducer guards ensure only the first event per busy period causes a re-render.
   useEffect(() => {
     const unsub = window.bifrost.onActivityEntry((entry) => {
       if (entry.type === 'claude_event') {
@@ -105,33 +107,23 @@ export default function App() {
             dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
           }
         }
-      }
-    });
-    return unsub;
-  }, [state.activeTaskId, dispatch]);
 
-  // Track agent busy state via plugin hooks (PostToolUse → busy, Stop → idle)
-  // with a safety debounce in case the Stop hook doesn't fire.
-  useEffect(() => {
-    const unsub = window.bifrost.onAgentBusy((taskId, busy) => {
-      if (busy) {
-        dispatch({ type: 'SET_AGENT_BUSY', taskId, busy: true });
-        // Reset safety debounce timer
-        const existing = agentBusyTimers.current.get(taskId);
-        if (existing) clearTimeout(existing);
-        agentBusyTimers.current.set(
-          taskId,
-          setTimeout(() => {
-            agentBusyTimers.current.delete(taskId);
-            dispatch({ type: 'SET_AGENT_BUSY', taskId, busy: false });
-          }, 15000),
-        );
-      } else {
-        // Stop hook fired — immediately idle
-        const existing = agentBusyTimers.current.get(taskId);
-        if (existing) clearTimeout(existing);
-        agentBusyTimers.current.delete(taskId);
-        dispatch({ type: 'SET_AGENT_BUSY', taskId, busy: false });
+        // Mark agent busy on assistant_text or tool_use events.
+        // Reducer guard (SET_AGENT_BUSY) no-ops if already busy.
+        const kind = entry.claudeEventKind;
+        if (kind === 'assistant_text' || kind === 'tool_use') {
+          dispatch({ type: 'SET_AGENT_BUSY', taskId: entry.taskId, busy: true });
+          // Reset safety debounce timer
+          const existing = agentBusyTimers.current.get(entry.taskId);
+          if (existing) clearTimeout(existing);
+          agentBusyTimers.current.set(
+            entry.taskId,
+            setTimeout(() => {
+              agentBusyTimers.current.delete(entry.taskId);
+              dispatch({ type: 'SET_AGENT_BUSY', taskId: entry.taskId, busy: false });
+            }, 15000),
+          );
+        }
       }
     });
     return () => {
@@ -139,6 +131,23 @@ export default function App() {
       for (const timer of agentBusyTimers.current.values()) clearTimeout(timer);
       agentBusyTimers.current.clear();
     };
+  }, [state.activeTaskId, dispatch]);
+
+  // Listen for agent idle signal from Stop plugin hook.
+  useEffect(() => {
+    const unsub = window.bifrost.onAgentBusy((taskId, busy) => {
+      if (busy) {
+        // PostToolUse hook — redundant with JSONL but harmless (reducer guards)
+        dispatch({ type: 'SET_AGENT_BUSY', taskId, busy: true });
+      } else {
+        // Stop hook fired — immediately idle, cancel debounce
+        const existing = agentBusyTimers.current.get(taskId);
+        if (existing) clearTimeout(existing);
+        agentBusyTimers.current.delete(taskId);
+        dispatch({ type: 'SET_AGENT_BUSY', taskId, busy: false });
+      }
+    });
+    return unsub;
   }, [dispatch]);
 
   // Listen for hook-based notifications (from Claude Code plugin)
