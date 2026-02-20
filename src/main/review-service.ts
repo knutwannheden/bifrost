@@ -199,6 +199,13 @@ export async function runReview(
 // Track content we last wrote, so we can skip our own saves in the watcher
 const lastWrittenContent = new Map<string, string>();
 
+// Track known review Claude session IDs so the claude-watcher can skip them
+const reviewClaudeSessionIds = new Set<string>();
+
+export function isReviewClaudeSession(claudeSessionId: string): boolean {
+  return reviewClaudeSessionIds.has(claudeSessionId);
+}
+
 export function saveReview(taskId: string, reviewId: string, content: string): void {
   const reviewPath = getReviewFilePath(taskId, reviewId);
   fs.mkdirSync(path.dirname(reviewPath), { recursive: true });
@@ -232,6 +239,7 @@ export function getReviewSessionId(taskId: string, reviewId: string): string | u
 }
 
 export function setReviewSessionId(taskId: string, reviewId: string, sessionId: string): void {
+  reviewClaudeSessionIds.add(sessionId);
   const entries = readManifest(taskId);
   const entry = entries.find((e) => e.id === reviewId);
   if (entry) {

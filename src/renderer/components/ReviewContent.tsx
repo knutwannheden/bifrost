@@ -258,6 +258,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
         timestamp: Date.now(),
         sessionId,
       };
+      dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'idle' });
       dispatch({ type: 'SET_REVIEW_CONTENT', reviewId: newReviewId, content: markdown });
       dispatch({ type: 'SET_REVIEW_STATUS', reviewId: newReviewId, status: 'done' });
       onNewReviewCreated(review);
