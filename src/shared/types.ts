@@ -29,8 +29,20 @@ export interface Task {
   isExternal?: boolean;
   /** True if this task uses the main repo directory instead of a separate worktree */
   inPlace?: boolean;
-  /** Session ID of the last review run (for resuming interactive discussion) */
-  reviewSessionId?: string;
+}
+
+export interface ReviewEntry {
+  id: string;
+  scope: 'working' | 'all';
+  instructions?: string;
+  timestamp: number;
+  sessionId?: string;
+}
+
+export interface Note {
+  id: string;       // UUID
+  text: string;
+  createdAt: number; // Unix timestamp
 }
 
 export interface ClaudeSession {

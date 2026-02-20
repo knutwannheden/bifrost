@@ -21,12 +21,13 @@ import { getApiPort } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
-import { runReview, saveReview, loadReview, watchReviewFile } from './review-service';
+import { runReview, saveReview, loadReview, watchReviewFile, listReviews, deleteReview, getReviewSessionId } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { scanRecentRepos } from './history-scanner';
 import { resolveRequest, cancelTaskRequests, setWorktreePathResolver } from './permission-manager';
 import { setActiveTaskId } from './notification-service';
+import { listNotes, createNote, deleteNote } from './note-store';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -596,28 +597,29 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Review
   ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string, scope?: 'working' | 'all', instructions?: string) => {
     const task = getTask(taskId);
-    const markdown = await runReview(task.worktreePath, taskId, mainWindow, scope, instructions);
-    watchReviewFile(taskId, mainWindow);
-    // reviewSessionId is set asynchronously via the SessionStart hook → /session-start API
-    const reviewSessionId = getTask(taskId).reviewSessionId;
-    return { markdown, reviewSessionId };
+    const { reviewId, markdown } = await runReview(task.worktreePath, taskId, mainWindow, scope, instructions);
+    watchReviewFile(taskId, reviewId, mainWindow);
+    // sessionId is set asynchronously via the SessionStart hook → /session-start API
+    const sessionId = getReviewSessionId(taskId, reviewId);
+    return { reviewId, markdown, sessionId };
   });
 
-  ipcMain.handle(IPC.SAVE_REVIEW, (_event, taskId: string, content: string) => {
-    saveReview(taskId, content);
+  ipcMain.handle(IPC.SAVE_REVIEW, (_event, taskId: string, reviewId: string, content: string) => {
+    saveReview(taskId, reviewId, content);
   });
 
-  ipcMain.handle(IPC.LOAD_REVIEW, (_event, taskId: string) => {
-    const content = loadReview(taskId);
+  ipcMain.handle(IPC.LOAD_REVIEW, (_event, taskId: string, reviewId: string) => {
+    const content = loadReview(taskId, reviewId);
     if (content) {
-      watchReviewFile(taskId, mainWindow);
+      watchReviewFile(taskId, reviewId, mainWindow);
     }
     return content;
   });
 
-  ipcMain.handle(IPC.RESUME_REVIEW, (_event, taskId: string) => {
+  ipcMain.handle(IPC.RESUME_REVIEW, (_event, taskId: string, reviewId: string) => {
     const task = getTask(taskId);
-    if (!task.reviewSessionId) throw new Error('No review session to resume');
+    const sessionId = getReviewSessionId(taskId, reviewId);
+    if (!sessionId) throw new Error('No review session to resume');
 
     // Kill existing review session if any
     const existing = reviewSessions.get(taskId);
@@ -626,7 +628,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const reviewPtySessionId = randomUUID();
     const config = loadConfig();
     createSession(reviewPtySessionId, task.worktreePath, mainWindow, {
-      claudeSessionId: task.reviewSessionId,
+      claudeSessionId: sessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
@@ -634,6 +636,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
     reviewSessions.set(taskId, reviewPtySessionId);
     return reviewPtySessionId;
+  });
+
+  ipcMain.handle(IPC.LIST_REVIEWS, (_event, taskId: string) => {
+    return listReviews(taskId);
+  });
+
+  ipcMain.handle(IPC.DELETE_REVIEW, (_event, taskId: string, reviewId: string) => {
+    deleteReview(taskId, reviewId);
   });
 
   // Integration
@@ -759,6 +769,19 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
     return null;
+  });
+
+  // Notes
+  ipcMain.handle(IPC.NOTE_LIST, (_event, repoId: string) => {
+    return listNotes(repoId);
+  });
+
+  ipcMain.handle(IPC.NOTE_CREATE, (_event, repoId: string, text: string) => {
+    return createNote(repoId, text);
+  });
+
+  ipcMain.handle(IPC.NOTE_DELETE, (_event, repoId: string, noteId: string) => {
+    deleteNote(repoId, noteId);
   });
 
   // Permission

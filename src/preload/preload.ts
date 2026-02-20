@@ -89,12 +89,14 @@ const api: BifrostAPI = {
 
   // Review
   runReview: (taskId, scope, instructions) => ipcRenderer.invoke(IPC.RUN_REVIEW, taskId, scope, instructions),
-  saveReview: (taskId, content) => ipcRenderer.invoke(IPC.SAVE_REVIEW, taskId, content),
-  loadReview: (taskId) => ipcRenderer.invoke(IPC.LOAD_REVIEW, taskId),
-  resumeReview: (taskId) => ipcRenderer.invoke(IPC.RESUME_REVIEW, taskId),
+  saveReview: (taskId, reviewId, content) => ipcRenderer.invoke(IPC.SAVE_REVIEW, taskId, reviewId, content),
+  loadReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.LOAD_REVIEW, taskId, reviewId),
+  resumeReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.RESUME_REVIEW, taskId, reviewId),
+  listReviews: (taskId) => ipcRenderer.invoke(IPC.LIST_REVIEWS, taskId),
+  deleteReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.DELETE_REVIEW, taskId, reviewId),
   onReviewProgress: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, content: string) =>
-      callback(taskId, content);
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, reviewId: string, content: string) =>
+      callback(taskId, reviewId, content);
     ipcRenderer.on(IPC_STREAM.REVIEW_PROGRESS, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_PROGRESS, handler);
   },
@@ -143,6 +145,11 @@ const api: BifrostAPI = {
   },
   resolvePermission: (requestId, decision) =>
     ipcRenderer.invoke(IPC.RESOLVE_PERMISSION, requestId, decision),
+
+  // Notes
+  listNotes: (repoId) => ipcRenderer.invoke(IPC.NOTE_LIST, repoId),
+  createNote: (repoId, text) => ipcRenderer.invoke(IPC.NOTE_CREATE, repoId, text),
+  deleteNote: (repoId, noteId) => ipcRenderer.invoke(IPC.NOTE_DELETE, repoId, noteId),
 
   // Menu actions
   onMenuAction: (callback) => {

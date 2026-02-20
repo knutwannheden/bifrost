@@ -8,11 +8,13 @@ import type {
   DiffResult,
   DiffStats,
   GitLogEntry,
+  Note,
   PermissionDecision,
   PermissionPromptData,
   PrInfo,
   RecentRepo,
   Repo,
+  ReviewEntry,
   Task,
 } from './types';
 
@@ -84,6 +86,8 @@ export const IPC = {
   SAVE_REVIEW: 'review:save',
   LOAD_REVIEW: 'review:load',
   RESUME_REVIEW: 'review:resume',
+  LIST_REVIEWS: 'review:list',
+  DELETE_REVIEW: 'review:delete',
 
   // Integration
   CHECK_INTEGRATION: 'integration:check',
@@ -103,6 +107,11 @@ export const IPC = {
   FETCH_PR_INFO: 'pr:fetch-info',
   MATCH_REPO_FOR_PR: 'pr:match-repo',
   CHECK_GH_AVAILABLE: 'gh:check',
+
+  // Notes
+  NOTE_LIST: 'note:list',
+  NOTE_CREATE: 'note:create',
+  NOTE_DELETE: 'note:delete',
 
   // Permission
   RESOLVE_PERMISSION: 'permission:resolve',
@@ -187,13 +196,15 @@ export interface BifrostAPI {
   resumeClaudeSession(claudeSessionId: string, cwd: string): Promise<Task>;
 
   // Review
-  runReview(taskId: string, scope?: 'working' | 'all', instructions?: string): Promise<{ markdown: string; reviewSessionId?: string }>;
-  saveReview(taskId: string, content: string): Promise<void>;
-  loadReview(taskId: string): Promise<string | null>;
-  resumeReview(taskId: string): Promise<string>;
+  runReview(taskId: string, scope?: 'working' | 'all', instructions?: string): Promise<{ reviewId: string; markdown: string; sessionId?: string }>;
+  saveReview(taskId: string, reviewId: string, content: string): Promise<void>;
+  loadReview(taskId: string, reviewId: string): Promise<string | null>;
+  resumeReview(taskId: string, reviewId: string): Promise<string>;
+  listReviews(taskId: string): Promise<ReviewEntry[]>;
+  deleteReview(taskId: string, reviewId: string): Promise<void>;
 
   // Review progress
-  onReviewProgress(callback: (taskId: string, content: string) => void): () => void;
+  onReviewProgress(callback: (taskId: string, reviewId: string, content: string) => void): () => void;
 
   // Integration
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;
@@ -224,6 +235,11 @@ export interface BifrostAPI {
   // Permission prompts
   onPermissionPrompt(callback: (request: PermissionPromptData) => void): () => void;
   resolvePermission(requestId: string, decision: PermissionDecision): Promise<void>;
+
+  // Notes
+  listNotes(repoId: string): Promise<Note[]>;
+  createNote(repoId: string, text: string): Promise<Note>;
+  deleteNote(repoId: string, noteId: string): Promise<void>;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

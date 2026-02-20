@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { Repo, Task, BifrostConfig, TaskStatus, PermissionPromptData, AppNotification } from '../../shared/types';
+import type { Repo, Task, BifrostConfig, TaskStatus, PermissionPromptData, AppNotification, ReviewEntry } from '../../shared/types';
 
 export type DiffMode = 'git' | 'activity' | 'log' | 'review';
 export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
@@ -28,15 +28,23 @@ export interface AppState {
   showTaskHistory: boolean;
   showKeyboardShortcuts: boolean;
   showSettings: boolean;
+  showNotes: boolean;
   paneStates: Record<string, TaskPaneState>;
+  /** Review markdown content keyed by reviewId */
   reviewContent: Record<string, string>;
+  /** Review status keyed by reviewId */
   reviewStatus: Record<string, ReviewStatus>;
+  /** Review entry lists keyed by taskId */
+  reviews: Record<string, ReviewEntry[]>;
+  /** Active (selected) review ID keyed by taskId */
+  activeReviewId: Record<string, string | null>;
   toast: string | null;
   toastDuration: number;
   permissionQueue: PermissionPromptData[];
   notifications: AppNotification[];
   showNotificationPopover: boolean;
   apiPort: number | null;
+  agentBusyTasks: Set<string>;
 }
 
 export type AppAction =
@@ -55,6 +63,7 @@ export type AppAction =
   | { type: 'TOGGLE_TASK_HISTORY' }
   | { type: 'TOGGLE_KEYBOARD_SHORTCUTS' }
   | { type: 'TOGGLE_SETTINGS' }
+  | { type: 'TOGGLE_NOTES' }
   | { type: 'SET_DIFF_MODE'; mode: DiffMode }
   | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
   | { type: 'CLOSE_DEV_SESSION'; taskId: string }
@@ -70,9 +79,14 @@ export type AppAction =
   | { type: 'DISMISS_NOTIFICATION'; id: string }
   | { type: 'TOGGLE_NOTIFICATION_POPOVER' }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
-  | { type: 'SET_REVIEW_STATUS'; taskId: string; status: ReviewStatus }
-  | { type: 'SET_REVIEW_CONTENT'; taskId: string; content: string }
-  | { type: 'REORDER_TASKS'; taskIds: string[] };
+  | { type: 'SET_REVIEW_STATUS'; reviewId: string; status: ReviewStatus }
+  | { type: 'SET_REVIEW_CONTENT'; reviewId: string; content: string }
+  | { type: 'SET_REVIEWS'; taskId: string; reviews: ReviewEntry[] }
+  | { type: 'ADD_REVIEW'; taskId: string; review: ReviewEntry }
+  | { type: 'DELETE_REVIEW'; taskId: string; reviewId: string }
+  | { type: 'SET_ACTIVE_REVIEW'; taskId: string; reviewId: string | null }
+  | { type: 'REORDER_TASKS'; taskIds: string[] }
+  | { type: 'SET_AGENT_BUSY'; taskId: string; busy: boolean };
 
 const initialState: AppState = {
   repos: [],
@@ -88,15 +102,19 @@ const initialState: AppState = {
   showTaskHistory: false,
   showKeyboardShortcuts: false,
   showSettings: false,
+  showNotes: false,
   paneStates: {},
   reviewContent: {},
   reviewStatus: {},
+  reviews: {},
+  activeReviewId: {},
   toast: null,
   toastDuration: 2000,
   permissionQueue: [],
   notifications: [],
   showNotificationPopover: false,
   apiPort: null,
+  agentBusyTasks: new Set(),
 };
 
 export const defaultPaneState: TaskPaneState = {
@@ -127,6 +145,7 @@ const allOverlaysClosed = {
   showTaskHistory: false,
   showKeyboardShortcuts: false,
   showSettings: false,
+  showNotes: false,
 };
 
 /** Close the active task's diff overlay */
@@ -218,6 +237,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showKeyboardShortcuts: !state.showKeyboardShortcuts });
     case 'TOGGLE_SETTINGS':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showSettings: !state.showSettings });
+    case 'TOGGLE_NOTES':
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showNotes: !state.showNotes });
     case 'SET_DIFF_MODE': {
       if (!state.activeTaskId) return state;
       const ps = getPaneState(state, state.activeTaskId);
@@ -259,9 +280,32 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ),
       };
     case 'SET_REVIEW_STATUS':
-      return { ...state, reviewStatus: { ...state.reviewStatus, [action.taskId]: action.status } };
+      return { ...state, reviewStatus: { ...state.reviewStatus, [action.reviewId]: action.status } };
     case 'SET_REVIEW_CONTENT':
-      return { ...state, reviewContent: { ...state.reviewContent, [action.taskId]: action.content } };
+      return { ...state, reviewContent: { ...state.reviewContent, [action.reviewId]: action.content } };
+    case 'SET_REVIEWS':
+      return { ...state, reviews: { ...state.reviews, [action.taskId]: action.reviews } };
+    case 'ADD_REVIEW':
+      return {
+        ...state,
+        reviews: {
+          ...state.reviews,
+          [action.taskId]: [...(state.reviews[action.taskId] ?? []), action.review],
+        },
+      };
+    case 'DELETE_REVIEW': {
+      const reviews = (state.reviews[action.taskId] ?? []).filter((r) => r.id !== action.reviewId);
+      const activeId = state.activeReviewId[action.taskId];
+      return {
+        ...state,
+        reviews: { ...state.reviews, [action.taskId]: reviews },
+        activeReviewId: activeId === action.reviewId
+          ? { ...state.activeReviewId, [action.taskId]: reviews.length > 0 ? reviews[reviews.length - 1].id : null }
+          : state.activeReviewId,
+      };
+    }
+    case 'SET_ACTIVE_REVIEW':
+      return { ...state, activeReviewId: { ...state.activeReviewId, [action.taskId]: action.reviewId } };
     case 'REORDER_TASKS': {
       const idSet = new Set(action.taskIds);
       const reordered = action.taskIds.map((id) => state.tasks.find((t) => t.id === id)!).filter(Boolean);
@@ -286,6 +330,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
         showNotificationPopover: opening,
         notifications: opening ? state.notifications.map((n) => ({ ...n, read: true })) : state.notifications,
       };
+    }
+    case 'SET_AGENT_BUSY': {
+      const next = new Set(state.agentBusyTasks);
+      if (action.busy) next.add(action.taskId);
+      else next.delete(action.taskId);
+      return { ...state, agentBusyTasks: next };
     }
     default:
       return state;

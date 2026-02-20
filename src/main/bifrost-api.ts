@@ -5,9 +5,11 @@ import os from 'node:os';
 import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask, updateTask } from './ipc-handlers';
+import { setReviewSessionId } from './review-service';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
+import { listNotes, deleteNote } from './note-store';
 import { createRequest, checkExistingRules } from './permission-manager';
 import { loadConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
@@ -202,11 +204,49 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    case '/list-notes': {
+      const targetId = resolveTaskId(body);
+      if (!targetId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      try {
+        const task = getTask(targetId);
+        const notes = listNotes(task.repoId);
+        jsonResponse(res, { notes });
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 404);
+      }
+      return;
+    }
+
+    case '/delete-note': {
+      const targetId = resolveTaskId(body);
+      const noteId = body.noteId as string;
+      if (!targetId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      if (!noteId) {
+        errorResponse(res, 'No noteId provided');
+        return;
+      }
+      try {
+        const task = getTask(targetId);
+        deleteNote(task.repoId, noteId);
+        jsonResponse(res, { ok: true });
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 404);
+      }
+      return;
+    }
+
     case '/session-start': {
       const sessionId = body.session_id as string;
       const cwd = body.cwd as string;
       const context = body.bifrost_context as string;
       const taskId = body.bifrost_task_id as string;
+      const reviewId = body.bifrost_review_id as string;
       if (!sessionId || !cwd) {
         errorResponse(res, 'Missing session_id or cwd');
         return;
@@ -219,8 +259,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
       }
-      if (context === 'review') {
-        updateTask(task.id, { reviewSessionId: sessionId });
+      if (context === 'review' && reviewId) {
+        setReviewSessionId(task.id, reviewId, sessionId);
       } else if (!task.claudeSessionId) {
         updateTask(task.id, { claudeSessionId: sessionId });
       }

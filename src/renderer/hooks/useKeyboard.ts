@@ -431,6 +431,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           dispatch({ type: 'TOGGLE_SETTINGS' });
           break;
 
+        case 'n':
+          e.preventDefault();
+          dispatch({ type: 'TOGGLE_NOTES' });
+          break;
+
         case 'g': {
           e.preventDefault();
           const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);

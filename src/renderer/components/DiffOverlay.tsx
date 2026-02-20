@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
 import { getActiveDiffState } from '../context/AppContext';
@@ -10,9 +10,10 @@ import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import ReviewContent from './ReviewContent';
+import ReviewSidebar from './ReviewSidebar';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
-import type { ActivityEntry, CaptureContextParams, GitLogEntry } from '../../shared/types';
+import type { ActivityEntry, CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
 
 interface HighlightedFile {
   file: DiffFile;
@@ -584,6 +585,66 @@ function GitLogEntryView({ entry, focused }: { entry: GitLogEntry; focused: bool
   );
 }
 
+function ReviewPanel({ taskId }: { taskId: string }) {
+  const { state, dispatch } = useApp();
+
+  const reviews = state.reviews[taskId] ?? [];
+  const activeReviewId = state.activeReviewId[taskId] ?? null;
+
+  // Track which review has discussion active (for the sidebar indicator)
+  const [discussingReviewId, setDiscussingReviewId] = useState<string | null>(null);
+
+  // Load review list on mount
+  useEffect(() => {
+    window.bifrost.listReviews(taskId).then((entries) => {
+      dispatch({ type: 'SET_REVIEWS', taskId, reviews: entries });
+      // Auto-select the most recent review if none selected
+      if (entries.length > 0 && !state.activeReviewId[taskId]) {
+        const newest = entries.reduce((a, b) => a.timestamp > b.timestamp ? a : b);
+        dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: newest.id });
+      }
+    });
+  }, [taskId]);
+
+  const handleSelectReview = useCallback((reviewId: string | null) => {
+    dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId });
+  }, [taskId, dispatch]);
+
+  const handleNewReview = useCallback(() => {
+    dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: null });
+  }, [taskId, dispatch]);
+
+  const handleNewReviewCreated = useCallback((review: ReviewEntry) => {
+    dispatch({ type: 'ADD_REVIEW', taskId, review });
+    dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: review.id });
+  }, [taskId, dispatch]);
+
+  const handleDeleteReview = useCallback(async (reviewId: string) => {
+    await window.bifrost.deleteReview(taskId, reviewId);
+    dispatch({ type: 'DELETE_REVIEW', taskId, reviewId });
+  }, [taskId, dispatch]);
+
+  return (
+    <div className="flex-1 flex min-h-0">
+      <ReviewSidebar
+        reviews={reviews}
+        activeReviewId={activeReviewId}
+        reviewStatuses={state.reviewStatus}
+        discussingReviewId={discussingReviewId}
+        onSelect={handleSelectReview}
+        onNewReview={handleNewReview}
+        onDelete={handleDeleteReview}
+      />
+      <ReviewContent
+        taskId={taskId}
+        activeReviewId={activeReviewId}
+        onNewReviewCreated={handleNewReviewCreated}
+        onDiscussionChange={setDiscussingReviewId}
+      />
+    </div>
+  );
+}
+
 export default function DiffOverlay() {
   const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -670,6 +731,9 @@ export default function DiffOverlay() {
   if (!showDiff) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Don't intercept keys when focus is inside a terminal (e.g. review discussion)
+    if ((e.target as HTMLElement).closest?.('.xterm')) return;
+
     // Cmd+O: open the focused entry's file in the IDE
     if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
@@ -970,7 +1034,7 @@ export default function DiffOverlay() {
         )}
       </div>
       {state.activeTaskId && isReview && (
-        <ReviewContent taskId={state.activeTaskId} />
+        <ReviewPanel taskId={state.activeTaskId} />
       )}
 
       {!state.activeTaskId && (

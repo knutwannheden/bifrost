@@ -215,5 +215,45 @@ server.registerTool(
   }
 );
 
+server.registerTool(
+  "list_notes",
+  {
+    title: "List Notes",
+    description:
+      "List all project notes for the current Bifrost task's repository.",
+    inputSchema: {},
+  },
+  async () => {
+    const result = await apiCall("/list-notes", { callerTaskId: TASK_ID });
+    if (result.notes.length === 0) {
+      return { content: [{ type: "text", text: "No notes." }] };
+    }
+    const text = result.notes
+      .map(
+        (n) =>
+          `- ${n.text} (id: ${n.id}, ${new Date(n.createdAt).toLocaleString()})`
+      )
+      .join("\n");
+    return { content: [{ type: "text", text }] };
+  }
+);
+
+server.registerTool(
+  "delete_note",
+  {
+    title: "Delete Note",
+    description: "Delete a project note by its ID.",
+    inputSchema: {
+      noteId: z.string().describe("The note ID to delete"),
+    },
+  },
+  async ({ noteId }) => {
+    await apiCall("/delete-note", { callerTaskId: TASK_ID, noteId });
+    return {
+      content: [{ type: "text", text: `Note ${noteId} deleted.` }],
+    };
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

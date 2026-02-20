@@ -15,6 +15,7 @@ import SettingsOverlay from './components/SettingsOverlay';
 import PermissionPanel from './components/PermissionPanel';
 import RightIconBar from './components/RightIconBar';
 import NotificationPopover from './components/NotificationPopover';
+import NotesOverlay from './components/NotesOverlay';
 
 declare global {
   interface Window {
@@ -64,6 +65,9 @@ export default function App() {
   // Buffer last assistant text per task for hook notifications
   const lastAssistantText = useRef(new Map<string, string>());
 
+  // Debounce timers for agent busy state
+  const agentBusyTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+
   // Mark active task as read when switching to it, and sync to main process
   useEffect(() => {
     window.bifrost.setActiveTaskId(state.activeTaskId);
@@ -89,6 +93,7 @@ export default function App() {
   // Mark non-active tasks as unread when new JSONL activity arrives
   // (actual Claude interactions, not terminal noise).
   // Also buffer last assistant text per task for hook notifications.
+  // Track agent busy state with debounce.
   useEffect(() => {
     const unsub = window.bifrost.onActivityEntry((entry) => {
       if (entry.type === 'claude_event') {
@@ -98,9 +103,36 @@ export default function App() {
         if (entry.taskId !== state.activeTaskId) {
           dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
         }
+
+        // Track agent busy state
+        const kind = entry.claudeEventKind;
+        if (kind === 'user_message') {
+          // Agent waiting for input — immediately idle
+          const existing = agentBusyTimers.current.get(entry.taskId);
+          if (existing) clearTimeout(existing);
+          agentBusyTimers.current.delete(entry.taskId);
+          dispatch({ type: 'SET_AGENT_BUSY', taskId: entry.taskId, busy: false });
+        } else if (kind === 'assistant_text' || kind === 'tool_use') {
+          // Agent is working — set busy, reset debounce timer
+          dispatch({ type: 'SET_AGENT_BUSY', taskId: entry.taskId, busy: true });
+          const existing = agentBusyTimers.current.get(entry.taskId);
+          if (existing) clearTimeout(existing);
+          agentBusyTimers.current.set(
+            entry.taskId,
+            setTimeout(() => {
+              agentBusyTimers.current.delete(entry.taskId);
+              dispatch({ type: 'SET_AGENT_BUSY', taskId: entry.taskId, busy: false });
+            }, 3000),
+          );
+        }
       }
     });
-    return unsub;
+    return () => {
+      unsub();
+      // Clean up timers
+      for (const timer of agentBusyTimers.current.values()) clearTimeout(timer);
+      agentBusyTimers.current.clear();
+    };
   }, [state.activeTaskId, dispatch]);
 
   // Listen for hook-based notifications (from Claude Code plugin)
@@ -307,6 +339,7 @@ export default function App() {
             {state.showCreateDialog && <TaskCreateDialog />}
             {state.showTaskHistory && <TaskHistoryPanel />}
             {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
+            {state.showNotes && <NotesOverlay />}
           </div>
 
           {/* Status bar */}

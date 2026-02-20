@@ -72,6 +72,7 @@ export default function TaskBar() {
             task={task}
             repoName={repoName}
             isActive={task.id === state.activeTaskId}
+            agentBusy={state.agentBusyTasks.has(task.id)}
             onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
             onClose={() => {
               window.bifrost.stopTask(task.id).then((updated) => {

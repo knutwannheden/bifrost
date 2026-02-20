@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ReviewStatus } from '../context/AppContext';
-import type { DiffStats } from '../../shared/types';
+import type { DiffStats, ReviewEntry } from '../../shared/types';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import TerminalPane from './TerminalPane';
@@ -15,7 +15,7 @@ const scopeLabels: Record<ReviewScope, { text: string; hintIndex: number }> = {
 
 function ReviewScopeToggle({ scope, onChange, stats }: { scope: ReviewScope; onChange: (s: ReviewScope) => void; stats: Record<ReviewScope, DiffStats | null | undefined> }) {
   return (
-    <div className="flex gap-1 px-3 py-2 border-b border-slate-700 flex-shrink-0">
+    <div className="flex gap-1">
       {(['working', 'all'] as const).map((s) => (
         <button
           key={s}
@@ -47,13 +47,13 @@ function renderMarkdownLine(
 ): React.ReactNode {
   // Headings
   if (line.startsWith('### ')) {
-    return <h3 key={lineIndex} className="text-sm font-semibold text-slate-200 mt-4 mb-1">{renderInline(line.slice(4))}</h3>;
+    return <h3 key={lineIndex} className="text-base font-semibold text-slate-200 mt-4 mb-1">{renderInline(line.slice(4))}</h3>;
   }
   if (line.startsWith('## ')) {
-    return <h2 key={lineIndex} className="text-base font-semibold text-slate-200 mt-5 mb-2">{renderInline(line.slice(3))}</h2>;
+    return <h2 key={lineIndex} className="text-lg font-semibold text-slate-200 mt-5 mb-2">{renderInline(line.slice(3))}</h2>;
   }
   if (line.startsWith('# ')) {
-    return <h1 key={lineIndex} className="text-lg font-bold text-slate-100 mt-5 mb-2">{renderInline(line.slice(2))}</h1>;
+    return <h1 key={lineIndex} className="text-xl font-bold text-slate-100 mt-5 mb-2">{renderInline(line.slice(2))}</h1>;
   }
 
   // Checkbox lines: - [ ] or - [x]
@@ -73,7 +73,7 @@ function renderMarkdownLine(
           onChange={() => onToggle(lineIndex)}
           className="mt-1 accent-blue-500 flex-shrink-0"
         />
-        <span className="text-sm text-slate-300">{renderInline(checkboxMatch[3])}</span>
+        <span className="text-base text-slate-300">{renderInline(checkboxMatch[3])}</span>
       </label>
     );
   }
@@ -85,7 +85,7 @@ function renderMarkdownLine(
     return (
       <div key={lineIndex} className="flex items-start gap-2 py-0.5" style={{ paddingLeft: indent * 4 }}>
         <span className="text-slate-500 flex-shrink-0 mt-0.5">-</span>
-        <span className="text-sm text-slate-300">{renderInline(bulletMatch[2])}</span>
+        <span className="text-base text-slate-300">{renderInline(bulletMatch[2])}</span>
       </div>
     );
   }
@@ -96,7 +96,7 @@ function renderMarkdownLine(
   }
 
   // Paragraphs
-  return <p key={lineIndex} className="text-sm text-slate-300 py-0.5">{renderInline(line)}</p>;
+  return <p key={lineIndex} className="text-base text-slate-300 py-0.5">{renderInline(line)}</p>;
 }
 
 /** Render inline formatting: **bold**, `code` */
@@ -124,7 +124,7 @@ function renderInline(text: string): React.ReactNode {
       const endBold = remaining.indexOf('**', boldIdx + 2);
       if (endBold >= 0) {
         if (boldIdx > 0) parts.push(remaining.slice(0, boldIdx));
-        parts.push(<strong key={key++} className="text-slate-100 font-semibold">{remaining.slice(boldIdx + 2, endBold)}</strong>);
+        parts.push(<strong key={key++} className="text-slate-100 font-semibold">{renderInline(remaining.slice(boldIdx + 2, endBold))}</strong>);
         remaining = remaining.slice(endBold + 2);
         continue;
       }
@@ -135,7 +135,7 @@ function renderInline(text: string): React.ReactNode {
       const endCode = remaining.indexOf('`', codeIdx + 1);
       if (endCode >= 0) {
         if (codeIdx > 0) parts.push(remaining.slice(0, codeIdx));
-        parts.push(<code key={key++} className="px-1 py-0.5 bg-slate-700 rounded text-xs text-amber-300 font-mono">{remaining.slice(codeIdx + 1, endCode)}</code>);
+        parts.push(<code key={key++} className="px-1 py-0.5 bg-slate-700 rounded text-sm text-amber-300 font-mono">{remaining.slice(codeIdx + 1, endCode)}</code>);
         remaining = remaining.slice(endCode + 1);
         continue;
       }
@@ -162,23 +162,38 @@ function parseCheckedLines(content: string): Set<number> {
 
 interface ReviewContentProps {
   taskId: string;
+  activeReviewId: string | null;
+  onNewReviewCreated: (review: ReviewEntry) => void;
+  onDiscussionChange: (reviewId: string | null) => void;
 }
 
-export default function ReviewContent({ taskId }: ReviewContentProps) {
+export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreated, onDiscussionChange }: ReviewContentProps) {
   const { state, dispatch } = useApp();
 
-  const content = state.reviewContent[taskId] ?? '';
-  const status: ReviewStatus = state.reviewStatus[taskId] ?? 'idle';
-  const task = state.tasks.find((t) => t.id === taskId);
-  const hasReviewSession = !!task?.reviewSessionId;
+  const reviewId = activeReviewId;
+  const content = reviewId ? (state.reviewContent[reviewId] ?? '') : '';
+  const status: ReviewStatus = reviewId ? (state.reviewStatus[reviewId] ?? 'idle') : 'idle';
 
-  // Scope, instructions, and discussion terminal state
+  // Review entry from manifest
+  const reviews = state.reviews[taskId] ?? [];
+  const activeEntry = reviewId ? reviews.find((r) => r.id === reviewId) : null;
+  const hasReviewSession = !!activeEntry?.sessionId;
+
+  // New review form state
   const [reviewScope, setReviewScope] = useState<ReviewScope>('working');
   const [reviewInstructions, setReviewInstructions] = useState('');
+
+  // Discussion terminal state
   const [reviewPtySessionId, setReviewPtySessionId] = useState<string | null>(null);
   const [showDiscussion, setShowDiscussion] = useState(false);
+  const [discussingReviewId, setDiscussingReviewId] = useState<string | null>(null);
 
-  // Diff stats for both scopes
+  // Notify parent of discussion state changes
+  useEffect(() => {
+    onDiscussionChange(showDiscussion ? discussingReviewId : null);
+  }, [showDiscussion, discussingReviewId, onDiscussionChange]);
+
+  // Diff stats for both scopes (for new review form)
   const [scopeStats, setScopeStats] = useState<Record<ReviewScope, DiffStats | null | undefined>>({ working: undefined, all: undefined });
   useEffect(() => {
     let cancelled = false;
@@ -193,59 +208,69 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
 
   const checkedLines = useMemo(() => parseCheckedLines(content), [content]);
   const hasChecked = checkedLines.size > 0;
-
   const lines = useMemo(() => content.split('\n'), [content]);
 
-  // Load review from disk on mount / when switching to this tab.
-  // Also starts the file watcher (via LOAD_REVIEW handler) so external
-  // edits stream in via REVIEW_PROGRESS.
+  // Load review content from disk when switching reviews
   useEffect(() => {
-    if (status === 'running') return;
-    window.bifrost.loadReview(taskId).then((saved) => {
+    if (!reviewId || status === 'running') return;
+    window.bifrost.loadReview(taskId, reviewId).then((saved) => {
       if (saved) {
-        dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: saved });
+        dispatch({ type: 'SET_REVIEW_CONTENT', reviewId, content: saved });
         if (status !== 'done') {
-          dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'done' });
+          dispatch({ type: 'SET_REVIEW_STATUS', reviewId, status: 'done' });
         }
       }
     });
-  }, [taskId]);
+  }, [taskId, reviewId]);
 
-  // Stream partial review output (while running) and external file changes (while done)
+  // Stream partial review output and external file changes
   useEffect(() => {
-    const unsub = window.bifrost.onReviewProgress((tid, updated) => {
-      if (tid === taskId) {
-        dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: updated });
-        // If we receive an update while done, stay in done state
+    const unsub = window.bifrost.onReviewProgress((tid, rid, updated) => {
+      if (tid === taskId && rid === reviewId) {
+        dispatch({ type: 'SET_REVIEW_CONTENT', reviewId: rid, content: updated });
         if (status !== 'running' && status !== 'done') {
-          dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'done' });
+          dispatch({ type: 'SET_REVIEW_STATUS', reviewId: rid, status: 'done' });
         }
       }
     });
     return unsub;
-  }, [taskId, status, dispatch]);
+  }, [taskId, reviewId, status, dispatch]);
 
+  // Reset discussion when switching reviews
+  useEffect(() => {
+    if (reviewId !== discussingReviewId) {
+      setShowDiscussion(false);
+    }
+  }, [reviewId, discussingReviewId]);
 
   const handleRunReview = useCallback(async () => {
-    dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'running' });
-    // Reset discussion state on re-run
+    // Generate a temporary ID for tracking; the real one comes from the backend
+    dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'running' });
     setReviewPtySessionId(null);
     setShowDiscussion(false);
+    setDiscussingReviewId(null);
     try {
-      const { markdown, reviewSessionId } = await window.bifrost.runReview(taskId, reviewScope, reviewInstructions || undefined);
-      dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: markdown });
-      dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'done' });
-      // Update the task in renderer state so the Discuss button appears
-      if (reviewSessionId && task) {
-        dispatch({ type: 'UPDATE_TASK', task: { ...task, reviewSessionId } });
-      }
+      const { reviewId: newReviewId, markdown, sessionId } = await window.bifrost.runReview(taskId, reviewScope, reviewInstructions || undefined);
+      const review: ReviewEntry = {
+        id: newReviewId,
+        scope: reviewScope,
+        instructions: reviewInstructions?.trim() || undefined,
+        timestamp: Date.now(),
+        sessionId,
+      };
+      dispatch({ type: 'SET_REVIEW_CONTENT', reviewId: newReviewId, content: markdown });
+      dispatch({ type: 'SET_REVIEW_STATUS', reviewId: newReviewId, status: 'done' });
+      onNewReviewCreated(review);
+      setReviewInstructions('');
     } catch (err) {
-      dispatch({ type: 'SET_REVIEW_STATUS', taskId, status: 'error' });
-      dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: `Error: ${err instanceof Error ? err.message : String(err)}` });
+      // Can't set error on __pending__ meaningfully, but show toast
+      dispatch({ type: 'SHOW_TOAST', message: `Review failed: ${err instanceof Error ? err.message : String(err)}` });
+      dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'idle' });
     }
-  }, [taskId, task, reviewScope, reviewInstructions, dispatch]);
+  }, [taskId, reviewScope, reviewInstructions, dispatch, onNewReviewCreated]);
 
   const handleToggle = useCallback((lineIndex: number) => {
+    if (!reviewId) return;
     const newLines = [...lines];
     const line = newLines[lineIndex];
     if (/^\s*- \[ \]/.test(line)) {
@@ -254,9 +279,9 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
       newLines[lineIndex] = line.replace(/- \[[xX]\]/, '- [ ]');
     }
     const updated = newLines.join('\n');
-    dispatch({ type: 'SET_REVIEW_CONTENT', taskId, content: updated });
-    window.bifrost.saveReview(taskId, updated);
-  }, [lines, taskId, dispatch]);
+    dispatch({ type: 'SET_REVIEW_CONTENT', reviewId, content: updated });
+    window.bifrost.saveReview(taskId, reviewId, updated);
+  }, [lines, taskId, reviewId, dispatch]);
 
   const handleCopyPrompt = useCallback(() => {
     navigator.clipboard.writeText('/bifrost:review-fix');
@@ -264,47 +289,44 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
   }, [dispatch]);
 
   const handleDiscuss = useCallback(async () => {
-    if (reviewPtySessionId) {
-      // Already have a session, just toggle to it
+    if (!reviewId) return;
+    if (reviewPtySessionId && discussingReviewId === reviewId) {
       setShowDiscussion(true);
       return;
     }
     try {
-      const ptySessionId = await window.bifrost.resumeReview(taskId);
+      const ptySessionId = await window.bifrost.resumeReview(taskId, reviewId);
       setReviewPtySessionId(ptySessionId);
+      setDiscussingReviewId(reviewId);
       setShowDiscussion(true);
     } catch (err) {
       dispatch({ type: 'SHOW_TOAST', message: `Failed to resume review: ${err instanceof Error ? err.message : String(err)}` });
     }
-  }, [taskId, reviewPtySessionId, dispatch]);
+  }, [taskId, reviewId, reviewPtySessionId, discussingReviewId, dispatch]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Scope toggle: left/right arrows, Option+T (working Tree), Option+C (all Changes)
-      if (!showDiscussion) {
+      // Don't intercept when in terminal
+      if ((e.target as HTMLElement)?.closest?.('.xterm')) return;
+
+      // Scope toggle in new review form: left/right arrows
+      if (!reviewId && !showDiscussion) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault();
           setReviewScope(e.key === 'ArrowLeft' ? 'working' : 'all');
           return;
         }
-        if (e.altKey && !e.metaKey && !e.ctrlKey) {
-          if (e.key === 't') {
-            e.preventDefault();
-            setReviewScope('working');
-            return;
-          }
-          if (e.key === 'c') {
-            e.preventDefault();
-            setReviewScope('all');
-            return;
-          }
-        }
+      }
+
+      // Escape: return from discussion to review text
+      if (e.key === 'Escape' && showDiscussion) {
+        e.preventDefault();
+        setShowDiscussion(false);
+        return;
       }
 
       if (e.key !== 'Enter') return;
-      // Don't intercept Enter when discussion terminal is active or typing in an input
-      if (showDiscussion) return;
       if (document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement) return;
 
       if (e.metaKey) {
@@ -312,54 +334,69 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
           e.preventDefault();
           handleCopyPrompt();
         }
-      } else if (status === 'done' && hasReviewSession) {
-        // Review done with session available → open discussion
+      } else if (status === 'done' && hasReviewSession && !showDiscussion) {
         e.preventDefault();
         handleDiscuss();
-      } else if (status !== 'running') {
-        // Idle/error/done without session → run review
+      } else if (!reviewId && !showDiscussion) {
+        // New review form → run review
         e.preventDefault();
         handleRunReview();
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [status, showDiscussion, hasChecked, hasReviewSession, handleCopyPrompt, handleDiscuss, handleRunReview]);
+  }, [reviewId, status, showDiscussion, hasChecked, hasReviewSession, handleCopyPrompt, handleDiscuss, handleRunReview]);
 
-  // Idle state — no existing review
-  if (status === 'idle' && !content) {
+  // === New Review Form ===
+  if (!reviewId) {
+    const isRunning = state.reviewStatus['__pending__'] === 'running';
     const currentStats = scopeStats[reviewScope];
-    // null means no changes (getDiffStats returns null for zero diff); undefined means still loading
     const hasChanges = currentStats === undefined || (currentStats !== null && (currentStats.additions > 0 || currentStats.deletions > 0));
+
+    if (isRunning) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
+          <div className="w-5 h-5 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+          <span className="text-sm text-slate-400">Running review...</span>
+        </div>
+      );
+    }
+
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
           {hasChanges ? (
             <>
-              <textarea
-                value={reviewInstructions}
-                onChange={(e) => setReviewInstructions(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleRunReview();
-                  }
-                }}
-                placeholder="Additional instructions for the reviewer (optional)"
-                className="w-full max-w-md px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500"
-                rows={2}
-              />
+              <div className="flex flex-col gap-2 w-full max-w-md">
+                <div className="text-xs text-slate-400 font-medium">Scope:</div>
+                <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
+              </div>
+              <div className="flex flex-col gap-2 w-full max-w-md">
+                <div className="text-xs text-slate-400 font-medium">Instructions (optional):</div>
+                <textarea
+                  value={reviewInstructions}
+                  onChange={(e) => setReviewInstructions(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleRunReview();
+                    }
+                  }}
+                  placeholder="Focus on error handling, security..."
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500"
+                  rows={2}
+                />
+              </div>
               <button
                 onClick={handleRunReview}
                 className="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                R<span className="underline underline-offset-2">u</span>n Review
+                Run Review
               </button>
-              <div className="max-w-sm text-center text-xs text-slate-500 leading-relaxed">
-                Runs Claude on the current git diff to produce a review with actionable items.
-                Check the items you want to address, then copy a prompt to paste into the main session.
-              </div>
+              <span className="text-xs text-slate-500">
+                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
+                {' '}to run
+              </span>
             </>
           ) : (
             <div className="text-sm text-slate-500">No changes to review.</div>
@@ -369,14 +406,20 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
     );
   }
 
-  // Running state — show spinner + streaming content
+  // === Running state ===
   if (status === 'running') {
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 flex-shrink-0 text-slate-400">
           <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin flex-shrink-0" />
           <span className="text-sm">Running review...</span>
+          {activeEntry && (
+            <span className={`px-1.5 py-0.5 text-[10px] rounded ${
+              activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-blue-900/40 text-blue-400'
+            }`}>
+              {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
+            </span>
+          )}
         </div>
         {content && (
           <div className="flex-1 overflow-auto p-4 font-sans">
@@ -387,48 +430,31 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
     );
   }
 
-  // Error state
+  // === Error state ===
   if (status === 'error') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <div className="text-red-400 text-sm">{content || 'Review failed'}</div>
-        <button
-          onClick={handleRunReview}
-          className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-sm transition-colors"
-        >
-          Retry
-        </button>
       </div>
     );
   }
 
-  // Done state — render markdown with checkboxes, or discussion terminal
+  // === Done state ===
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
-      {/* View toggle tabs when discussion is available */}
-      {reviewPtySessionId && (
-        <div className="flex items-center gap-0 px-4 border-b border-slate-700 flex-shrink-0">
-          <button
-            onClick={() => setShowDiscussion(false)}
-            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-              !showDiscussion
-                ? 'border-blue-500 text-slate-200'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            Review
-          </button>
-          <button
-            onClick={() => setShowDiscussion(true)}
-            className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
-              showDiscussion
-                ? 'border-blue-500 text-slate-200'
-                : 'border-transparent text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            Discussion
-          </button>
+      {/* Metadata bar */}
+      {activeEntry && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-700 flex-shrink-0 text-xs text-slate-500">
+          <span className={`px-1.5 py-0.5 rounded ${
+            activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-blue-900/40 text-blue-400'
+          }`}>
+            {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
+          </span>
+          {activeEntry.instructions && (
+            <span className="truncate max-w-xs" title={activeEntry.instructions}>
+              &ldquo;{activeEntry.instructions}&rdquo;
+            </span>
+          )}
         </div>
       )}
 
@@ -438,12 +464,6 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
           {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
         </div>
         <div className="flex items-center gap-3 px-4 py-3 border-t border-slate-700 flex-shrink-0">
-          <button
-            onClick={handleRunReview}
-            className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded text-xs transition-colors"
-          >
-            Re-run
-          </button>
           <button
             onClick={handleCopyPrompt}
             disabled={!hasChecked}
@@ -455,7 +475,7 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
           >
             Copy Prompt
           </button>
-          {hasReviewSession && !reviewPtySessionId && (
+          {hasReviewSession && !showDiscussion && (
             <button
               onClick={handleDiscuss}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition-colors"
@@ -467,15 +487,25 @@ export default function ReviewContent({ taskId }: ReviewContentProps) {
             <span className="text-xs text-slate-500">{checkedLines.size} item{checkedLines.size !== 1 ? 's' : ''} selected</span>
           )}
           <span className="ml-auto text-xs text-slate-500">
-            <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
-            {' '}{hasReviewSession ? 'discuss' : 'run review'}
-            {hasChecked && <>{' · '}<kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">{'\u2318'}Enter</kbd> copy prompt</>}
+            {hasReviewSession && !showDiscussion && (
+              <>
+                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
+                {' '}discuss
+              </>
+            )}
+            {hasChecked && (
+              <>
+                {hasReviewSession && ' · '}
+                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">{'\u2318'}Enter</kbd>
+                {' '}copy prompt
+              </>
+            )}
           </span>
         </div>
       </div>
 
       {/* Discussion terminal — kept mounted when toggled away */}
-      {reviewPtySessionId && (
+      {reviewPtySessionId && discussingReviewId === reviewId && (
         <div className="flex-1 min-h-0" style={{ display: showDiscussion ? undefined : 'none' }}>
           <TerminalPane
             sessionId={reviewPtySessionId}
