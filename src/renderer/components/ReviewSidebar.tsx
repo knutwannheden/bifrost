@@ -52,13 +52,13 @@ export default function ReviewSidebar({
         (document.activeElement as HTMLElement)?.closest?.('.xterm')
       ) return;
 
-      if (e.key === 'n' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.altKey && e.code === 'KeyN') {
         e.preventDefault();
         onNewReview();
         return;
       }
 
-      if (e.key === 'd' && !e.metaKey && !e.ctrlKey && !e.altKey && activeReviewId) {
+      if (e.altKey && e.code === 'KeyD' && activeReviewId) {
         e.preventDefault();
         onDelete(activeReviewId);
         return;
@@ -100,7 +100,7 @@ export default function ReviewSidebar({
             : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
         }`}
       >
-        + New Review
+        + <span className="underline underline-offset-2">N</span>ew Review
       </button>
 
       <div className="flex-1 overflow-y-auto">

@@ -151,6 +151,14 @@ const api: BifrostAPI = {
   createNote: (repoId, text) => ipcRenderer.invoke(IPC.NOTE_CREATE, repoId, text),
   deleteNote: (repoId, noteId) => ipcRenderer.invoke(IPC.NOTE_DELETE, repoId, noteId),
 
+  // Agent busy state (from plugin hooks)
+  onAgentBusy: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, busy: boolean) =>
+      callback(taskId, busy);
+    ipcRenderer.on(IPC_STREAM.AGENT_BUSY, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.AGENT_BUSY, handler);
+  },
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) =>

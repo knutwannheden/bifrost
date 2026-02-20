@@ -205,7 +205,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         activeTaskId: action.taskId,
         previousActiveTaskId: state.activeTaskId !== action.taskId ? state.activeTaskId : state.previousActiveTaskId,
       };
-    case 'SET_TASK_UNREAD':
+    case 'SET_TASK_UNREAD': {
+      const target = state.tasks.find((t) => t.id === action.taskId);
+      if (target?.hasUnread === action.hasUnread) return state;
       return {
         ...state,
         tasks: state.tasks.map((t) =>
@@ -213,6 +215,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ),
         ...(action.hasUnread && { lastNotifiedTaskId: action.taskId }),
       };
+    }
     case 'SET_TASK_STATUS':
       return {
         ...state,
@@ -332,6 +335,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
     }
     case 'SET_AGENT_BUSY': {
+      const has = state.agentBusyTasks.has(action.taskId);
+      if (action.busy === has) return state;
       const next = new Set(state.agentBusyTasks);
       if (action.busy) next.add(action.taskId);
       else next.delete(action.taskId);

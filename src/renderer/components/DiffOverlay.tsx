@@ -599,7 +599,7 @@ function ReviewPanel({ taskId }: { taskId: string }) {
     window.bifrost.listReviews(taskId).then((entries) => {
       dispatch({ type: 'SET_REVIEWS', taskId, reviews: entries });
       // Auto-select the most recent review if none selected
-      if (entries.length > 0 && !state.activeReviewId[taskId]) {
+      if (entries.length > 0 && !state.activeReviewId[taskId] && state.reviewStatus['__pending__'] !== 'running') {
         const newest = entries.reduce((a, b) => a.timestamp > b.timestamp ? a : b);
         dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: newest.id });
       }
@@ -731,8 +731,9 @@ export default function DiffOverlay() {
   if (!showDiff) return null;
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Don't intercept keys when focus is inside a terminal (e.g. review discussion)
-    if ((e.target as HTMLElement).closest?.('.xterm')) return;
+    // Don't intercept keys when focus is inside a terminal or form input
+    const tag = (e.target as HTMLElement).tagName;
+    if ((e.target as HTMLElement).closest?.('.xterm') || tag === 'INPUT' || tag === 'TEXTAREA') return;
 
     // Cmd+O: open the focused entry's file in the IDE
     if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'o') {

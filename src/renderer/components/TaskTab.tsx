@@ -109,7 +109,7 @@ export default function TaskTab({ task, repoName, isActive, agentBusy, onClick, 
       >
         <span className="flex flex-col items-center min-w-0 max-w-[200px]">
           <span className="flex items-center gap-1.5">
-            {agentBusy && !isActive ? (
+            {agentBusy ? (
               <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
             ) : task.hasUnread && !isActive ? (
               <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />

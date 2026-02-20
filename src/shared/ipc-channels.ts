@@ -127,6 +127,7 @@ export const IPC_STREAM = {
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
+  AGENT_BUSY: 'agent:busy',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -240,6 +241,9 @@ export interface BifrostAPI {
   listNotes(repoId: string): Promise<Note[]>;
   createNote(repoId: string, text: string): Promise<Note>;
   deleteNote(repoId: string, noteId: string): Promise<void>;
+
+  // Agent busy state (from plugin hooks)
+  onAgentBusy(callback: (taskId: string, busy: boolean) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;
