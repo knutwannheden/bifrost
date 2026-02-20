@@ -68,6 +68,10 @@ export default function App() {
   // Safety debounce timers for agent busy state (in case Stop hook doesn't fire)
   const agentBusyTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
+  // Ref for activeTaskId so the JSONL listener doesn't re-subscribe on tab switch
+  const activeTaskIdRef = useRef(state.activeTaskId);
+  activeTaskIdRef.current = state.activeTaskId;
+
   // Mark active task as read when switching to it, and sync to main process
   useEffect(() => {
     window.bifrost.setActiveTaskId(state.activeTaskId);
@@ -82,6 +86,11 @@ export default function App() {
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task && task.status !== 'archived') {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
+        // Clear busy state — Stop hook may not fire on process kill
+        const existing = agentBusyTimers.current.get(task.id);
+        if (existing) clearTimeout(existing);
+        agentBusyTimers.current.delete(task.id);
+        dispatch({ type: 'SET_AGENT_BUSY', taskId: task.id, busy: false });
         if (code !== 0 && code !== 143) { // 143 = SIGTERM (intentional kill)
           dispatch({ type: 'SHOW_TOAST', message: `${task.name} exited with code ${code}` });
         }
@@ -95,17 +104,15 @@ export default function App() {
   // Also buffer last assistant text per task for hook notifications.
   // Detect agent busy state early via JSONL events (assistant_text/tool_use).
   // The reducer guards ensure only the first event per busy period causes a re-render.
+  // Uses activeTaskIdRef so the listener is stable and debounce timers survive tab switches.
   useEffect(() => {
     const unsub = window.bifrost.onActivityEntry((entry) => {
       if (entry.type === 'claude_event') {
         if (entry.claudeEventKind === 'assistant_text' && entry.claudeText) {
           lastAssistantText.current.set(entry.taskId, entry.claudeText);
         }
-        if (entry.taskId !== state.activeTaskId) {
-          const task = state.tasks.find((t) => t.id === entry.taskId);
-          if (task && !task.hasUnread) {
-            dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
-          }
+        if (entry.taskId !== activeTaskIdRef.current) {
+          dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
         }
 
         // Mark agent busy on assistant_text or tool_use events.
@@ -131,14 +138,23 @@ export default function App() {
       for (const timer of agentBusyTimers.current.values()) clearTimeout(timer);
       agentBusyTimers.current.clear();
     };
-  }, [state.activeTaskId, dispatch]);
+  }, [dispatch]);
 
   // Listen for agent idle signal from Stop plugin hook.
   useEffect(() => {
     const unsub = window.bifrost.onAgentBusy((taskId, busy) => {
       if (busy) {
-        // PostToolUse hook — redundant with JSONL but harmless (reducer guards)
+        // PostToolUse hook — set busy and reset debounce timer as safety net
         dispatch({ type: 'SET_AGENT_BUSY', taskId, busy: true });
+        const existing = agentBusyTimers.current.get(taskId);
+        if (existing) clearTimeout(existing);
+        agentBusyTimers.current.set(
+          taskId,
+          setTimeout(() => {
+            agentBusyTimers.current.delete(taskId);
+            dispatch({ type: 'SET_AGENT_BUSY', taskId, busy: false });
+          }, 15000),
+        );
       } else {
         // Stop hook fired — immediately idle, cancel debounce
         const existing = agentBusyTimers.current.get(taskId);
