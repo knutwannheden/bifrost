@@ -284,9 +284,10 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   }, [lines, taskId, reviewId, dispatch]);
 
   const handleCopyPrompt = useCallback(() => {
-    navigator.clipboard.writeText('/bifrost:review-fix');
+    const prompt = `/bifrost:review-fix ${taskId}`;
+    navigator.clipboard.writeText(prompt);
     dispatch({ type: 'SHOW_TOAST', message: 'Copied /bifrost:review-fix \u2014 paste into Claude session' });
-  }, [dispatch]);
+  }, [taskId, dispatch]);
 
   const handleDiscuss = useCallback(async () => {
     if (!reviewId) return;
