@@ -142,59 +142,6 @@ function summarizeToolInput(toolName: string, input: Record<string, unknown>): s
   }
 }
 
-/**
- * Read the first line of a file (for extracting session metadata).
- */
-function readFirstLine(filePath: string): string | null {
-  try {
-    const fd = fs.openSync(filePath, 'r');
-    const buf = Buffer.alloc(4096);
-    const bytesRead = fs.readSync(fd, buf, 0, 4096, 0);
-    fs.closeSync(fd);
-    if (bytesRead === 0) return null;
-    const text = buf.toString('utf-8', 0, bytesRead);
-    const newline = text.indexOf('\n');
-    return newline >= 0 ? text.slice(0, newline) : text;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Extract the Claude session ID from the first line of a JSONL file.
- */
-function extractSessionId(filePath: string): string | null {
-  const line = readFirstLine(filePath);
-  if (!line) return null;
-  try {
-    const parsed = JSON.parse(line);
-    return parsed.sessionId ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Find the most recently modified JSONL file and return its session ID.
- */
-function getLatestSessionId(projectDir: string): string | null {
-  let latest: { path: string; mtime: number } | null = null;
-  try {
-    for (const file of fs.readdirSync(projectDir)) {
-      if (!file.endsWith('.jsonl')) continue;
-      const filePath = path.join(projectDir, file);
-      try {
-        const stat = fs.statSync(filePath);
-        if (!latest || stat.mtimeMs > latest.mtime) {
-          latest = { path: filePath, mtime: stat.mtimeMs };
-        }
-      } catch { /* ignore */ }
-    }
-  } catch { /* ignore */ }
-  if (!latest) return null;
-  return extractSessionId(latest.path);
-}
-
 function readNewLines(filePath: string, offset: number): { lines: string[]; newOffset: number } {
   let stat: fs.Stats;
   try {
@@ -241,7 +188,6 @@ function readRecentEntries(filePath: string, taskId: string, maxEntries: number)
 
 export interface ClaudeWatcherCallbacks {
   onSummary?: (taskId: string, summary: string) => void;
-  onSessionChange?: (taskId: string, claudeSessionId: string) => void;
 }
 
 export function startClaudeWatching(
@@ -269,12 +215,6 @@ export function startClaudeWatching(
     }
   }
 
-  // Sync session ID from the most recent JSONL file on startup
-  if (callbacks?.onSessionChange) {
-    const sessionId = getLatestSessionId(projectDir);
-    if (sessionId) callbacks.onSessionChange(taskId, sessionId);
-  }
-
   const pollTimer = setInterval(() => {
     if (!fs.existsSync(projectDir)) return;
 
@@ -288,12 +228,8 @@ export function startClaudeWatching(
     for (const file of files) {
       const filePath = path.join(projectDir, file);
 
-      // For new files not yet tracked, extract session ID and start from end
+      // For new files not yet tracked, start from end (skip existing content)
       if (!fileOffsets.has(filePath)) {
-        if (callbacks?.onSessionChange) {
-          const sid = extractSessionId(filePath);
-          if (sid) callbacks.onSessionChange(taskId, sid);
-        }
         try {
           const stat = fs.statSync(filePath);
           fileOffsets.set(filePath, stat.size);

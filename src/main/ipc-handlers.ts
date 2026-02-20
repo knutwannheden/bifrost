@@ -21,7 +21,7 @@ import { getApiPort } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
-import { runReview, saveReview, loadReview, watchReviewFile, listReviews, deleteReview, getReviewSessionId, isReviewClaudeSession } from './review-service';
+import { runReview, saveReview, loadReview, watchReviewFile, listReviews, deleteReview, getReviewSessionId } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { scanRecentRepos } from './history-scanner';
@@ -140,13 +140,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       try {
         updateTask(taskId, { summary });
         mainWindow.webContents.send(IPC_STREAM.TASK_SUMMARY, taskId, summary);
-      } catch { /* task may have been deleted */ }
-    },
-    onSessionChange: (taskId: string, claudeSessionId: string) => {
-      try {
-        if (!isReviewClaudeSession(claudeSessionId)) {
-          updateTask(taskId, { claudeSessionId });
-        }
       } catch { /* task may have been deleted */ }
     },
   };
