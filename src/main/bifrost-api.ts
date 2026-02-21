@@ -281,6 +281,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       if (context === 'review' && reviewId) {
         setReviewSessionId(task.id, reviewId, sessionId);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
+        }
       } else if (!task.claudeSessionId) {
         updateTask(task.id, { claudeSessionId: sessionId });
       }

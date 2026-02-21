@@ -38,6 +38,8 @@ export interface AppState {
   reviews: Record<string, ReviewEntry[]>;
   /** Active (selected) review ID keyed by taskId */
   activeReviewId: Record<string, string | null>;
+  /** Active discussion PTY sessions keyed by taskId */
+  reviewDiscussion: Record<string, { ptySessionId: string; reviewId: string }>;
   toast: string | null;
   toastDuration: number;
   permissionQueue: PermissionPromptData[];
@@ -85,6 +87,9 @@ export type AppAction =
   | { type: 'ADD_REVIEW'; taskId: string; review: ReviewEntry }
   | { type: 'DELETE_REVIEW'; taskId: string; reviewId: string }
   | { type: 'SET_ACTIVE_REVIEW'; taskId: string; reviewId: string | null }
+  | { type: 'UPDATE_REVIEW_SESSION'; taskId: string; reviewId: string; sessionId: string }
+  | { type: 'SET_REVIEW_DISCUSSION'; taskId: string; reviewId: string; ptySessionId: string }
+  | { type: 'CLEAR_REVIEW_DISCUSSION'; taskId: string }
   | { type: 'REORDER_TASKS'; taskIds: string[] }
   | { type: 'SET_AGENT_BUSY'; taskId: string; busy: boolean };
 
@@ -108,6 +113,7 @@ const initialState: AppState = {
   reviewStatus: {},
   reviews: {},
   activeReviewId: {},
+  reviewDiscussion: {},
   toast: null,
   toastDuration: 2000,
   permissionQueue: [],
@@ -309,6 +315,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'SET_ACTIVE_REVIEW':
       return { ...state, activeReviewId: { ...state.activeReviewId, [action.taskId]: action.reviewId } };
+    case 'UPDATE_REVIEW_SESSION': {
+      const taskReviews = (state.reviews[action.taskId] ?? []).map((r) =>
+        r.id === action.reviewId ? { ...r, sessionId: action.sessionId } : r,
+      );
+      return { ...state, reviews: { ...state.reviews, [action.taskId]: taskReviews } };
+    }
+    case 'SET_REVIEW_DISCUSSION':
+      return { ...state, reviewDiscussion: { ...state.reviewDiscussion, [action.taskId]: { ptySessionId: action.ptySessionId, reviewId: action.reviewId } } };
+    case 'CLEAR_REVIEW_DISCUSSION': {
+      const { [action.taskId]: _removed, ...rest } = state.reviewDiscussion;
+      void _removed;
+      return { ...state, reviewDiscussion: rest };
+    }
     case 'REORDER_TASKS': {
       const idSet = new Set(action.taskIds);
       const reordered = action.taskIds.map((id) => state.tasks.find((t) => t.id === id)!).filter(Boolean);

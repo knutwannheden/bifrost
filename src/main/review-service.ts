@@ -99,6 +99,11 @@ export function migrateIfNeeded(taskId: string, legacySessionId?: string): Revie
   return [entry];
 }
 
+// --- Running review tracking ---
+
+const runningReviews = new Map<string, ReturnType<typeof spawn>>();
+const cancelledReviews = new Set<string>();
+
 // --- Public API ---
 
 export function listReviews(taskId: string): ReviewEntry[] {
@@ -135,6 +140,9 @@ export async function runReview(
       env,
     });
 
+    runningReviews.set(taskId, proc);
+    cancelledReviews.delete(taskId);
+
     let stdout = '';
     let stderr = '';
     let settled = false;
@@ -162,7 +170,11 @@ export async function runReview(
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      if (code === 0 && stdout.trim()) {
+      runningReviews.delete(taskId);
+      if (cancelledReviews.has(taskId)) {
+        cancelledReviews.delete(taskId);
+        reject(new Error('Review cancelled'));
+      } else if (code === 0 && stdout.trim()) {
         resolve(stdout.trim());
       } else {
         reject(new Error(stderr.trim() || `claude exited with code ${code}`));
@@ -173,6 +185,7 @@ export async function runReview(
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
+      runningReviews.delete(taskId);
       reject(err);
     });
   });
@@ -194,6 +207,13 @@ export async function runReview(
   fs.writeFileSync(getReviewFilePath(taskId, reviewId), markdown, 'utf-8');
 
   return { reviewId, markdown };
+}
+
+export function cancelReview(taskId: string): void {
+  const proc = runningReviews.get(taskId);
+  if (!proc) return;
+  cancelledReviews.add(taskId);
+  proc.kill();
 }
 
 // Track content we last wrote, so we can skip our own saves in the watcher

@@ -89,6 +89,7 @@ const api: BifrostAPI = {
 
   // Review
   runReview: (taskId, scope, instructions) => ipcRenderer.invoke(IPC.RUN_REVIEW, taskId, scope, instructions),
+  cancelReview: (taskId) => ipcRenderer.invoke(IPC.CANCEL_REVIEW, taskId),
   saveReview: (taskId, reviewId, content) => ipcRenderer.invoke(IPC.SAVE_REVIEW, taskId, reviewId, content),
   loadReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.LOAD_REVIEW, taskId, reviewId),
   resumeReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.RESUME_REVIEW, taskId, reviewId),
@@ -99,6 +100,12 @@ const api: BifrostAPI = {
       callback(taskId, reviewId, content);
     ipcRenderer.on(IPC_STREAM.REVIEW_PROGRESS, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_PROGRESS, handler);
+  },
+  onReviewSession: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, reviewId: string, sessionId: string) =>
+      callback(taskId, reviewId, sessionId);
+    ipcRenderer.on(IPC_STREAM.REVIEW_SESSION, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_SESSION, handler);
   },
 
   // Integration

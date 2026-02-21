@@ -25,11 +25,16 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
 
   const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active });
 
-  // Focus the terminal when it becomes the focused pane and no overlays are showing
+  // Focus the terminal when it becomes the focused pane and no overlays are showing.
+  // When `focused` transitions to true, the caller explicitly wants focus (e.g. discussion
+  // terminal inside the diff overlay), so skip the overlay guard in that case.
   const { showDiff } = getActiveDiffState(state);
   const anyOverlay = state.showRepoManager || state.showCreateDialog || showDiff || state.showTaskHistory;
+  const prevFocused = useRef(false);
   useEffect(() => {
-    if (!anyOverlay && active && focused && terminal.current && !showSearch) {
+    const becameFocused = focused && !prevFocused.current;
+    prevFocused.current = focused;
+    if (active && focused && terminal.current && !showSearch && (becameFocused || !anyOverlay)) {
       terminal.current.focus();
     }
   }, [anyOverlay, active, focused, terminal, showSearch]);

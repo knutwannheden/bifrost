@@ -21,7 +21,7 @@ import { getApiPort } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
-import { runReview, saveReview, loadReview, watchReviewFile, listReviews, deleteReview, getReviewSessionId } from './review-service';
+import { runReview, cancelReview, saveReview, loadReview, watchReviewFile, listReviews, deleteReview, getReviewSessionId } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { scanRecentRepos } from './history-scanner';
@@ -597,6 +597,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     // sessionId is set asynchronously via the SessionStart hook → /session-start API
     const sessionId = getReviewSessionId(taskId, reviewId);
     return { reviewId, markdown, sessionId };
+  });
+
+  ipcMain.handle(IPC.CANCEL_REVIEW, (_event, taskId: string) => {
+    cancelReview(taskId);
   });
 
   ipcMain.handle(IPC.SAVE_REVIEW, (_event, taskId: string, reviewId: string, content: string) => {

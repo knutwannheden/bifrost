@@ -339,6 +339,192 @@ const stageIndicator: Record<GitFileStage, { label: string; color: string; title
   untracked: { label: '?', color: 'text-slate-500', title: 'Untracked' },
 };
 
+interface FileTreeNode {
+  /** Display label — may be a merged path like "src/main/java" for sparse dirs */
+  label: string;
+  /** Full directory path from repo root (used as key for collapse state) */
+  path: string;
+  children: FileTreeNode[];
+  /** Files directly in this directory, with their index in the flat files array */
+  files: { file: DiffFile; flatIndex: number }[];
+}
+
+function buildFileTree(files: DiffFile[]): FileTreeNode {
+  const root: FileTreeNode = { label: '', path: '', children: [], files: [] };
+
+  // Insert each file into the tree
+  for (let i = 0; i < files.length; i++) {
+    const filePath = files[i].newPath || files[i].oldPath;
+    const lastSlash = filePath.lastIndexOf('/');
+    const dirPath = lastSlash >= 0 ? filePath.slice(0, lastSlash) : '';
+    const segments = dirPath ? dirPath.split('/') : [];
+
+    let node = root;
+    let currentPath = '';
+    for (const seg of segments) {
+      currentPath = currentPath ? `${currentPath}/${seg}` : seg;
+      let child = node.children.find((c) => c.path === currentPath);
+      if (!child) {
+        child = { label: seg, path: currentPath, children: [], files: [] };
+        node.children.push(child);
+      }
+      node = child;
+    }
+    node.files.push({ file: files[i], flatIndex: i });
+  }
+
+  // Sparse-collapse: merge single-child dirs with zero files
+  function collapse(node: FileTreeNode): void {
+    for (const child of node.children) collapse(child);
+    while (node.children.length === 1 && node.files.length === 0) {
+      const only = node.children[0];
+      node.label = node.label ? `${node.label}/${only.label}` : only.label;
+      node.path = only.path;
+      node.children = only.children;
+      node.files = only.files;
+    }
+  }
+  for (const child of root.children) collapse(child);
+
+  // Sort: directories first (alphabetical), then files (alphabetical)
+  function sortTree(node: FileTreeNode): void {
+    node.children.sort((a, b) => a.label.localeCompare(b.label));
+    node.files.sort((a, b) => {
+      const aName = (a.file.newPath || a.file.oldPath).split('/').pop()!;
+      const bName = (b.file.newPath || b.file.oldPath).split('/').pop()!;
+      return aName.localeCompare(bName);
+    });
+    for (const child of node.children) sortTree(child);
+  }
+  sortTree(root);
+
+  return root;
+}
+
+/** Compute aggregate stats for a tree node and all descendants */
+function treeNodeStats(node: FileTreeNode): { additions: number; deletions: number } {
+  let additions = 0;
+  let deletions = 0;
+  for (const f of node.files) {
+    const s = diffFileStats(f.file);
+    additions += s.additions;
+    deletions += s.deletions;
+  }
+  for (const child of node.children) {
+    const s = treeNodeStats(child);
+    additions += s.additions;
+    deletions += s.deletions;
+  }
+  return { additions, deletions };
+}
+
+/** Find the directory paths that contain the file at the given flat index */
+function findAncestorPaths(node: FileTreeNode, flatIndex: number): string[] | null {
+  for (const f of node.files) {
+    if (f.flatIndex === flatIndex) return [];
+  }
+  for (const child of node.children) {
+    const result = findAncestorPaths(child, flatIndex);
+    if (result !== null) return [child.path, ...result];
+  }
+  return null;
+}
+
+function FileTreeItem({
+  node,
+  depth,
+  collapsed,
+  onToggle,
+  selectedIndex,
+  onSelectFile,
+  fileStatuses,
+  fileRefs,
+}: {
+  node: FileTreeNode;
+  depth: number;
+  collapsed: Set<string>;
+  onToggle: (path: string) => void;
+  selectedIndex: number;
+  onSelectFile: (index: number) => void;
+  fileStatuses: Record<string, GitFileStage[]>;
+  fileRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
+}) {
+  const isCollapsed = collapsed.has(node.path);
+  const stats = useMemo(() => treeNodeStats(node), [node]);
+
+  return (
+    <>
+      {/* Directory row */}
+      <div
+        className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-slate-800 text-xs"
+        style={{ paddingLeft: depth * 16 + 8 }}
+        onClick={() => onToggle(node.path)}
+      >
+        <span className="text-slate-500 w-3 text-center flex-shrink-0">
+          {isCollapsed ? '▸' : '▾'}
+        </span>
+        <span className="text-slate-400 truncate">{node.label}</span>
+        <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
+      </div>
+      {/* Children (dirs then files) when expanded */}
+      {!isCollapsed && (
+        <>
+          {node.children.map((child) => (
+            <FileTreeItem
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              collapsed={collapsed}
+              onToggle={onToggle}
+              selectedIndex={selectedIndex}
+              onSelectFile={onSelectFile}
+              fileStatuses={fileStatuses}
+              fileRefs={fileRefs}
+            />
+          ))}
+          {node.files.map(({ file, flatIndex }) => {
+            const path = file.newPath || file.oldPath;
+            const basename = path.split('/').pop()!;
+            const fileStat = diffFileStats(file);
+            const cfg = statusConfig[file.status];
+            const stages = fileStatuses[path] ?? [];
+            const isSelected = flatIndex === selectedIndex;
+
+            return (
+              <div
+                key={flatIndex}
+                ref={(el) => { fileRefs.current[flatIndex] = el; }}
+                onClick={() => onSelectFile(flatIndex)}
+                className={`flex items-center gap-2 py-1 cursor-pointer text-xs ${
+                  isSelected
+                    ? 'bg-slate-700/50 border-l-2 border-blue-400'
+                    : 'border-l-2 border-transparent hover:bg-slate-800'
+                }`}
+                style={{ paddingLeft: (depth + 1) * 16 + 8 }}
+              >
+                <span className="flex gap-0.5 flex-shrink-0">
+                  <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
+                  {stages.map((stage) => {
+                    const si = stageIndicator[stage as GitFileStage];
+                    return si ? (
+                      <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
+                    ) : null;
+                  })}
+                </span>
+                <span className="text-slate-200 truncate">{basename}</span>
+                {file.binary
+                  ? <span className="text-xs text-slate-600 italic flex-shrink-0 ml-auto">binary</span>
+                  : <DiffStatsBadge additions={fileStat.additions} deletions={fileStat.deletions} className="flex-shrink-0 ml-auto" />
+                }
+              </div>
+            );
+          })}
+        </>
+      )}
+    </>
+  );
+}
+
 function FileListSidebar({
   files,
   selectedIndex,
@@ -351,6 +537,23 @@ function FileListSidebar({
   fileStatuses: Record<string, GitFileStage[]>;
 }) {
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  const tree = useMemo(() => buildFileTree(files), [files]);
+
+  // Auto-expand ancestors of the selected file
+  useEffect(() => {
+    if (files.length === 0) return;
+    const ancestors = findAncestorPaths(tree, selectedIndex);
+    if (!ancestors || ancestors.length === 0) return;
+    setCollapsed((prev) => {
+      const collapsedAncestors = ancestors.filter((p) => prev.has(p));
+      if (collapsedAncestors.length === 0) return prev;
+      const next = new Set(prev);
+      for (const p of collapsedAncestors) next.delete(p);
+      return next;
+    });
+  }, [selectedIndex, tree, files.length]);
 
   useEffect(() => {
     itemRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
@@ -367,53 +570,116 @@ function FileListSidebar({
     return { additions, deletions };
   }, [files]);
 
+  const handleToggle = useCallback((path: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }, []);
+
+  // Check if all files are in root (no directories) — render flat list
+  const hasTree = tree.children.length > 0;
+
   return (
-    <div className="w-64 flex-shrink-0 border-r border-slate-700 overflow-y-auto">
+    <div className="w-72 flex-shrink-0 border-r border-slate-700 overflow-y-auto">
       <div className="px-3 py-2 border-b border-slate-700 text-xs text-slate-400 flex items-center gap-2">
         <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
         <DiffStatsBadge additions={totalStats.additions} deletions={totalStats.deletions} />
       </div>
-      {files.map((file, idx) => {
-        const path = file.newPath || file.oldPath;
-        const lastSlash = path.lastIndexOf('/');
-        const basename = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
-        const dirname = lastSlash >= 0 ? path.slice(0, lastSlash) : '';
-        const stats = diffFileStats(file);
-        const cfg = statusConfig[file.status];
-        const stages = fileStatuses[path] ?? [];
-        const isSelected = idx === selectedIndex;
+      {hasTree ? (
+        <>
+          {/* Root-level directories */}
+          {tree.children.map((child) => (
+            <FileTreeItem
+              key={child.path}
+              node={child}
+              depth={0}
+              collapsed={collapsed}
+              onToggle={handleToggle}
+              selectedIndex={selectedIndex}
+              onSelectFile={onSelectFile}
+              fileStatuses={fileStatuses}
+              fileRefs={itemRefs}
+            />
+          ))}
+          {/* Root-level files (no directory) */}
+          {tree.files.map(({ file, flatIndex }) => {
+            const path = file.newPath || file.oldPath;
+            const basename = path.split('/').pop() || path;
+            const stats = diffFileStats(file);
+            const cfg = statusConfig[file.status];
+            const stages = fileStatuses[path] ?? [];
+            const isSelected = flatIndex === selectedIndex;
 
-        return (
-          <div
-            key={idx}
-            ref={(el) => { itemRefs.current[idx] = el; }}
-            onClick={() => onSelectFile(idx)}
-            className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs ${
-              isSelected
-                ? 'bg-slate-700/50 border-l-2 border-blue-400'
-                : 'border-l-2 border-transparent hover:bg-slate-800'
-            }`}
-          >
-            <span className="flex gap-0.5 flex-shrink-0">
-              <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
-              {stages.map((stage) => {
-                const si = stageIndicator[stage as GitFileStage];
-                return si ? (
-                  <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
-                ) : null;
-              })}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="text-slate-200 truncate">{basename}</div>
-              {dirname && <div className="text-slate-500 truncate">{dirname}</div>}
+            return (
+              <div
+                key={flatIndex}
+                ref={(el) => { itemRefs.current[flatIndex] = el; }}
+                onClick={() => onSelectFile(flatIndex)}
+                className={`flex items-center gap-2 px-3 py-1 cursor-pointer text-xs ${
+                  isSelected
+                    ? 'bg-slate-700/50 border-l-2 border-blue-400'
+                    : 'border-l-2 border-transparent hover:bg-slate-800'
+                }`}
+              >
+                <span className="flex gap-0.5 flex-shrink-0">
+                  <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
+                  {stages.map((stage) => {
+                    const si = stageIndicator[stage as GitFileStage];
+                    return si ? (
+                      <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
+                    ) : null;
+                  })}
+                </span>
+                <span className="text-slate-200 truncate">{basename}</span>
+                {file.binary
+                  ? <span className="text-xs text-slate-600 italic flex-shrink-0 ml-auto">binary</span>
+                  : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
+                }
+              </div>
+            );
+          })}
+        </>
+      ) : (
+        /* Flat fallback when all files are in root */
+        tree.files.map(({ file, flatIndex }) => {
+          const path = file.newPath || file.oldPath;
+          const stats = diffFileStats(file);
+          const cfg = statusConfig[file.status];
+          const stages = fileStatuses[path] ?? [];
+          const isSelected = flatIndex === selectedIndex;
+
+          return (
+            <div
+              key={flatIndex}
+              ref={(el) => { itemRefs.current[flatIndex] = el; }}
+              onClick={() => onSelectFile(flatIndex)}
+              className={`flex items-center gap-2 px-3 py-1 cursor-pointer text-xs ${
+                isSelected
+                  ? 'bg-slate-700/50 border-l-2 border-blue-400'
+                  : 'border-l-2 border-transparent hover:bg-slate-800'
+              }`}
+            >
+              <span className="flex gap-0.5 flex-shrink-0">
+                <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
+                {stages.map((stage) => {
+                  const si = stageIndicator[stage as GitFileStage];
+                  return si ? (
+                    <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
+                  ) : null;
+                })}
+              </span>
+              <span className="text-slate-200 truncate">{path}</span>
+              {file.binary
+                ? <span className="text-xs text-slate-600 italic flex-shrink-0 ml-auto">binary</span>
+                : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
+              }
             </div>
-            {file.binary
-              ? <span className="text-xs text-slate-600 italic flex-shrink-0">binary</span>
-              : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0" />
-            }
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 }

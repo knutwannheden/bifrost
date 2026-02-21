@@ -183,10 +183,13 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   const [reviewScope, setReviewScope] = useState<ReviewScope>('working');
   const [reviewInstructions, setReviewInstructions] = useState('');
 
-  // Discussion terminal state
-  const [reviewPtySessionId, setReviewPtySessionId] = useState<string | null>(null);
-  const [showDiscussion, setShowDiscussion] = useState(false);
-  const [discussingReviewId, setDiscussingReviewId] = useState<string | null>(null);
+  // Discussion terminal state (persisted in AppContext so it survives overlay close/reopen)
+  const discussion = state.reviewDiscussion[taskId];
+  const reviewPtySessionId = discussion?.ptySessionId ?? null;
+  const discussingReviewId = discussion?.reviewId ?? null;
+  const [showDiscussion, setShowDiscussion] = useState(
+    () => discussingReviewId !== null && discussingReviewId === activeReviewId,
+  );
 
   // Notify parent of discussion state changes
   useEffect(() => {
@@ -240,19 +243,26 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     return unsub;
   }, [taskId, reviewId, status, dispatch]);
 
-  // Reset discussion when switching reviews
+  // Update review entry when session ID arrives (set asynchronously via SessionStart hook)
   useEffect(() => {
-    if (reviewId !== discussingReviewId) {
-      setShowDiscussion(false);
-    }
+    const unsub = window.bifrost.onReviewSession((tid, rid, sid) => {
+      if (tid === taskId) {
+        dispatch({ type: 'UPDATE_REVIEW_SESSION', taskId: tid, reviewId: rid, sessionId: sid });
+      }
+    });
+    return unsub;
+  }, [taskId, dispatch]);
+
+  // Hide discussion view when switching to a different review
+  useEffect(() => {
+    setShowDiscussion(discussingReviewId !== null && discussingReviewId === reviewId);
   }, [reviewId, discussingReviewId]);
 
   const handleRunReview = useCallback(async () => {
     // Generate a temporary ID for tracking; the real one comes from the backend
     dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'running' });
-    setReviewPtySessionId(null);
+    dispatch({ type: 'CLEAR_REVIEW_DISCUSSION', taskId });
     setShowDiscussion(false);
-    setDiscussingReviewId(null);
     try {
       const { reviewId: newReviewId, markdown, sessionId } = await window.bifrost.runReview(taskId, reviewScope, reviewInstructions || undefined);
       const review: ReviewEntry = {
@@ -268,8 +278,10 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       onNewReviewCreated(review);
       setReviewInstructions('');
     } catch (err) {
-      // Can't set error on __pending__ meaningfully, but show toast
-      dispatch({ type: 'SHOW_TOAST', message: `Review failed: ${err instanceof Error ? err.message : String(err)}` });
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg !== 'Review cancelled') {
+        dispatch({ type: 'SHOW_TOAST', message: `Review failed: ${msg}` });
+      }
       dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'idle' });
     }
   }, [taskId, reviewScope, reviewInstructions, dispatch, onNewReviewCreated]);
@@ -302,13 +314,18 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     }
     try {
       const ptySessionId = await window.bifrost.resumeReview(taskId, reviewId);
-      setReviewPtySessionId(ptySessionId);
-      setDiscussingReviewId(reviewId);
+      dispatch({ type: 'SET_REVIEW_DISCUSSION', taskId, reviewId, ptySessionId });
       setShowDiscussion(true);
     } catch (err) {
       dispatch({ type: 'SHOW_TOAST', message: `Failed to resume review: ${err instanceof Error ? err.message : String(err)}` });
     }
   }, [taskId, reviewId, reviewPtySessionId, discussingReviewId, dispatch]);
+
+  const isReviewRunning = status === 'running' || state.reviewStatus['__pending__'] === 'running';
+
+  const handleCancelReview = useCallback(() => {
+    window.bifrost.cancelReview(taskId);
+  }, [taskId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -316,11 +333,23 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       // Don't intercept when in terminal
       if ((e.target as HTMLElement)?.closest?.('.xterm')) return;
 
-      // Scope toggle in new review form: left/right arrows
+      // Alt+C: cancel running review (checked before scope toggle to avoid collision)
+      if (e.altKey && e.code === 'KeyC' && isReviewRunning) {
+        e.preventDefault();
+        handleCancelReview();
+        return;
+      }
+
+      // Scope toggle in new review form: left/right arrows or Alt+T/Alt+C
       if (!reviewId && !showDiscussion) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault();
           setReviewScope(e.key === 'ArrowLeft' ? 'working' : 'all');
+          return;
+        }
+        if (e.altKey && (e.code === 'KeyT' || e.code === 'KeyC')) {
+          e.preventDefault();
+          setReviewScope(e.code === 'KeyT' ? 'working' : 'all');
           return;
         }
       }
@@ -351,7 +380,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [reviewId, status, showDiscussion, hasChecked, hasReviewSession, canRunReview, handleCopyPrompt, handleDiscuss, handleRunReview]);
+  }, [reviewId, status, showDiscussion, hasChecked, hasReviewSession, canRunReview, isReviewRunning, handleCancelReview, handleCopyPrompt, handleDiscuss, handleRunReview]);
 
   // === New Review Form ===
   if (!reviewId) {
@@ -362,6 +391,16 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <div className="w-5 h-5 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
           <span className="text-sm text-slate-400">Running review...</span>
+          <button
+            onClick={handleCancelReview}
+            className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+          >
+            Cancel
+          </button>
+          <span className="text-xs text-slate-600">
+            <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-500 font-mono">Alt+C</kbd>
+            {' '}to cancel
+          </span>
         </div>
       );
     }
@@ -427,6 +466,12 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
               {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
             </span>
           )}
+          <button
+            onClick={handleCancelReview}
+            className="ml-auto px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+          >
+            Cancel
+          </button>
         </div>
         {content && (
           <div className="flex-1 overflow-auto p-4 font-sans">

@@ -83,6 +83,7 @@ export const IPC = {
 
   // Review
   RUN_REVIEW: 'review:run',
+  CANCEL_REVIEW: 'review:cancel',
   SAVE_REVIEW: 'review:save',
   LOAD_REVIEW: 'review:load',
   RESUME_REVIEW: 'review:resume',
@@ -124,6 +125,7 @@ export const IPC_STREAM = {
   ACTIVITY_ENTRY: 'activity:entry',
   TASK_SUMMARY: 'task:summary',
   REVIEW_PROGRESS: 'review:progress',
+  REVIEW_SESSION: 'review:session',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
@@ -198,6 +200,7 @@ export interface BifrostAPI {
 
   // Review
   runReview(taskId: string, scope?: 'working' | 'all', instructions?: string): Promise<{ reviewId: string; markdown: string; sessionId?: string }>;
+  cancelReview(taskId: string): Promise<void>;
   saveReview(taskId: string, reviewId: string, content: string): Promise<void>;
   loadReview(taskId: string, reviewId: string): Promise<string | null>;
   resumeReview(taskId: string, reviewId: string): Promise<string>;
@@ -206,6 +209,7 @@ export interface BifrostAPI {
 
   // Review progress
   onReviewProgress(callback: (taskId: string, reviewId: string, content: string) => void): () => void;
+  onReviewSession(callback: (taskId: string, reviewId: string, sessionId: string) => void): () => void;
 
   // Integration
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;
