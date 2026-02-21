@@ -321,6 +321,12 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     }
   }, [taskId, reviewId, reviewPtySessionId, discussingReviewId, dispatch]);
 
+  const handleCloseDiscussion = useCallback(() => {
+    window.bifrost.closeReviewSession(taskId);
+    dispatch({ type: 'CLEAR_REVIEW_DISCUSSION', taskId });
+    setShowDiscussion(false);
+  }, [taskId, dispatch]);
+
   const isReviewRunning = status === 'running' || state.reviewStatus['__pending__'] === 'running';
 
   const handleCancelReview = useCallback(() => {
@@ -558,12 +564,26 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
 
       {/* Discussion terminal — kept mounted when toggled away */}
       {reviewPtySessionId && discussingReviewId === reviewId && (
-        <div className="flex-1 min-h-0" style={{ display: showDiscussion ? undefined : 'none' }}>
-          <TerminalPane
-            sessionId={reviewPtySessionId}
-            active={showDiscussion}
-            focused={showDiscussion}
-          />
+        <div className="flex-1 flex flex-col min-h-0" style={{ display: showDiscussion ? undefined : 'none' }}>
+          <div className="flex-1 min-h-0">
+            <TerminalPane
+              sessionId={reviewPtySessionId}
+              active={showDiscussion}
+              focused={showDiscussion}
+            />
+          </div>
+          <div className="flex items-center gap-3 px-4 py-2 border-t border-slate-700 flex-shrink-0">
+            <button
+              onClick={handleCloseDiscussion}
+              className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+            >
+              Close Discussion
+            </button>
+            <span className="text-xs text-slate-600">
+              <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-500 font-mono">Esc</kbd>
+              {' '}back to review
+            </span>
+          </div>
         </div>
       )}
     </div>

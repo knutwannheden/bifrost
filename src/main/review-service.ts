@@ -134,7 +134,12 @@ export async function runReview(
     const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
     try { env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
 
-    const proc = spawn('claude', ['-p', prompt], {
+    const reviewFilePath = getReviewFilePath(taskId, reviewId);
+    const proc = spawn('claude', [
+      '-p',
+      '--append-system-prompt', `The review document is stored at: ${reviewFilePath}\nIf the user asks you to update the review based on discussion, write the updated markdown to that file.`,
+      prompt,
+    ], {
       stdio: ['ignore', 'pipe', 'pipe'],
       cwd: worktreePath,
       env,

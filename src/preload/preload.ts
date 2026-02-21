@@ -95,6 +95,7 @@ const api: BifrostAPI = {
   resumeReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.RESUME_REVIEW, taskId, reviewId),
   listReviews: (taskId) => ipcRenderer.invoke(IPC.LIST_REVIEWS, taskId),
   deleteReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.DELETE_REVIEW, taskId, reviewId),
+  closeReviewSession: (taskId) => ipcRenderer.invoke(IPC.CLOSE_REVIEW_SESSION, taskId),
   onReviewProgress: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string, reviewId: string, content: string) =>
       callback(taskId, reviewId, content);

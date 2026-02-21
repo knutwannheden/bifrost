@@ -645,6 +645,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     deleteReview(taskId, reviewId);
   });
 
+  ipcMain.handle(IPC.CLOSE_REVIEW_SESSION, (_event, taskId: string) => {
+    const reviewPtyId = reviewSessions.get(taskId);
+    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
+  });
+
   // Integration
   ipcMain.handle(IPC.CHECK_INTEGRATION, () => checkIntegration());
   ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());

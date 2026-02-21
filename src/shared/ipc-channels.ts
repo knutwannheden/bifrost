@@ -89,6 +89,7 @@ export const IPC = {
   RESUME_REVIEW: 'review:resume',
   LIST_REVIEWS: 'review:list',
   DELETE_REVIEW: 'review:delete',
+  CLOSE_REVIEW_SESSION: 'review:close-session',
 
   // Integration
   CHECK_INTEGRATION: 'integration:check',
@@ -206,6 +207,7 @@ export interface BifrostAPI {
   resumeReview(taskId: string, reviewId: string): Promise<string>;
   listReviews(taskId: string): Promise<ReviewEntry[]>;
   deleteReview(taskId: string, reviewId: string): Promise<void>;
+  closeReviewSession(taskId: string): Promise<void>;
 
   // Review progress
   onReviewProgress(callback: (taskId: string, reviewId: string, content: string) => void): () => void;

@@ -14,8 +14,15 @@ Find the review file to work on:
 
 If the `reviews/` directory doesn't exist, fall back to reading `~/.bifrost/tasks/{task-id}/review.md`.
 
-Address all items marked with [x] (checked checkboxes). As each item is resolved, edit the review file directly:
-- Change `- [x] item` to `- [x] DONE: item` or add a brief note about the resolution
+Address all items marked with [x] (checked checkboxes). For each checked item, critically evaluate whether the finding is actually valid before acting on it — review findings can be wrong, overly cautious, or based on misunderstanding the code's intent.
+
+For each checked item, edit the review file directly:
+- If the finding is valid and you fix it: change `- [x] item` to `- [x] ✅ item`
+- If the finding is incorrect or not worth addressing: change `- [x] item` to `- [x] ❌ item` and add an indented bullet with the rejection reason, e.g.:
+  ```
+  - [x] ❌ Potential null pointer on line 42
+    - The value is guaranteed non-null by the guard clause on line 38
+  ```
 - Leave unchecked items (`- [ ]`) as-is
 
 Focus only on the checked items. Work through them one at a time.
