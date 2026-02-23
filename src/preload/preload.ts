@@ -51,7 +51,7 @@ const api: BifrostAPI = {
   // Diff
   getDiff: (taskId, scope) => ipcRenderer.invoke(IPC.GET_DIFF, taskId, scope),
   getDiffStats: (taskId, scope) => ipcRenderer.invoke(IPC.GET_DIFF_STATS, taskId, scope),
-  getFileStatuses: (taskId) => ipcRenderer.invoke(IPC.GET_FILE_STATUSES, taskId),
+  getFileStatuses: (taskId, scope) => ipcRenderer.invoke(IPC.GET_FILE_STATUSES, taskId, scope),
   getGitLog: (taskId) => ipcRenderer.invoke(IPC.GET_GIT_LOG, taskId),
   getPrUrl: (taskId) => ipcRenderer.invoke(IPC.GET_PR_URL, taskId),
 
@@ -107,6 +107,12 @@ const api: BifrostAPI = {
       callback(taskId, reviewId, sessionId);
     ipcRenderer.on(IPC_STREAM.REVIEW_SESSION, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_SESSION, handler);
+  },
+  onReviewActivity: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, reviewId: string, activity: string) =>
+      callback(taskId, reviewId, activity);
+    ipcRenderer.on(IPC_STREAM.REVIEW_ACTIVITY, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_ACTIVITY, handler);
   },
 
   // Integration

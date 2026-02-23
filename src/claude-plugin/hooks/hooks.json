@@ -17,6 +17,11 @@
         "hooks": [
           {
             "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/bifrost-agent-activity.sh busy",
+            "async": true
+          },
+          {
+            "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/bifrost-permission.sh",
             "timeout": 120
           }

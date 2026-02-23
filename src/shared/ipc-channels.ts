@@ -127,6 +127,7 @@ export const IPC_STREAM = {
   TASK_SUMMARY: 'task:summary',
   REVIEW_PROGRESS: 'review:progress',
   REVIEW_SESSION: 'review:session',
+  REVIEW_ACTIVITY: 'review:activity',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
@@ -171,7 +172,7 @@ export interface BifrostAPI {
   // Diff
   getDiff(taskId: string, scope?: 'working' | 'all'): Promise<DiffResult>;
   getDiffStats(taskId: string, scope?: 'working' | 'all'): Promise<DiffStats | null>;
-  getFileStatuses(taskId: string): Promise<Record<string, string[]>>;
+  getFileStatuses(taskId: string, scope?: 'working' | 'all'): Promise<Record<string, string[]>>;
   getGitLog(taskId: string): Promise<GitLogEntry[]>;
   getPrUrl(taskId: string): Promise<string | null>;
 
@@ -212,6 +213,7 @@ export interface BifrostAPI {
   // Review progress
   onReviewProgress(callback: (taskId: string, reviewId: string, content: string) => void): () => void;
   onReviewSession(callback: (taskId: string, reviewId: string, sessionId: string) => void): () => void;
+  onReviewActivity(callback: (taskId: string, reviewId: string, activity: string) => void): () => void;
 
   // Integration
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;

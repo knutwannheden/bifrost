@@ -50,6 +50,7 @@ export default function TaskCreateDialog() {
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
   const [branchFocusedIdx, setBranchFocusedIdx] = useState(0);
   const [branches, setBranches] = useState<string[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prBanner, setPrBanner] = useState<{ number: number; title?: string; repoId?: string; headBranch?: string; message?: string } | null>(null);
@@ -105,17 +106,20 @@ export default function TaskCreateDialog() {
   // Keep focused index in bounds and auto-select first match
   useEffect(() => {
     setRepoFocusedIdx(0);
-    if (filteredRepos.length > 0 && repoDropdownOpen) {
-      setRepoId(filteredRepos[0].id);
-    }
   }, [repoSearch]);
 
   useEffect(() => {
     setBranchFocusedIdx(0);
-    if (filteredBranches.length > 0 && branchDropdownOpen) {
-      setBranch(filteredBranches[0]);
-    }
   }, [branchSearch]);
+
+  // Scroll focused dropdown items into view
+  useEffect(() => {
+    repoListRef.current?.children[repoFocusedIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [repoFocusedIdx]);
+
+  useEffect(() => {
+    branchListRef.current?.children[branchFocusedIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [branchFocusedIdx]);
 
   // Focus the repo input on open and select text
   useEffect(() => {
@@ -180,6 +184,18 @@ export default function TaskCreateDialog() {
     }
   }, [inPlace, repoId]);
 
+  /** Pick the best default branch from a list, preferring upstream for forks. */
+  const pickDefaultBranch = useCallback((branchList: string[], forRepo: Repo | undefined): string | undefined => {
+    if (!forRepo) return branchList[0];
+    const upstreamBranch = `upstream/${forRepo.defaultBranch}`;
+    if (branchList.includes(upstreamBranch)) return upstreamBranch;
+    const originBranch = `origin/${forRepo.defaultBranch}`;
+    if (branchList.includes(originBranch)) return originBranch;
+    if (branchList.includes(forRepo.defaultBranch)) return forRepo.defaultBranch;
+    return branchList[0];
+  }, []);
+
+  // Fetch branches when repo changes (with cancellation for stale requests)
   useEffect(() => {
     if (!repoId) {
       setBranches([]);
@@ -187,35 +203,38 @@ export default function TaskCreateDialog() {
       setBranchSearch('');
       return;
     }
+    let cancelled = false;
     setTaskName(generateTaskName());
+    setBranches([]);
+    setBranch('');
+    setBranchSearch('');
+    setBranchesLoading(true);
     window.bifrost.getRepoBranches(repoId).then((b) => {
-      setBranches(b);
-      // Restore last-used branch if it exists for this repo
-      const lastRepoId = localStorage.getItem('bifrost:lastRepoId');
-      const lastBranch = localStorage.getItem('bifrost:lastBranch');
-      if (lastRepoId === repoId && lastBranch && b.includes(lastBranch)) {
-        setBranch(lastBranch);
-        setBranchSearch(lastBranch);
-      } else {
-        const repo = state.repos.find((r) => r.id === repoId);
-        if (repo && b.includes(repo.defaultBranch)) {
-          setBranch(repo.defaultBranch);
-          setBranchSearch(repo.defaultBranch);
-        } else if (b.length > 0) {
-          setBranch(b[0]);
-          setBranchSearch(b[0]);
-        }
-      }
-      // If PR detected, select the PR branch (add to list if not present)
-      if (prBanner?.headBranch && prBanner?.repoId === repoId) {
-        if (!b.includes(prBanner.headBranch)) {
-          setBranches([prBanner.headBranch, ...b]);
-        }
-        setBranch(prBanner.headBranch);
-        setBranchSearch(prBanner.headBranch);
-      }
+      if (!cancelled) setBranches(b);
+    }).finally(() => {
+      if (!cancelled) setBranchesLoading(false);
     });
-  }, [repoId, state.repos]);
+    return () => { cancelled = true; };
+  }, [repoId]);
+
+  // Select branch when branches load or PR is detected
+  useEffect(() => {
+    if (branches.length === 0) return;
+    if (prBanner?.headBranch && prBanner.repoId === repoId) {
+      if (!branches.includes(prBanner.headBranch)) {
+        setBranches((prev) => [prBanner.headBranch!, ...prev]);
+      }
+      setBranch(prBanner.headBranch);
+      setBranchSearch(prBanner.headBranch);
+    } else {
+      const repo = state.repos.find((r) => r.id === repoId);
+      const defaultBranch = pickDefaultBranch(branches, repo);
+      if (defaultBranch) {
+        setBranch(defaultBranch);
+        setBranchSearch(defaultBranch);
+      }
+    }
+  }, [branches, prBanner]);
 
   const selectRepo = (id: string) => {
     const repo = state.repos.find((r) => r.id === id);
@@ -263,7 +282,6 @@ export default function TaskCreateDialog() {
         ...(inPlace && { inPlace: true }),
       });
       localStorage.setItem('bifrost:lastRepoId', repoId);
-      if (!inPlace && branch) localStorage.setItem('bifrost:lastBranch', branch);
       dispatch({ type: 'ADD_TASK', task });
       dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
       close();
@@ -350,12 +368,6 @@ export default function TaskCreateDialog() {
                 onClick={() => {
                   setPrBanner(null);
                   setPrInfo(null);
-                  // Reset to default branch
-                  const repo = state.repos.find((r) => r.id === repoId);
-                  if (repo && branches.includes(repo.defaultBranch)) {
-                    setBranch(repo.defaultBranch);
-                    setBranchSearch(repo.defaultBranch);
-                  }
                 }}
                 className="text-xs text-blue-400 hover:text-blue-200 ml-3 whitespace-nowrap"
               >
@@ -429,11 +441,7 @@ export default function TaskCreateDialog() {
                     if (!repoDropdownOpen) {
                       setRepoDropdownOpen(true);
                     } else {
-                      setRepoFocusedIdx((i) => {
-                        const next = i < filteredRepos.length - 1 ? i + 1 : 0;
-                        setRepoId(filteredRepos[next].id);
-                        return next;
-                      });
+                      setRepoFocusedIdx((i) => i < filteredRepos.length - 1 ? i + 1 : 0);
                     }
                     break;
                   case 'ArrowUp':
@@ -441,11 +449,7 @@ export default function TaskCreateDialog() {
                     if (!repoDropdownOpen) {
                       setRepoDropdownOpen(true);
                     } else {
-                      setRepoFocusedIdx((i) => {
-                        const next = i > 0 ? i - 1 : filteredRepos.length - 1;
-                        setRepoId(filteredRepos[next].id);
-                        return next;
-                      });
+                      setRepoFocusedIdx((i) => i > 0 ? i - 1 : filteredRepos.length - 1);
                     }
                     break;
                   case 'Enter':
@@ -563,10 +567,11 @@ export default function TaskCreateDialog() {
               </div>
             ) : (
             <>
+            <div className="relative">
             <input
               ref={branchRef}
               type="text"
-              value={branchSearch}
+              value={branchesLoading ? '' : branchSearch}
               onChange={(e) => {
                 setBranchSearch(e.target.value);
                 setBranchDropdownOpen(true);
@@ -615,10 +620,20 @@ export default function TaskCreateDialog() {
                     break;
                 }
               }}
-              placeholder={branches.length === 0 ? 'Select a repo first' : 'Type to search...'}
-              disabled={branches.length === 0}
+              placeholder={branchesLoading ? '' : branches.length === 0 ? 'Select a repo first' : 'Type to search...'}
+              disabled={branchesLoading || branches.length === 0}
               className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
             />
+            {branchesLoading && (
+              <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
+                <svg className="animate-spin h-3.5 w-3.5 text-slate-400 mr-2" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-sm text-slate-400">Fetching branches...</span>
+              </div>
+            )}
+            </div>
             {branchDropdownOpen && filteredBranches.length > 0 && (
               <div
                 ref={branchListRef}

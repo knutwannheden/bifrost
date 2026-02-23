@@ -26,9 +26,20 @@ export async function createWorktree(
     await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
   }
 
+  const remoteMatch = branch.match(/^([^/]+)\/(.+)$/);
+
   await execFile('git', ['worktree', 'add', worktreePath, '-b', taskName, branch], {
     cwd: repoPath,
   });
+
+  // Set upstream tracking when branching from a remote tracking branch
+  if (remoteMatch) {
+    await execFile(
+      'git',
+      ['branch', '--set-upstream-to', branch, taskName],
+      { cwd: worktreePath },
+    );
+  }
 
   return worktreePath;
 }

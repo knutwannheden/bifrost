@@ -9,20 +9,27 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ReviewEntry } from '../shared/types';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
+const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const REVIEW_TIMEOUT_MS = 300_000;
 
 const REVIEW_INSTRUCTIONS = `Produce a Markdown document with:
 1. A brief summary paragraph of the changes
 2. A "## Review Items" section with a checked checkbox list (- [x]) of actionable findings:
    bugs, logic errors, security issues, missing edge cases, code quality concerns.
-   Each item should be specific and actionable.
+   Each item should be specific and actionable, prefixed with a severity tag:
+   \`[critical]\` — bugs, security vulnerabilities, data loss risks
+   \`[important]\` — logic errors, missing edge cases, correctness issues
+   \`[suggestion]\` — code quality, style, maintainability improvements
+   Order items by severity (critical first).
 If the code looks good, say so and use fewer items.
 Output ONLY the Markdown, no preamble.`;
 
-const REVIEW_PROMPTS: Record<string, string> = {
-  working: `Review the uncommitted changes in this worktree (git diff HEAD). ${REVIEW_INSTRUCTIONS}`,
-  all: `Review all changes in this worktree since the base branch (use git to find the merge-base and diff against it). ${REVIEW_INSTRUCTIONS}`,
-};
+function getReviewPrompt(scope: 'working' | 'all', baseBranch?: string): string {
+  if (scope === 'all' && baseBranch) {
+    return `Review all changes in this worktree since the base branch. Use \`git merge-base ${baseBranch} HEAD\` to find the fork point and diff against it. ${REVIEW_INSTRUCTIONS}`;
+  }
+  return `Review the uncommitted changes in this worktree (git diff HEAD). ${REVIEW_INSTRUCTIONS}`;
+}
 
 // --- Path helpers ---
 
@@ -116,10 +123,11 @@ export async function runReview(
   mainWindow?: BrowserWindow,
   scope: 'working' | 'all' = 'working',
   instructions?: string,
+  baseBranch?: string,
 ): Promise<{ reviewId: string; markdown: string }> {
   const reviewId = randomUUID();
 
-  let prompt = REVIEW_PROMPTS[scope];
+  let prompt = getReviewPrompt(scope, baseBranch);
   if (instructions?.trim()) {
     prompt += `\n\nAdditional reviewer instructions:\n${instructions.trim()}`;
   }
@@ -176,6 +184,7 @@ export async function runReview(
       settled = true;
       clearTimeout(timeout);
       runningReviews.delete(taskId);
+      stopReviewActivityWatch(taskId);
       if (cancelledReviews.has(taskId)) {
         cancelledReviews.delete(taskId);
         reject(new Error('Review cancelled'));
@@ -191,6 +200,7 @@ export async function runReview(
       settled = true;
       clearTimeout(timeout);
       runningReviews.delete(taskId);
+      stopReviewActivityWatch(taskId);
       reject(err);
     });
   });
@@ -215,6 +225,7 @@ export async function runReview(
 }
 
 export function cancelReview(taskId: string): void {
+  stopReviewActivityWatch(taskId);
   const proc = runningReviews.get(taskId);
   if (!proc) return;
   cancelledReviews.add(taskId);
@@ -302,5 +313,101 @@ export function unwatchReviewFile(reviewId: string): void {
   if (watcher) {
     watcher.close();
     reviewWatchers.delete(reviewId);
+  }
+}
+
+// --- Review activity polling (shows last JSONL message during review) ---
+
+const reviewActivityIntervals = new Map<string, ReturnType<typeof setInterval>>();
+
+function projectDirName(worktreePath: string): string {
+  return worktreePath.replace(/[/.]/g, '-');
+}
+
+function findSessionJsonl(worktreePath: string, sessionId: string): string | null {
+  const filePath = path.join(CLAUDE_PROJECTS_DIR, projectDirName(worktreePath), `${sessionId}.jsonl`);
+  return fs.existsSync(filePath) ? filePath : null;
+}
+
+function formatToolUse(name: string, input: Record<string, unknown>): string {
+  switch (name) {
+    case 'Read': return `Reading ${input.file_path || ''}`;
+    case 'Edit': return `Editing ${input.file_path || ''}`;
+    case 'Write': return `Writing ${input.file_path || ''}`;
+    case 'Bash': return `$ ${(input.command as string || '').slice(0, 80)}`;
+    case 'Glob': return `Searching ${input.pattern || ''}`;
+    case 'Grep': return `Searching for /${input.pattern || ''}/`;
+    case 'Task': return `Agent: ${input.description || ''}`;
+    default: return name;
+  }
+}
+
+function readLastActivity(filePath: string): string | null {
+  let stat: fs.Stats;
+  try { stat = fs.statSync(filePath); } catch { return null; }
+  if (stat.size === 0) return null;
+
+  const readSize = Math.min(stat.size, 32768);
+  const fd = fs.openSync(filePath, 'r');
+  const buf = Buffer.alloc(readSize);
+  fs.readSync(fd, buf, 0, readSize, stat.size - readSize);
+  fs.closeSync(fd);
+
+  const lines = buf.toString('utf-8').split('\n').filter((l) => l.trim());
+  for (let i = lines.length - 1; i >= 0; i--) {
+    try {
+      const obj = JSON.parse(lines[i]);
+      if (obj.type !== 'assistant') continue;
+      const content = obj.message?.content;
+      if (!Array.isArray(content)) continue;
+      // Prefer last tool_use, then last text
+      for (let j = content.length - 1; j >= 0; j--) {
+        if (content[j].type === 'tool_use') {
+          return formatToolUse(content[j].name, content[j].input as Record<string, unknown>);
+        }
+        if (content[j].type === 'text') {
+          const text = (content[j].text as string || '').trim();
+          if (text) return text.length > 100 ? text.slice(0, 100) + '...' : text;
+        }
+      }
+    } catch { /* skip malformed lines */ }
+  }
+  return null;
+}
+
+export function startReviewActivityWatch(
+  taskId: string,
+  reviewId: string,
+  worktreePath: string,
+  sessionId: string,
+  mainWindow: BrowserWindow,
+): void {
+  stopReviewActivityWatch(taskId);
+
+  let jsonlPath: string | null = null;
+  let lastActivity = '';
+
+  const interval = setInterval(() => {
+    if (!jsonlPath) {
+      jsonlPath = findSessionJsonl(worktreePath, sessionId);
+      if (!jsonlPath) return;
+    }
+    const activity = readLastActivity(jsonlPath);
+    if (activity && activity !== lastActivity) {
+      lastActivity = activity;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_STREAM.REVIEW_ACTIVITY, taskId, reviewId, activity);
+      }
+    }
+  }, 1500);
+
+  reviewActivityIntervals.set(taskId, interval);
+}
+
+export function stopReviewActivityWatch(taskId: string): void {
+  const interval = reviewActivityIntervals.get(taskId);
+  if (interval) {
+    clearInterval(interval);
+    reviewActivityIntervals.delete(taskId);
   }
 }

@@ -5,7 +5,7 @@ import os from 'node:os';
 import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask, updateTask } from './ipc-handlers';
-import { setReviewSessionId } from './review-service';
+import { setReviewSessionId, startReviewActivityWatch } from './review-service';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
@@ -283,6 +283,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         setReviewSessionId(task.id, reviewId, sessionId);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
+          startReviewActivityWatch(task.id, reviewId, cwd, sessionId, mainWindow);
         }
       } else if (!task.claudeSessionId) {
         updateTask(task.id, { claudeSessionId: sessionId });

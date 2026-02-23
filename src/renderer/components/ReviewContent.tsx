@@ -253,6 +253,15 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     return unsub;
   }, [taskId, dispatch]);
 
+  // Show last JSONL activity during review
+  const [reviewActivity, setReviewActivity] = useState<string | null>(null);
+  useEffect(() => {
+    const unsub = window.bifrost.onReviewActivity((tid, _rid, activity) => {
+      if (tid === taskId) setReviewActivity(activity);
+    });
+    return unsub;
+  }, [taskId]);
+
   // Hide discussion view when switching to a different review
   useEffect(() => {
     setShowDiscussion(discussingReviewId !== null && discussingReviewId === reviewId);
@@ -263,6 +272,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'running' });
     dispatch({ type: 'CLEAR_REVIEW_DISCUSSION', taskId });
     setShowDiscussion(false);
+    setReviewActivity(null);
     try {
       const { reviewId: newReviewId, markdown, sessionId } = await window.bifrost.runReview(taskId, reviewScope, reviewInstructions || undefined);
       const review: ReviewEntry = {
@@ -397,6 +407,9 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <div className="w-5 h-5 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
           <span className="text-sm text-slate-400">Running review...</span>
+          {reviewActivity && (
+            <span className="text-xs text-slate-500 max-w-md truncate" title={reviewActivity}>{reviewActivity}</span>
+          )}
           <button
             onClick={handleCancelReview}
             className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
@@ -472,9 +485,12 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
               {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
             </span>
           )}
+          {reviewActivity && !content && (
+            <span className="text-xs text-slate-500 truncate max-w-xs" title={reviewActivity}>{reviewActivity}</span>
+          )}
           <button
             onClick={handleCancelReview}
-            className="ml-auto px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+            className="ml-auto px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors flex-shrink-0"
           >
             Cancel
           </button>

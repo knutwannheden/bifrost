@@ -9,7 +9,7 @@ const execFile = promisify(execFileCb);
 import { IPC, IPC_STREAM } from '../shared/ipc-channels';
 import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams, ActivityEntry, PermissionDecision } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
-import { addRepo, removeRepo, getRepoBranches, detectBaseBranch, getRemotes } from './repo-manager';
+import { addRepo, removeRepo, getRepoBranches, getRemotes } from './repo-manager';
 import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree } from './worktree-manager';
 import { createSession, createShellSession, writeToSession, resizeSession, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
@@ -52,31 +52,50 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
 
 /**
  * Resolve the effective base branch for diff/review comparison.
- * Uses repo.defaultBranch if available and different from the current branch,
- * otherwise auto-detects from origin/HEAD or main/master.
+ * Tries repo.defaultBranch (preferring remote-tracking refs), then origin/HEAD,
+ * then origin/main or origin/master as last resort. All local operations, no network.
  */
 async function resolveBaseBranch(task: Task): Promise<string | undefined> {
+  // Wrap with a timeout so we never block the UI indefinitely
+  const result = await Promise.race([
+    resolveBaseBranchInner(task),
+    new Promise<undefined>((resolve) => setTimeout(resolve, 8000)),
+  ]);
+  return result;
+}
+
+async function resolveBaseBranchInner(task: Task): Promise<string | undefined> {
+  // Try repo's configured default branch (remote-tracking refs preferred for freshness)
   const config = loadConfig();
   const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-  let base = repo?.defaultBranch;
-
-  // Check if the stored base branch is the same as the current branch (useless for diff)
-  if (base) {
-    try {
-      const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd: task.worktreePath,
-      });
-      if (stdout.trim() === base) base = undefined;
-    } catch {
-      // ignore
+  if (repo?.defaultBranch) {
+    for (const candidate of [`origin/${repo.defaultBranch}`, `upstream/${repo.defaultBranch}`, repo.defaultBranch]) {
+      try {
+        await execFile('git', ['rev-parse', '--verify', candidate], { cwd: task.worktreePath, timeout: 5000 });
+        return candidate;
+      } catch { /* ref doesn't exist */ }
     }
   }
 
-  if (!base) {
-    base = await detectBaseBranch(task.worktreePath);
+  // Fallback: origin/HEAD
+  try {
+    const { stdout } = await execFile(
+      'git', ['symbolic-ref', 'refs/remotes/origin/HEAD'],
+      { cwd: task.worktreePath, timeout: 5000 },
+    );
+    const branch = stdout.trim().replace(/^refs\/remotes\/origin\//, '');
+    if (branch) return `origin/${branch}`;
+  } catch { /* origin/HEAD not set */ }
+
+  // Last resort: origin/main or origin/master
+  for (const candidate of ['main', 'master']) {
+    try {
+      await execFile('git', ['rev-parse', '--verify', `origin/${candidate}`], { cwd: task.worktreePath, timeout: 5000 });
+      return `origin/${candidate}`;
+    } catch { /* doesn't exist */ }
   }
 
-  return base;
+  return undefined;
 }
 
 async function destroyTask(taskId: string): Promise<void> {
@@ -218,8 +237,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         throw new Error(`An active task "${conflict.name}" already uses the main worktree for this repo`);
       }
       worktreePath = repo.path;
-      // Auto-detect current branch
-      const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo.path });
+      // Auto-detect current branch (symbolic-ref works even on repos with no commits)
+      const { stdout } = await execFile('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: repo.path });
       branch = stdout.trim();
       inPlace = true;
     } else {
@@ -421,21 +440,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Diff
   ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
-    const baseBranch = await resolveBaseBranch(task);
+    const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
     return getDiff(task.worktreePath, baseBranch, scope);
   });
 
   // File statuses (staged/unstaged/committed/untracked)
-  ipcMain.handle(IPC.GET_FILE_STATUSES, async (_event, taskId: string) => {
+  ipcMain.handle(IPC.GET_FILE_STATUSES, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
-    const baseBranch = await resolveBaseBranch(task);
+    const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
     return getFileStatuses(task.worktreePath, baseBranch);
   });
 
   // Diff stats
   ipcMain.handle(IPC.GET_DIFF_STATS, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
-    const baseBranch = await resolveBaseBranch(task);
+    const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
     return getDiffStats(task.worktreePath, baseBranch, scope);
   });
 
@@ -452,7 +471,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     try {
       const { stdout } = await execFile('gh', ['pr', 'view', '--json', 'url', '-q', '.url'], {
-        cwd: task.worktreePath,
+        cwd: task.worktreePath, timeout: 10000, killSignal: 'SIGKILL',
       });
       const url = stdout.trim();
       return url || null;
@@ -592,7 +611,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Review
   ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string, scope?: 'working' | 'all', instructions?: string) => {
     const task = getTask(taskId);
-    const { reviewId, markdown } = await runReview(task.worktreePath, taskId, mainWindow, scope, instructions);
+    const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
+    const { reviewId, markdown } = await runReview(task.worktreePath, taskId, mainWindow, scope, instructions, baseBranch);
     watchReviewFile(taskId, reviewId, mainWindow);
     // sessionId is set asynchronously via the SessionStart hook → /session-start API
     const sessionId = getReviewSessionId(taskId, reviewId);
@@ -686,7 +706,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // gh CLI availability
   ipcMain.handle(IPC.CHECK_GH_AVAILABLE, async () => {
     try {
-      await execFile('gh', ['--version'], { timeout: 5000 });
+      await execFile('gh', ['--version'], { timeout: 5000, killSignal: 'SIGKILL' });
       return true;
     } catch {
       return false;
@@ -706,7 +726,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const { stdout } = await execFile(
         'gh',
         ghArgs,
-        { cwd: repo.path, timeout: 10000 },
+        { cwd: repo.path, timeout: 10000, killSignal: 'SIGKILL' },
       );
       const data = JSON.parse(stdout);
       const headRepoOwner = data.headRepositoryOwner?.login ?? '';
@@ -729,7 +749,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const { stdout: prRef } = await execFile(
       'git',
       ['ls-remote', lsRemoteTarget, `refs/pull/${prNumber}/head`],
-      { cwd: repo.path, timeout: 10000 },
+      { cwd: repo.path, timeout: 10000, killSignal: 'SIGKILL' },
     );
     const prSha = prRef.split('\t')[0];
     if (!prSha) throw new Error(`PR #${prNumber} not found`);
@@ -740,7 +760,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const { stdout: refs } = await execFile(
         'git',
         ['ls-remote', '--heads', lsRemoteTarget],
-        { cwd: repo.path, timeout: 10000 },
+        { cwd: repo.path, timeout: 10000, killSignal: 'SIGKILL' },
       );
       for (const line of refs.split('\n')) {
         const [sha, ref] = line.split('\t');

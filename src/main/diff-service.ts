@@ -15,6 +15,7 @@ export async function getDiff(worktreePath: string, baseBranch?: string, scope: 
       // Diff merge-base against working tree (committed + staged + unstaged)
       const { stdout: mergeBaseOut } = await execFile('git', ['merge-base', baseBranch, 'HEAD'], {
         cwd: worktreePath,
+        timeout: 10000,
       });
       diffArgs = ['diff', mergeBaseOut.trim()];
     } else {
@@ -25,6 +26,7 @@ export async function getDiff(worktreePath: string, baseBranch?: string, scope: 
     const { stdout: trackedDiff } = await execFile('git', diffArgs, {
       cwd: worktreePath,
       maxBuffer: 10 * 1024 * 1024,
+      timeout: 30000,
     });
 
     // Get untracked files and generate synthetic diffs
@@ -86,26 +88,26 @@ export async function getFileStatuses(worktreePath: string, baseBranch?: string)
 
   // Unstaged tracked changes
   try {
-    const { stdout } = await execFile('git', ['diff', '--name-only'], { cwd: worktreePath });
+    const { stdout } = await execFile('git', ['diff', '--name-only'], { cwd: worktreePath, timeout: 10000 });
     for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'unstaged');
   } catch { /* ignore */ }
 
   // Staged changes
   try {
-    const { stdout } = await execFile('git', ['diff', '--cached', '--name-only'], { cwd: worktreePath });
+    const { stdout } = await execFile('git', ['diff', '--cached', '--name-only'], { cwd: worktreePath, timeout: 10000 });
     for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'staged');
   } catch { /* ignore */ }
 
   // Untracked files
   try {
-    const { stdout } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], { cwd: worktreePath });
+    const { stdout } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], { cwd: worktreePath, timeout: 10000 });
     for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'untracked');
   } catch { /* ignore */ }
 
   // Committed changes since base branch
   if (baseBranch) {
     try {
-      const { stdout } = await execFile('git', ['diff', '--name-only', `${baseBranch}...HEAD`], { cwd: worktreePath });
+      const { stdout } = await execFile('git', ['diff', '--name-only', `${baseBranch}...HEAD`], { cwd: worktreePath, timeout: 10000 });
       for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'committed');
     } catch { /* ignore */ }
   }
@@ -124,6 +126,7 @@ export async function getDiffStats(worktreePath: string, baseBranch?: string, sc
     if (scope === 'all' && baseBranch) {
       const { stdout: mergeBaseOut } = await execFile('git', ['merge-base', baseBranch, 'HEAD'], {
         cwd: worktreePath,
+        timeout: 10000,
       });
       diffArgs = ['diff', '--shortstat', mergeBaseOut.trim()];
     } else {
@@ -134,6 +137,7 @@ export async function getDiffStats(worktreePath: string, baseBranch?: string, sc
     try {
       const { stdout } = await execFile('git', diffArgs, {
         cwd: worktreePath,
+        timeout: 10000,
       });
       const trimmed = stdout.trim();
       if (trimmed) {

@@ -722,10 +722,10 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
 
   // Fetch file statuses alongside the diff
   useEffect(() => {
-    window.bifrost.getFileStatuses(taskId).then(
+    window.bifrost.getFileStatuses(taskId, scope).then(
       (statuses) => setFileStatuses(statuses as Record<string, GitFileStage[]>),
     ).catch(() => setFileStatuses({}));
-  }, [taskId, diff]);
+  }, [taskId, diff, scope]);
 
   const filtered = useMemo(() => {
     if (!files || !search) return files;

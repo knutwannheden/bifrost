@@ -81,7 +81,7 @@ export async function detectBaseBranch(repoPath: string): Promise<string | undef
   try {
     const { stdout } = await execFile(
       'gh', ['repo', 'view', '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name'],
-      { cwd: repoPath, timeout: 5000 },
+      { cwd: repoPath, timeout: 5000, killSignal: 'SIGKILL' },
     );
     const branch = stdout.trim();
     if (branch) return branch;
@@ -156,6 +156,6 @@ export async function getRepoBranches(repoPath: string): Promise<string[]> {
   const { stdout } = await execFile('git', ['branch', '-a'], { cwd: repoPath });
   return stdout
     .split('\n')
-    .map((line) => line.replace(/^\s*[*+]?\s+/, '').trim())
+    .map((line) => line.replace(/^\s*[*+]?\s+/, '').replace(/^remotes\//, '').trim())
     .filter((line) => line.length > 0 && !line.includes('->'));
 }
