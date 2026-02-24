@@ -10,7 +10,7 @@ import type { ReviewEntry } from '../shared/types';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-const REVIEW_TIMEOUT_MS = 300_000;
+const REVIEW_TIMEOUT_MS = 900_000;
 
 const REVIEW_INSTRUCTIONS = `Produce a Markdown document with:
 1. A brief summary paragraph of the changes

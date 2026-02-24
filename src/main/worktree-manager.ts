@@ -2,35 +2,58 @@ import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { getRemotes } from './repo-manager';
 
 const execFile = promisify(execFileCb);
 
-function resolveWorktreePath(repoPath: string, taskName: string, local?: boolean): string {
-  if (local) {
-    return path.join(repoPath, '.worktrees', taskName);
-  }
-  return path.join(os.homedir(), '.bifrost', 'worktrees', path.basename(repoPath), taskName);
+function resolveWorktreePath(repoPath: string, taskName: string): string {
+  return path.join(repoPath, '.worktrees', taskName);
+}
+
+/** Ensure /.worktrees/ is listed in .git/info/exclude so it stays untracked without touching .gitignore. */
+async function ensureExcludeEntry(repoPath: string): Promise<void> {
+  const excludePath = path.join(repoPath, '.git', 'info', 'exclude');
+  const entry = '/.worktrees/';
+  try {
+    await fs.promises.mkdir(path.dirname(excludePath), { recursive: true });
+    let content = '';
+    try { content = await fs.promises.readFile(excludePath, 'utf-8'); } catch { /* file may not exist */ }
+    if (!content.split('\n').some((line) => line.trim() === entry)) {
+      const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
+      await fs.promises.appendFile(excludePath, `${separator}${entry}\n`);
+    }
+  } catch { /* best effort */ }
 }
 
 export async function createWorktree(
   repoPath: string,
   taskName: string,
   branch: string,
-  localWorktrees?: boolean,
 ): Promise<string> {
-  const worktreePath = resolveWorktreePath(repoPath, taskName, localWorktrees);
+  const t0 = Date.now();
+  const worktreePath = resolveWorktreePath(repoPath, taskName);
 
-  if (localWorktrees) {
-    await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
-  }
+  await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
+  await ensureExcludeEntry(repoPath);
 
   const remoteMatch = branch.match(/^([^/]+)\/(.+)$/);
+
+  // Fetch the latest remote ref before creating the worktree (best-effort with timeout)
+  if (remoteMatch) {
+    try {
+      await execFile('git', ['fetch', remoteMatch[1], remoteMatch[2]], {
+        cwd: repoPath, timeout: 15000,
+      });
+      console.log(`[createWorktree] fetch: ${Date.now() - t0}ms`);
+    } catch {
+      console.log(`[createWorktree] fetch failed/timed out, using local ref (${Date.now() - t0}ms)`);
+    }
+  }
 
   await execFile('git', ['worktree', 'add', worktreePath, '-b', taskName, branch], {
     cwd: repoPath,
   });
+  console.log(`[createWorktree] git worktree add: ${Date.now() - t0}ms`);
 
   // Set upstream tracking when branching from a remote tracking branch
   if (remoteMatch) {
@@ -39,6 +62,7 @@ export async function createWorktree(
       ['branch', '--set-upstream-to', branch, taskName],
       { cwd: worktreePath },
     );
+    console.log(`[createWorktree] set-upstream-to: ${Date.now() - t0}ms`);
   }
 
   return worktreePath;
@@ -48,13 +72,11 @@ export async function createWorktreeFromPr(
   repoPath: string,
   taskName: string,
   prInfo: import('../shared/types').PrInfo,
-  localWorktrees?: boolean,
 ): Promise<string> {
-  const worktreePath = resolveWorktreePath(repoPath, taskName, localWorktrees);
+  const worktreePath = resolveWorktreePath(repoPath, taskName);
 
-  if (localWorktrees) {
-    await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
-  }
+  await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
+  await ensureExcludeEntry(repoPath);
 
   // Find which remote hosts the PR head branch
   const headGhPath = prInfo.headRepoOwner && prInfo.headRepoName
@@ -105,13 +127,10 @@ export async function createWorktreeFromPr(
 export async function restoreWorktree(
   repoPath: string,
   taskName: string,
-  localWorktrees?: boolean,
 ): Promise<string> {
-  const worktreePath = resolveWorktreePath(repoPath, taskName, localWorktrees);
+  const worktreePath = resolveWorktreePath(repoPath, taskName);
 
-  if (localWorktrees) {
-    await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
-  }
+  await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
 
   await execFile('git', ['worktree', 'add', worktreePath, taskName], {
     cwd: repoPath,

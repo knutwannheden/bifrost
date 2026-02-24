@@ -200,19 +200,6 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
-      key: 'localWorktrees',
-      category: 'General',
-      label: 'Local worktrees',
-      description: 'Create worktrees inside the repo directory (.worktrees/)',
-      tooltip: 'By default, worktrees are created in a sibling directory next to your repo. With this enabled, they go into a .worktrees/ folder inside the repo instead.\n\nUseful when your IDE or tools expect everything under one root directory. Make sure to add .worktrees/ to your .gitignore.',
-      render: (config, update) => (
-        <ToggleSwitch
-          checked={config.localWorktrees}
-          onChange={(v) => update({ localWorktrees: v })}
-        />
-      ),
-    },
-    {
       key: 'showTips',
       category: 'General',
       label: 'Show tips on welcome screen',

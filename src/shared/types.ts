@@ -65,7 +65,6 @@ export interface BifrostConfig {
   notifications: boolean;
   showTips: boolean;
   agentTeams: boolean;
-  localWorktrees: boolean;
   managePermissions: boolean;
 }
 
@@ -197,7 +196,6 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   notifications: true,
   showTips: true,
   agentTeams: false,
-  localWorktrees: false,
   managePermissions: true,
 };
 

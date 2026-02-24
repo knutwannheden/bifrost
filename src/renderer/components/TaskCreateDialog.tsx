@@ -29,6 +29,9 @@ function matchesSearch(repo: Repo, search: string): boolean {
   return search.toLowerCase().split(/\s+/).filter(Boolean).every((term) => haystack.includes(term));
 }
 
+// Cache branches per repo so subsequent opens are instant
+const branchCache = new Map<string, string[]>();
+
 export default function TaskCreateDialog() {
   const { state, dispatch } = useApp();
   const initialRepo = (() => {
@@ -205,12 +208,25 @@ export default function TaskCreateDialog() {
     }
     let cancelled = false;
     setTaskName(generateTaskName());
-    setBranches([]);
     setBranch('');
     setBranchSearch('');
-    setBranchesLoading(true);
+
+    // Use cached branches immediately if available
+    const cached = branchCache.get(repoId);
+    if (cached) {
+      setBranches(cached);
+      setBranchesLoading(false);
+    } else {
+      setBranches([]);
+      setBranchesLoading(true);
+    }
+
+    // Refresh in background
     window.bifrost.getRepoBranches(repoId).then((b) => {
-      if (!cancelled) setBranches(b);
+      if (!cancelled) {
+        branchCache.set(repoId, b);
+        setBranches(b);
+      }
     }).finally(() => {
       if (!cancelled) setBranchesLoading(false);
     });

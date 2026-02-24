@@ -203,7 +203,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === repoId);
     if (!repo) throw new Error(`Repo not found: ${repoId}`);
-    const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repo.path });
+    const { stdout } = await execFile('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: repo.path });
     return stdout.trim();
   });
 
@@ -220,6 +220,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Tasks
   ipcMain.handle(IPC.CREATE_TASK, async (_event, params: CreateTaskParams) => {
+    const t0 = Date.now();
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === params.repoId);
     if (!repo) throw new Error(`Repo not found: ${params.repoId}`);
@@ -242,18 +243,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       branch = stdout.trim();
       inPlace = true;
     } else {
+      console.log('[CREATE_TASK] creating worktree...');
       worktreePath = params.prInfo
-        ? await createWorktreeFromPr(repo.path, params.name, params.prInfo, config.localWorktrees)
-        : await createWorktree(repo.path, params.name, params.branch, config.localWorktrees);
+        ? await createWorktreeFromPr(repo.path, params.name, params.prInfo)
+        : await createWorktree(repo.path, params.name, params.branch);
+      console.log(`[CREATE_TASK] worktree created in ${Date.now() - t0}ms`);
     }
 
     const sessionId = randomUUID();
     const taskId = randomUUID();
 
+    console.log(`[CREATE_TASK] spawning session at ${Date.now() - t0}ms`);
     createSession(sessionId, worktreePath, mainWindow, {
       taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams,
     });
-
 
     const task: Task = {
       id: taskId,
@@ -274,6 +277,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     // Start watching for file changes
     startWatching(task.id, worktreePath, mainWindow, claudeCallbacks);
 
+    console.log(`[CREATE_TASK] done in ${Date.now() - t0}ms`);
     return task;
   });
 
@@ -343,7 +347,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const config = loadConfig();
       const repo = config.repos.find((r: Repo) => r.id === task.repoId);
       if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
-      worktreePath = await restoreWorktree(repo.path, task.name, config.localWorktrees);
+      worktreePath = await restoreWorktree(repo.path, task.name);
     }
 
     // Re-detect current branch for in-place tasks (user may have switched)
