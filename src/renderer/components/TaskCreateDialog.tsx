@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import type { PrInfo, Repo } from '../../shared/types';
-import { generateTaskName } from '../utils/name-generator';
+import { generateTaskName } from '../../shared/name-generator';
 import { shortPath } from '../utils/paths';
 import ActionLabel from './ActionLabel';
 

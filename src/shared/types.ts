@@ -184,6 +184,54 @@ export interface RecentRepo {
   githubPath?: string;
 }
 
+export interface SkillUsageEntry {
+  skill: string;
+  count: number;
+}
+
+export interface ToolUsageEntry {
+  tool: string;
+  count: number;
+}
+
+export interface BashCommandEntry {
+  command: string;
+  count: number;
+}
+
+export interface StatsData {
+  skillUsage: SkillUsageEntry[];
+  toolUsage: ToolUsageEntry[];
+  bashCommands: BashCommandEntry[];
+}
+
+// Supervisor types
+
+export type SupervisorItemStatus = 'queued' | 'running' | 'paused' | 'done' | 'error' | 'opened';
+
+export interface SupervisorItem {
+  id: string;
+  noteId: string;
+  repoId: string;
+  noteText: string;
+  status: SupervisorItemStatus;
+  name: string;
+  branch: string;
+  worktreePath?: string;
+  claudeSessionId?: string;
+  errorMessage?: string;
+  createdAt: number;
+  startedAt?: number;
+  completedAt?: number;
+  openedAsTaskId?: string;
+}
+
+export interface SupervisorState {
+  running: boolean;
+  concurrency: number;
+  items: SupervisorItem[];
+}
+
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',

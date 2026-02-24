@@ -165,6 +165,31 @@ const api: BifrostAPI = {
   createNote: (repoId, text) => ipcRenderer.invoke(IPC.NOTE_CREATE, repoId, text),
   deleteNote: (repoId, noteId) => ipcRenderer.invoke(IPC.NOTE_DELETE, repoId, noteId),
 
+  // Stats
+  getStats: () => ipcRenderer.invoke(IPC.GET_STATS),
+  onStatsUpdate: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: import('../shared/types').StatsData) =>
+      callback(data);
+    ipcRenderer.on(IPC_STREAM.STATS_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.STATS_UPDATE, handler);
+  },
+
+  // Supervisor
+  getSupervisorState: () => ipcRenderer.invoke(IPC.SUPERVISOR_GET_STATE),
+  startSupervisor: () => ipcRenderer.invoke(IPC.SUPERVISOR_START),
+  stopSupervisor: () => ipcRenderer.invoke(IPC.SUPERVISOR_STOP),
+  setSupervisorConcurrency: (n) => ipcRenderer.invoke(IPC.SUPERVISOR_SET_CONCURRENCY, n),
+  pauseSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_PAUSE_ITEM, itemId),
+  resumeSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_RESUME_ITEM, itemId),
+  openSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_OPEN_ITEM, itemId),
+  removeSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_REMOVE_ITEM, itemId),
+  onSupervisorUpdate: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, supervisorState: import('../shared/types').SupervisorState) =>
+      callback(supervisorState);
+    ipcRenderer.on(IPC_STREAM.SUPERVISOR_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.SUPERVISOR_UPDATE, handler);
+  },
+
   // Agent busy state (from plugin hooks)
   onAgentBusy: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string, busy: boolean) =>

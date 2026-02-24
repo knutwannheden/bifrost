@@ -28,6 +28,11 @@ import { scanRecentRepos } from './history-scanner';
 import { resolveRequest, cancelTaskRequests, setWorktreePathResolver } from './permission-manager';
 import { setActiveTaskId } from './notification-service';
 import { listNotes, createNote, deleteNote } from './note-store';
+import { getStats } from './stats-service';
+import {
+  initSupervisor, getSupervisorState, startSupervisor, stopSupervisor,
+  setSupervisorConcurrency, pauseItem, resumeItem, openItem, removeItem,
+} from './supervisor-service';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -816,4 +821,59 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.RESOLVE_PERMISSION, (_event, requestId: string, decision: PermissionDecision) => {
     resolveRequest(requestId, decision);
   });
+
+  // Stats
+  ipcMain.handle(IPC.GET_STATS, () =>
+    getStats((data) => {
+      mainWindow.webContents.send(IPC_STREAM.STATS_UPDATE, data);
+    }),
+  );
+
+  // Supervisor
+  const supervisorTaskCreator = async (item: import('../shared/types').SupervisorItem): Promise<Task> => {
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === item.repoId);
+    if (!repo) throw new Error(`Repo not found: ${item.repoId}`);
+    if (!item.worktreePath) throw new Error('Supervisor item has no worktree');
+
+    const sessionId = randomUUID();
+    const taskId = randomUUID();
+
+    createSession(sessionId, item.worktreePath, mainWindow, {
+      claudeSessionId: item.claudeSessionId,
+      taskId,
+      apiPort: getApiPort() ?? undefined,
+      permissionMode: config.permissionMode,
+      agentTeams: config.agentTeams,
+    });
+
+    const task: Task = {
+      id: taskId,
+      name: item.name,
+      repoId: item.repoId,
+      branch: item.branch,
+      worktreePath: item.worktreePath,
+      sessionId,
+      status: 'running',
+      hasUnread: false,
+      createdAt: Date.now(),
+      claudeSessionId: item.claudeSessionId,
+    };
+
+    tasks.push(task);
+    saveTasks(tasks);
+    startWatching(taskId, item.worktreePath, mainWindow, claudeCallbacks);
+    return task;
+  };
+
+  initSupervisor(mainWindow, supervisorTaskCreator);
+
+  ipcMain.handle(IPC.SUPERVISOR_GET_STATE, () => getSupervisorState());
+  ipcMain.handle(IPC.SUPERVISOR_START, () => startSupervisor());
+  ipcMain.handle(IPC.SUPERVISOR_STOP, () => stopSupervisor());
+  ipcMain.handle(IPC.SUPERVISOR_SET_CONCURRENCY, (_event, n: number) => setSupervisorConcurrency(n));
+  ipcMain.handle(IPC.SUPERVISOR_PAUSE_ITEM, (_event, itemId: string) => pauseItem(itemId));
+  ipcMain.handle(IPC.SUPERVISOR_RESUME_ITEM, (_event, itemId: string) => resumeItem(itemId));
+  ipcMain.handle(IPC.SUPERVISOR_OPEN_ITEM, (_event, itemId: string) => openItem(itemId));
+  ipcMain.handle(IPC.SUPERVISOR_REMOVE_ITEM, (_event, itemId: string) => removeItem(itemId));
 }

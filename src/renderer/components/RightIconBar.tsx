@@ -37,6 +37,26 @@ function ReviewIcon() {
   );
 }
 
+function SupervisorIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="4" r="2" />
+      <path d="M8 6v2" />
+      <path d="M4.5 10.5L8 8l3.5 2.5" />
+      <circle cx="4.5" cy="12" r="1.5" />
+      <circle cx="11.5" cy="12" r="1.5" />
+    </svg>
+  );
+}
+
+function StatsIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 13V8M6.5 13V5M10 13V7M13.5 13V3" />
+    </svg>
+  );
+}
+
 function GearIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -134,9 +154,25 @@ export default function RightIconBar() {
         <ReviewIcon />
       </IconButton>
 
+      <IconButton
+        label="Supervisor"
+        active={state.showSupervisor}
+        onClick={() => dispatch({ type: 'TOGGLE_SUPERVISOR' })}
+      >
+        <SupervisorIcon />
+      </IconButton>
+
       <div className="flex-1" />
 
       <div className="mx-2 my-1 border-t border-slate-700" />
+
+      <IconButton
+        label="Statistics"
+        active={state.showStats}
+        onClick={() => dispatch({ type: 'TOGGLE_STATS' })}
+      >
+        <StatsIcon />
+      </IconButton>
 
       <IconButton
         label="Settings"

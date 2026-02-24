@@ -15,6 +15,8 @@ import type {
   RecentRepo,
   Repo,
   ReviewEntry,
+  StatsData,
+  SupervisorState,
   Task,
 } from './types';
 
@@ -117,6 +119,19 @@ export const IPC = {
 
   // Permission
   RESOLVE_PERMISSION: 'permission:resolve',
+
+  // Stats
+  GET_STATS: 'stats:get',
+
+  // Supervisor
+  SUPERVISOR_GET_STATE: 'supervisor:get-state',
+  SUPERVISOR_START: 'supervisor:start',
+  SUPERVISOR_STOP: 'supervisor:stop',
+  SUPERVISOR_SET_CONCURRENCY: 'supervisor:set-concurrency',
+  SUPERVISOR_PAUSE_ITEM: 'supervisor:pause-item',
+  SUPERVISOR_RESUME_ITEM: 'supervisor:resume-item',
+  SUPERVISOR_OPEN_ITEM: 'supervisor:open-item',
+  SUPERVISOR_REMOVE_ITEM: 'supervisor:remove-item',
 } as const;
 
 // Streaming channels (send/on)
@@ -132,6 +147,8 @@ export const IPC_STREAM = {
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
   AGENT_BUSY: 'agent:busy',
+  STATS_UPDATE: 'stats:update',
+  SUPERVISOR_UPDATE: 'supervisor:update',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -252,6 +269,21 @@ export interface BifrostAPI {
 
   // Agent busy state (from plugin hooks)
   onAgentBusy(callback: (taskId: string, busy: boolean) => void): () => void;
+
+  // Stats
+  getStats(): Promise<void>;
+  onStatsUpdate(callback: (data: StatsData) => void): () => void;
+
+  // Supervisor
+  getSupervisorState(): Promise<SupervisorState>;
+  startSupervisor(): Promise<SupervisorState>;
+  stopSupervisor(): Promise<SupervisorState>;
+  setSupervisorConcurrency(n: number): Promise<SupervisorState>;
+  pauseSupervisorItem(itemId: string): Promise<SupervisorState>;
+  resumeSupervisorItem(itemId: string): Promise<SupervisorState>;
+  openSupervisorItem(itemId: string): Promise<Task>;
+  removeSupervisorItem(itemId: string): Promise<SupervisorState>;
+  onSupervisorUpdate(callback: (state: SupervisorState) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

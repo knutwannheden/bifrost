@@ -16,6 +16,8 @@ import PermissionPanel from './components/PermissionPanel';
 import RightIconBar from './components/RightIconBar';
 import NotificationPopover from './components/NotificationPopover';
 import NotesOverlay from './components/NotesOverlay';
+import StatsOverlay from './components/StatsOverlay';
+import SupervisorOverlay from './components/SupervisorOverlay';
 
 declare global {
   interface Window {
@@ -325,6 +327,8 @@ export default function App() {
             {state.showTaskHistory && <TaskHistoryPanel />}
             {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
             {state.showNotes && <NotesOverlay />}
+            {state.showStats && <StatsOverlay />}
+            {state.showSupervisor && <SupervisorOverlay />}
           </div>
 
           {/* Status bar */}

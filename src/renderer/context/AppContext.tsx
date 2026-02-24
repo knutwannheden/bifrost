@@ -29,6 +29,8 @@ export interface AppState {
   showKeyboardShortcuts: boolean;
   showSettings: boolean;
   showNotes: boolean;
+  showStats: boolean;
+  showSupervisor: boolean;
   paneStates: Record<string, TaskPaneState>;
   /** Review markdown content keyed by reviewId */
   reviewContent: Record<string, string>;
@@ -66,6 +68,8 @@ export type AppAction =
   | { type: 'TOGGLE_KEYBOARD_SHORTCUTS' }
   | { type: 'TOGGLE_SETTINGS' }
   | { type: 'TOGGLE_NOTES' }
+  | { type: 'TOGGLE_STATS' }
+  | { type: 'TOGGLE_SUPERVISOR' }
   | { type: 'SET_DIFF_MODE'; mode: DiffMode }
   | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
   | { type: 'CLOSE_DEV_SESSION'; taskId: string }
@@ -108,6 +112,8 @@ const initialState: AppState = {
   showKeyboardShortcuts: false,
   showSettings: false,
   showNotes: false,
+  showStats: false,
+  showSupervisor: false,
   paneStates: {},
   reviewContent: {},
   reviewStatus: {},
@@ -152,6 +158,8 @@ const allOverlaysClosed = {
   showKeyboardShortcuts: false,
   showSettings: false,
   showNotes: false,
+  showStats: false,
+  showSupervisor: false,
 };
 
 /** Close the active task's diff overlay */
@@ -248,6 +256,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showSettings: !state.showSettings });
     case 'TOGGLE_NOTES':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showNotes: !state.showNotes });
+    case 'TOGGLE_STATS':
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showStats: !state.showStats });
+    case 'TOGGLE_SUPERVISOR':
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showSupervisor: !state.showSupervisor });
     case 'SET_DIFF_MODE': {
       if (!state.activeTaskId) return state;
       const ps = getPaneState(state, state.activeTaskId);

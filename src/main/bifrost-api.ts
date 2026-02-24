@@ -6,6 +6,7 @@ import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask, updateTask } from './ipc-handlers';
 import { setReviewSessionId, startReviewActivityWatch } from './review-service';
+import { setSupervisorItemSessionId } from './supervisor-service';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
@@ -267,8 +268,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const context = body.bifrost_context as string;
       const taskId = body.bifrost_task_id as string;
       const reviewId = body.bifrost_review_id as string;
+      const supervisorItemId = body.bifrost_supervisor_item_id as string;
       if (!sessionId || !cwd) {
         errorResponse(res, 'Missing session_id or cwd');
+        return;
+      }
+      // Supervisor context — set session ID on the supervisor item
+      if (context === 'supervisor' && supervisorItemId) {
+        setSupervisorItemSessionId(supervisorItemId, sessionId);
+        jsonResponse(res, { ok: true });
         return;
       }
       // Look up task by ID first (most reliable), then fall back to CWD matching
@@ -285,7 +293,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
           startReviewActivityWatch(task.id, reviewId, cwd, sessionId, mainWindow);
         }
-      } else if (!task.claudeSessionId) {
+      } else if (task.claudeSessionId !== sessionId) {
         updateTask(task.id, { claudeSessionId: sessionId });
       }
       jsonResponse(res, { ok: true });
