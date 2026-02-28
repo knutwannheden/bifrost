@@ -63,7 +63,7 @@ Each task has both a Claude Code pane and a dev terminal pane, side by side. Tog
 
 Bifrost includes an MCP server that lets Claude Code sessions access captured context, task diffs, and activity logs. On startup, Bifrost automatically installs the server to `~/.bifrost/mcp/`.
 
-To enable it, add the following to your Claude Code MCP config (`~/.claude/claude_desktop_config.json` or project `.mcp.json`):
+To enable it, you can ask Bifrost to automatically add the configuration to your Claude Code MCP config, or manually add the following to `~/.claude/claude_desktop_config.json` (or project `.mcp.json`):
 
 ```json
 {
