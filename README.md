@@ -10,23 +10,34 @@
 
 ## Overview
 
-Bifrost lets you run multiple Claude Code sessions side-by-side, each in its own git worktree with a dedicated PTY terminal. It tracks file changes, commits, and Claude interactions in real time, and provides diff visualization with syntax highlighting.
+Work-in-progress Electron app. Built for myself because I couldn't find existing tools that fit how I wanted to work. I like GUIs that are fully keyboard-operable — think JetBrains IDEs. Rough around the edges, but genuinely useful as-is.
 
-## Features
+Bifrost is a keyboard-centric Electron app that works like a multi-tab terminal. You run multiple Claude Code sessions in parallel, each in its own git worktree with a dedicated terminal. You interact with Claude Code directly—Bifrost just manages the tabs, context isolation, and switching. Each task's context stays clean, and you jump between them without losing focus.
 
-- **Multi-task orchestration** — each task gets its own git worktree and Claude Code session
-- **Live terminal streaming** — xterm.js terminals with Dracula theme
-- **Split panes** — Claude + dev terminal side by side per task
-- **Code review** — Review tab in the diff overlay runs Claude non-interactively to review changes, renders Markdown with interactive checkboxes, and copies a prompt for addressing selected items
-- **Git diff viewer** — syntax-highlighted diffs with per-file stat badges via Shiki
-- **Git log viewer** — commit history filtered per worktree
-- **Activity log** — file changes, commits, and Claude events tracked in real time
-- **Task auto-summarization** — completed tasks are summarized via Claude CLI
-- **Context capture** — Cmd+Shift+C captures terminal content or transcript references for cross-session sharing
-- **Session resumption** — discover and resume external Claude Code sessions
-- **IDE integration** — open files in VS Code or JetBrains IDEs
-- **Settings** — IDE selection, font size, sandbox mode
-- **MCP server** — exposes captured context to Claude via Model Context Protocol
+## Key Features
+
+**Task Creation Skill**
+
+You're deep in a task in Claude Code. An idea pops up—something related but separate. You invoke the task creation skill and describe the idea. The skill automatically crafts a prompt with the relevant context, creates a new task in Bifrost, and launches a Claude Code session that immediately starts working on it. You stay in your current Claude Code session the whole time.
+
+Why does this matter? Your main session's context stays clean. You can parallelize work with minimal context pollution and without leaving your Claude Code session. The skill handles turning your idea into a properly-scoped task. I use this 5-10 times a day.
+
+**Code Review (In Isolation)**
+
+Run Claude-powered code reviews in a completely separate session. Your main context never gets polluted. Findings render as interactive Markdown with checkboxes—you pick which to address—and a generated prompt hands them off to your main session for fixes.
+
+**Split Terminals: Claude Code + Dev Terminal**
+
+Each task has both a Claude Code pane and a dev terminal pane, side by side. Toggle between them with Cmd+/ without leaving the app. Spawn a long-running command (tests, build, server), switch to Claude Code, work while it runs, then switch back when done. Everything stays in one window with full keyboard control.
+
+## Core Features
+
+- **Multi-session workflows** — Run multiple Claude Code sessions in parallel, each with its own git worktree and dedicated PTY terminal
+- **Keyboard-centric navigation** — Switch between sessions, open diffs, manage tasks, and control the app entirely with keyboard shortcuts
+- **Git diff viewer** — Syntax-highlighted diffs with per-file stats (via Shiki)
+- **Activity log** — Real-time tracking of file changes, commits, and Claude events
+- **Git log viewer** — Commit history filtered per worktree
+- **MCP server** — Let Claude Code sessions access captured context, task diffs, and activity logs via Model Context Protocol
 
 ## Keyboard Shortcuts
 
