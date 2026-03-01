@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, clipboard, dialog, shell } from 'electron';
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
