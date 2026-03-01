@@ -66,6 +66,7 @@ export interface BifrostConfig {
   showTips: boolean;
   agentTeams: boolean;
   managePermissions: boolean;
+  experimentalFeatures: boolean;
 }
 
 export interface CreateTaskParams {
@@ -245,6 +246,7 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   showTips: true,
   agentTeams: false,
   managePermissions: true,
+  experimentalFeatures: false,
 };
 
 // Permission approval types

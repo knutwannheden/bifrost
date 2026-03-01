@@ -154,13 +154,16 @@ export default function RightIconBar() {
         <ReviewIcon />
       </IconButton>
 
-      <IconButton
-        label="Supervisor"
-        active={state.showSupervisor}
-        onClick={() => dispatch({ type: 'TOGGLE_SUPERVISOR' })}
-      >
-        <SupervisorIcon />
-      </IconButton>
+      {state.config?.experimentalFeatures && (
+        <IconButton
+          label="Supervisor"
+          active={state.showSupervisor}
+          badge={supervisorBadge}
+          onClick={() => dispatch({ type: 'TOGGLE_SUPERVISOR' })}
+        >
+          <SupervisorIcon />
+        </IconButton>
+      )}
 
       <div className="flex-1" />
 
