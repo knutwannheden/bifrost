@@ -140,15 +140,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Re-spawn sessions for tasks that were running when the app quit
   for (const task of tasksToRestore) {
     if (fs.existsSync(task.worktreePath)) {
-      const sessionId = randomUUID();
       const startupConfig = loadConfig();
-      createSession(sessionId, task.worktreePath, mainWindow, {
+      createSession(task.sessionId, task.worktreePath, mainWindow, {
         claudeSessionId: task.claudeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
       });
 
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
-        tasks[idx] = { ...tasks[idx], sessionId, status: 'running', hasUnread: false };
+        tasks[idx] = { ...tasks[idx], status: 'running', hasUnread: false };
       }
     }
   }
