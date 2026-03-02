@@ -17,7 +17,7 @@ import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastChangedFile } from './activity-watcher';
-import { getApiPort, isSessionStale, registerResumeAttempt } from './bifrost-api';
+import { getApiPort, isSessionStale } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
@@ -153,9 +153,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
 
       // Use task.id as PTY sessionId so renderer can find the buffer
-      if (resumeSessionId) {
-        registerResumeAttempt(task.id);
-      }
       createSession(task.id, task.worktreePath, mainWindow, {
         resumeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
       });
@@ -282,7 +279,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       repoId: params.repoId,
       branch,
       worktreePath,
-      sessionId,
       status: 'running',
       hasUnread: false,
       createdAt: Date.now(),
@@ -387,9 +383,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       updateTask(taskId, { sessionId: undefined });
     }
 
-    if (resumeSessionId) {
-      registerResumeAttempt(taskId, resumeSessionId);
-    }
     createSession(taskId, worktreePath, mainWindow, {
       resumeSessionId,
       taskId,
@@ -607,7 +600,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
-    registerResumeAttempt(taskId, externalSessionId);
     createSession(taskId, cwd, mainWindow, {
       resumeSessionId: externalSessionId,
       taskId,

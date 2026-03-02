@@ -16,20 +16,6 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 
 let mainWindow: BrowserWindow | null = null;
 
-// Track /session-start call counts per task. When resuming (either via REOPEN_TASK or
-// manual /resume), Claude makes multiple calls. We skip the first one and allow updates after.
-const sessionStartCallCounts = new Map<string, number>();
-
-function incrementSessionStartCallCount(taskId: string): number {
-  const count = (sessionStartCallCounts.get(taskId) ?? 0) + 1;
-  sessionStartCallCounts.set(taskId, count);
-  return count;
-}
-
-export function registerResumeAttempt(taskId: string): void {
-  // Reset call count when resumption is registered (for REOPEN_TASK case)
-  sessionStartCallCounts.set(taskId, 0);
-}
 
 /**
  * Check if a Claude session is still valid.
@@ -317,6 +303,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: true });
         return;
       }
+      // Only update task.sessionId for 'code' context (the main Claude session in the Bifrost tab)
+      // Other contexts (dev, review, etc.) don't update the stored sessionId
+      if (context !== 'code') {
+        jsonResponse(res, { ok: true });
+        return;
+      }
       // Look up task by ID first (most reliable), then fall back to CWD matching
       const task = taskId
         ? (() => { try { return getTask(taskId); } catch { return undefined; } })()
@@ -325,21 +317,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
       }
-      // Handle sessionId capture:
-      // - First time (undefined): always capture
-      // - After first call (callCount > 1) in regular context: allow updates (handles resumption)
-      // This works for both registered resumptions (REOPEN_TASK) and immediate /resume commands
-      const callCount = context === 'code' ? incrementSessionStartCallCount(task.id) : 0;
-
-      if (!task.sessionId && sessionId) {
-        // First time: always capture when undefined
-        updateTask(task.id, { sessionId });
-      } else if (context === 'code' && callCount > 1 && task.sessionId !== sessionId) {
-        // After first /session-start call: allow updates if sessionId differs
-        // This handles both registered resumptions and immediate /resume commands
+      // Update sessionId if it differs from current value.
+      // This works for all cases: initial capture, manual /resume, registered resumptions, etc.
+      if (task.sessionId !== sessionId) {
         updateTask(task.id, { sessionId });
       }
-      if (context === 'review' && reviewId) {
+      if (reviewId) {
         setReviewSessionId(task.id, reviewId, sessionId);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
