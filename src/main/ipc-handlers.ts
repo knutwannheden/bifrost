@@ -41,6 +41,10 @@ let tasks: Task[] = [];
 // Module-level reference set by registerIpcHandlers(), used by createTaskCore()
 let _claudeCallbacks: { onSummary: (taskId: string, summary: string) => void } | null = null;
 
+// Tasks whose sessions are deferred until their tab is activated
+const pendingRestore = new Set<string>();
+
+
 export function getTasks(): Task[] {
   return tasks;
 }
@@ -208,6 +212,24 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   return task;
 }
 
+function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): void {
+  pendingRestore.delete(taskId);
+  const task = getTask(taskId);
+  const config = loadConfig();
+
+  createSession(taskId, task.worktreePath, mainWindow, {
+    resumeSessionId: task.sessionId,
+    taskId,
+    apiPort: getApiPort() ?? undefined,
+    permissionMode: config.permissionMode,
+    agentTeams: config.agentTeams,
+    onResumeFailed: task.sessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
+  });
+
+  if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
+  startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks);
+}
+
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Load persisted context entries from disk
   loadPersistedContexts();
@@ -234,35 +256,23 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   };
   _claudeCallbacks = claudeCallbacks;
 
-  // Re-spawn sessions for tasks that were running when the app quit
+  // Mark previously-running tasks as running and defer session creation until tab activation
   for (const task of tasksToRestore) {
     if (fs.existsSync(task.worktreePath)) {
-      const startupConfig = loadConfig();
-
       // Check if stored sessionId is stale; if so, clear it so user can select a session
-      let resumeSessionId = task.sessionId;
-      if (resumeSessionId && isSessionStale(task.worktreePath, resumeSessionId)) {
-        resumeSessionId = undefined;
+      if (task.sessionId && isSessionStale(task.worktreePath, task.sessionId)) {
         const idx = tasks.findIndex((t) => t.id === task.id);
         if (idx !== -1) {
           tasks[idx] = { ...tasks[idx], sessionId: undefined };
         }
       }
 
-      // Use task.id as PTY sessionId so renderer can find the buffer
-      const taskId = task.id;
-      createSession(taskId, task.worktreePath, mainWindow, {
-        resumeSessionId, taskId, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
-        onResumeFailed: resumeSessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
-      });
-
-      const idx = tasks.findIndex((t) => t.id === taskId);
+      const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx !== -1) {
         tasks[idx] = { ...tasks[idx], status: 'running', hasUnread: false };
       }
 
-      // Start watching immediately so onSessionChange fires when Claude session starts
-      startWatching(taskId, task.worktreePath, mainWindow, claudeCallbacks);
+      pendingRestore.add(task.id);
     }
   }
 
@@ -721,6 +731,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.SET_ACTIVE_TASK_ID, (_event, taskId: string | null) => {
     setActiveTaskId(taskId);
+    if (taskId && pendingRestore.has(taskId)) {
+      restoreTaskSession(taskId, mainWindow);
+    }
   });
 
   ipcMain.handle(IPC.GET_LAST_ASSISTANT_MESSAGE, (_event, taskId: string) => {

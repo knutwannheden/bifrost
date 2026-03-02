@@ -5,6 +5,7 @@ import { registerIpcHandlers } from './ipc-handlers';
 import { killAllSessions } from './session-manager';
 import { initNotificationService } from './notification-service';
 import { startApi, stopApi, initApi } from './bifrost-api';
+import { ensureHooks } from './integration-installer';
 import { stopAllWatching } from './activity-watcher';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
@@ -149,6 +150,9 @@ app.on('ready', async () => {
 
   buildMenu();
   createWindow();
+
+  // Ensure plugin hooks are in the path Claude actually loads from
+  ensureHooks();
 
   // Start HTTP API
   await startApi();

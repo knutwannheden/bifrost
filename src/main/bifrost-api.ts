@@ -385,11 +385,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
       }
-      // When we started with --resume, the stored sessionId is already validated.
-      // Don't overwrite it with a potentially transient "wrapper" session ID that
-      // Claude reports before loading the actual resumed conversation.
-      const resumeSessionId = body.bifrost_resume_session_id as string;
-      if (!resumeSessionId && task.sessionId !== sessionId) {
+      if (task.sessionId !== sessionId) {
         updateTask(task.id, { sessionId });
       }
       if (reviewId) {

@@ -55,6 +55,30 @@ function readPluginVersion(pluginDir: string): string | null {
   }
 }
 
+/**
+ * Claude's marketplace caching may not copy hooks/ into the plugin cache directory.
+ * This ensures hooks exist at whatever path Claude is actually loading the plugin from.
+ */
+export function ensureHooks(): void {
+  try {
+    if (!fs.existsSync(PLUGINS_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(PLUGINS_FILE, 'utf-8')) as PluginsFile;
+    const entries = raw.plugins?.[PLUGIN_ID] as Array<Record<string, unknown>> | undefined;
+    if (!entries?.[0]?.installPath) return;
+
+    const installPath = entries[0].installPath as string;
+    const cachedHooks = path.join(installPath, 'hooks');
+    const sourceHooks = path.join(PLUGIN_DEPLOY_DIR, 'hooks');
+
+    if (!fs.existsSync(path.join(cachedHooks, 'hooks.json')) && fs.existsSync(path.join(sourceHooks, 'hooks.json'))) {
+      copyDirSync(sourceHooks, cachedHooks);
+      console.log(`[integration] Copied hooks to ${cachedHooks}`);
+    }
+  } catch {
+    // Best-effort
+  }
+}
+
 export function checkIntegration(): IntegrationStatus {
   try {
     // Check both registration and enablement

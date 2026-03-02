@@ -119,13 +119,12 @@ export function createSession(
     return a;
   };
 
-  const buildEnv = (resume: boolean): Record<string, string> => {
+  const buildEnv = (): Record<string, string> => {
     const e: Record<string, string> = {};
     e.BIFROST_CONTEXT = options?.context ?? 'code';
     if (options?.taskId) e.BIFROST_TASK_ID = options.taskId;
     if (options?.apiPort) e.BIFROST_API_PORT = String(options.apiPort);
     if (options?.agentTeams) e.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
-    if (resume && options?.resumeSessionId) e.BIFROST_RESUME_SESSION_ID = options.resumeSessionId;
     return e;
   };
 
@@ -134,7 +133,7 @@ export function createSession(
     ? (buffer: string): boolean => {
         if (buffer.includes('No conversation found')) {
           console.log(`[session] Resume failed for ${sessionId}, restarting without --resume`);
-          spawnSession(sessionId, 'claude', buildArgs(false), cwd, mainWindow, { extraEnv: buildEnv(false), autoTrust: true });
+          spawnSession(sessionId, 'claude', buildArgs(false), cwd, mainWindow, { extraEnv: buildEnv(), autoTrust: true });
           options?.onResumeFailed?.();
           return true;
         }
@@ -143,7 +142,7 @@ export function createSession(
     : undefined;
 
   const prompt = options?.prompt && !options.resumeSessionId ? options.prompt : undefined;
-  spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, { extraEnv: buildEnv(true), autoTrust: true, prompt, onBeforeExit });
+  spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, { extraEnv: buildEnv(), autoTrust: true, prompt, onBeforeExit });
 }
 
 export function createShellSession(
