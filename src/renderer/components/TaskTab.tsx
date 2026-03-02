@@ -114,9 +114,9 @@ export default function TaskTab({ task, repoName, isActive, agentBusy, onClick, 
             ) : task.hasUnread && !isActive ? (
               <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
             ) : null}
-            <span className="text-xs leading-tight truncate">{task.name}</span>
+            <span className="text-xs leading-tight truncate font-sans">{task.name}</span>
           </span>
-          <span className="text-[9px] leading-tight truncate max-w-full text-slate-500">{repoName}</span>
+          <span className="text-[9px] leading-tight truncate max-w-full text-slate-500 font-sans">{repoName}</span>
         </span>
         <span
           className="ml-1 text-slate-500 hover:text-slate-200 flex-shrink-0 hidden group-hover:inline"
