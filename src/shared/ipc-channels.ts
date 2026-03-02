@@ -45,6 +45,7 @@ export const IPC = {
   DELETE_TASK: 'task:delete',
   LIST_TASKS: 'task:list',
   REORDER_TASKS: 'tasks:reorder',
+  GET_SESSION_MTIMES: 'task:session-mtimes',
 
   // Terminal sessions
   CREATE_DEV_TERMINAL: 'session:create-dev-terminal',
@@ -115,6 +116,7 @@ export const IPC = {
   // Notes
   NOTE_LIST: 'note:list',
   NOTE_CREATE: 'note:create',
+  NOTE_UPDATE: 'note:update',
   NOTE_DELETE: 'note:delete',
 
   // Permission
@@ -149,6 +151,7 @@ export const IPC_STREAM = {
   AGENT_BUSY: 'agent:busy',
   STATS_UPDATE: 'stats:update',
   SUPERVISOR_UPDATE: 'supervisor:update',
+  TASK_CREATED: 'task:created',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -156,7 +159,7 @@ export interface BifrostAPI {
   // Config
   loadConfig(): Promise<BifrostConfig>;
   saveConfig(config: BifrostConfig): Promise<void>;
-  setIde(ide: 'code' | 'idea'): Promise<void>;
+  setIde(ide: 'code' | 'idea' | 'zed'): Promise<void>;
 
   // Repos
   addRepo(params: AddRepoParams): Promise<Repo>;
@@ -176,6 +179,7 @@ export interface BifrostAPI {
   deleteTask(taskId: string): Promise<void>;
   listTasks(): Promise<Task[]>;
   reorderTasks(taskIds: string[]): Promise<void>;
+  getSessionMtimes(): Promise<Record<string, number>>;
 
   // Terminal
   createDevTerminal(taskId: string): Promise<string>;
@@ -247,8 +251,9 @@ export interface BifrostAPI {
   matchRepoForPr(owner: string, repo: string): Promise<string | null>;
   checkGhAvailable(): Promise<boolean>;
 
-  // Task summary
+  // Task events
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
+  onTaskCreated(callback: (task: Task) => void): () => void;
 
   // Notifications
   setActiveTaskId(taskId: string | null): Promise<void>;
@@ -265,13 +270,14 @@ export interface BifrostAPI {
   // Notes
   listNotes(repoId: string): Promise<Note[]>;
   createNote(repoId: string, text: string): Promise<Note>;
+  updateNote(repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }): Promise<Note>;
   deleteNote(repoId: string, noteId: string): Promise<void>;
 
   // Agent busy state (from plugin hooks)
   onAgentBusy(callback: (taskId: string, busy: boolean) => void): () => void;
 
   // Stats
-  getStats(): Promise<void>;
+  getStats(since?: number): Promise<void>;
   onStatsUpdate(callback: (data: StatsData) => void): () => void;
 
   // Supervisor

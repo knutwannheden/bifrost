@@ -60,6 +60,42 @@ function formatRelative(ts: number): string {
   return `${days}d ago`;
 }
 
+const TIME_BUCKETS = [
+  'Last 10 minutes',
+  'Today',
+  'Yesterday',
+  'This week',
+  'Last week',
+  'This month',
+  'Older',
+] as const;
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function getTimeBucket(ts: number): string {
+  const now = new Date();
+  const diffMs = now.getTime() - ts;
+
+  if (diffMs < 10 * 60 * 1000) return 'Last 10 minutes';
+
+  const today = startOfDay(now);
+  const taskDay = startOfDay(new Date(ts));
+
+  if (taskDay.getTime() === today.getTime()) return 'Today';
+
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (taskDay.getTime() === yesterday.getTime()) return 'Yesterday';
+
+  const daysAgo = Math.floor((today.getTime() - taskDay.getTime()) / (24 * 60 * 60 * 1000));
+  if (daysAgo < 7) return 'This week';
+  if (daysAgo < 14) return 'Last week';
+  if (daysAgo < 30) return 'This month';
+  return 'Older';
+}
+
 interface TaskRowProps {
   task: Task;
   idx: number;
@@ -206,6 +242,7 @@ export default function TaskHistoryPanel() {
   const [sessions, setSessions] = useState<ClaudeSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [diffStatsMap, setDiffStatsMap] = useState<Map<string, DiffStats>>(new Map());
+  const [sessionMtimes, setSessionMtimes] = useState<Record<string, number>>({});
   const [branchConfirm, setBranchConfirm] = useState<{ task: Task; currentBranch: string } | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -234,6 +271,12 @@ export default function TaskHistoryPanel() {
     }
   }, [state.tasks, isSessionsMode]);
 
+  // Fetch session JSONL mtimes for chronological ordering
+  useEffect(() => {
+    if (isSessionsMode) return;
+    window.bifrost.getSessionMtimes().then(setSessionMtimes).catch(() => {});
+  }, [isSessionsMode]);
+
   // Load sessions when switching to sessions tab
   useEffect(() => {
     if (isSessionsMode && sessions.length === 0) {
@@ -260,7 +303,7 @@ export default function TaskHistoryPanel() {
       }
       return true;
     })
-    .sort((a, b) => b.createdAt - a.createdAt);
+    .sort((a, b) => (sessionMtimes[b.id] ?? b.createdAt) - (sessionMtimes[a.id] ?? a.createdAt));
 
   const filteredSessions = isSessionsMode
     ? sessions.filter((s) => {
@@ -273,33 +316,26 @@ export default function TaskHistoryPanel() {
   const repoName = (repoId: string) =>
     state.repos.find((r) => r.id === repoId)?.name ?? '';
 
-  const groupByRepo = !isSessionsMode && !!state.config?.groupHistoryByRepo;
-
-  const taskGroups = groupByRepo
+  const taskGroups = !isSessionsMode
     ? (() => {
         const map = new Map<string, Task[]>();
         for (const task of filteredTasks) {
-          const name = task.isExternal ? 'Other' : (repoName(task.repoId) || 'Other');
-          let group = map.get(name);
+          const bucket = getTimeBucket(sessionMtimes[task.id] ?? task.createdAt);
+          let group = map.get(bucket);
           if (!group) {
             group = [];
-            map.set(name, group);
+            map.set(bucket, group);
           }
           group.push(task);
         }
-        return Array.from(map, ([name, tasks]) => ({ name, tasks }))
-          .sort((a, b) => {
-            if (a.name === 'Other') return 1;
-            if (b.name === 'Other') return -1;
-            return a.name.localeCompare(b.name);
-          });
+        return TIME_BUCKETS
+          .filter((b) => map.has(b))
+          .map((b) => ({ name: b, tasks: map.get(b)! }));
       })()
     : [];
 
   // Build a flat list of tasks in grouped order for navigation
-  const flatTaskList = groupByRepo
-    ? taskGroups.flatMap((g) => g.tasks)
-    : filteredTasks;
+  const flatTaskList = taskGroups.flatMap((g) => g.tasks);
 
   const listLength = isSessionsMode ? filteredSessions.length : flatTaskList.length;
 
@@ -665,8 +701,7 @@ export default function TaskHistoryPanel() {
               {flatTaskList.length === 0 && (
                 <p className="text-sm text-slate-500 text-center py-4">No tasks found.</p>
               )}
-              {groupByRepo ? (
-                (() => {
+              {(() => {
                   let flatIdx = 0;
                   return taskGroups.map((group) => (
                     <div key={group.name} className="space-y-2">
@@ -704,35 +739,7 @@ export default function TaskHistoryPanel() {
                       })}
                     </div>
                   ));
-                })()
-              ) : (
-                flatTaskList.map((task, idx) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    idx={idx}
-                    focusedIdx={focusedIdx}
-                    editingId={editingId}
-                    editName={editName}
-                    diffStats={diffStatsMap.get(task.id)}
-                    search={search}
-                    setEditName={setEditName}
-                    setFocusedIdx={setFocusedIdx}
-                    itemRefs={itemRefs}
-                    handleActivate={handleActivate}
-                    startRename={startRename}
-                    submitRename={submitRename}
-                    setEditingId={setEditingId}
-                    handleReopen={handleReopen}
-                    handleArchive={handleArchive}
-                    handleDelete={handleDelete}
-                    canReopen={canReopen}
-                    canArchive={canArchive}
-                    repoName={repoName}
-                    shortPath={shortPath}
-                  />
-                ))
-              )}
+                })()}
             </>
           )}
         </div>

@@ -41,6 +41,7 @@ export interface Note {
   id: string;       // UUID
   text: string;
   createdAt: number; // Unix timestamp
+  addressed: boolean;
 }
 
 export interface ClaudeSession {
@@ -53,12 +54,11 @@ export interface ClaudeSession {
 
 export interface BifrostConfig {
   repos: Repo[];
-  ide: 'code' | 'idea';
+  ide: 'code' | 'idea' | 'zed';
   fontSize: number;
   fontFamily: string;
   fontWeight: number;
   permissionMode: 'default' | 'sandbox' | 'skip-permissions';
-  groupHistoryByRepo: boolean;
   hideTerminalOnSwitch: boolean;
   notifications: boolean;
   showTips: boolean;
@@ -68,13 +68,20 @@ export interface BifrostConfig {
 }
 
 export interface CreateTaskParams {
-  repoId: string;
-  name: string;
+  repoId?: string;
+  /** Repo path — resolved to repoId (auto-added if not yet configured) */
+  repoPath?: string;
+  /** Task name — auto-generated from prompt if omitted */
+  name?: string;
   branch: string;
+  /** Desired git branch name for the worktree (auto-derived from task name if omitted) */
+  branchName?: string;
   /** PR info for PR-sourced tasks — triggers fetch + upstream setup */
   prInfo?: PrInfo;
   /** Use the main repo directory instead of creating a separate worktree */
   inPlace?: boolean;
+  /** Initial prompt sent to Claude as the first message */
+  prompt?: string;
 }
 
 export interface PrInfo {
@@ -198,10 +205,26 @@ export interface BashCommandEntry {
   count: number;
 }
 
+export interface ContextRotEntry {
+  name: string;       // Tool name, or "Bash: <normalized cmd>" for bash detail
+  count: number;
+  totalBytes: number;
+  avgBytes: number;   // computed: totalBytes / count
+}
+
+export interface EscalationEntry {
+  command: string;     // Base command (stripped of tail/head/grep)
+  clusters: number;    // Number of back-to-back clusters found
+  wastedRuns: number;  // Total re-runs without intervening edits
+  worstCluster: number;// Largest single cluster
+}
+
 export interface StatsData {
   skillUsage: SkillUsageEntry[];
   toolUsage: ToolUsageEntry[];
   bashCommands: BashCommandEntry[];
+  contextRot: ContextRotEntry[];
+  tailEscalation: EscalationEntry[];
 }
 
 // Supervisor types
@@ -237,7 +260,6 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   fontFamily: 'MesloLGS NF',
   fontWeight: 300,
   permissionMode: 'default',
-  groupHistoryByRepo: false,
   hideTerminalOnSwitch: false,
   notifications: true,
   showTips: true,
@@ -273,7 +295,7 @@ export interface PermissionDecision {
 
 export interface AppNotification {
   id: string;
-  type: 'plugin-update' | 'info';
+  type: 'plugin-update' | 'restart-sessions' | 'info';
   title: string;
   message: string;
   action?: { label: string; handler: string };

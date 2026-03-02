@@ -15,6 +15,24 @@ interface Shortcut {
 
 const GROUPS = ['Tasks', 'Navigation', 'Views', 'Actions', 'App'] as const;
 
+function Highlight({ text, search }: { text: string; search: string }) {
+  if (!search) return <>{text}</>;
+  const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return <>{text}</>;
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part)
+          ? <mark key={i} className="bg-yellow-500/30 text-inherit rounded-sm">{part}</mark>
+          : part,
+      )}
+    </>
+  );
+}
+
 const shortcuts: Shortcut[] = [
   // Tasks
   { key: 'T', label: 'New task', group: 'Tasks', execKey: 't' },
@@ -57,10 +75,12 @@ export default function KeyboardShortcutsPanel() {
 
   const filtered = useMemo(() => {
     if (!query) return shortcuts;
-    const lower = query.toLowerCase();
-    return shortcuts.filter(
-      (s) => s.label.toLowerCase().includes(lower) || s.key.toLowerCase().includes(lower),
-    );
+    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    if (terms.length === 0) return shortcuts;
+    return shortcuts.filter((s) => {
+      const haystack = `${s.label} ${s.key}`.toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    });
   }, [query]);
 
   // Build a flat list of items (group headers + shortcuts) for rendering and navigation
@@ -229,7 +249,7 @@ export default function KeyboardShortcutsPanel() {
                   onClick={() => execute(item.shortcut)}
                   onMouseEnter={() => setSelectedIndex(navIdx)}
                 >
-                  <span className="text-sm text-slate-300">{item.shortcut.label}</span>
+                  <span className="text-sm text-slate-300"><Highlight text={item.shortcut.label} search={query} /></span>
                   <kbd className="px-2 py-0.5 text-xs font-mono bg-slate-700 border border-slate-600 rounded text-slate-300">
                     {item.shortcut.key.includes('Shift+') ? `\u2318\u21E7${item.shortcut.key.replace('Shift+', '')}` : `\u2318${item.shortcut.key}`}
                   </kbd>

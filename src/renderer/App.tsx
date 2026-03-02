@@ -122,6 +122,16 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
+  // Listen for tasks created via the HTTP API (e.g. from MCP create_task tool)
+  useEffect(() => {
+    const unsub = window.bifrost.onTaskCreated((task) => {
+      dispatch({ type: 'ADD_TASK', task });
+      dispatch({ type: 'SET_TASK_UNREAD', taskId: task.id, hasUnread: true });
+      dispatch({ type: 'SHOW_TOAST', message: `New task: **${task.name}**` });
+    });
+    return unsub;
+  }, [dispatch]);
+
   // Listen for hook-based notifications (from Claude Code plugin)
   useEffect(() => {
     const unsub = window.bifrost.onHookNotification(

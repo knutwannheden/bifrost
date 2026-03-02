@@ -4,12 +4,12 @@ import { loadConfig } from './config';
 
 export function openInIde(
   worktreePath: string,
-  ide?: 'code' | 'idea',
+  ide?: 'code' | 'idea' | 'zed',
   filePath?: string,
   line?: number,
 ): Promise<void> {
   const resolved = ide ?? loadConfig().ide;
-  const command = resolved === 'idea' ? 'idea' : 'code';
+  const command = resolved === 'idea' ? 'idea' : resolved === 'zed' ? 'zed' : 'code';
 
   // Resolve relative file paths to absolute
   const absFile = filePath ? path.resolve(worktreePath, filePath) : undefined;
@@ -20,9 +20,13 @@ export function openInIde(
       if (line) args.push('--line', String(line));
       args.push(absFile);
     } else {
-      // VS Code: --goto supports file:line:col
+      // VS Code (--goto file:line) and Zed (file:line) both use file:line syntax
       if (line) {
-        args.push('--goto', `${absFile}:${line}`);
+        if (resolved === 'zed') {
+          args.push(`${absFile}:${line}`);
+        } else {
+          args.push('--goto', `${absFile}:${line}`);
+        }
       } else {
         args.push(absFile);
       }

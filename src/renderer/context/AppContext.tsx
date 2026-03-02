@@ -36,6 +36,8 @@ export interface AppState {
   reviewContent: Record<string, string>;
   /** Review status keyed by reviewId */
   reviewStatus: Record<string, ReviewStatus>;
+  /** Timestamp when the current review started running */
+  reviewStartedAt: number | null;
   /** Review entry lists keyed by taskId */
   reviews: Record<string, ReviewEntry[]>;
   /** Active (selected) review ID keyed by taskId */
@@ -117,6 +119,7 @@ const initialState: AppState = {
   paneStates: {},
   reviewContent: {},
   reviewStatus: {},
+  reviewStartedAt: null,
   reviews: {},
   activeReviewId: {},
   reviewDiscussion: {},
@@ -301,7 +304,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ),
       };
     case 'SET_REVIEW_STATUS':
-      return { ...state, reviewStatus: { ...state.reviewStatus, [action.reviewId]: action.status } };
+      return {
+        ...state,
+        reviewStatus: { ...state.reviewStatus, [action.reviewId]: action.status },
+        reviewStartedAt: action.status === 'running' ? (state.reviewStartedAt ?? Date.now()) : action.status === 'done' || action.status === 'idle' ? null : state.reviewStartedAt,
+      };
     case 'SET_REVIEW_CONTENT':
       return { ...state, reviewContent: { ...state.reviewContent, [action.reviewId]: action.content } };
     case 'SET_REVIEWS':

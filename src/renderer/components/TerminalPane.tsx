@@ -29,7 +29,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   // When `focused` transitions to true, the caller explicitly wants focus (e.g. discussion
   // terminal inside the diff overlay), so skip the overlay guard in that case.
   const { showDiff } = getActiveDiffState(state);
-  const anyOverlay = state.showRepoManager || state.showCreateDialog || showDiff || state.showTaskHistory;
+  const anyOverlay = state.showRepoManager || state.showCreateDialog || showDiff || state.showTaskHistory || state.showKeyboardShortcuts || state.showSettings || state.showNotes || state.showStats || state.showSupervisor;
   const prevFocused = useRef(false);
   useEffect(() => {
     const becameFocused = focused && !prevFocused.current;

@@ -35,7 +35,7 @@ export async function getDiff(worktreePath: string, baseBranch?: string, scope: 
       const { stdout: untrackedOutput } = await execFile(
         'git',
         ['ls-files', '--others', '--exclude-standard'],
-        { cwd: worktreePath },
+        { cwd: worktreePath, timeout: 10000 },
       );
       const untrackedFiles = untrackedOutput.trim().split('\n').filter(Boolean);
 
@@ -157,7 +157,7 @@ export async function getDiffStats(worktreePath: string, baseBranch?: string, sc
       const { stdout: untrackedOutput } = await execFile(
         'git',
         ['ls-files', '--others', '--exclude-standard'],
-        { cwd: worktreePath },
+        { cwd: worktreePath, timeout: 10000 },
       );
       const untrackedFiles = untrackedOutput.trim().split('\n').filter(Boolean);
 

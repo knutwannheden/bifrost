@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp, getActiveDiffState } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
+import type { SupervisorState } from '../../shared/types';
 
 function BellIcon() {
   return (
@@ -68,12 +69,18 @@ function GearIcon() {
 
 interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean;
-  badge?: boolean;
+  badge?: 'amber' | 'green' | 'blue';
   label: string;
   shortcut?: string;
   onClick: () => void;
   children: React.ReactNode;
 }
+
+const badgeClasses = {
+  amber: 'bg-amber-400',
+  green: 'bg-green-400 animate-pulse',
+  blue: 'bg-blue-500',
+};
 
 function IconButton({ active, badge, label, shortcut, onClick, children, ...rest }: IconButtonProps) {
   return (
@@ -88,7 +95,7 @@ function IconButton({ active, badge, label, shortcut, onClick, children, ...rest
     >
       {children}
       {badge && (
-        <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-amber-400" />
+        <span className={`absolute top-1 right-1.5 w-2 h-2 rounded-full ${badgeClasses[badge]}`} />
       )}
       <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 border border-slate-700 shadow-lg whitespace-nowrap z-50">
         <span className="text-xs text-slate-200">{label}</span>
@@ -98,11 +105,27 @@ function IconButton({ active, badge, label, shortcut, onClick, children, ...rest
   );
 }
 
+function useSupervisorBadge(): 'green' | 'blue' | undefined {
+  const [svState, setSvState] = useState<SupervisorState | null>(null);
+  useEffect(() => {
+    window.bifrost.getSupervisorState().then(setSvState);
+    const unsub = window.bifrost.onSupervisorUpdate(setSvState);
+    return unsub;
+  }, []);
+  if (!svState) return undefined;
+  const hasRunning = svState.items.some((i) => i.status === 'running');
+  if (hasRunning) return 'green';
+  const hasDone = svState.items.some((i) => i.status === 'done');
+  if (hasDone) return 'blue';
+  return undefined;
+}
+
 export default function RightIconBar() {
   const { state, dispatch } = useApp();
 
   const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
+  const supervisorBadge = useSupervisorBadge();
 
   const toggleDiffMode = (mode: DiffMode) => {
     if (isDiffActive && diffMode === mode) {
@@ -118,7 +141,7 @@ export default function RightIconBar() {
       <IconButton
         label="Notifications"
         active={state.showNotificationPopover}
-        badge={hasUnreadNotifications}
+        badge={hasUnreadNotifications ? 'amber' : undefined}
         onClick={() => dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' })}
         data-notification-bell
       >

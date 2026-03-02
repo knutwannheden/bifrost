@@ -53,10 +53,20 @@ export function createNote(repoId: string, text: string): Note {
     id: randomUUID(),
     text,
     createdAt: Date.now(),
+    addressed: false,
   };
   notes.push(note);
   save(repoId, notes);
   return note;
+}
+
+export function updateNote(repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }): Note {
+  const notes = load(repoId);
+  const idx = notes.findIndex((n) => n.id === noteId);
+  if (idx === -1) throw new Error(`Note not found: ${noteId}`);
+  notes[idx] = { ...notes[idx], ...updates };
+  save(repoId, notes);
+  return notes[idx];
 }
 
 export function deleteNote(repoId: string, noteId: string): void {

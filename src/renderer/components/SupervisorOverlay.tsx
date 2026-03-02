@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { SupervisorState, SupervisorItem } from '../../shared/types';
 
@@ -82,7 +82,12 @@ export default function SupervisorOverlay() {
   const { state: appState, dispatch } = useApp();
   const [svState, setSvState] = useState<SupervisorState | null>(null);
 
+  const panelRef = useRef<HTMLDivElement>(null);
   const close = () => dispatch({ type: 'TOGGLE_SUPERVISOR' });
+
+  useEffect(() => {
+    panelRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     window.bifrost.getSupervisorState().then(setSvState);
@@ -145,16 +150,23 @@ export default function SupervisorOverlay() {
     <div
       className="absolute inset-0 z-20 flex items-center justify-center bg-black/30"
       onClick={close}
-      onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[560px] flex flex-col shadow-xl max-h-[70vh]"
+        ref={panelRef}
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+        className="bg-slate-800 rounded-lg border border-slate-600 w-[640px] flex flex-col shadow-xl max-h-[80vh] outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700">
           <span className="text-sm font-medium text-slate-200">Supervisor</span>
           {svState?.running && <Spinner />}
+          {svState && svState.items.length > 0 && (
+            <span className="text-xs text-slate-500">
+              {running.length} running · {queued.length} queued · {done.length} done
+            </span>
+          )}
           <div className="flex-1" />
 
           {/* Concurrency */}

@@ -25,6 +25,7 @@ const api: BifrostAPI = {
   deleteTask: (taskId) => ipcRenderer.invoke(IPC.DELETE_TASK, taskId),
   listTasks: () => ipcRenderer.invoke(IPC.LIST_TASKS),
   reorderTasks: (taskIds) => ipcRenderer.invoke(IPC.REORDER_TASKS, taskIds),
+  getSessionMtimes: () => ipcRenderer.invoke(IPC.GET_SESSION_MTIMES),
 
   // Terminal
   createDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CREATE_DEV_TERMINAL, taskId),
@@ -130,12 +131,18 @@ const api: BifrostAPI = {
   matchRepoForPr: (owner, repo) => ipcRenderer.invoke(IPC.MATCH_REPO_FOR_PR, owner, repo),
   checkGhAvailable: () => ipcRenderer.invoke(IPC.CHECK_GH_AVAILABLE),
 
-  // Task summary
+  // Task events
   onTaskSummary: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string, summary: string) =>
       callback(taskId, summary);
     ipcRenderer.on(IPC_STREAM.TASK_SUMMARY, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.TASK_SUMMARY, handler);
+  },
+  onTaskCreated: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, task: import('../shared/types').Task) =>
+      callback(task);
+    ipcRenderer.on(IPC_STREAM.TASK_CREATED, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TASK_CREATED, handler);
   },
 
   // Notifications
@@ -163,10 +170,11 @@ const api: BifrostAPI = {
   // Notes
   listNotes: (repoId) => ipcRenderer.invoke(IPC.NOTE_LIST, repoId),
   createNote: (repoId, text) => ipcRenderer.invoke(IPC.NOTE_CREATE, repoId, text),
+  updateNote: (repoId, noteId, updates) => ipcRenderer.invoke(IPC.NOTE_UPDATE, repoId, noteId, updates),
   deleteNote: (repoId, noteId) => ipcRenderer.invoke(IPC.NOTE_DELETE, repoId, noteId),
 
   // Stats
-  getStats: () => ipcRenderer.invoke(IPC.GET_STATS),
+  getStats: (since?: number) => ipcRenderer.invoke(IPC.GET_STATS, since),
   onStatsUpdate: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, data: import('../shared/types').StatsData) =>
       callback(data);

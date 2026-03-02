@@ -14,11 +14,14 @@ const execFile = promisify(execFileCb);
 const ACTIVITY_DIR = path.join(os.homedir(), '.bifrost', 'activity');
 const POLL_INTERVAL_MS = 2000;
 
+const GIT_TIMEOUT_MS = 10000;
+
 interface TaskWatcher {
   pollTimer: ReturnType<typeof setInterval>;
   entries: ActivityEntry[];
   headSha: string | null;
   knownFiles: Set<string>;
+  polling: boolean;
 }
 
 const watchers = new Map<string, TaskWatcher>();
@@ -52,6 +55,7 @@ async function getHeadSha(worktreePath: string): Promise<string | null> {
   try {
     const { stdout } = await execFile('git', ['rev-parse', 'HEAD'], {
       cwd: worktreePath,
+      timeout: GIT_TIMEOUT_MS,
     });
     return stdout.trim();
   } catch {
@@ -65,7 +69,7 @@ async function getFileDiff(worktreePath: string, filePath: string): Promise<stri
     const { stdout } = await execFile(
       'git',
       ['diff', 'HEAD', '--', filePath],
-      { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024 },
+      { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024, timeout: GIT_TIMEOUT_MS },
     );
     if (stdout) return stdout;
 
@@ -73,6 +77,7 @@ async function getFileDiff(worktreePath: string, filePath: string): Promise<stri
     try {
       await execFile('git', ['ls-files', '--error-unmatch', filePath], {
         cwd: worktreePath,
+        timeout: GIT_TIMEOUT_MS,
       });
       // File is tracked but has no diff — no changes
       return '';
@@ -95,7 +100,7 @@ async function getCommitMessage(worktreePath: string, sha: string): Promise<stri
     const { stdout } = await execFile(
       'git',
       ['log', '-1', '--format=%s', sha],
-      { cwd: worktreePath },
+      { cwd: worktreePath, timeout: GIT_TIMEOUT_MS },
     );
     return stdout.trim();
   } catch {
@@ -107,6 +112,7 @@ async function getChangedFiles(worktreePath: string): Promise<string[]> {
   try {
     const { stdout } = await execFile('git', ['status', '--porcelain'], {
       cwd: worktreePath,
+      timeout: GIT_TIMEOUT_MS,
     });
     if (!stdout.trim()) return [];
     return stdout
@@ -135,6 +141,7 @@ export function startWatching(
     entries,
     headSha: null,
     knownFiles: new Set<string>(),
+    polling: false,
   };
 
   // Get initial HEAD SHA and file state before starting the poll loop
@@ -149,6 +156,8 @@ export function startWatching(
   });
 
   const poll = async () => {
+    if (tw.polling) return; // Previous poll still running — skip this cycle
+    tw.polling = true;
     try {
       // 1. Check for new commit
       const currentSha = await getHeadSha(worktreePath);
@@ -207,6 +216,8 @@ export function startWatching(
     } catch (err) {
       // Worktree may have been deleted or git state is broken — skip this cycle
       console.error(`[activity-watcher] poll error for task ${taskId}:`, err);
+    } finally {
+      tw.polling = false;
     }
   };
 

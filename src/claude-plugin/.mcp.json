@@ -1,6 +1,8 @@
 {
-  "bifrost": {
-    "command": "node",
-    "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.mjs"]
+  "mcpServers": {
+    "bifrost": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/server.mjs"]
+    }
   }
 }

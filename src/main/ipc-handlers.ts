@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, clipboard, dialog, shell } from 'electron';
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -17,17 +18,17 @@ import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastChangedFile } from './activity-watcher';
-import { getApiPort, isSessionStale } from './bifrost-api';
+import { getApiPort, getSessionMtime, isSessionStale } from './bifrost-api';
+import { generateTaskName } from '../shared/name-generator';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
-import { summarizeTask, countJsonlLines } from './task-summarizer';
 import { runReview, cancelReview, saveReview, loadReview, watchReviewFile, listReviews, deleteReview, getReviewSessionId } from './review-service';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { scanRecentRepos } from './history-scanner';
 import { resolveRequest, cancelTaskRequests, setWorktreePathResolver } from './permission-manager';
 import { setActiveTaskId } from './notification-service';
-import { listNotes, createNote, deleteNote } from './note-store';
+import { listNotes, createNote, updateNote, deleteNote } from './note-store';
 import { getStats } from './stats-service';
 import {
   initSupervisor, getSupervisorState, startSupervisor, stopSupervisor,
@@ -36,6 +37,9 @@ import {
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
+
+// Module-level reference set by registerIpcHandlers(), used by createTaskCore()
+let _claudeCallbacks: { onSummary: (taskId: string, summary: string) => void } | null = null;
 
 export function getTasks(): Task[] {
   return tasks;
@@ -125,6 +129,85 @@ async function destroyTask(taskId: string): Promise<void> {
   saveTasks(tasks);
 }
 
+export async function createTaskCore(params: CreateTaskParams, mainWindow: BrowserWindow): Promise<Task> {
+  const t0 = Date.now();
+  const config = loadConfig();
+  let repo: Repo | undefined;
+
+  if (params.repoPath) {
+    const input = params.repoPath;
+    // Try matching as GitHub path (e.g. "org/repo")
+    repo = config.repos.find((r: Repo) => r.githubPath === input);
+    if (!repo) {
+      // Resolve as filesystem path — find existing or auto-add
+      const resolved = path.resolve(input.replace(/^~(\/|$)/, os.homedir() + '$1'));
+      repo = config.repos.find((r: Repo) => r.path === resolved);
+      if (!repo) {
+        repo = await addRepo({ type: 'local', path: resolved });
+        config.repos.push(repo);
+        saveConfig(config);
+      }
+    }
+  } else {
+    repo = config.repos.find((r: Repo) => r.id === params.repoId);
+  }
+  if (!repo) throw new Error(`Repo not found: ${params.repoId ?? params.repoPath}`);
+
+  const name = params.branchName || params.name || generateTaskName();
+
+  let worktreePath: string;
+  let branch = params.branch;
+  let inPlace = false;
+
+  if (params.inPlace) {
+    const conflict = tasks.find(
+      (t) => t.status !== 'archived' && t.worktreePath === repo.path,
+    );
+    if (conflict) {
+      throw new Error(`An active task "${conflict.name}" already uses the main worktree for this repo`);
+    }
+    worktreePath = repo.path;
+    const { stdout } = await execFile('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: repo.path, timeout: 5000 });
+    branch = stdout.trim();
+    inPlace = true;
+  } else {
+    console.log('[CREATE_TASK] creating worktree...');
+    worktreePath = params.prInfo
+      ? await createWorktreeFromPr(repo.path, name, params.prInfo)
+      : await createWorktree(repo.path, name, params.branch, params.branchName);
+    console.log(`[CREATE_TASK] worktree created in ${Date.now() - t0}ms`);
+  }
+
+  const taskId = randomUUID();
+
+  console.log(`[CREATE_TASK] spawning session at ${Date.now() - t0}ms`);
+  createSession(taskId, worktreePath, mainWindow, {
+    taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams, prompt: params.prompt,
+  });
+
+  const task: Task = {
+    id: taskId,
+    name,
+    repoId: repo.id,
+    branch,
+    worktreePath,
+    status: 'running',
+    hasUnread: false,
+    createdAt: Date.now(),
+    ...(inPlace && { inPlace: true }),
+    ...(params.prompt ? { summary: params.prompt } : {}),
+  };
+
+  tasks.push(task);
+  saveTasks(tasks);
+
+  if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
+  startWatching(task.id, worktreePath, mainWindow, _claudeCallbacks);
+
+  console.log(`[CREATE_TASK] done in ${Date.now() - t0}ms`);
+  return task;
+}
+
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Load persisted context entries from disk
   loadPersistedContexts();
@@ -136,6 +219,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   tasks = persisted.map((t) =>
     t.status === 'running' ? { ...t, status: 'stopped' as const } : t,
   );
+
+  // Permission manager: provide worktree path resolver
+  setWorktreePathResolver((taskId) => getTask(taskId).worktreePath);
+
+  // Claude watcher callbacks
+  const claudeCallbacks = {
+    onSummary: (taskId: string, summary: string) => {
+      try {
+        updateTask(taskId, { summary });
+        mainWindow.webContents.send(IPC_STREAM.TASK_SUMMARY, taskId, summary);
+      } catch { /* task may have been deleted */ }
+    },
+  };
+  _claudeCallbacks = claudeCallbacks;
 
   // Re-spawn sessions for tasks that were running when the app quit
   for (const task of tasksToRestore) {
@@ -153,36 +250,28 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
 
       // Use task.id as PTY sessionId so renderer can find the buffer
-      createSession(task.id, task.worktreePath, mainWindow, {
-        resumeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
+      const taskId = task.id;
+      createSession(taskId, task.worktreePath, mainWindow, {
+        resumeSessionId, taskId, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
+        onResumeFailed: resumeSessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
       });
 
-      const idx = tasks.findIndex((t) => t.id === task.id);
+      const idx = tasks.findIndex((t) => t.id === taskId);
       if (idx !== -1) {
         tasks[idx] = { ...tasks[idx], status: 'running', hasUnread: false };
       }
+
+      // Start watching immediately so onSessionChange fires when Claude session starts
+      startWatching(taskId, task.worktreePath, mainWindow, claudeCallbacks);
     }
   }
 
   saveTasks(tasks);
 
-  // Permission manager: provide worktree path resolver
-  setWorktreePathResolver((taskId) => getTask(taskId).worktreePath);
-
-  // Claude watcher callbacks
-  const claudeCallbacks = {
-    onSummary: (taskId: string, summary: string) => {
-      try {
-        updateTask(taskId, { summary });
-        mainWindow.webContents.send(IPC_STREAM.TASK_SUMMARY, taskId, summary);
-      } catch { /* task may have been deleted */ }
-    },
-  };
-
   // Config
   ipcMain.handle(IPC.LOAD_CONFIG, () => loadConfig());
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => saveConfig(config));
-  ipcMain.handle(IPC.SET_IDE, (_event, ide: 'code' | 'idea') => {
+  ipcMain.handle(IPC.SET_IDE, (_event, ide: 'code' | 'idea' | 'zed') => {
     const config = loadConfig();
     config.ide = ide;
     saveConfig(config);
@@ -236,63 +325,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Tasks
   ipcMain.handle(IPC.CREATE_TASK, async (_event, params: CreateTaskParams) => {
-    const t0 = Date.now();
-    const config = loadConfig();
-    const repo = config.repos.find((r: Repo) => r.id === params.repoId);
-    if (!repo) throw new Error(`Repo not found: ${params.repoId}`);
-
-    let worktreePath: string;
-    let branch = params.branch;
-    let inPlace = false;
-
-    if (params.inPlace) {
-      // Conflict check: only one non-archived in-place task per repo
-      const conflict = tasks.find(
-        (t) => t.status !== 'archived' && t.worktreePath === repo.path,
-      );
-      if (conflict) {
-        throw new Error(`An active task "${conflict.name}" already uses the main worktree for this repo`);
-      }
-      worktreePath = repo.path;
-      // Auto-detect current branch (symbolic-ref works even on repos with no commits)
-      const { stdout } = await execFile('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: repo.path });
-      branch = stdout.trim();
-      inPlace = true;
-    } else {
-      console.log('[CREATE_TASK] creating worktree...');
-      worktreePath = params.prInfo
-        ? await createWorktreeFromPr(repo.path, params.name, params.prInfo)
-        : await createWorktree(repo.path, params.name, params.branch);
-      console.log(`[CREATE_TASK] worktree created in ${Date.now() - t0}ms`);
-    }
-
-    const taskId = randomUUID();
-
-    console.log(`[CREATE_TASK] spawning session at ${Date.now() - t0}ms`);
-    createSession(taskId, worktreePath, mainWindow, {
-      taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams,
-    });
-
-    const task: Task = {
-      id: taskId,
-      name: params.name,
-      repoId: params.repoId,
-      branch,
-      worktreePath,
-      status: 'running',
-      hasUnread: false,
-      createdAt: Date.now(),
-      ...(inPlace && { inPlace: true }),
-    };
-
-    tasks.push(task);
-    saveTasks(tasks);
-
-    // Start watching for file changes
-    startWatching(task.id, worktreePath, mainWindow, claudeCallbacks);
-
-    console.log(`[CREATE_TASK] done in ${Date.now() - t0}ms`);
-    return task;
+    return createTaskCore(params, mainWindow);
   });
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
@@ -389,8 +422,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       apiPort: getApiPort() ?? undefined,
       permissionMode: reopenConfig.permissionMode,
       agentTeams: reopenConfig.agentTeams,
+      onResumeFailed: resumeSessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
     });
-
 
     // Restart file watcher
     startWatching(taskId, worktreePath, mainWindow, claudeCallbacks);
@@ -426,6 +459,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     let ri = 0;
     tasks = tasks.map((t) => idSet.has(t.id) ? reordered[ri++] : t);
     saveTasks(tasks);
+  });
+
+  ipcMain.handle(IPC.GET_SESSION_MTIMES, () => {
+    const result: Record<string, number> = {};
+    for (const task of tasks) {
+      const mtime = getSessionMtime(task.worktreePath, task.sessionId);
+      if (mtime != null) result[task.id] = mtime;
+    }
+    return result;
   });
 
   ipcMain.handle(IPC.CREATE_DEV_TERMINAL, (_event, taskId: string) => {
@@ -528,25 +570,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.CLEAR_ACTIVITY_LOG, (_event, taskId: string) => {
     clearActivityLog(taskId);
   });
-
-  // Start watchers for any running tasks on startup
-  for (const task of tasks) {
-    if (task.status === 'running' || task.status === 'stopped') {
-      if (fs.existsSync(task.worktreePath)) {
-        startWatching(task.id, task.worktreePath, mainWindow, claudeCallbacks);
-      }
-    }
-  }
-
-  // Summarize unsummarized tasks on startup
-  (async () => {
-    for (const task of tasks) {
-      if (!task.summary && countJsonlLines(task.worktreePath) >= 3) {
-        const summary = await summarizeTask(task.worktreePath);
-        if (summary) claudeCallbacks.onSummary(task.id, summary);
-      }
-    }
-  })();
 
   // Terminal title
   ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, taskId: string, title: string) => {
@@ -826,6 +849,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return createNote(repoId, text);
   });
 
+  ipcMain.handle(IPC.NOTE_UPDATE, (_event, repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }) => {
+    return updateNote(repoId, noteId, updates);
+  });
+
   ipcMain.handle(IPC.NOTE_DELETE, (_event, repoId: string, noteId: string) => {
     deleteNote(repoId, noteId);
   });
@@ -836,10 +863,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Stats
-  ipcMain.handle(IPC.GET_STATS, () =>
+  ipcMain.handle(IPC.GET_STATS, (_event, since?: number) =>
     getStats((data) => {
       mainWindow.webContents.send(IPC_STREAM.STATS_UPDATE, data);
-    }),
+    }, since),
   );
 
   // Supervisor

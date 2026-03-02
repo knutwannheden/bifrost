@@ -145,7 +145,7 @@ export async function runReview(
     const reviewFilePath = getReviewFilePath(taskId, reviewId);
     const proc = spawn('claude', [
       '-p',
-      '--append-system-prompt', `The review document is stored at: ${reviewFilePath}\nIf the user asks you to update the review based on discussion, write the updated markdown to that file.`,
+      '--append-system-prompt', `The review document will be saved at: ${reviewFilePath}\nDuring this review, output the markdown directly — do not write to any files.\nIf later resumed for discussion and asked to update the review, write changes to that file.`,
       prompt,
     ], {
       stdio: ['ignore', 'pipe', 'pipe'],

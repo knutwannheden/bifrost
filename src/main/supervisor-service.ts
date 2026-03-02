@@ -9,7 +9,7 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import type { SupervisorItem, SupervisorState, Task } from '../shared/types';
 import { loadSupervisorState, saveSupervisorState } from './supervisor-store';
 import { generateTaskName } from '../shared/name-generator';
-import { listNotes } from './note-store';
+import { listNotes, updateNote } from './note-store';
 import { loadConfig } from './config';
 import { createWorktree, removeWorktree } from './worktree-manager';
 
@@ -63,26 +63,35 @@ export function getSupervisorState(): SupervisorState {
 export function startSupervisor(): SupervisorState {
   state.running = true;
 
-  // Scan all repos' notes and queue items for untracked notes
+  // Scan all repos' notes and queue items for unprocessed notes
   const config = loadConfig();
-  const trackedNoteIds = new Set(state.items.map((item) => item.noteId));
+  const itemByNoteId = new Map(state.items.map((item) => [item.noteId, item]));
 
   for (const repo of config.repos) {
     const notes = listNotes(repo.id);
     for (const note of notes) {
-      if (!trackedNoteIds.has(note.id)) {
-        const name = generateTaskName();
-        state.items.push({
-          id: randomUUID(),
-          noteId: note.id,
-          repoId: repo.id,
-          noteText: note.text,
-          status: 'queued',
-          name,
-          branch: name,
-          createdAt: Date.now(),
-        });
+      if (note.addressed) continue;
+
+      const existing = itemByNoteId.get(note.id);
+      if (existing && (existing.status === 'done' || existing.status === 'opened')) {
+        // Note was un-addressed after completion — remove old item and re-queue
+        state = { ...state, items: state.items.filter((i) => i.id !== existing.id) };
+      } else if (existing) {
+        // Already queued/running/paused — leave as-is
+        continue;
       }
+
+      const name = generateTaskName();
+      state.items.push({
+        id: randomUUID(),
+        noteId: note.id,
+        repoId: repo.id,
+        noteText: note.text,
+        status: 'queued',
+        name,
+        branch: name,
+        createdAt: Date.now(),
+      });
     }
   }
 
@@ -275,6 +284,7 @@ async function spawnProcess(item: SupervisorItem): Promise<void> {
 
     if (code === 0) {
       updateItem(item.id, { status: 'done', completedAt: Date.now() });
+      try { updateNote(item.repoId, item.noteId, { addressed: true }); } catch { /* note may have been deleted */ }
     } else {
       updateItem(item.id, {
         status: 'error',

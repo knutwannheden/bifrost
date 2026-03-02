@@ -167,10 +167,19 @@ export function useTerminal(
     });
 
     // Receive data from session
+    // Preserve scroll position when user has manually scrolled up —
+    // without this, incoming data can reset the viewport to the top.
     const removeDataListener = window.bifrost.onSessionData(
       (sid: string, data: string) => {
         if (sid === sessionId) {
-          terminal.write(data);
+          const buf = terminal.buffer.active;
+          const viewportY = buf.viewportY;
+          const isScrolledUp = viewportY < buf.baseY;
+          terminal.write(data, () => {
+            if (isScrolledUp) {
+              terminal.scrollToLine(viewportY);
+            }
+          });
         }
       },
     );

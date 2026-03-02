@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ReviewStatus } from '../context/AppContext';
 import type { DiffStats, ReviewEntry } from '../../shared/types';
@@ -167,20 +167,18 @@ function formatElapsed(ms: number): string {
   return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
-function useElapsed(running: boolean): number {
-  const startRef = useRef(Date.now());
+function useElapsed(running: boolean, startedAt: number | null): number {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!running) {
+    if (!running || !startedAt) {
       setElapsed(0);
       return;
     }
-    startRef.current = Date.now();
-    setElapsed(0);
-    const interval = setInterval(() => setElapsed(Date.now() - startRef.current), 1000);
+    setElapsed(Date.now() - startedAt);
+    const interval = setInterval(() => setElapsed(Date.now() - startedAt), 1000);
     return () => clearInterval(interval);
-  }, [running]);
+  }, [running, startedAt]);
 
   return elapsed;
 }
@@ -336,10 +334,10 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   }, [lines, taskId, reviewId, dispatch]);
 
   const handleCopyPrompt = useCallback(() => {
-    const prompt = `/bifrost:review-fix ${taskId}`;
+    const prompt = reviewId ? `/bifrost:review-fix ${taskId} ${reviewId}` : `/bifrost:review-fix ${taskId}`;
     navigator.clipboard.writeText(prompt);
     dispatch({ type: 'SHOW_TOAST', message: 'Copied /bifrost:review-fix \u2014 paste into Claude session' });
-  }, [taskId, dispatch]);
+  }, [taskId, reviewId, dispatch]);
 
   const handleDiscuss = useCallback(async () => {
     if (!reviewId) return;
@@ -363,7 +361,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   }, [taskId, dispatch]);
 
   const isReviewRunning = status === 'running' || state.reviewStatus['__pending__'] === 'running';
-  const elapsed = useElapsed(isReviewRunning);
+  const elapsed = useElapsed(isReviewRunning, state.reviewStartedAt);
 
   const handleCancelReview = useCallback(() => {
     window.bifrost.cancelReview(taskId);

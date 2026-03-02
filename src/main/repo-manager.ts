@@ -39,7 +39,7 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
     const repoName = path.basename(url, '.git');
     const clonePath = path.join(os.homedir(), '.bifrost', 'repos', repoName);
 
-    await execFile('git', ['clone', url, clonePath]);
+    await execFile('git', ['clone', url, clonePath], { timeout: 120000 });
     const defaultBranch = await getDefaultBranch(clonePath);
     const githubPath = await getGitHubPath(clonePath);
 
@@ -59,6 +59,7 @@ export async function getGitHubPath(repoPath: string): Promise<string | undefine
   try {
     const { stdout } = await execFile('git', ['config', '--get', 'remote.origin.url'], {
       cwd: repoPath,
+      timeout: 10000,
     });
     const url = stdout.trim();
     // git@github.com:org/repo.git or https://github.com/org/repo.git
@@ -93,6 +94,7 @@ export async function detectBaseBranch(repoPath: string): Promise<string | undef
   try {
     const { stdout } = await execFile('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
       cwd: repoPath,
+      timeout: 10000,
     });
     const branch = stdout.trim().replace(/^refs\/remotes\/origin\//, '');
     if (branch) return branch;
@@ -105,6 +107,7 @@ export async function detectBaseBranch(repoPath: string): Promise<string | undef
     try {
       await execFile('git', ['rev-parse', '--verify', candidate], {
         cwd: repoPath,
+        timeout: 10000,
       });
       return candidate;
     } catch {
@@ -131,7 +134,7 @@ export function removeRepo(
 
 export async function getRemotes(repoPath: string): Promise<Array<{ name: string; githubPath: string }>> {
   try {
-    const { stdout } = await execFile('git', ['remote', '-v'], { cwd: repoPath });
+    const { stdout } = await execFile('git', ['remote', '-v'], { cwd: repoPath, timeout: 10000 });
     const seen = new Set<string>();
     const remotes: Array<{ name: string; githubPath: string }> = [];
     for (const line of stdout.split('\n')) {
@@ -153,7 +156,7 @@ export async function getRemotes(repoPath: string): Promise<Array<{ name: string
 }
 
 export async function getRepoBranches(repoPath: string): Promise<string[]> {
-  const { stdout } = await execFile('git', ['branch', '-a'], { cwd: repoPath });
+  const { stdout } = await execFile('git', ['branch', '-a'], { cwd: repoPath, timeout: 10000 });
   return stdout
     .split('\n')
     .map((line) => line.replace(/^\s*[*+]?\s+/, '').replace(/^remotes\//, '').trim())

@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
-import { getTasks, getTask, updateTask } from './ipc-handlers';
+import { getTasks, getTask, updateTask, createTaskCore } from './ipc-handlers';
 import { setReviewSessionId, startReviewActivityWatch } from './review-service';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
@@ -39,6 +39,39 @@ export function isSessionStale(worktreePath: string, sessionId?: string): boolea
 
   // Project exists but no sessionId provided, so we can't confirm it's valid
   return false;
+}
+
+/**
+ * Get the mtime of the JSONL session file for a given worktree/session.
+ * Returns epoch ms, or null if the file cannot be found.
+ */
+export function getSessionMtime(worktreePath: string, sessionId?: string): number | null {
+  const encoded = worktreePath.replace(/[/.]/g, '-');
+  const projectPath = path.join(os.homedir(), '.claude', 'projects', encoded);
+
+  if (!fs.existsSync(projectPath)) return null;
+
+  if (sessionId) {
+    const sessionFilePath = path.join(projectPath, `${sessionId}.jsonl`);
+    try {
+      return fs.statSync(sessionFilePath).mtimeMs;
+    } catch {
+      return null;
+    }
+  }
+
+  // No sessionId — find the most recently modified .jsonl
+  try {
+    const files = fs.readdirSync(projectPath)
+      .filter((f) => f.endsWith('.jsonl'))
+      .map((f) => {
+        const fp = path.join(projectPath, f);
+        return fs.statSync(fp).mtimeMs;
+      });
+    return files.length > 0 ? Math.max(...files) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function initApi(window: BrowserWindow): void {
@@ -105,16 +138,51 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    case '/list-repos': {
+      const config = loadConfig();
+      const repos = config.repos.map((r: { id: string; name: string; path: string; defaultBranch: string; githubPath?: string }) => ({
+        id: r.id,
+        name: r.name,
+        path: r.path,
+        defaultBranch: r.defaultBranch,
+        githubPath: r.githubPath,
+      }));
+      jsonResponse(res, { repos });
+      return;
+    }
+
     case '/list-tasks': {
       const tasks = getTasks().map((t) => ({
         id: t.id,
         name: t.name,
+        repoId: t.repoId,
         status: t.status,
         branch: t.branch,
         worktreePath: t.worktreePath,
         createdAt: t.createdAt,
       }));
       jsonResponse(res, { tasks });
+      return;
+    }
+
+    case '/create-task': {
+      const { repoId, repoPath, name, branch, branchName, prompt } = body as {
+        repoId?: string; repoPath?: string; name?: string; branch?: string; branchName?: string; prompt?: string;
+      };
+      if (!repoId && !repoPath) {
+        errorResponse(res, 'either repoId or repoPath is required');
+        return;
+      }
+      try {
+        const task = await createTaskCore(
+          { repoId, repoPath, name, branch: branch || 'main', branchName, prompt },
+          mainWindow!,
+        );
+        mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
+        jsonResponse(res, task);
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 400);
+      }
       return;
     }
 
@@ -317,9 +385,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
       }
-      // Update sessionId if it differs from current value.
-      // This works for all cases: initial capture, manual /resume, registered resumptions, etc.
-      if (task.sessionId !== sessionId) {
+      // When we started with --resume, the stored sessionId is already validated.
+      // Don't overwrite it with a potentially transient "wrapper" session ID that
+      // Claude reports before loading the actual resumed conversation.
+      const resumeSessionId = body.bifrost_resume_session_id as string;
+      if (!resumeSessionId && task.sessionId !== sessionId) {
         updateTask(task.id, { sessionId });
       }
       if (reviewId) {
@@ -370,17 +440,29 @@ export async function startApi(): Promise<number | null> {
   return null;
 }
 
-export function stopApi(): void {
-  if (server) {
-    server.close();
-    server = null;
-  }
-  try {
-    fs.unlinkSync(PORT_FILE);
-  } catch {
-    // ignore
-  }
-  activePort = null;
+export function stopApi(): Promise<void> {
+  return new Promise((resolve) => {
+    if (server) {
+      server.close(() => {
+        server = null;
+        try {
+          fs.unlinkSync(PORT_FILE);
+        } catch {
+          // ignore
+        }
+        activePort = null;
+        resolve();
+      });
+    } else {
+      try {
+        fs.unlinkSync(PORT_FILE);
+      } catch {
+        // ignore
+      }
+      activePort = null;
+      resolve();
+    }
+  });
 }
 
 export function getApiPort(): number | null {

@@ -1,28 +1,48 @@
 ---
-name: review-fix
-description: This skill should be used when the user asks to "fix review items", "address review feedback", "resolve review comments", or invokes /bifrost:review-fix. Reads a Bifrost code review checklist and addresses all checked items.
-argument-hint: [task-id]
+name: bifrost:review-fix
+description: Use when the user asks to "fix review items", "address review feedback", "resolve review comments", or invokes /bifrost:review-fix. Addresses all checked items in a code review checklist.
+argument-hint: [task-id] [review-id]
 ---
 
-Determine the task ID: use `$1` if provided, otherwise fall back to the `$BIFROST_TASK_ID` environment variable.
+## 🚨 IRON LAW
 
-Find the review file to work on:
+**FIX FINDINGS FIRST, EVALUATE SECOND**
 
-1. Read `~/.bifrost/tasks/{task-id}/reviews/index.json` — this is a JSON array of review entries, each with an `id` field
-2. Pick the last entry in the array (the most recent review)
-3. Read `~/.bifrost/tasks/{task-id}/reviews/{id}.md` where `{id}` is the review entry's id
+Do not rationalize away findings before looking at code. Read the code, understand why the reviewer flagged it, fix or reject with evidence — in that order.
 
-If the `reviews/` directory doesn't exist, fall back to reading `~/.bifrost/tasks/{task-id}/review.md`.
+Skipping this step = silently ignoring real issues because you're confident you know better.
 
-Address all items marked with [x] (checked checkboxes). For each checked item, critically evaluate whether the finding is actually valid before acting on it — review findings can be wrong, overly cautious, or based on misunderstanding the code's intent.
+## Workflow
 
-For each checked item, edit the review file directly:
-- If the finding is valid and you fix it: change `- [x] item` to `- [x] ✅ item`
-- If the finding is incorrect or not worth addressing: change `- [x] item` to `- [x] ❌ item` and add an indented bullet with the rejection reason, e.g.:
-  ```
-  - [x] ❌ Potential null pointer on line 42
-    - The value is guaranteed non-null by the guard clause on line 38
-  ```
-- Leave unchecked items (`- [ ]`) as-is
+1. Get task ID: first argument (`$1`), or fall back to `$BIFROST_TASK_ID`. Verify `~/.bifrost/tasks/{task-id}/` exists.
 
-Focus only on the checked items. Work through them one at a time.
+2. Find review file:
+   - Read `~/.bifrost/tasks/{task-id}/reviews/index.json` (array of review entries with `id` field)
+   - If second argument (`$2`) provided, find that `id`; otherwise use last entry (most recent)
+   - Read `~/.bifrost/tasks/{task-id}/reviews/{id}.md`
+   - If `reviews/` directory doesn't exist, fall back to `~/.bifrost/tasks/{task-id}/review.md`
+
+3. For each item marked `[x]`:
+   - Read the code at the flagged location
+   - Understand WHY the reviewer flagged it
+   - **Then** decide: fix or reject
+   - Mark `- [x] ✅ item` (fixed) or `- [x] ❌ item` (rejected with reason)
+   - If rejected, add indented reason:
+     ```
+     - [x] ❌ Potential null pointer on line 42
+       - Value guaranteed non-null by guard clause on line 38
+     ```
+
+4. Leave unchecked items (`- [ ]`) as-is.
+
+## Common Rationalizations - STOP
+
+| Excuse | Reality |
+|--------|---------|
+| "I know this code works, skip this finding" | You haven't read the code yet. Look first. |
+| "The reviewer was being overly cautious" | You find out by reading code, not by assumption. |
+| "I'll fix it after testing" | Fix now, test after. Deferring hides real issues. |
+| "This is too minor" | Minor = still a valid finding. Fix it. |
+| "I can see why they flagged it, I'll skip it anyway" | Then document the rejection. Don't just ignore it. |
+
+**All of these mean: Read the code, then decide. No shortcuts.**

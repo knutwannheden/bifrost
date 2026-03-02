@@ -6,6 +6,7 @@ const execFile = promisify(execFileCb);
 
 const FORMAT = '%H%x00%h%x00%s%x00%aN%x00%aI';
 const MAX_ENTRIES = 200;
+const GIT_TIMEOUT_MS = 15000;
 
 export async function getGitLog(worktreePath: string, baseBranch?: string): Promise<GitLogEntry[]> {
   try {
@@ -16,21 +17,21 @@ export async function getGitLog(worktreePath: string, baseBranch?: string): Prom
         ({ stdout } = await execFile(
           'git',
           ['log', `--format=${FORMAT}`, `--max-count=${MAX_ENTRIES}`, `${baseBranch}..HEAD`],
-          { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024 },
+          { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024, timeout: GIT_TIMEOUT_MS },
         ));
       } catch {
         // Base branch not available — fall back to full log
         ({ stdout } = await execFile(
           'git',
           ['log', `--format=${FORMAT}`, `--max-count=${MAX_ENTRIES}`],
-          { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024 },
+          { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024, timeout: GIT_TIMEOUT_MS },
         ));
       }
     } else {
       ({ stdout } = await execFile(
         'git',
         ['log', `--format=${FORMAT}`, `--max-count=${MAX_ENTRIES}`],
-        { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024 },
+        { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024, timeout: GIT_TIMEOUT_MS },
       ));
     }
 

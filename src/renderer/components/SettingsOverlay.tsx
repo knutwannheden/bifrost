@@ -167,10 +167,10 @@ function buildSettings(): SettingDef[] {
       key: 'ide',
       category: 'General',
       label: 'IDE',
-      tooltip: 'Which IDE to open when you press \u2318O. VS Code uses the "code" CLI, IntelliJ uses the "idea" CLI. The IDE opens the task\u2019s worktree directory.',
+      tooltip: 'Which IDE to open when you press \u2318O. VS Code uses the "code" CLI, IntelliJ uses the "idea" CLI, Zed uses the "zed" CLI. The IDE opens the task\u2019s worktree directory.',
       render: (config, update) => (
         <div className="flex gap-1">
-          {(['code', 'idea'] as const).map((ide) => (
+          {(['code', 'idea', 'zed'] as const).map((ide) => (
             <button
               key={ide}
               onClick={() => update({ ide })}
@@ -180,23 +180,10 @@ function buildSettings(): SettingDef[] {
                   : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
               }`}
             >
-              {ide === 'code' ? 'VS Code' : 'IntelliJ'}
+              {ide === 'code' ? 'VS Code' : ide === 'idea' ? 'IntelliJ' : 'Zed'}
             </button>
           ))}
         </div>
-      ),
-    },
-    {
-      key: 'groupHistoryByRepo',
-      category: 'General',
-      label: 'Group history by repo',
-      description: 'Group tasks by repository in history view',
-      tooltip: 'When enabled, the task history panel (\u2318H) organizes archived tasks under collapsible repository headings instead of a flat chronological list.',
-      render: (config, update) => (
-        <ToggleSwitch
-          checked={config.groupHistoryByRepo}
-          onChange={(v) => update({ groupHistoryByRepo: v })}
-        />
       ),
     },
     {

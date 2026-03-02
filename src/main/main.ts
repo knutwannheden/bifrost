@@ -167,10 +167,10 @@ app.on('ready', async () => {
   });
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   stopAllWatching();
   killAllSessions();
-  stopApi();
+  await stopApi();
 });
 
 app.on('will-quit', () => {

@@ -1,5 +1,8 @@
 import type { BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 // Use require for node-pty because it's externalized from Vite bundling
@@ -13,13 +16,17 @@ const sessions = new Map<string, IPty>();
 const sessionBuffers = new Map<string, string>();
 const MAX_BUFFER = 256 * 1024; // 256 KB per session
 
+function shellEscape(arg: string): string {
+  return "'" + arg.replace(/'/g, "'\\''") + "'";
+}
+
 function spawnSession(
   sessionId: string,
   command: string,
   args: string[],
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { cols?: number; rows?: number; extraEnv?: Record<string, string> },
+  options?: { cols?: number; rows?: number; extraEnv?: Record<string, string>; autoTrust?: boolean; prompt?: string; onBeforeExit?: (buffer: string, exitCode: number) => boolean },
 ): void {
   const env = { ...process.env } as Record<string, string>;
   // Remove CLAUDECODE so claude CLI doesn't refuse to start
@@ -30,7 +37,24 @@ function spawnSession(
     Object.assign(env, options.extraEnv);
   }
 
-  const shell = pty.spawn(command, args, {
+  let spawnCommand: string;
+  let spawnArgs: string[];
+
+  if (options?.prompt) {
+    // Pipe the prompt via stdin so Claude reads it as the initial message.
+    // This avoids terminal paste-detection issues that occur when writing
+    // multi-line text to the PTY after the welcome banner.
+    const tmpFile = path.join(os.tmpdir(), `bifrost-prompt-${sessionId}`);
+    fs.writeFileSync(tmpFile, options.prompt + '\n');
+    const cmdParts = [command, ...args.map(shellEscape)].join(' ');
+    spawnCommand = 'sh';
+    spawnArgs = ['-c', `cat ${shellEscape(tmpFile)} | ${cmdParts}; rm -f ${shellEscape(tmpFile)}`];
+  } else {
+    spawnCommand = command;
+    spawnArgs = args;
+  }
+
+  const shell = pty.spawn(spawnCommand, spawnArgs, {
     name: 'xterm-256color',
     cols: options?.cols ?? 120,
     rows: options?.rows ?? 30,
@@ -41,10 +65,25 @@ function spawnSession(
   sessions.set(sessionId, shell);
   sessionBuffers.set(sessionId, '');
 
+  // Auto-accept workspace trust prompt for Bifrost-managed Claude sessions.
+  // Worktree directories are subdirectories of repos the user already added,
+  // but Claude Code treats each unique CWD as a separate project needing trust.
+  let trustHandled = !options?.autoTrust;
+
   shell.onData((data: string) => {
     // Accumulate output so the renderer can replay on connect
     const buf = (sessionBuffers.get(sessionId) ?? '') + data;
     sessionBuffers.set(sessionId, buf.length > MAX_BUFFER ? buf.slice(-MAX_BUFFER) : buf);
+
+    if (!trustHandled && buf.includes('Yes, I trust this folder')) {
+      trustHandled = true;
+      shell.write('\r');
+    }
+
+    // Welcome banner without trust prompt means workspace is already trusted
+    if (!trustHandled && buf.includes('╰')) {
+      trustHandled = true;
+    }
 
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_STREAM.SESSION_DATA, sessionId, data);
@@ -52,6 +91,12 @@ function spawnSession(
   });
 
   shell.onExit(({ exitCode }: { exitCode: number }) => {
+    const buffer = sessionBuffers.get(sessionId) ?? '';
+    if (options?.onBeforeExit?.(buffer, exitCode)) {
+      sessions.delete(sessionId);
+      // Don't delete buffer or emit exit — caller is handling retry
+      return;
+    }
     sessions.delete(sessionId);
     sessionBuffers.delete(sessionId);
     if (!mainWindow.isDestroyed()) {
@@ -64,25 +109,41 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resumeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string },
+  options?: { resumeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string; prompt?: string; onResumeFailed?: () => void },
 ): void {
-  const args: string[] = [];
-  if (options?.resumeSessionId) {
-    args.push('--resume', options.resumeSessionId);
-  }
-  if (options?.permissionMode === 'sandbox') {
-    args.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
-  } else if (options?.permissionMode === 'skip-permissions') {
-    args.push('--dangerously-skip-permissions');
-  }
-  const extraEnv: Record<string, string> = {};
-  extraEnv.BIFROST_CONTEXT = options?.context ?? 'code';
-  if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
-  if (options?.apiPort) extraEnv.BIFROST_API_PORT = String(options.apiPort);
-  if (options?.agentTeams) extraEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
-  // Pass attempted resumeSessionId so /session-start can detect successful resumption
-  if (options?.resumeSessionId) extraEnv.BIFROST_RESUME_SESSION_ID = options.resumeSessionId;
-  spawnSession(sessionId, 'claude', args, cwd, mainWindow, { extraEnv });
+  const buildArgs = (resume: boolean): string[] => {
+    const a: string[] = [];
+    if (resume && options?.resumeSessionId) a.push('--resume', options.resumeSessionId);
+    if (options?.permissionMode === 'sandbox') a.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
+    else if (options?.permissionMode === 'skip-permissions') a.push('--dangerously-skip-permissions');
+    return a;
+  };
+
+  const buildEnv = (resume: boolean): Record<string, string> => {
+    const e: Record<string, string> = {};
+    e.BIFROST_CONTEXT = options?.context ?? 'code';
+    if (options?.taskId) e.BIFROST_TASK_ID = options.taskId;
+    if (options?.apiPort) e.BIFROST_API_PORT = String(options.apiPort);
+    if (options?.agentTeams) e.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+    if (resume && options?.resumeSessionId) e.BIFROST_RESUME_SESSION_ID = options.resumeSessionId;
+    return e;
+  };
+
+  // When resuming, detect "No conversation found" and automatically retry without --resume
+  const onBeforeExit = options?.resumeSessionId
+    ? (buffer: string): boolean => {
+        if (buffer.includes('No conversation found')) {
+          console.log(`[session] Resume failed for ${sessionId}, restarting without --resume`);
+          spawnSession(sessionId, 'claude', buildArgs(false), cwd, mainWindow, { extraEnv: buildEnv(false), autoTrust: true });
+          options?.onResumeFailed?.();
+          return true;
+        }
+        return false;
+      }
+    : undefined;
+
+  const prompt = options?.prompt && !options.resumeSessionId ? options.prompt : undefined;
+  spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, { extraEnv: buildEnv(true), autoTrust: true, prompt, onBeforeExit });
 }
 
 export function createShellSession(
