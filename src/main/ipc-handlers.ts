@@ -376,14 +376,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     const reopenConfig = loadConfig();
 
-    // Migrate legacy claudeSessionId field to sessionId (old code had both, we consolidated to one)
-    // If task has legacy claudeSessionId, use that (it's the correct Claude session ID)
-    const legacyClaudeSessionId = (task as Record<string, unknown>).claudeSessionId as string | undefined;
-    let resumeSessionId = task.sessionId || legacyClaudeSessionId;
-
     // Check if stored sessionId is stale; if so, clear it so user can select a session
+    let resumeSessionId = task.sessionId;
     if (resumeSessionId && isSessionStale(worktreePath, resumeSessionId)) {
       resumeSessionId = undefined;
+      updateTask(taskId, { sessionId: undefined });
     }
 
     createSession(taskId, worktreePath, mainWindow, {
