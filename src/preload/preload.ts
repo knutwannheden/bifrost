@@ -84,8 +84,8 @@ const api: BifrostAPI = {
 
   // Claude sessions
   listClaudeSessions: () => ipcRenderer.invoke(IPC.LIST_CLAUDE_SESSIONS),
-  resumeClaudeSession: (claudeSessionId, cwd) =>
-    ipcRenderer.invoke(IPC.RESUME_CLAUDE_SESSION, claudeSessionId, cwd),
+  resumeClaudeSession: (externalSessionId, cwd) =>
+    ipcRenderer.invoke(IPC.RESUME_CLAUDE_SESSION, externalSessionId, cwd),
 
   // Review
   runReview: (taskId, scope, instructions) => ipcRenderer.invoke(IPC.RUN_REVIEW, taskId, scope, instructions),

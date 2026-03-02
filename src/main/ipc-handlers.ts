@@ -2,7 +2,6 @@ import { ipcMain, BrowserWindow, clipboard, dialog, shell } from 'electron';
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
@@ -18,7 +17,7 @@ import { getGitLog } from './git-log-service';
 import { openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastChangedFile } from './activity-watcher';
-import { getApiPort } from './bifrost-api';
+import { getApiPort, isSessionStale, registerResumeAttempt } from './bifrost-api';
 import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { summarizeTask, countJsonlLines } from './task-summarizer';
@@ -142,8 +141,23 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   for (const task of tasksToRestore) {
     if (fs.existsSync(task.worktreePath)) {
       const startupConfig = loadConfig();
-      createSession(task.sessionId, task.worktreePath, mainWindow, {
-        claudeSessionId: task.claudeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
+
+      // Check if stored sessionId is stale; if so, clear it so user can select a session
+      let resumeSessionId = task.sessionId;
+      if (resumeSessionId && isSessionStale(task.worktreePath, resumeSessionId)) {
+        resumeSessionId = undefined;
+        const idx = tasks.findIndex((t) => t.id === task.id);
+        if (idx !== -1) {
+          tasks[idx] = { ...tasks[idx], sessionId: undefined };
+        }
+      }
+
+      // Use task.id as PTY sessionId so renderer can find the buffer
+      if (resumeSessionId) {
+        registerResumeAttempt(task.id, resumeSessionId);
+      }
+      createSession(task.id, task.worktreePath, mainWindow, {
+        resumeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,
       });
 
       const idx = tasks.findIndex((t) => t.id === task.id);
@@ -255,11 +269,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       console.log(`[CREATE_TASK] worktree created in ${Date.now() - t0}ms`);
     }
 
-    const sessionId = randomUUID();
     const taskId = randomUUID();
 
     console.log(`[CREATE_TASK] spawning session at ${Date.now() - t0}ms`);
-    createSession(sessionId, worktreePath, mainWindow, {
+    createSession(taskId, worktreePath, mainWindow, {
       taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams,
     });
 
@@ -365,10 +378,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
-    const sessionId = randomUUID();
     const reopenConfig = loadConfig();
-    createSession(sessionId, worktreePath, mainWindow, {
-      claudeSessionId: task.claudeSessionId,
+
+    // Check if stored sessionId is stale; if so, clear it so user can select a session
+    let resumeSessionId = task.sessionId;
+    if (resumeSessionId && isSessionStale(worktreePath, resumeSessionId)) {
+      resumeSessionId = undefined;
+      updateTask(taskId, { sessionId: undefined });
+    }
+
+    if (resumeSessionId) {
+      registerResumeAttempt(taskId, resumeSessionId);
+    }
+    createSession(taskId, worktreePath, mainWindow, {
+      resumeSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: reopenConfig.permissionMode,
@@ -380,7 +403,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     startWatching(taskId, worktreePath, mainWindow, claudeCallbacks);
 
     return updateTask(taskId, {
-      sessionId,
       worktreePath,
       branch,
       status: 'running',
@@ -419,7 +441,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const existing = devSessions.get(taskId);
     if (existing) killSession(existing);
 
-    const devSessionId = randomUUID();
+    const devSessionId = `${taskId}-dev`;
     createShellSession(devSessionId, task.worktreePath, mainWindow);
     devSessions.set(taskId, devSessionId);
     return devSessionId;
@@ -564,12 +586,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return scanClaudeSessions(excludePaths);
   });
 
-  ipcMain.handle(IPC.RESUME_CLAUDE_SESSION, async (_event, claudeSessionId: string, cwd: string) => {
+  ipcMain.handle(IPC.RESUME_CLAUDE_SESSION, async (_event, externalSessionId: string, cwd: string) => {
     if (!fs.existsSync(cwd)) {
       throw new Error(`Directory no longer exists: ${cwd}`);
     }
 
-    const sessionId = randomUUID();
     const taskId = randomUUID();
     const name = path.basename(cwd);
 
@@ -586,8 +607,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       }
     }
 
-    createSession(sessionId, cwd, mainWindow, {
-      claudeSessionId,
+    registerResumeAttempt(taskId, externalSessionId);
+    createSession(taskId, cwd, mainWindow, {
+      resumeSessionId: externalSessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
@@ -605,7 +627,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       status: 'running',
       hasUnread: false,
       createdAt: Date.now(),
-      claudeSessionId,
       isExternal: !matchedRepo,
     };
 
@@ -653,10 +674,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const existing = reviewSessions.get(taskId);
     if (existing) killSession(existing);
 
-    const reviewPtySessionId = randomUUID();
+    const reviewPtySessionId = `${taskId}-review`;
     const config = loadConfig();
     createSession(reviewPtySessionId, task.worktreePath, mainWindow, {
-      claudeSessionId: sessionId,
+      resumeSessionId: sessionId,
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
@@ -836,11 +857,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!repo) throw new Error(`Repo not found: ${item.repoId}`);
     if (!item.worktreePath) throw new Error('Supervisor item has no worktree');
 
-    const sessionId = randomUUID();
     const taskId = randomUUID();
 
-    createSession(sessionId, item.worktreePath, mainWindow, {
-      claudeSessionId: item.claudeSessionId,
+    createSession(taskId, item.worktreePath, mainWindow, {
       taskId,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
@@ -857,7 +876,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       status: 'running',
       hasUnread: false,
       createdAt: Date.now(),
-      claudeSessionId: item.claudeSessionId,
     };
 
     tasks.push(task);

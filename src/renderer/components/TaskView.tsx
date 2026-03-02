@@ -227,7 +227,7 @@ export default function TaskView() {
               }}
             >
               <TerminalPane
-                sessionId={task.sessionId}
+                sessionId={task.id}
                 taskId={task.id}
                 active={isActive}
                 focused={ps.focusedPane === 'claude'}

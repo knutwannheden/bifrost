@@ -64,11 +64,11 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { claudeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string },
+  options?: { resumeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string },
 ): void {
   const args: string[] = [];
-  if (options?.claudeSessionId) {
-    args.push('--resume', options.claudeSessionId);
+  if (options?.resumeSessionId) {
+    args.push('--resume', options.resumeSessionId);
   }
   if (options?.permissionMode === 'sandbox') {
     args.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
@@ -80,6 +80,8 @@ export function createSession(
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
   if (options?.apiPort) extraEnv.BIFROST_API_PORT = String(options.apiPort);
   if (options?.agentTeams) extraEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+  // Pass attempted resumeSessionId so /session-start can detect successful resumption
+  if (options?.resumeSessionId) extraEnv.BIFROST_RESUME_SESSION_ID = options.resumeSessionId;
   spawnSession(sessionId, 'claude', args, cwd, mainWindow, { extraEnv });
 }
 

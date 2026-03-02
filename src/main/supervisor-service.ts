@@ -194,10 +194,6 @@ export function removeItem(itemId: string): SupervisorState {
   return state;
 }
 
-export function setSupervisorItemSessionId(itemId: string, sessionId: string): void {
-  updateItem(itemId, { claudeSessionId: sessionId });
-  broadcastState();
-}
 
 // --- Internal ---
 
@@ -208,8 +204,8 @@ function processQueue(): void {
   const available = state.concurrency - runningCount;
   if (available <= 0) return;
 
-  // Pick items: prefer paused (with session to resume), then queued
-  const paused = state.items.filter((i) => i.status === 'paused' && i.claudeSessionId);
+  // Pick items: prefer paused, then queued
+  const paused = state.items.filter((i) => i.status === 'paused');
   const queued = state.items.filter((i) => i.status === 'queued');
   const toStart = [...paused, ...queued].slice(0, available);
 
@@ -250,9 +246,6 @@ async function spawnProcess(item: SupervisorItem): Promise<void> {
   try { env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
 
   const args: string[] = ['-p'];
-  if (item.claudeSessionId) {
-    args.push('--resume', item.claudeSessionId);
-  }
   if (config.permissionMode === 'skip-permissions') {
     args.push('--dangerously-skip-permissions');
   }

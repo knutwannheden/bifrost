@@ -23,8 +23,6 @@ export interface Task {
   terminalTitle?: string;
   /** Auto-generated one-sentence summary of what the task is doing */
   summary?: string;
-  /** If this task was resumed from an external Claude session */
-  claudeSessionId?: string;
   /** True if this task has no managed worktree (e.g. resumed external session) */
   isExternal?: boolean;
   /** True if this task uses the main repo directory instead of a separate worktree */
@@ -219,7 +217,6 @@ export interface SupervisorItem {
   name: string;
   branch: string;
   worktreePath?: string;
-  claudeSessionId?: string;
   errorMessage?: string;
   createdAt: number;
   startedAt?: number;

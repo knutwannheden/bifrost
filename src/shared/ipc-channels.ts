@@ -215,7 +215,7 @@ export interface BifrostAPI {
 
   // Claude sessions
   listClaudeSessions(): Promise<ClaudeSession[]>;
-  resumeClaudeSession(claudeSessionId: string, cwd: string): Promise<Task>;
+  resumeClaudeSession(externalSessionId: string, cwd: string): Promise<Task>;
 
   // Review
   runReview(taskId: string, scope?: 'working' | 'all', instructions?: string): Promise<{ reviewId: string; markdown: string; sessionId?: string }>;

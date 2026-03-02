@@ -6,7 +6,6 @@ import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask, updateTask } from './ipc-handlers';
 import { setReviewSessionId, startReviewActivityWatch } from './review-service';
-import { setSupervisorItemSessionId } from './supervisor-service';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
@@ -16,6 +15,52 @@ import { loadConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 let mainWindow: BrowserWindow | null = null;
+
+// Track attempted resumeSessionIds and /session-start call counts for each task.
+// When resuming, Claude makes multiple /session-start calls. We skip the first one
+// (ephemeral new session) and allow updates after that if sessionId differs.
+const resumeAttempts = new Map<string, { resumeSessionId: string; callCount: number }>();
+
+export function registerResumeAttempt(taskId: string, resumeSessionId: string): void {
+  resumeAttempts.set(taskId, { resumeSessionId, callCount: 0 });
+}
+
+function getResumeAttemptInfo(taskId: string): { resumeSessionId: string; callCount: number } | undefined {
+  return resumeAttempts.get(taskId);
+}
+
+function incrementCallCount(taskId: string): number {
+  const info = resumeAttempts.get(taskId);
+  if (info) {
+    info.callCount++;
+    return info.callCount;
+  }
+  return 0;
+}
+
+/**
+ * Check if a Claude session is still valid.
+ * Claude encodes project paths by replacing `/` and `.` with `-` in ~/.claude/projects.
+ * Session files are stored as {sessionId}.jsonl in the project directory.
+ */
+export function isSessionStale(worktreePath: string, sessionId?: string): boolean {
+  const encoded = worktreePath.replace(/[/.]/g, '-');
+  const projectPath = path.join(os.homedir(), '.claude', 'projects', encoded);
+
+  // Project directory doesn't exist = definitely stale
+  if (!fs.existsSync(projectPath)) {
+    return true;
+  }
+
+  // If sessionId provided, check if that specific session file exists
+  if (sessionId) {
+    const sessionFilePath = path.join(projectPath, `${sessionId}.jsonl`);
+    return !fs.existsSync(sessionFilePath);
+  }
+
+  // Project exists but no sessionId provided, so we can't confirm it's valid
+  return false;
+}
 
 export function initApi(window: BrowserWindow): void {
   mainWindow = window;
@@ -287,14 +332,28 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
       }
+      // Handle sessionId capture based on resumption context:
+      // - If resuming (resumeSessionId was attempted): skip first call, allow updates after
+      // - Otherwise: only update if undefined
+      const resumeInfo = getResumeAttemptInfo(task.id);
+      const callCount = resumeInfo ? incrementCallCount(task.id) : 0;
+      const isResuming = resumeInfo && context === 'code'; // Only for regular task sessions, not review/supervisor
+
+      if (!task.sessionId && sessionId) {
+        // First time: always capture when undefined
+        updateTask(task.id, { sessionId });
+      } else if (isResuming && callCount > 1 && task.sessionId !== sessionId) {
+        // Resuming: after first call, allow update if sessionId differs (resumption succeeded)
+        updateTask(task.id, { sessionId });
+        // Clear the resume attempt tracking once we've updated
+        resumeAttempts.delete(task.id);
+      }
       if (context === 'review' && reviewId) {
         setReviewSessionId(task.id, reviewId, sessionId);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
           startReviewActivityWatch(task.id, reviewId, cwd, sessionId, mainWindow);
         }
-      } else if (task.claudeSessionId !== sessionId) {
-        updateTask(task.id, { claudeSessionId: sessionId });
       }
       jsonResponse(res, { ok: true });
       return;
