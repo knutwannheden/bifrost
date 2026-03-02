@@ -154,7 +154,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
       // Use task.id as PTY sessionId so renderer can find the buffer
       if (resumeSessionId) {
-        registerResumeAttempt(task.id, resumeSessionId);
+        registerResumeAttempt(task.id);
       }
       createSession(task.id, task.worktreePath, mainWindow, {
         resumeSessionId, taskId: task.id, apiPort: getApiPort() ?? undefined, permissionMode: startupConfig.permissionMode, agentTeams: startupConfig.agentTeams,

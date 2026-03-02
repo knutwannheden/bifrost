@@ -16,26 +16,19 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 
 let mainWindow: BrowserWindow | null = null;
 
-// Track attempted resumeSessionIds and /session-start call counts for each task.
-// When resuming, Claude makes multiple /session-start calls. We skip the first one
-// (ephemeral new session) and allow updates after that if sessionId differs.
-const resumeAttempts = new Map<string, { resumeSessionId: string; callCount: number }>();
+// Track /session-start call counts per task. When resuming (either via REOPEN_TASK or
+// manual /resume), Claude makes multiple calls. We skip the first one and allow updates after.
+const sessionStartCallCounts = new Map<string, number>();
 
-export function registerResumeAttempt(taskId: string, resumeSessionId: string): void {
-  resumeAttempts.set(taskId, { resumeSessionId, callCount: 0 });
+function incrementSessionStartCallCount(taskId: string): number {
+  const count = (sessionStartCallCounts.get(taskId) ?? 0) + 1;
+  sessionStartCallCounts.set(taskId, count);
+  return count;
 }
 
-function getResumeAttemptInfo(taskId: string): { resumeSessionId: string; callCount: number } | undefined {
-  return resumeAttempts.get(taskId);
-}
-
-function incrementCallCount(taskId: string): number {
-  const info = resumeAttempts.get(taskId);
-  if (info) {
-    info.callCount++;
-    return info.callCount;
-  }
-  return 0;
+export function registerResumeAttempt(taskId: string): void {
+  // Reset call count when resumption is registered (for REOPEN_TASK case)
+  sessionStartCallCounts.set(taskId, 0);
 }
 
 /**
@@ -332,21 +325,19 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
       }
-      // Handle sessionId capture based on resumption context:
-      // - If resuming (resumeSessionId was attempted): skip first call, allow updates after
-      // - Otherwise: only update if undefined
-      const resumeInfo = getResumeAttemptInfo(task.id);
-      const callCount = resumeInfo ? incrementCallCount(task.id) : 0;
-      const isResuming = resumeInfo && context === 'code'; // Only for regular task sessions, not review/supervisor
+      // Handle sessionId capture:
+      // - First time (undefined): always capture
+      // - After first call (callCount > 1) in regular context: allow updates (handles resumption)
+      // This works for both registered resumptions (REOPEN_TASK) and immediate /resume commands
+      const callCount = context === 'code' ? incrementSessionStartCallCount(task.id) : 0;
 
       if (!task.sessionId && sessionId) {
         // First time: always capture when undefined
         updateTask(task.id, { sessionId });
-      } else if (isResuming && callCount > 1 && task.sessionId !== sessionId) {
-        // Resuming: after first call, allow update if sessionId differs (resumption succeeded)
+      } else if (context === 'code' && callCount > 1 && task.sessionId !== sessionId) {
+        // After first /session-start call: allow updates if sessionId differs
+        // This handles both registered resumptions and immediate /resume commands
         updateTask(task.id, { sessionId });
-        // Clear the resume attempt tracking once we've updated
-        resumeAttempts.delete(task.id);
       }
       if (context === 'review' && reviewId) {
         setReviewSessionId(task.id, reviewId, sessionId);
