@@ -93,8 +93,7 @@ function spawnSession(
   shell.onExit(({ exitCode }: { exitCode: number }) => {
     const buffer = sessionBuffers.get(sessionId) ?? '';
     if (options?.onBeforeExit?.(buffer, exitCode)) {
-      sessions.delete(sessionId);
-      // Don't delete buffer or emit exit — caller is handling retry
+      // Don't delete session/buffer or emit exit — caller already spawned a replacement
       return;
     }
     sessions.delete(sessionId);

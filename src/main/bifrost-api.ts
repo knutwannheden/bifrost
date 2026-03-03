@@ -31,10 +31,17 @@ export function isSessionStale(worktreePath: string, sessionId?: string): boolea
     return true;
   }
 
-  // If sessionId provided, check if that specific session file exists
+  // If sessionId provided, check if that specific session file exists and has content
   if (sessionId) {
     const sessionFilePath = path.join(projectPath, `${sessionId}.jsonl`);
-    return !fs.existsSync(sessionFilePath);
+    try {
+      const stat = fs.statSync(sessionFilePath);
+      // Files under 4 KB typically contain only metadata (file-history-snapshot,
+      // progress entries) with no actual conversation — Claude cannot resume these.
+      return stat.size < 4096;
+    } catch {
+      return true;
+    }
   }
 
   // Project exists but no sessionId provided, so we can't confirm it's valid
@@ -383,6 +390,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         : getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
       if (!task) {
         jsonResponse(res, { ok: false, reason: 'no matching task' });
+        return;
+      }
+      // During --resume, Claude fires two SessionStart events:
+      //   1. source=startup with a transient wrapper session ID
+      //   2. source=resume  with the actual resumed session ID
+      // Skip the wrapper event so it never overwrites the stored sessionId.
+      const source = body.source as string;
+      if (task.sessionId && source === 'startup') {
+        jsonResponse(res, { ok: true });
         return;
       }
       if (task.sessionId !== sessionId) {

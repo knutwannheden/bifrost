@@ -14,6 +14,21 @@ interface TerminalPaneProps {
   onTitleChange?: (title: string) => void;
 }
 
+function LoadingOverlay() {
+  const [dots, setDots] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setDots((d) => (d + 1) % 4), 400);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+      <span className="text-gray-500 text-sm font-mono">
+        Loading{'.'.repeat(dots)}
+      </span>
+    </div>
+  );
+}
+
 export default function TerminalPane({ sessionId, active, focused, hideCursor = false, onFocusRequest, onTitleChange }: TerminalPaneProps) {
   const { state } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -23,7 +38,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   const fontFamily = state.config?.fontFamily;
   const fontWeight = state.config?.fontWeight;
 
-  const { terminal } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active });
+  const { terminal, loading } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing.
   // When `focused` transitions to true, the caller explicitly wants focus (e.g. discussion
@@ -69,6 +84,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
       {showSearch && (
         <TerminalSearchBar sessionId={sessionId} onClose={handleSearchClose} />
       )}
+      {loading && <LoadingOverlay />}
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );

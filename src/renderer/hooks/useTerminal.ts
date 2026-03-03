@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 // import { LigaturesAddon } from '@xterm/addon-ligatures';
@@ -27,10 +27,12 @@ export function useTerminal(
 ) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const [loading, setLoading] = useState(true);
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
+    setLoading(true);
 
     const hideCursor = options?.hideCursor ?? false;
     const bg = '#282a36';
@@ -157,6 +159,7 @@ export function useTerminal(
     // TUI with the correct dimensions (buffer was generated at default 120×30).
     window.bifrost.drainSessionBuffer(sessionId).then((buf) => {
       if (buf) {
+        setLoading(false);
         terminal.write(buf, () => {
           try {
             fitAddon.fit();
@@ -169,9 +172,14 @@ export function useTerminal(
     // Receive data from session
     // Preserve scroll position when user has manually scrolled up —
     // without this, incoming data can reset the viewport to the top.
+    let hasReceivedData = false;
     const removeDataListener = window.bifrost.onSessionData(
       (sid: string, data: string) => {
         if (sid === sessionId) {
+          if (!hasReceivedData) {
+            hasReceivedData = true;
+            setLoading(false);
+          }
           const buf = terminal.buffer.active;
           const viewportY = buf.viewportY;
           const isScrolledUp = viewportY < buf.baseY;
@@ -284,5 +292,5 @@ export function useTerminal(
     }
   }, [visible, sessionId]);
 
-  return { terminal: terminalRef, fitAddon: fitAddonRef };
+  return { terminal: terminalRef, fitAddon: fitAddonRef, loading };
 }
