@@ -44,7 +44,6 @@ export async function createWorktree(
   branch: string,
   branchName?: string,
 ): Promise<string> {
-  const t0 = Date.now();
   const worktreePath = resolveWorktreePath(repoPath, taskName);
 
   await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
@@ -58,10 +57,7 @@ export async function createWorktree(
       await execFile('git', ['fetch', remoteMatch[1], remoteMatch[2]], {
         cwd: repoPath, timeout: 15000,
       });
-      console.log(`[createWorktree] fetch: ${Date.now() - t0}ms`);
-    } catch {
-      console.log(`[createWorktree] fetch failed/timed out, using local ref (${Date.now() - t0}ms)`);
-    }
+    } catch { /* fetch failed/timed out — use local ref */ }
   }
 
   const newBranchName = await resolveAvailableBranchName(repoPath, branchName ?? taskName);
@@ -70,7 +66,6 @@ export async function createWorktree(
     cwd: repoPath,
     timeout: 30000,
   });
-  console.log(`[createWorktree] git worktree add: ${Date.now() - t0}ms`);
 
   // Set upstream tracking when branching from a remote tracking branch
   if (remoteMatch) {
@@ -79,7 +74,6 @@ export async function createWorktree(
       ['branch', '--set-upstream-to', branch, newBranchName],
       { cwd: worktreePath, timeout: 10000 },
     );
-    console.log(`[createWorktree] set-upstream-to: ${Date.now() - t0}ms`);
   }
 
   return worktreePath;

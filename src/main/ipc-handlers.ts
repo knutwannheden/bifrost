@@ -134,7 +134,6 @@ async function destroyTask(taskId: string): Promise<void> {
 }
 
 export async function createTaskCore(params: CreateTaskParams, mainWindow: BrowserWindow): Promise<Task> {
-  const t0 = Date.now();
   const config = loadConfig();
   let repo: Repo | undefined;
 
@@ -175,16 +174,12 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     branch = stdout.trim();
     inPlace = true;
   } else {
-    console.log('[CREATE_TASK] creating worktree...');
     worktreePath = params.prInfo
       ? await createWorktreeFromPr(repo.path, name, params.prInfo)
       : await createWorktree(repo.path, name, params.branch, params.branchName);
-    console.log(`[CREATE_TASK] worktree created in ${Date.now() - t0}ms`);
   }
 
   const taskId = randomUUID();
-
-  console.log(`[CREATE_TASK] spawning session at ${Date.now() - t0}ms`);
   createSession(taskId, worktreePath, mainWindow, {
     taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams, prompt: params.prompt,
   });
@@ -208,7 +203,6 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
   startWatching(task.id, worktreePath, mainWindow, _claudeCallbacks);
 
-  console.log(`[CREATE_TASK] done in ${Date.now() - t0}ms`);
   return task;
 }
 
