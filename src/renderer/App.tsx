@@ -18,6 +18,7 @@ import NotificationPopover from './components/NotificationPopover';
 import NotesOverlay from './components/NotesOverlay';
 import StatsOverlay from './components/StatsOverlay';
 import SupervisorOverlay from './components/SupervisorOverlay';
+import { requestArchive, performArchive } from './utils/archive';
 
 declare global {
   interface Window {
@@ -265,16 +266,9 @@ export default function App() {
         case 'archive-task': {
           const archiveId = state.activeTaskId;
           if (!archiveId) break;
-          const remaining = state.tasks.filter(
-            (t) => t.id !== archiveId && t.status === 'running',
-          );
-          dispatch({
-            type: 'SET_ACTIVE_TASK',
-            taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-          });
-          window.bifrost.archiveTask(archiveId).then((updated) => {
-            dispatch({ type: 'UPDATE_TASK', task: updated });
-          });
+          const archiveTask = state.tasks.find((t) => t.id === archiveId);
+          if (!archiveTask || archiveTask.status === 'archived') break;
+          requestArchive(archiveId, archiveTask.name, state, dispatch);
           break;
         }
         case 'quit-confirm':
@@ -360,6 +354,45 @@ export default function App() {
 
       {/* Notification popover */}
       <NotificationPopover />
+
+      {/* Archive confirmation dialog */}
+      {state.archiveConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
+            }
+          }}
+        >
+          <div className="bg-slate-800 rounded-lg border border-slate-600 p-6 w-[400px] shadow-xl">
+            <h3 className="text-sm font-semibold text-slate-200 mb-3">Uncommitted Changes</h3>
+            <p className="text-sm text-slate-400 mb-5">
+              <span className="font-medium text-slate-300">{state.archiveConfirm.taskName}</span> has uncommitted changes that will be lost when the worktree is removed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                autoFocus
+                onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
+                className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const { taskId } = state.archiveConfirm!;
+                  dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
+                  performArchive(taskId, state, dispatch);
+                }}
+                className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded"
+              >
+                Force Archive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast notification */}
       {state.toast && (

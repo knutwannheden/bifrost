@@ -40,6 +40,7 @@ export const IPC = {
   CLOSE_TASK: 'task:close',
   STOP_TASK: 'task:stop',
   ARCHIVE_TASK: 'task:archive',
+  IS_WORKTREE_DIRTY: 'task:is-worktree-dirty',
   REOPEN_TASK: 'task:reopen',
   RENAME_TASK: 'task:rename',
   DELETE_TASK: 'task:delete',
@@ -174,6 +175,7 @@ export interface BifrostAPI {
   closeTask(taskId: string): Promise<void>;
   stopTask(taskId: string): Promise<Task>;
   archiveTask(taskId: string): Promise<Task>;
+  isWorktreeDirty(taskId: string): Promise<boolean>;
   reopenTask(taskId: string): Promise<Task>;
   renameTask(taskId: string, name: string): Promise<Task>;
   deleteTask(taskId: string): Promise<void>;

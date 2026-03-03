@@ -391,6 +391,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
   });
 
+  ipcMain.handle(IPC.IS_WORKTREE_DIRTY, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    // We don't own external or in-place worktrees — skip check
+    if (task.isExternal || task.inPlace) return false;
+    if (!fs.existsSync(task.worktreePath)) return false;
+    try {
+      const { stdout } = await execFile('git', ['status', '--porcelain'], {
+        cwd: task.worktreePath, timeout: 5000,
+      });
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  });
+
   ipcMain.handle(IPC.REOPEN_TASK, async (_event, taskId: string) => {
     const task = getTask(taskId);
     let worktreePath = task.worktreePath;

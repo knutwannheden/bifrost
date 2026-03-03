@@ -51,6 +51,7 @@ export interface AppState {
   showNotificationPopover: boolean;
   apiPort: number | null;
   agentBusyTasks: Set<string>;
+  archiveConfirm: { taskId: string; taskName: string } | null;
 }
 
 export type AppAction =
@@ -97,7 +98,9 @@ export type AppAction =
   | { type: 'SET_REVIEW_DISCUSSION'; taskId: string; reviewId: string; ptySessionId: string }
   | { type: 'CLEAR_REVIEW_DISCUSSION'; taskId: string }
   | { type: 'REORDER_TASKS'; taskIds: string[] }
-  | { type: 'SET_AGENT_BUSY'; taskId: string; busy: boolean };
+  | { type: 'SET_AGENT_BUSY'; taskId: string; busy: boolean }
+  | { type: 'SHOW_ARCHIVE_CONFIRM'; taskId: string; taskName: string }
+  | { type: 'HIDE_ARCHIVE_CONFIRM' };
 
 const initialState: AppState = {
   repos: [],
@@ -130,6 +133,7 @@ const initialState: AppState = {
   showNotificationPopover: false,
   apiPort: null,
   agentBusyTasks: new Set(),
+  archiveConfirm: null,
 };
 
 export const defaultPaneState: TaskPaneState = {
@@ -380,6 +384,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       else next.delete(action.taskId);
       return { ...state, agentBusyTasks: next };
     }
+    case 'SHOW_ARCHIVE_CONFIRM':
+      return { ...state, archiveConfirm: { taskId: action.taskId, taskName: action.taskName } };
+    case 'HIDE_ARCHIVE_CONFIRM':
+      return { ...state, archiveConfirm: null };
     default:
       return state;
   }

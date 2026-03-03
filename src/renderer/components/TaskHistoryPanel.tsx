@@ -4,6 +4,7 @@ import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import { shortPath } from '../utils/paths';
 import type { Task, ClaudeSession, DiffStats } from '../../shared/types';
+import { requestArchive } from '../utils/archive';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -393,23 +394,9 @@ export default function TaskHistoryPanel() {
     doReopen(task);
   };
 
-  const handleArchive = async (task: Task) => {
+  const handleArchive = (task: Task) => {
     setError(null);
-    try {
-      const updated = await window.bifrost.archiveTask(task.id);
-      dispatch({ type: 'UPDATE_TASK', task: updated });
-      if (state.activeTaskId === task.id) {
-        const activeTasks = state.tasks.filter(
-          (t) => t.id !== task.id && t.status !== 'archived',
-        );
-        dispatch({
-          type: 'SET_ACTIVE_TASK',
-          taskId: activeTasks.length > 0 ? activeTasks[activeTasks.length - 1].id : null,
-        });
-      }
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to archive task');
-    }
+    requestArchive(task.id, task.name, state, dispatch);
   };
 
   const handleDelete = async (task: Task) => {

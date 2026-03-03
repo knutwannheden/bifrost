@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { requestArchive } from '../utils/archive';
 
 interface Shortcut {
   key: string;
@@ -136,16 +137,9 @@ export default function KeyboardShortcutsPanel() {
     if (action === 'archive-task') {
       const taskId = state.activeTaskId;
       if (!taskId) return;
-      window.bifrost.archiveTask(taskId).then((updated) => {
-        dispatch({ type: 'UPDATE_TASK', task: updated });
-        const remaining = state.tasks.filter(
-          (t) => t.id !== taskId && t.status === 'running',
-        );
-        dispatch({
-          type: 'SET_ACTIVE_TASK',
-          taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-        });
-      });
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      requestArchive(taskId, task.name, state, dispatch);
     }
   };
 

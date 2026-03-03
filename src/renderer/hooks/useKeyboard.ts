@@ -4,6 +4,7 @@ import type { AppState, AppAction, PaneTarget } from '../context/AppContext';
 import type { CaptureContextParams } from '../../shared/types';
 import { defaultPaneState, getActiveDiffState } from '../context/AppContext';
 import { terminalRegistry } from './useTerminal';
+import { requestArchive } from '../utils/archive';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
 const DOUBLE_PRESS_MS = 500;
@@ -246,18 +247,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         }
         lastCmdShiftWRef.current = 0;
 
-        // Select next task immediately — archiveTask is async (worktree
-        // removal) and the session-exit event would clear the tab first.
-        const remaining = state.tasks.filter(
-          (t) => t.id !== taskId && t.status === 'running',
-        );
-        dispatch({
-          type: 'SET_ACTIVE_TASK',
-          taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-        });
-        window.bifrost.archiveTask(taskId).then((updated) => {
-          dispatch({ type: 'UPDATE_TASK', task: updated });
-        });
+        requestArchive(taskId, task.name, state, dispatch);
         return;
       }
 
