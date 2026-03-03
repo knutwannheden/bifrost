@@ -131,6 +131,16 @@ export function useTerminal(
           return false;
         }
       }
+      // Option+Left/Right: word navigation (ESC b / ESC f)
+      if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          if (e.type === 'keydown') {
+            const seq = e.key === 'ArrowLeft' ? '\x1bb' : '\x1bf';
+            window.bifrost.writeToSession(sessionId!, seq);
+          }
+          return false;
+        }
+      }
       if (e.metaKey && !e.shiftKey) {
         const key = e.key.toLowerCase();
         if ('atdrhko,lgf'.includes(key)) return false;
