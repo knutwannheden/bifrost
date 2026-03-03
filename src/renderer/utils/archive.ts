@@ -9,12 +9,14 @@ export function performArchive(
   state: AppState,
   dispatch: React.Dispatch<AppAction>,
 ): void {
-  const remaining = state.tasks.filter(
-    (t) => t.id !== taskId && t.status === 'running',
-  );
+  const running = state.tasks.filter((t) => t.status === 'running');
+  const idx = running.findIndex((t) => t.id === taskId);
+  const remaining = running.filter((t) => t.id !== taskId);
+  // Pick the next tab, or the previous one if archiving the last tab
+  const nextIdx = Math.min(idx, remaining.length - 1);
   dispatch({
     type: 'SET_ACTIVE_TASK',
-    taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+    taskId: nextIdx >= 0 ? remaining[nextIdx].id : null,
   });
   window.bifrost.archiveTask(taskId).then((updated) => {
     dispatch({ type: 'UPDATE_TASK', task: updated });
