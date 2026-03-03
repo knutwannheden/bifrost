@@ -87,12 +87,23 @@ export function useTerminal(
     terminal.loadAddon(searchAddon);
     terminal.open(containerRef.current);
 
-    // Use WebGL renderer for better performance with multiple terminals
-    try {
-      terminal.loadAddon(new WebglAddon());
-    } catch {
-      // WebGL not available, fall back to default canvas renderer
-    }
+    // Use WebGL renderer for better performance with multiple terminals.
+    // On context loss (e.g. system sleep), dispose and re-create the addon
+    // so xterm falls back to canvas temporarily then recovers.
+    const loadWebgl = () => {
+      try {
+        const webgl = new WebglAddon();
+        webgl.onContextLoss(() => {
+          webgl.dispose();
+          // Re-attempt WebGL after a short delay (GPU may be available again)
+          setTimeout(loadWebgl, 1000);
+        });
+        terminal.loadAddon(webgl);
+      } catch {
+        // WebGL not available, fall back to default canvas renderer
+      }
+    };
+    loadWebgl();
 
     // Initial fit — also resize PTY immediately so output produced before
     // the buffer drain uses correct dimensions instead of the default 120×30.
