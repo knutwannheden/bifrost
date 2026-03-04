@@ -148,9 +148,15 @@ export function createShellSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
+  options?: { taskId?: string },
 ): void {
   const shellPath = process.env.SHELL || '/bin/zsh';
-  spawnSession(sessionId, shellPath, ['-l'], cwd, mainWindow, { rows: 15, extraEnv: { BIFROST_CONTEXT: 'dev' } });
+  const extraEnv: Record<string, string> = {
+    BIFROST_CONTEXT: 'dev',
+    BIFROST_WORKTREE: cwd,
+  };
+  if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
+  spawnSession(sessionId, shellPath, ['-l'], cwd, mainWindow, { rows: 15, extraEnv });
 }
 
 export function writeToSession(sessionId: string, data: string): void {

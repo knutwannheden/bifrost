@@ -496,7 +496,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (existing) killSession(existing);
 
     const devSessionId = `${taskId}-dev`;
-    createShellSession(devSessionId, task.worktreePath, mainWindow);
+    createShellSession(devSessionId, task.worktreePath, mainWindow, { taskId });
     devSessions.set(taskId, devSessionId);
     return devSessionId;
   });
