@@ -191,9 +191,22 @@ export function useTerminal(
     });
 
     // Receive data from session
-    // Preserve scroll position when user has manually scrolled up —
-    // without this, incoming data can reset the viewport to the top.
+    // When user has scrolled up, hold the viewport at the same absolute
+    // line so they can read without the view jumping.  When the viewport
+    // is at the bottom, let xterm auto-scroll to follow new output
+    // (tail -f behaviour).
     let hasReceivedData = false;
+    let userScrolledUp = false;
+    let savedViewportY = 0;
+
+    terminal.onScroll(() => {
+      const buf = terminal.buffer.active;
+      userScrolledUp = buf.viewportY < buf.baseY;
+      if (userScrolledUp) {
+        savedViewportY = buf.viewportY;
+      }
+    });
+
     const removeDataListener = window.bifrost.onSessionData(
       (sid: string, data: string) => {
         if (sid === sessionId) {
@@ -201,12 +214,9 @@ export function useTerminal(
             hasReceivedData = true;
             setLoading(false);
           }
-          const buf = terminal.buffer.active;
-          const viewportY = buf.viewportY;
-          const isScrolledUp = viewportY < buf.baseY;
           terminal.write(data, () => {
-            if (isScrolledUp) {
-              terminal.scrollToLine(viewportY);
+            if (userScrolledUp) {
+              terminal.scrollToLine(savedViewportY);
             }
           });
         }
