@@ -128,18 +128,19 @@ export default function App() {
       (taskId, taskName, message) => {
         if (taskId === state.activeTaskId) return;
         dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
+        const hint = '\n`⌘=` to switch';
         if (message) {
           // Notification hook provides message directly
           const lines = message.split('\n').slice(0, 3).join('\n');
           const truncated = lines.length < message.length ? lines + '...' : lines;
-          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000 });
+          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}${hint}`, duration: 5000 });
         } else {
           // Stop hook — delay briefly so the activity watcher streams the final entry
           setTimeout(() => {
             const text = lastAssistantText.current.get(taskId) || 'Waiting for input';
             const lines = text.split('\n').slice(0, 3).join('\n');
             const truncated = lines.length < text.length ? lines + '...' : lines;
-            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000 });
+            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}${hint}`, duration: 5000 });
           }, 500);
         }
       },
