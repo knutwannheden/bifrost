@@ -261,34 +261,61 @@ export interface SummarizeOptions {
   ollamaModels?: string[];
 }
 
-let summarizeInFlight = false;
+interface SummarizeRequest {
+  taskId: string;
+  worktreePath: string;
+  options?: SummarizeOptions;
+  resolve: (result: string | null) => void;
+}
 
-/**
- * Summarize a task by feeding JSONL transcript head+tail to ollama (preferred)
- * or claude haiku (fallback). Returns the summary, or null on failure.
- * Only one summarization runs at a time to avoid spawning many ollama processes.
- */
-export async function summarizeTask(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
-  if (summarizeInFlight) return null;
+const summarizeQueue = new Map<string, SummarizeRequest>();
+let summarizeRunning = false;
 
+async function processQueue(): Promise<void> {
+  if (summarizeRunning) return;
+  const next = summarizeQueue.values().next().value as SummarizeRequest | undefined;
+  if (!next) return;
+  summarizeQueue.delete(next.taskId);
+
+  summarizeRunning = true;
+  try {
+    next.resolve(await runSummarize(next.worktreePath, next.options));
+  } catch {
+    next.resolve(null);
+  } finally {
+    summarizeRunning = false;
+    processQueue();
+  }
+}
+
+async function runSummarize(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
   const jsonlPath = resolveJsonlPath(worktreePath, options?.sessionId);
   if (!jsonlPath) return null;
 
   const input = readHeadTail(jsonlPath);
   if (!input) return null;
 
-  summarizeInFlight = true;
-  try {
-    const installed = getInstalledOllamaModels();
-    const model = (options?.ollamaModels ?? []).find((m) =>
-      installed.has(m) || installed.has(m.includes(':') ? m : `${m}:latest`),
-    );
-    if (model) {
-      const result = await tryOllama(model, input);
-      if (result) return result;
-    }
-    return tryClaude(input);
-  } finally {
-    summarizeInFlight = false;
+  const installed = getInstalledOllamaModels();
+  const model = (options?.ollamaModels ?? []).find((m) =>
+    installed.has(m) || installed.has(m.includes(':') ? m : `${m}:latest`),
+  );
+  if (model) {
+    const result = await tryOllama(model, input);
+    if (result) return result;
   }
+  return tryClaude(input);
+}
+
+/**
+ * Summarize a task by feeding JSONL transcript head+tail to ollama (preferred)
+ * or claude haiku (fallback). Returns the summary, or null on failure.
+ * Requests are queued with at most one entry per task. Only one summarization
+ * runs at a time to avoid spawning many ollama processes.
+ */
+export function summarizeTask(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
+  const taskId = options?.sessionId ?? worktreePath;
+  return new Promise<string | null>((resolve) => {
+    summarizeQueue.set(taskId, { taskId, worktreePath, options, resolve });
+    processQueue();
+  });
 }
