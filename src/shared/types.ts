@@ -267,7 +267,7 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   agentTeams: false,
   managePermissions: true,
   experimentalFeatures: false,
-  ollamaModels: ['phi4-mini'],
+  ollamaModels: ['phi4-mini', 'gemma3:1b'],
 };
 
 // Permission approval types

@@ -6,11 +6,13 @@ import { randomUUID } from 'node:crypto';
 import type { ActivityEntry } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { summarizeTask } from './task-summarizer';
+import { loadConfig } from './config';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 interface ClaudeWatcher {
   taskId: string;
+  sessionId?: string;
   projectDir: string;
   /** Byte offset per JSONL file so we only read new lines */
   fileOffsets: Map<string, number>;
@@ -195,6 +197,7 @@ export function startClaudeWatching(
   worktreePath: string,
   mainWindow: BrowserWindow,
   callbacks?: ClaudeWatcherCallbacks,
+  sessionId?: string,
 ): void {
   stopClaudeWatching(taskId);
 
@@ -203,31 +206,36 @@ export function startClaudeWatching(
 
   const fileOffsets = new Map<string, number>();
 
-  // Initialize offsets for existing files (skip existing content for live streaming)
-  if (fs.existsSync(projectDir)) {
-    for (const file of fs.readdirSync(projectDir)) {
-      if (!file.endsWith('.jsonl')) continue;
-      const filePath = path.join(projectDir, file);
-      try {
-        const stat = fs.statSync(filePath);
-        fileOffsets.set(filePath, stat.size);
-      } catch { /* ignore */ }
+  // Determine which files to watch
+  const getWatchFiles = (): string[] => {
+    if (!fs.existsSync(projectDir)) return [];
+    if (sessionId) {
+      // Watch only the specific session file
+      const filePath = path.join(projectDir, `${sessionId}.jsonl`);
+      return fs.existsSync(filePath) ? [filePath] : [];
     }
+    // Watch all JSONL files
+    try {
+      return fs.readdirSync(projectDir)
+        .filter((f) => f.endsWith('.jsonl'))
+        .map((f) => path.join(projectDir, f));
+    } catch {
+      return [];
+    }
+  };
+
+  // Initialize offsets for existing files (skip existing content for live streaming)
+  for (const filePath of getWatchFiles()) {
+    try {
+      const stat = fs.statSync(filePath);
+      fileOffsets.set(filePath, stat.size);
+    } catch { /* ignore */ }
   }
 
   const pollTimer = setInterval(() => {
-    if (!fs.existsSync(projectDir)) return;
+    const files = getWatchFiles();
 
-    let files: string[];
-    try {
-      files = fs.readdirSync(projectDir).filter((f) => f.endsWith('.jsonl'));
-    } catch {
-      return;
-    }
-
-    for (const file of files) {
-      const filePath = path.join(projectDir, file);
-
+    for (const filePath of files) {
       // For new files not yet tracked, start from end (skip existing content)
       if (!fileOffsets.has(filePath)) {
         try {
@@ -253,9 +261,10 @@ export function startClaudeWatching(
         if (w) {
           w.lineCount += lines.length;
           const { onSummary } = callbacks ?? {};
-          if (onSummary && w.lineCount >= 5 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 20)) {
+          if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 5)) {
             w.lastSummaryAt = w.lineCount;
-            summarizeTask(worktreePath).then((summary) => {
+            const config = loadConfig();
+            summarizeTask(worktreePath, { sessionId: w.sessionId, ollamaModels: config.ollamaModels }).then((summary) => {
               if (summary) onSummary(taskId, summary);
             }).catch(() => { /* ignore */ });
           }
@@ -264,7 +273,7 @@ export function startClaudeWatching(
     }
   }, 1000);
 
-  watchers.set(taskId, { taskId, projectDir, fileOffsets, pollTimer, lineCount: 0, lastSummaryAt: 0 });
+  watchers.set(taskId, { taskId, sessionId, projectDir, fileOffsets, pollTimer, lineCount: 0, lastSummaryAt: 0 });
 }
 
 /**

@@ -224,7 +224,7 @@ function buildSettings(): SettingDef[] {
           value={(config.ollamaModels ?? []).join(', ')}
           onChange={(e) => update({ ollamaModels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
           className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
-          placeholder="phi4-mini"
+          placeholder="phi4-mini, gemma3:1b"
         />
       ),
     },

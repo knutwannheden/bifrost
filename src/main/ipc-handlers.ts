@@ -201,7 +201,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   saveTasks(tasks);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(task.id, worktreePath, mainWindow, _claudeCallbacks);
+  startWatching(task.id, worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
 
   return task;
 }
@@ -221,7 +221,7 @@ function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): void {
   });
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks);
+  startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
 }
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
@@ -445,7 +445,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
 
     // Restart file watcher
-    startWatching(taskId, worktreePath, mainWindow, claudeCallbacks);
+    startWatching(taskId, worktreePath, mainWindow, claudeCallbacks, resumeSessionId);
 
     return updateTask(taskId, {
       worktreePath,
@@ -667,7 +667,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     tasks.push(task);
     saveTasks(tasks);
 
-    startWatching(taskId, cwd, mainWindow, claudeCallbacks);
+    startWatching(taskId, cwd, mainWindow, claudeCallbacks, sessionId);
 
     return task;
   });
@@ -921,7 +921,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     tasks.push(task);
     saveTasks(tasks);
-    startWatching(taskId, item.worktreePath, mainWindow, claudeCallbacks);
+    startWatching(taskId, item.worktreePath, mainWindow, claudeCallbacks, sessionId);
     return task;
   };
 
