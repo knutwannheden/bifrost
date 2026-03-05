@@ -61,9 +61,9 @@ export default function NotificationPopover() {
               timestamp: Date.now(),
             },
           });
-          dispatch({ type: 'SHOW_TOAST', message: 'Plugin updated.' });
+          dispatch({ type: 'SHOW_TOAST', message: 'Plugin updated. Use `/reload-plugins` or restart sessions to apply.' });
         } else {
-          dispatch({ type: 'SHOW_TOAST', message: 'Plugin updated.' });
+          dispatch({ type: 'SHOW_TOAST', message: 'Plugin updated. Use `/reload-plugins` in running sessions to apply.' });
         }
       }).catch(() => {
         dispatch({ type: 'SHOW_TOAST', message: 'Plugin update failed.' });
