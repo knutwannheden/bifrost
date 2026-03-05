@@ -47,9 +47,42 @@ export default function NotificationPopover() {
       dispatch({ type: 'SHOW_TOAST', message: 'Installing plugin update...' });
       window.bifrost.installIntegration().then(() => {
         dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
-        dispatch({ type: 'SHOW_TOAST', message: 'Plugin updated. Restart Claude Code sessions to apply.' });
+        const runningTasks = state.tasks.filter((t) => t.status === 'running');
+        if (runningTasks.length > 0) {
+          dispatch({
+            type: 'PUSH_NOTIFICATION',
+            notification: {
+              id: 'restart-sessions',
+              type: 'plugin-update',
+              title: 'Restart Sessions?',
+              message: `${runningTasks.length} running task${runningTasks.length > 1 ? 's' : ''} will be restarted to use the updated plugin.`,
+              action: { label: 'Restart All', handler: 'restart-sessions' },
+              read: false,
+              timestamp: Date.now(),
+            },
+          });
+          dispatch({ type: 'SHOW_TOAST', message: 'Plugin updated.' });
+        } else {
+          dispatch({ type: 'SHOW_TOAST', message: 'Plugin updated.' });
+        }
       }).catch(() => {
         dispatch({ type: 'SHOW_TOAST', message: 'Plugin update failed.' });
+      });
+    } else if (handler === 'restart-sessions') {
+      dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
+      const runningTasks = state.tasks.filter((t) => t.status === 'running');
+      dispatch({ type: 'SHOW_TOAST', message: `Restarting ${runningTasks.length} session${runningTasks.length > 1 ? 's' : ''}...` });
+      Promise.all(
+        runningTasks.map(async (task) => {
+          const stopped = await window.bifrost.stopTask(task.id);
+          dispatch({ type: 'UPDATE_TASK', task: stopped });
+          const reopened = await window.bifrost.reopenTask(task.id);
+          dispatch({ type: 'UPDATE_TASK', task: reopened });
+        }),
+      ).then(() => {
+        dispatch({ type: 'SHOW_TOAST', message: 'All sessions restarted.' });
+      }).catch(() => {
+        dispatch({ type: 'SHOW_TOAST', message: 'Some sessions failed to restart.' });
       });
     }
   };
