@@ -234,22 +234,31 @@ export interface SummarizeOptions {
   ollamaModels?: string[];
 }
 
+let summarizeInFlight = false;
+
 /**
  * Summarize a task by feeding JSONL transcript head+tail to ollama (preferred)
  * or claude haiku (fallback). Returns the summary, or null on failure.
+ * Only one summarization runs at a time to avoid spawning many ollama processes.
  */
 export async function summarizeTask(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
+  if (summarizeInFlight) return null;
+
   const jsonlPath = resolveJsonlPath(worktreePath, options?.sessionId);
   if (!jsonlPath) return null;
 
   const input = readHeadTail(jsonlPath);
   if (!input) return null;
 
-  const models = options?.ollamaModels ?? [];
-  for (const model of models) {
-    const result = await tryOllama(model, input);
-    if (result) return result;
+  summarizeInFlight = true;
+  try {
+    const models = options?.ollamaModels ?? [];
+    for (const model of models) {
+      const result = await tryOllama(model, input);
+      if (result) return result;
+    }
+    return tryClaude(input);
+  } finally {
+    summarizeInFlight = false;
   }
-
-  return tryClaude(input);
 }
