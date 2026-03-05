@@ -261,7 +261,7 @@ export function startClaudeWatching(
         if (w) {
           w.lineCount += lines.length;
           const { onSummary } = callbacks ?? {};
-          if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 5)) {
+          if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
             w.lastSummaryAt = w.lineCount;
             const config = loadConfig();
             summarizeTask(worktreePath, { sessionId: w.sessionId, ollamaModels: config.ollamaModels }).then((summary) => {

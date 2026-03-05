@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -6,6 +6,33 @@ import os from 'node:os';
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 const SUMMARY_TIMEOUT_MS = 30_000;
+
+/** Cached set of installed ollama model names (refreshed periodically). */
+let ollamaModelsCache: Set<string> | null = null;
+let ollamaModelsCacheTime = 0;
+const OLLAMA_CACHE_TTL_MS = 60_000;
+
+function getInstalledOllamaModels(): Set<string> {
+  const now = Date.now();
+  if (ollamaModelsCache && now - ollamaModelsCacheTime < OLLAMA_CACHE_TTL_MS) {
+    return ollamaModelsCache;
+  }
+  try {
+    const output = execSync('ollama list', { timeout: 5000, encoding: 'utf-8' });
+    const models = new Set<string>();
+    for (const line of output.split('\n').slice(1)) {
+      const name = line.split(/\s+/)[0];
+      if (name) models.add(name);
+    }
+    ollamaModelsCache = models;
+    ollamaModelsCacheTime = now;
+    return models;
+  } catch {
+    ollamaModelsCache = new Set();
+    ollamaModelsCacheTime = now;
+    return ollamaModelsCache;
+  }
+}
 
 const SUMMARY_PROMPT = `You are summarizing a Claude Code session transcript. The input is a sequence of JSONL lines from the session.
 
@@ -252,8 +279,11 @@ export async function summarizeTask(worktreePath: string, options?: SummarizeOpt
 
   summarizeInFlight = true;
   try {
-    const models = options?.ollamaModels ?? [];
-    for (const model of models) {
+    const installed = getInstalledOllamaModels();
+    const model = (options?.ollamaModels ?? []).find((m) =>
+      installed.has(m) || installed.has(m.includes(':') ? m : `${m}:latest`),
+    );
+    if (model) {
       const result = await tryOllama(model, input);
       if (result) return result;
     }
