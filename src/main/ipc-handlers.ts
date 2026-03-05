@@ -116,7 +116,7 @@ async function destroyTask(taskId: string): Promise<void> {
   const task = getTask(taskId);
   stopWatching(taskId);
   if (task.status === 'running') {
-    killSession(task.sessionId);
+    killSession(taskId);
   }
   if (!task.inPlace && fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
@@ -333,6 +333,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
+    killSession(taskId);
     const devSessionId = devSessions.get(taskId);
     if (devSessionId) { killSession(devSessionId); devSessions.delete(taskId); }
     const reviewPtyId = reviewSessions.get(taskId);
@@ -344,7 +345,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     if (task.status === 'running') {
       cancelTaskRequests(taskId);
-      killSession(task.sessionId);
+      killSession(taskId);
     }
     return updateTask(taskId, { status: 'stopped' });
   });
@@ -363,7 +364,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Kill session if still running
     if (task.status === 'running') {
-      killSession(task.sessionId);
+      killSession(taskId);
     }
 
     // Remove worktree but keep the branch
