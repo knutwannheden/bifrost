@@ -5,12 +5,12 @@ import type { StatsData, ContextRotEntry, EscalationEntry } from '../../shared/t
 type TabId = 'tool-usage' | 'skill-usage' | 'bash-commands' | 'context-rot' | 'tail-escalation';
 type TimeRange = '24h' | 'week' | 'all';
 
-const TABS: { id: TabId; label: string }[] = [
+const TABS: { id: TabId; label: string; experimental?: boolean }[] = [
   { id: 'skill-usage', label: 'Skills' },
-  { id: 'tool-usage', label: 'Tools' },
-  { id: 'bash-commands', label: 'Bash' },
-  { id: 'context-rot', label: 'Output' },
-  { id: 'tail-escalation', label: 'Escalation' },
+  { id: 'tool-usage', label: 'Tools', experimental: true },
+  { id: 'bash-commands', label: 'Bash', experimental: true },
+  { id: 'context-rot', label: 'Output', experimental: true },
+  { id: 'tail-escalation', label: 'Escalation', experimental: true },
 ];
 
 const TIME_RANGES: { id: TimeRange; label: string }[] = [
@@ -192,7 +192,8 @@ const emptyStats: StatsData = {
 };
 
 export default function StatsOverlay() {
-  const { dispatch } = useApp();
+  const { state, dispatch } = useApp();
+  const experimental = state.config?.experimentalFeatures ?? false;
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<TabId>('skill-usage');
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
@@ -221,6 +222,7 @@ export default function StatsOverlay() {
     }
   };
 
+  const visibleTabs = TABS.filter((tab) => !tab.experimental || experimental);
   const barEntries = getTabEntries(data, activeTab);
 
   return (
@@ -232,16 +234,17 @@ export default function StatsOverlay() {
       tabIndex={-1}
     >
       <div
+        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
         className="bg-slate-800 rounded-lg border border-slate-600 w-[560px] flex flex-col shadow-xl max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <div className="flex items-center gap-1">
-            {TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
-                className={`text-sm px-2 py-0.5 rounded ${
+                className={`text-sm px-2 py-0.5 rounded flex items-center gap-1 ${
                   activeTab === tab.id
                     ? 'bg-slate-700 text-slate-200'
                     : 'text-slate-400 hover:text-slate-200'
@@ -249,6 +252,12 @@ export default function StatsOverlay() {
                 onClick={() => setActiveTab(tab.id)}
               >
                 {tab.label}
+                {tab.experimental && (
+                  <svg width="10" height="10" viewBox="0 0 16 16" className="text-green-400 opacity-70" fill="none" stroke="currentColor" strokeWidth="1.2">
+                    <path d="M6 1h4v1H9v4l3.5 6.5a1 1 0 0 1-.9 1.5H4.4a1 1 0 0 1-.9-1.5L7 6V2H6V1z" />
+                    <path d="M5.5 10.5L7.5 7h1l2 3.5a1 1 0 0 1-.9 1.5H6.4a1 1 0 0 1-.9-1.5z" fill="currentColor" opacity="0.5" stroke="none" />
+                  </svg>
+                )}
               </button>
             ))}
             {!done && (
