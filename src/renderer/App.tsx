@@ -86,8 +86,6 @@ export default function App() {
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task && task.status !== 'archived') {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
-        // Clear busy state — Stop hook may not fire on process kill
-        dispatch({ type: 'SET_AGENT_BUSY', taskId: task.id, busy: false });
         if (code !== 0 && code !== 143) { // 143 = SIGTERM (intentional kill)
           dispatch({ type: 'SHOW_TOAST', message: `${task.name} exited with code ${code}` });
         }
@@ -110,15 +108,6 @@ export default function App() {
           dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
         }
       }
-    });
-    return unsub;
-  }, [dispatch]);
-
-  // Listen for agent busy/idle signals from plugin hooks.
-  // PreToolUse/PostToolUse → busy=true, Stop → busy=false.
-  useEffect(() => {
-    const unsub = window.bifrost.onAgentBusy((taskId, busy) => {
-      dispatch({ type: 'SET_AGENT_BUSY', taskId, busy });
     });
     return unsub;
   }, [dispatch]);

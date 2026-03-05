@@ -6,7 +6,6 @@ interface TaskTabProps {
   task: Task;
   repoName: string;
   isActive: boolean;
-  agentBusy: boolean;
   onClick: () => void;
   onClose: () => void;
   onRename: (name: string) => void;
@@ -14,7 +13,7 @@ interface TaskTabProps {
   onDragEnd: () => void;
 }
 
-export default function TaskTab({ task, repoName, isActive, agentBusy, onClick, onClose, onRename, onDragStart, onDragEnd }: TaskTabProps) {
+export default function TaskTab({ task, repoName, isActive, onClick, onClose, onRename, onDragStart, onDragEnd }: TaskTabProps) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(task.name);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -109,9 +108,7 @@ export default function TaskTab({ task, repoName, isActive, agentBusy, onClick, 
       >
         <span className="flex flex-col items-center min-w-0 max-w-[200px]">
           <span className="flex items-center gap-1.5">
-            {agentBusy ? (
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
-            ) : task.hasUnread && !isActive ? (
+            {task.hasUnread && !isActive ? (
               <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
             ) : null}
             <span className="text-xs leading-tight truncate font-sans">{task.name}</span>

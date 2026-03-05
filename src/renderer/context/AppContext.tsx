@@ -50,7 +50,6 @@ export interface AppState {
   notifications: AppNotification[];
   showNotificationPopover: boolean;
   apiPort: number | null;
-  agentBusyTasks: Set<string>;
   archiveConfirm: { taskId: string; taskName: string } | null;
 }
 
@@ -98,7 +97,6 @@ export type AppAction =
   | { type: 'SET_REVIEW_DISCUSSION'; taskId: string; reviewId: string; ptySessionId: string }
   | { type: 'CLEAR_REVIEW_DISCUSSION'; taskId: string }
   | { type: 'REORDER_TASKS'; taskIds: string[] }
-  | { type: 'SET_AGENT_BUSY'; taskId: string; busy: boolean }
   | { type: 'SHOW_ARCHIVE_CONFIRM'; taskId: string; taskName: string }
   | { type: 'HIDE_ARCHIVE_CONFIRM' };
 
@@ -132,7 +130,6 @@ const initialState: AppState = {
   notifications: [],
   showNotificationPopover: false,
   apiPort: null,
-  agentBusyTasks: new Set(),
   archiveConfirm: null,
 };
 
@@ -375,14 +372,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
         showNotificationPopover: opening,
         notifications: opening ? state.notifications.map((n) => ({ ...n, read: true })) : state.notifications,
       };
-    }
-    case 'SET_AGENT_BUSY': {
-      const has = state.agentBusyTasks.has(action.taskId);
-      if (action.busy === has) return state;
-      const next = new Set(state.agentBusyTasks);
-      if (action.busy) next.add(action.taskId);
-      else next.delete(action.taskId);
-      return { ...state, agentBusyTasks: next };
     }
     case 'SHOW_ARCHIVE_CONFIRM':
       return { ...state, archiveConfirm: { taskId: action.taskId, taskName: action.taskName } };

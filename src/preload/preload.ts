@@ -199,14 +199,6 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.SUPERVISOR_UPDATE, handler);
   },
 
-  // Agent busy state (from plugin hooks)
-  onAgentBusy: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, busy: boolean) =>
-      callback(taskId, busy);
-    ipcRenderer.on(IPC_STREAM.AGENT_BUSY, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.AGENT_BUSY, handler);
-  },
-
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) =>

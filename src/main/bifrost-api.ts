@@ -341,26 +341,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
-    case '/agent-busy':
-    case '/agent-idle': {
-      const cwd = body.cwd as string;
-      if (!cwd) {
-        errorResponse(res, 'Missing cwd');
-        return;
-      }
-      const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
-      if (!task) {
-        jsonResponse(res, { ok: false });
-        return;
-      }
-      const busy = req.url === '/agent-busy';
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_STREAM.AGENT_BUSY, task.id, busy);
-      }
-      jsonResponse(res, { ok: true });
-      return;
-    }
-
     case '/session-start': {
       const sessionId = body.session_id as string;
       const cwd = body.cwd as string;

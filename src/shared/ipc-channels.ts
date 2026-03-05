@@ -149,7 +149,6 @@ export const IPC_STREAM = {
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
-  AGENT_BUSY: 'agent:busy',
   STATS_UPDATE: 'stats:update',
   SUPERVISOR_UPDATE: 'supervisor:update',
   TASK_CREATED: 'task:created',
@@ -274,9 +273,6 @@ export interface BifrostAPI {
   createNote(repoId: string, text: string): Promise<Note>;
   updateNote(repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }): Promise<Note>;
   deleteNote(repoId: string, noteId: string): Promise<void>;
-
-  // Agent busy state (from plugin hooks)
-  onAgentBusy(callback: (taskId: string, busy: boolean) => void): () => void;
 
   // Stats
   getStats(since?: number): Promise<void>;
