@@ -65,6 +65,7 @@ export interface BifrostConfig {
   agentTeams: boolean;
   managePermissions: boolean;
   experimentalFeatures: boolean;
+  ollamaModels: string[];
 }
 
 export interface CreateTaskParams {
@@ -266,6 +267,7 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   agentTeams: false,
   managePermissions: true,
   experimentalFeatures: false,
+  ollamaModels: ['phi4-mini'],
 };
 
 // Permission approval types

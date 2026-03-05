@@ -212,6 +212,22 @@ function buildSettings(): SettingDef[] {
         />
       ),
     },
+    {
+      key: 'ollamaModels',
+      category: 'General',
+      label: 'Ollama models',
+      description: 'Models to try for task summarization, in priority order',
+      tooltip: 'Comma-separated list of ollama model names. Bifrost tries each in order for task summarization, falling back to Claude Haiku if none are available.',
+      render: (config, update) => (
+        <input
+          type="text"
+          value={(config.ollamaModels ?? []).join(', ')}
+          onChange={(e) => update({ ollamaModels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+          placeholder="phi4-mini"
+        />
+      ),
+    },
   ];
 }
 
