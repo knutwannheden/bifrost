@@ -45,6 +45,7 @@ export interface AppState {
   /** Active discussion PTY sessions keyed by taskId */
   reviewDiscussion: Record<string, { ptySessionId: string; reviewId: string }>;
   toast: string | null;
+  toastHint: string | null;
   toastDuration: number;
   permissionQueue: PermissionPromptData[];
   notifications: AppNotification[];
@@ -78,7 +79,7 @@ export type AppAction =
   | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
   | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
   | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget }
-  | { type: 'SHOW_TOAST'; message: string; duration?: number }
+  | { type: 'SHOW_TOAST'; message: string; duration?: number; hint?: string }
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
   | { type: 'PUSH_PERMISSION'; request: PermissionPromptData }
@@ -125,6 +126,7 @@ const initialState: AppState = {
   activeReviewId: {},
   reviewDiscussion: {},
   toast: null,
+  toastHint: null,
   toastDuration: 2000,
   permissionQueue: [],
   notifications: [],
@@ -292,9 +294,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return setPaneState(state, action.taskId, { ...ps, [key]: false });
     }
     case 'SHOW_TOAST':
-      return { ...state, toast: action.message, toastDuration: action.duration ?? 2000 };
+      return { ...state, toast: action.message, toastHint: action.hint ?? null, toastDuration: action.duration ?? 2000 };
     case 'HIDE_TOAST':
-      return { ...state, toast: null };
+      return { ...state, toast: null, toastHint: null };
     case 'SET_API_PORT':
       return { ...state, apiPort: action.port };
     case 'SET_TASK_SUMMARY':

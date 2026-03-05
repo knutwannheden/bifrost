@@ -94,19 +94,11 @@ export default function App() {
     return unsub;
   }, [state.tasks, dispatch]);
 
-  // Mark non-active tasks as unread when new JSONL activity arrives
-  // (actual Claude interactions, not terminal noise).
-  // Also buffer last assistant text per task for hook notifications.
-  // Uses activeTaskIdRef so the listener is stable across tab switches.
+  // Buffer last assistant text per task for hook notifications.
   useEffect(() => {
     const unsub = window.bifrost.onActivityEntry((entry) => {
-      if (entry.type === 'claude_event') {
-        if (entry.claudeEventKind === 'assistant_text' && entry.claudeText) {
-          lastAssistantText.current.set(entry.taskId, entry.claudeText);
-        }
-        if (entry.taskId !== activeTaskIdRef.current) {
-          dispatch({ type: 'SET_TASK_UNREAD', taskId: entry.taskId, hasUnread: true });
-        }
+      if (entry.type === 'claude_event' && entry.claudeEventKind === 'assistant_text' && entry.claudeText) {
+        lastAssistantText.current.set(entry.taskId, entry.claudeText);
       }
     });
     return unsub;
@@ -128,19 +120,18 @@ export default function App() {
       (taskId, taskName, message) => {
         if (taskId === state.activeTaskId) return;
         dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
-        const hint = '\n`⌘=` to switch';
         if (message) {
           // Notification hook provides message directly
           const lines = message.split('\n').slice(0, 3).join('\n');
           const truncated = lines.length < message.length ? lines + '...' : lines;
-          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}${hint}`, duration: 5000 });
+          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: '⌘= to switch' });
         } else {
           // Stop hook — delay briefly so the activity watcher streams the final entry
           setTimeout(() => {
             const text = lastAssistantText.current.get(taskId) || 'Waiting for input';
             const lines = text.split('\n').slice(0, 3).join('\n');
             const truncated = lines.length < text.length ? lines + '...' : lines;
-            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}${hint}`, duration: 5000 });
+            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: '⌘= to switch' });
           }, 500);
         }
       },
@@ -390,6 +381,9 @@ export default function App() {
         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-900/60 backdrop-blur-xl text-slate-200 text-sm rounded-xl shadow-2xl border border-white/10 animate-fade-in max-w-lg"
              style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
           <SimpleMarkdown text={state.toast} />
+          {state.toastHint && (
+            <div className="text-right text-xs text-slate-500 mt-1">{state.toastHint}</div>
+          )}
         </div>
       )}
     </div>
