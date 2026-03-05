@@ -287,7 +287,8 @@ export default function App() {
 
   const handleToggleIde = async () => {
     if (!state.config) return;
-    const newIde = state.config.ide === 'code' ? 'idea' : 'code';
+    const ides: BifrostConfig['ide'][] = ['code', 'idea', 'zed'];
+    const newIde = ides[(ides.indexOf(state.config.ide) + 1) % ides.length];
     await window.bifrost.setIde(newIde);
     dispatch({ type: 'SET_CONFIG', config: { ...state.config, ide: newIde } });
   };
