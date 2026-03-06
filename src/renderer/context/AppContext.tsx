@@ -47,6 +47,7 @@ export interface AppState {
   toast: string | null;
   toastHint: string | null;
   toastDuration: number;
+  toastAction: { label: string; callback: () => void } | null;
   permissionQueue: PermissionPromptData[];
   notifications: AppNotification[];
   showNotificationPopover: boolean;
@@ -79,7 +80,7 @@ export type AppAction =
   | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
   | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
   | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget }
-  | { type: 'SHOW_TOAST'; message: string; duration?: number; hint?: string }
+  | { type: 'SHOW_TOAST'; message: string; duration?: number; hint?: string; action?: { label: string; callback: () => void } }
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
   | { type: 'PUSH_PERMISSION'; request: PermissionPromptData }
@@ -128,6 +129,7 @@ const initialState: AppState = {
   toast: null,
   toastHint: null,
   toastDuration: 2000,
+  toastAction: null,
   permissionQueue: [],
   notifications: [],
   showNotificationPopover: false,
@@ -294,9 +296,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return setPaneState(state, action.taskId, { ...ps, [key]: false });
     }
     case 'SHOW_TOAST':
-      return { ...state, toast: action.message, toastHint: action.hint ?? null, toastDuration: action.duration ?? 2000 };
+      return { ...state, toast: action.message, toastHint: action.hint ?? null, toastDuration: action.duration ?? 2000, toastAction: action.action ?? null };
     case 'HIDE_TOAST':
-      return { ...state, toast: null, toastHint: null };
+      return { ...state, toast: null, toastHint: null, toastAction: null };
     case 'SET_API_PORT':
       return { ...state, apiPort: action.port };
     case 'SET_TASK_SUMMARY':

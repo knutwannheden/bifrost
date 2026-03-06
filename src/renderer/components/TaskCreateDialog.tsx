@@ -5,19 +5,7 @@ import { generateTaskName } from '../../shared/name-generator';
 import { shortPath } from '../utils/paths';
 import ActionLabel from './ActionLabel';
 
-interface ParsedPrUrl {
-  owner: string;
-  repo: string;
-  number: number;
-}
-
-function parsePrUrl(text: string): ParsedPrUrl | null {
-  const match = text.trim().match(
-    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)\/?(?:[?#].*)?$/,
-  );
-  if (!match) return null;
-  return { owner: match[1], repo: match[2], number: parseInt(match[3], 10) };
-}
+import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 
 function repoDisplayName(repo: Repo): string {
   return repo.githubPath ?? repo.name;
@@ -58,6 +46,7 @@ export default function TaskCreateDialog() {
   const [error, setError] = useState<string | null>(null);
   const [prBanner, setPrBanner] = useState<{ number: number; title?: string; repoId?: string; headBranch?: string; message?: string } | null>(null);
   const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
+  const [slackUrl, setSlackUrl] = useState<string | null>(null);
   const [inPlace, setInPlace] = useState(false);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
 
@@ -134,11 +123,19 @@ export default function TaskCreateDialog() {
     }
   }, [state.repos.length]);
 
-  // Detect PR URL on clipboard when dialog opens
+  // Detect PR or Slack URL on clipboard when dialog opens
   useEffect(() => {
     (async () => {
       try {
         const text = await window.bifrost.readClipboard();
+
+        // Check for Slack URL first (simpler — no API calls needed)
+        const slack = parseSlackUrl(text);
+        if (slack) {
+          setSlackUrl(slack);
+          return;
+        }
+
         const parsed = parsePrUrl(text);
         if (!parsed) return;
 
@@ -290,12 +287,16 @@ export default function TaskCreateDialog() {
     setLoading(true);
     setError(null);
     try {
+      const slackPrompt = slackUrl
+        ? `Read the following Slack message and the thread which it is part of and try to understand what is requested: ${slackUrl}`
+        : undefined;
       const task = await window.bifrost.createTask({
         repoId,
         name: taskName.trim(),
         branch: inPlace ? '' : branch,
         ...(prInfo && !inPlace && { prInfo }),
         ...(inPlace && { inPlace: true }),
+        ...(slackPrompt && { prompt: slackPrompt }),
       });
       localStorage.setItem('bifrost:lastRepoId', repoId);
       dispatch({ type: 'ADD_TASK', task });
@@ -385,6 +386,21 @@ export default function TaskCreateDialog() {
                   setPrBanner(null);
                   setPrInfo(null);
                 }}
+                className="text-xs text-blue-400 hover:text-blue-200 ml-3 whitespace-nowrap"
+              >
+                Ignore
+              </button>
+            </div>
+          )}
+
+          {/* Slack link banner */}
+          {slackUrl && (
+            <div className="flex items-center justify-between bg-blue-900/40 border border-blue-700/50 rounded px-3 py-2">
+              <p className="text-xs text-blue-300 truncate">
+                Slack message detected
+              </p>
+              <button
+                onClick={() => setSlackUrl(null)}
                 className="text-xs text-blue-400 hover:text-blue-200 ml-3 whitespace-nowrap"
               >
                 Ignore

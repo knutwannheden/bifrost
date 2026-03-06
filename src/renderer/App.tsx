@@ -19,6 +19,7 @@ import NotesOverlay from './components/NotesOverlay';
 import StatsOverlay from './components/StatsOverlay';
 import SupervisorOverlay from './components/SupervisorOverlay';
 import { requestArchive, performArchive } from './utils/archive';
+import { parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
 
 declare global {
   interface Window {
@@ -165,6 +166,41 @@ export default function App() {
         });
       }
     }).catch(() => {});
+  }, [dispatch]);
+
+  // Detect PR / Slack links on clipboard when window gains focus
+  const lastClipboardRef = useRef<string | null>(null);
+  useEffect(() => {
+    const onFocus = async () => {
+      try {
+        const text = await window.bifrost.readClipboard();
+        if (!text || text === lastClipboardRef.current) return;
+        lastClipboardRef.current = text;
+
+        let label: string | undefined;
+        if (parseSlackUrl(text)) {
+          label = 'Slack message detected';
+        } else if (parsePrUrl(text)) {
+          const pr = parsePrUrl(text)!;
+          label = `PR #${pr.number} detected`;
+        }
+        if (label) {
+          dispatch({
+            type: 'SHOW_TOAST',
+            message: label,
+            duration: 5000,
+            action: {
+              label: 'Create Task',
+              callback: () => dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true }),
+            },
+          });
+        }
+      } catch {
+        // clipboard read failed — ignore
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [dispatch]);
 
   // Listen for menu actions from the main process
@@ -380,7 +416,20 @@ export default function App() {
       {state.toast && (
         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-900/60 backdrop-blur-xl text-slate-200 text-sm rounded-xl shadow-2xl border border-white/10 animate-fade-in max-w-lg"
              style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}>
-          <SimpleMarkdown text={state.toast} />
+          <div className="flex items-center gap-3">
+            <SimpleMarkdown text={state.toast} />
+            {state.toastAction && (
+              <button
+                onClick={() => {
+                  state.toastAction!.callback();
+                  dispatch({ type: 'HIDE_TOAST' });
+                }}
+                className="shrink-0 px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded"
+              >
+                {state.toastAction.label}
+              </button>
+            )}
+          </div>
           {state.toastHint && (
             <div className="text-right text-xs text-slate-500 mt-1">{state.toastHint}</div>
           )}
