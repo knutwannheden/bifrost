@@ -20,7 +20,7 @@ function shellEscape(arg: string): string {
   return "'" + arg.replace(/'/g, "'\\''") + "'";
 }
 
-function spawnSession(
+export function spawnSession(
   sessionId: string,
   command: string,
   args: string[],

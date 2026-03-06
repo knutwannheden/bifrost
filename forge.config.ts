@@ -50,7 +50,7 @@ const config: ForgeConfig = {
     },
     // Copy native modules and plugin source into the packaged app
     packageAfterCopy: async (_config, buildPath) => {
-      const nativeModules = ['node-pty'];
+      const nativeModules = ['node-pty', 'nan'];
       for (const mod of nativeModules) {
         const src = path.join(__dirname, 'node_modules', mod);
         const dest = path.join(buildPath, 'node_modules', mod);

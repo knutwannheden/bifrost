@@ -693,8 +693,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
     const { reviewId, markdown } = await runReview(task.worktreePath, taskId, mainWindow, scope, instructions, baseBranch);
-    watchReviewFile(taskId, reviewId, mainWindow);
-    // sessionId is set asynchronously via the SessionStart hook → /session-start API
     const sessionId = getReviewSessionId(taskId, reviewId);
     return { reviewId, markdown, sessionId };
   });

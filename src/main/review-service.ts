@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { BrowserWindow } from 'electron';
 import fs from 'node:fs';
@@ -7,6 +6,7 @@ import os from 'node:os';
 
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ReviewEntry } from '../shared/types';
+import { spawnSession, killSession } from './session-manager';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -22,7 +22,7 @@ const REVIEW_INSTRUCTIONS = `Produce a Markdown document with:
    \`[suggestion]\` — code quality, style, maintainability improvements
    Order items by severity (critical first).
 If the code looks good, say so and use fewer items.
-Output ONLY the Markdown, no preamble.`;
+Write ONLY the Markdown to the specified file, no preamble.`;
 
 function getReviewPrompt(scope: 'working' | 'all', baseBranch?: string): string {
   if (scope === 'all' && baseBranch) {
@@ -108,7 +108,7 @@ export function migrateIfNeeded(taskId: string, legacySessionId?: string): Revie
 
 // --- Running review tracking ---
 
-const runningReviews = new Map<string, ReturnType<typeof spawn>>();
+const runningReviews = new Map<string, string>(); // taskId -> ptySessionId
 const cancelledReviews = new Set<string>();
 
 // --- Public API ---
@@ -120,116 +120,107 @@ export function listReviews(taskId: string): ReviewEntry[] {
 export async function runReview(
   worktreePath: string,
   taskId: string,
-  mainWindow?: BrowserWindow,
+  mainWindow: BrowserWindow,
   scope: 'working' | 'all' = 'working',
   instructions?: string,
   baseBranch?: string,
 ): Promise<{ reviewId: string; markdown: string }> {
   const reviewId = randomUUID();
+  const reviewFilePath = getReviewFilePath(taskId, reviewId);
 
-  let prompt = getReviewPrompt(scope, baseBranch);
-  if (instructions?.trim()) {
-    prompt += `\n\nAdditional reviewer instructions:\n${instructions.trim()}`;
-  }
-
-  const markdown = await new Promise<string>((resolve, reject) => {
-    const env = { ...process.env } as Record<string, string>;
-    delete env.CLAUDECODE;
-    env.BIFROST_CONTEXT = 'review';
-    env.BIFROST_TASK_ID = taskId;
-    env.BIFROST_REVIEW_ID = reviewId;
-    // Ensure the SessionStart hook can reach the Bifrost API
-    const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
-    try { env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
-
-    const reviewFilePath = getReviewFilePath(taskId, reviewId);
-    const proc = spawn('claude', [
-      '-p',
-      '--append-system-prompt', `The review document will be saved at: ${reviewFilePath}\nDuring this review, output the markdown directly — do not write to any files.\nIf later resumed for discussion and asked to update the review, write changes to that file.`,
-      prompt,
-    ], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      cwd: worktreePath,
-      env,
-    });
-
-    runningReviews.set(taskId, proc);
-    cancelledReviews.delete(taskId);
-
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        proc.kill();
-        reject(new Error('Review timed out'));
-      }
-    }, REVIEW_TIMEOUT_MS);
-
-    proc.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_STREAM.REVIEW_PROGRESS, taskId, reviewId, stdout);
-      }
-    });
-
-    proc.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-    });
-
-    proc.on('close', (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      runningReviews.delete(taskId);
-      stopReviewActivityWatch(taskId);
-      if (cancelledReviews.has(taskId)) {
-        cancelledReviews.delete(taskId);
-        reject(new Error('Review cancelled'));
-      } else if (code === 0 && stdout.trim()) {
-        resolve(stdout.trim());
-      } else {
-        reject(new Error(stderr.trim() || `claude exited with code ${code}`));
-      }
-    });
-
-    proc.on('error', (err) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      runningReviews.delete(taskId);
-      stopReviewActivityWatch(taskId);
-      reject(err);
-    });
-  });
-
-  // Create review entry in manifest
+  // Create manifest entry before spawning so session-start hook can set sessionId
   const entry: ReviewEntry = {
     id: reviewId,
     scope,
     instructions: instructions?.trim() || undefined,
     timestamp: Date.now(),
   };
-
   const entries = migrateIfNeeded(taskId);
   entries.push(entry);
   writeManifest(taskId, entries);
 
-  // Save review content
+  let prompt = getReviewPrompt(scope, baseBranch);
+  if (instructions?.trim()) {
+    prompt += `\n\nAdditional reviewer instructions:\n${instructions.trim()}`;
+  }
+  prompt += `\n\nWrite the review document to: ${reviewFilePath}\nIf later resumed for discussion and asked to update the review, write changes to that same file.`;
+
+  const ptySessionId = `${taskId}-review`;
+  killSession(ptySessionId);
+
+  const extraEnv: Record<string, string> = {
+    BIFROST_CONTEXT: 'review',
+    BIFROST_TASK_ID: taskId,
+    BIFROST_REVIEW_ID: reviewId,
+  };
+  const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
+  try { extraEnv.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
+
+  // Ensure review dir exists for file watcher
+  fs.mkdirSync(path.dirname(reviewFilePath), { recursive: true });
+  watchReviewFile(taskId, reviewId, mainWindow);
+
+  const markdown = await new Promise<string>((resolve, reject) => {
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        runningReviews.delete(taskId);
+        stopReviewActivityWatch(taskId);
+        killSession(ptySessionId);
+        reject(new Error('Review timed out'));
+      }
+    }, REVIEW_TIMEOUT_MS);
+
+    cancelledReviews.delete(taskId);
+    runningReviews.set(taskId, ptySessionId);
+
+    spawnSession(ptySessionId, 'claude', ['--dangerously-skip-permissions'], worktreePath, mainWindow, {
+      extraEnv,
+      autoTrust: true,
+      prompt,
+      onBeforeExit: (_buffer, exitCode) => {
+        if (settled) return false;
+        settled = true;
+        clearTimeout(timeout);
+        runningReviews.delete(taskId);
+        stopReviewActivityWatch(taskId);
+
+        if (cancelledReviews.has(taskId)) {
+          cancelledReviews.delete(taskId);
+          reject(new Error('Review cancelled'));
+        } else if (exitCode === 0) {
+          try {
+            const content = fs.readFileSync(reviewFilePath, 'utf-8').trim();
+            if (content) {
+              resolve(content);
+            } else {
+              reject(new Error('Review produced no output'));
+            }
+          } catch {
+            reject(new Error('Review file not written'));
+          }
+        } else {
+          reject(new Error(`claude exited with code ${exitCode}`));
+        }
+        return false;
+      },
+    });
+  });
+
+  // Track content so file watcher skips our own read
   lastWrittenContent.set(reviewId, markdown);
-  fs.writeFileSync(getReviewFilePath(taskId, reviewId), markdown, 'utf-8');
 
   return { reviewId, markdown };
 }
 
 export function cancelReview(taskId: string): void {
   stopReviewActivityWatch(taskId);
-  const proc = runningReviews.get(taskId);
-  if (!proc) return;
+  const ptySessionId = runningReviews.get(taskId);
+  if (!ptySessionId) return;
   cancelledReviews.add(taskId);
-  proc.kill();
+  killSession(ptySessionId);
 }
 
 // Track content we last wrote, so we can skip our own saves in the watcher
