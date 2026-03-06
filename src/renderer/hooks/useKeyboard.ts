@@ -303,7 +303,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
       // The user can Ctrl+/ to switch to the Claude pane first.
       if (!isMac && state.activeTaskId) {
         const activePs = state.paneStates[state.activeTaskId] ?? defaultPaneState;
-        if (activePs.focusedPane === 'dev' && activePs.devSessionId && 'drhkl'.includes(key)) {
+        if (activePs.focusedPane === 'dev' && activePs.devSessionId && 'adrhkl'.includes(key)) {
           return;
         }
       }

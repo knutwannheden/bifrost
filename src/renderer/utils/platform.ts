@@ -1,4 +1,4 @@
-export const isMac = navigator.platform.startsWith('Mac');
+export const isMac = navigator.userAgent.includes('Macintosh');
 
 /** Check if the platform modifier key is pressed (Cmd on macOS, Ctrl on Linux/Windows) */
 export function isModKey(e: { metaKey: boolean; ctrlKey: boolean }): boolean {
