@@ -24,7 +24,9 @@ const createWindow = () => {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#282a36',
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : {}),
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hiddenInset' as const }
+      : { autoHideMenuBar: true }),
     icon: path.join(__dirname, '../../assets/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
