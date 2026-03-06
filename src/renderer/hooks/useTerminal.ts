@@ -49,6 +49,7 @@ export function useTerminal(
         activate: (_event, uri) => {
           window.bifrost.openUrl(uri);
         },
+        allowNonHttpProtocols: true,
       },
       theme: {
         background: bg,

@@ -15,7 +15,7 @@ import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree }
 import { createSession, createShellSession, writeToSession, resizeSession, killSession, drainSessionBuffer } from './session-manager';
 import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
 import { getGitLog } from './git-log-service';
-import { openInIde } from './ide-launcher';
+import { openFileInIde, openInIde } from './ide-launcher';
 import { loadTasks, saveTasks } from './task-store';
 import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastChangedFile } from './activity-watcher';
 import { getApiPort, getSessionMtime, isSessionStale } from './bifrost-api';
@@ -568,6 +568,19 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Shell
   ipcMain.handle(IPC.OPEN_URL, (_event, url: string) => {
+    // file:// URLs → open in configured IDE
+    if (/^file:\/\//i.test(url)) {
+      try {
+        const parsed = new URL(url);
+        const filePath = decodeURIComponent(parsed.pathname);
+        const line = parseInt(parsed.hash.replace(/^#L?/, ''), 10)
+          || parseInt(parsed.searchParams.get('line') ?? '', 10)
+          || undefined;
+        return openFileInIde(filePath, line);
+      } catch {
+        return;
+      }
+    }
     if (!/^https?:\/\//i.test(url)) return;
     return shell.openExternal(url);
   });
