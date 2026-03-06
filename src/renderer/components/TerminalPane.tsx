@@ -11,6 +11,7 @@ interface TerminalPaneProps {
   active: boolean;
   focused: boolean;
   hideCursor?: boolean;
+  paneType?: 'claude' | 'dev';
   onFocusRequest?: () => void;
   onTitleChange?: (title: string) => void;
 }
@@ -30,7 +31,7 @@ function LoadingOverlay() {
   );
 }
 
-export default function TerminalPane({ sessionId, active, focused, hideCursor = false, onFocusRequest, onTitleChange }: TerminalPaneProps) {
+export default function TerminalPane({ sessionId, active, focused, hideCursor = false, paneType, onFocusRequest, onTitleChange }: TerminalPaneProps) {
   const { state } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -39,7 +40,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   const fontFamily = state.config?.fontFamily;
   const fontWeight = state.config?.fontWeight;
 
-  const { terminal, loading } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active });
+  const { terminal, loading } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active, paneType });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing.
   // When `focused` transitions to true, the caller explicitly wants focus (e.g. discussion

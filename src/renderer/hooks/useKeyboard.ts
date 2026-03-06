@@ -5,7 +5,7 @@ import type { CaptureContextParams } from '../../shared/types';
 import { defaultPaneState, getActiveDiffState } from '../context/AppContext';
 import { terminalRegistry } from './useTerminal';
 import { requestArchive } from '../utils/archive';
-import { isModKey, modSymbol, shiftSymbol } from '../utils/platform';
+import { isModKey, isMac, modSymbol, shiftSymbol } from '../utils/platform';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
 const DOUBLE_PRESS_MS = 500;
@@ -297,6 +297,15 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           dispatch({ type: 'SET_ACTIVE_TASK', taskId: notifId });
         }
         return;
+      }
+
+      // On Linux, let readline shortcuts reach the focused dev terminal.
+      // The user can Ctrl+/ to switch to the Claude pane first.
+      if (!isMac && state.activeTaskId) {
+        const activePs = state.paneStates[state.activeTaskId] ?? defaultPaneState;
+        if (activePs.focusedPane === 'dev' && activePs.devSessionId && 'drhkl'.includes(key)) {
+          return;
+        }
       }
 
       switch (key) {

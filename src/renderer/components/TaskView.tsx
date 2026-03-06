@@ -233,6 +233,7 @@ export default function TaskView() {
                 active={isActive}
                 focused={ps.focusedPane === 'claude'}
                 hideCursor
+                paneType="claude"
                 onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
                 onTitleChange={(title) => handleTitleChange(task.id, title)}
               />
@@ -261,6 +262,7 @@ export default function TaskView() {
                   sessionId={ps.devSessionId}
                   active={isActive}
                   focused={ps.focusedPane === 'dev'}
+                  paneType="dev"
                   onFocusRequest={() => handlePaneFocus(task.id, 'dev')}
                 />
               </div>

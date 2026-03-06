@@ -5,7 +5,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { isModKey } from '../utils/platform';
+import { isModKey, isMac } from '../utils/platform';
 
 // Global registry so keyboard shortcuts can access terminal instances
 export const terminalRegistry = new Map<string, Terminal>();
@@ -18,6 +18,7 @@ interface TerminalOptions {
   fontFamily?: string;
   fontWeight?: number;
   visible?: boolean;
+  paneType?: 'claude' | 'dev';
 }
 
 export function useTerminal(
@@ -35,6 +36,7 @@ export function useTerminal(
     if (!sessionId || !containerRef.current) return;
     setLoading(true);
 
+    const paneType = options?.paneType;
     const hideCursor = options?.hideCursor ?? false;
     const bg = '#282a36';
     const cursorConfig = hideCursor
@@ -155,6 +157,10 @@ export function useTerminal(
       }
       if (isModKey(e) && !e.shiftKey) {
         const key = e.key.toLowerCase();
+        // On Linux, let readline shortcuts (Ctrl+A/D/R/H/K/L) pass through
+        // to the dev terminal instead of intercepting them for app shortcuts.
+        // Users can Ctrl+/ to switch to the Claude pane for those shortcuts.
+        if (!isMac && paneType === 'dev' && 'adrhkl'.includes(key)) return true;
         if ('atdrhko,lgf'.includes(key)) return false;
       }
       if (isModKey(e) && e.shiftKey) {
