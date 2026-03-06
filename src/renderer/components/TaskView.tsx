@@ -2,32 +2,33 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useApp, defaultPaneState } from '../context/AppContext';
 import type { PaneTarget } from '../context/AppContext';
 import TerminalPane from './TerminalPane';
+import { modSymbol, shiftSymbol, altSymbol } from '../utils/platform';
 
 const shortcuts = [
-  { keys: '⌘R', label: 'Add a repository' },
-  { keys: '⌘T', label: 'Create a new task' },
-  { keys: '⌘H', label: 'Resume from history' },
-  { keys: '⌘K', label: 'Command palette' },
+  { keys: `${modSymbol}R`, label: 'Add a repository' },
+  { keys: `${modSymbol}T`, label: 'Create a new task' },
+  { keys: `${modSymbol}H`, label: 'Resume from history' },
+  { keys: `${modSymbol}K`, label: 'Command palette' },
 ];
 
 const tips = [
   'Most views support instant search \u2014 just start typing to filter. Space-separated terms are ANDed.',
-  'Underlined characters in buttons are mnemonics \u2014 press Option + that letter to activate.',
+  `Underlined characters in buttons are mnemonics \u2014 press ${altSymbol}that letter to activate.`,
   'Double-click a task tab to rename it inline.',
-  'Press \u2318D to view git diff and activity log for the current task.',
+  `Press ${modSymbol}D to view git diff and activity log for the current task.`,
   'Hover over a task tab to see its summary, branch, and current activity.',
-  'Use \u2318F to search within the terminal. Enter/Shift+Enter to navigate matches.',
+  `Use ${modSymbol}F to search within the terminal. Enter/Shift+Enter to navigate matches.`,
   'Each task runs in its own git worktree \u2014 agents work independently without conflicts.',
-  'Press \u2318H to browse task history and resume archived tasks.',
-  'Use \u2318K to open the command palette for quick access to all actions.',
-  'Press \u2318, to open settings and customize font size, IDE, and more.',
-  'Press \u2318/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.',
-  'Press \u2318\u21e7C to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.',
-  'Press \u2325U to run an AI review of your task\u2019s changes \u2014 get actionable feedback before committing.',
+  `Press ${modSymbol}H to browse task history and resume archived tasks.`,
+  `Use ${modSymbol}K to open the command palette for quick access to all actions.`,
+  `Press ${modSymbol}, to open settings and customize font size, IDE, and more.`,
+  `Press ${modSymbol}/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.`,
+  `Press ${modSymbol}${shiftSymbol}C to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.`,
+  `Press ${altSymbol}U to run an AI review of your task\u2019s changes \u2014 get actionable feedback before committing.`,
   'When a permission prompt appears, press Tab to focus it \u2014 then use A/D to allow/deny, Esc to deny once.',
-  'Press \u2318- to jump back to your previous tab \u2014 like cd - for tasks.',
-  'Press \u2318= to jump to the last tab that had a notification.',
-  'Copy a GitHub PR URL before pressing \u2318T \u2014 the new task dialog will auto-fill the PR details.',
+  `Press ${modSymbol}- to jump back to your previous tab \u2014 like cd - for tasks.`,
+  `Press ${modSymbol}= to jump to the last tab that had a notification.`,
+  `Copy a GitHub PR URL before pressing ${modSymbol}T \u2014 the new task dialog will auto-fill the PR details.`,
 ];
 
 export default function TaskView() {
@@ -232,6 +233,7 @@ export default function TaskView() {
                 active={isActive}
                 focused={ps.focusedPane === 'claude'}
                 hideCursor
+                paneType="claude"
                 onFocusRequest={() => handlePaneFocus(task.id, 'claude')}
                 onTitleChange={(title) => handleTitleChange(task.id, title)}
               />
@@ -260,6 +262,7 @@ export default function TaskView() {
                   sessionId={ps.devSessionId}
                   active={isActive}
                   focused={ps.focusedPane === 'dev'}
+                  paneType="dev"
                   onFocusRequest={() => handlePaneFocus(task.id, 'dev')}
                 />
               </div>

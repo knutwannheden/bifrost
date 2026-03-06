@@ -8,6 +8,7 @@ import TaskView from './components/TaskView';
 import StatusBar from './components/StatusBar';
 import RepoManager from './components/RepoManager';
 import TaskCreateDialog from './components/TaskCreateDialog';
+import { modSymbol } from './utils/platform';
 import DiffOverlay from './components/DiffOverlay';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
@@ -125,14 +126,14 @@ export default function App() {
           // Notification hook provides message directly
           const lines = message.split('\n').slice(0, 3).join('\n');
           const truncated = lines.length < message.length ? lines + '...' : lines;
-          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: '⌘= to switch' });
+          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: `${modSymbol}= to switch` });
         } else {
           // Stop hook — delay briefly so the activity watcher streams the final entry
           setTimeout(() => {
             const text = lastAssistantText.current.get(taskId) || 'Waiting for input';
             const lines = text.split('\n').slice(0, 3).join('\n');
             const truncated = lines.length < text.length ? lines + '...' : lines;
-            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: '⌘= to switch' });
+            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: `${modSymbol}= to switch` });
           }, 500);
         }
       },
@@ -289,7 +290,7 @@ export default function App() {
           break;
         }
         case 'quit-confirm':
-          dispatch({ type: 'SHOW_TOAST', message: 'Press ⌘Q again to quit' });
+          dispatch({ type: 'SHOW_TOAST', message: `Press ${modSymbol}Q again to quit` });
           break;
         case 'open-in-ide': {
           const task = state.tasks.find((t) => t.id === state.activeTaskId);

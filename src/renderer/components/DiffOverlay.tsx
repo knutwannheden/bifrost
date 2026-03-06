@@ -13,6 +13,7 @@ import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
+import { isModKey } from '../utils/platform';
 import type { ActivityEntry, CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
 
 interface HighlightedFile {
@@ -1001,8 +1002,8 @@ export default function DiffOverlay() {
     const tag = (e.target as HTMLElement).tagName;
     if ((e.target as HTMLElement).closest?.('.xterm') || tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    // Cmd+O: open the focused entry's file in the IDE
-    if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'o') {
+    // Mod+O: open the focused entry's file in the IDE
+    if (isModKey(e) && !e.shiftKey && e.key.toLowerCase() === 'o') {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
       if (activeTask) {
         let filePath: string | undefined;
@@ -1022,8 +1023,8 @@ export default function DiffOverlay() {
       }
     }
 
-    // Cmd+Shift+C: capture context for the focused entry
-    if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'c') {
+    // Mod+Shift+C: capture context for the focused entry
+    if (isModKey(e) && e.shiftKey && e.key.toLowerCase() === 'c') {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
       if (!activeTask) return;
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { BifrostConfig } from '../../shared/types';
+import { modSymbol } from '../utils/platform';
 
 interface SettingDef {
   key: string;
@@ -141,8 +142,8 @@ function buildSettings(): SettingDef[] {
       key: 'hideTerminalOnSwitch',
       category: 'Claude Code',
       label: 'Hide terminal on switch',
-      description: '\u2318/ hides dev terminal when switching to Claude',
-      tooltip: 'When you press \u2318/ to switch focus from the dev terminal to the Claude pane, this setting also hides the dev terminal to give Claude the full screen. Press \u2318/ again to bring it back.',
+      description: `${modSymbol}/ hides dev terminal when switching to Claude`,
+      tooltip: `When you press ${modSymbol}/ to switch focus from the dev terminal to the Claude pane, this setting also hides the dev terminal to give Claude the full screen. Press ${modSymbol}/ again to bring it back.`,
       render: (config, update) => (
         <ToggleSwitch
           checked={config.hideTerminalOnSwitch}
@@ -167,7 +168,7 @@ function buildSettings(): SettingDef[] {
       key: 'ide',
       category: 'General',
       label: 'IDE',
-      tooltip: 'Which IDE to open when you press \u2318O. VS Code uses the "code" CLI, IntelliJ uses the "idea" CLI, Zed uses the "zed" CLI. The IDE opens the task\u2019s worktree directory.',
+      tooltip: `Which IDE to open when you press ${modSymbol}O. VS Code uses the "code" CLI, IntelliJ uses the "idea" CLI, Zed uses the "zed" CLI. The IDE opens the task\u2019s worktree directory.`,
       render: (config, update) => (
         <div className="flex gap-1">
           {(['code', 'idea', 'zed'] as const).map((ide) => (
@@ -401,7 +402,7 @@ export default function SettingsOverlay() {
 
         {/* Footer */}
         <div className="flex justify-end px-4 py-2 border-t border-slate-700">
-          <span className="text-xs text-slate-500">{'\u2318'}, to close</span>
+          <span className="text-xs text-slate-500">{modSymbol}, to close</span>
         </div>
       </div>
     </div>

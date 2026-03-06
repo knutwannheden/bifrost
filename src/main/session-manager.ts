@@ -150,7 +150,7 @@ export function createShellSession(
   mainWindow: BrowserWindow,
   options?: { taskId?: string },
 ): void {
-  const shellPath = process.env.SHELL || '/bin/zsh';
+  const shellPath = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
   const extraEnv: Record<string, string> = {
     BIFROST_CONTEXT: 'dev',
     BIFROST_WORKTREE: cwd,
