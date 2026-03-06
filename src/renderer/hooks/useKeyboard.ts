@@ -5,6 +5,7 @@ import type { CaptureContextParams } from '../../shared/types';
 import { defaultPaneState, getActiveDiffState } from '../context/AppContext';
 import { terminalRegistry } from './useTerminal';
 import { requestArchive } from '../utils/archive';
+import { isModKey, modSymbol, shiftSymbol } from '../utils/platform';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
 const DOUBLE_PRESS_MS = 500;
@@ -147,7 +148,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
     const handler = (e: KeyboardEvent) => {
       const { showDiff, diffMode } = getActiveDiffState(state);
 
-      if (!e.metaKey) return;
+      if (!isModKey(e)) return;
 
       const key = e.key.toLowerCase();
 
@@ -242,7 +243,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
         const now = Date.now();
         if (now - lastCmdShiftWRef.current >= DOUBLE_PRESS_MS) {
           lastCmdShiftWRef.current = now;
-          dispatch({ type: 'SHOW_TOAST', message: 'Press \u2318\u21E7W again to archive task' });
+          dispatch({ type: 'SHOW_TOAST', message: `Press ${modSymbol}${shiftSymbol}W again to archive task` });
           return;
         }
         lastCmdShiftWRef.current = 0;
@@ -319,7 +320,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             const now = Date.now();
             if (now - lastCmdWRef.current >= DOUBLE_PRESS_MS) {
               lastCmdWRef.current = now;
-              dispatch({ type: 'SHOW_TOAST', message: 'Press ⌘W again to stop task' });
+              dispatch({ type: 'SHOW_TOAST', message: `Press ${modSymbol}W again to stop task` });
               break;
             }
             lastCmdWRef.current = 0;

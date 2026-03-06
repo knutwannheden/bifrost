@@ -5,6 +5,7 @@ import type { DiffStats, ReviewEntry } from '../../shared/types';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import TerminalPane from './TerminalPane';
+import { isModKey, modSymbol } from '../utils/platform';
 
 type ReviewScope = 'working' | 'all';
 
@@ -404,7 +405,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       if (e.key !== 'Enter') return;
       if (document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement) return;
 
-      if (e.metaKey) {
+      if (isModKey(e)) {
         if (status === 'done' && hasChecked) {
           e.preventDefault();
           handleCopyPrompt();
@@ -594,7 +595,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
             {hasChecked && (
               <>
                 {hasReviewSession && ' · '}
-                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">{'\u2318'}Enter</kbd>
+                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">{modSymbol}Enter</kbd>
                 {' '}copy prompt
               </>
             )}

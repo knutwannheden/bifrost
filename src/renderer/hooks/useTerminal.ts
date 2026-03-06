@@ -5,6 +5,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
+import { isModKey } from '../utils/platform';
 
 // Global registry so keyboard shortcuts can access terminal instances
 export const terminalRegistry = new Map<string, Terminal>();
@@ -152,11 +153,11 @@ export function useTerminal(
           return false;
         }
       }
-      if (e.metaKey && !e.shiftKey) {
+      if (isModKey(e) && !e.shiftKey) {
         const key = e.key.toLowerCase();
         if ('atdrhko,lgf'.includes(key)) return false;
       }
-      if (e.metaKey && e.shiftKey) {
+      if (isModKey(e) && e.shiftKey) {
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'c') return false;
       }

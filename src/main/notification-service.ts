@@ -39,7 +39,11 @@ export function handleBellNotification(taskId: string, taskName: string, isActiv
   if (focused && isActiveTask) return;
 
   // Sound for background tasks or when unfocused
-  execFile('afplay', ['/System/Library/Sounds/Glass.aiff'], () => {});
+  if (process.platform === 'darwin') {
+    execFile('afplay', ['/System/Library/Sounds/Glass.aiff'], () => {});
+  } else if (process.platform === 'linux') {
+    execFile('paplay', ['/usr/share/sounds/freedesktop/stereo/bell.oga'], () => {});
+  }
 
   // OS notification + dock bounce only when window is not focused
   if (!focused) {

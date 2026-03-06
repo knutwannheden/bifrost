@@ -3,6 +3,7 @@ import '@xterm/xterm/css/xterm.css';
 import { useApp, getActiveDiffState } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
 import TerminalSearchBar from './TerminalSearchBar';
+import { isModKey } from '../utils/platform';
 
 interface TerminalPaneProps {
   sessionId: string;
@@ -57,7 +58,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   // Listen for Cmd+F to open search bar
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'f' && focused && active && !anyOverlay) {
+      if (isModKey(e) && !e.shiftKey && e.key.toLowerCase() === 'f' && focused && active && !anyOverlay) {
         e.preventDefault();
         setShowSearch(true);
       }

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { Note, Repo } from '../../shared/types';
 import { shortPath } from '../utils/paths';
+import { isModKey, modSymbol, altSymbol, deleteSymbol } from '../utils/platform';
 
 function repoDisplayName(repo: Repo): string {
   return repo.githubPath ?? repo.name;
@@ -244,7 +245,7 @@ export default function NotesOverlay() {
       return;
     }
     // Cmd+Delete to delete selected note
-    if (e.key === 'Backspace' && e.metaKey) {
+    if (e.key === 'Backspace' && isModKey(e)) {
       e.preventDefault();
       deleteSelectedNote();
       return;
@@ -272,7 +273,7 @@ export default function NotesOverlay() {
       return;
     }
     // Cmd+Delete to delete
-    if (e.key === 'Backspace' && e.metaKey) {
+    if (e.key === 'Backspace' && isModKey(e)) {
       e.preventDefault();
       deleteSelectedNote();
       return;
@@ -517,7 +518,7 @@ export default function NotesOverlay() {
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-slate-700">
           <p className="text-xs text-slate-500">
-            Esc to close · ⌥N new note · ↑↓ navigate · ⌘⌫ delete
+            Esc to close · {altSymbol}N new note · ↑↓ navigate · {modSymbol}{deleteSymbol} delete
           </p>
         </div>
       </div>
