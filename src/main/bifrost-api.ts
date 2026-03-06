@@ -5,7 +5,7 @@ import os from 'node:os';
 import { BrowserWindow } from 'electron';
 import { resolve as resolveContext } from './context-store';
 import { getTasks, getTask, updateTask, createTaskCore } from './ipc-handlers';
-import { setReviewSessionId, startReviewActivityWatch } from './review-service';
+import { setReviewSessionId, startReviewActivityWatch, loadReview } from './review-service';
 import { getDiff } from './diff-service';
 import { getActivityLog } from './activity-watcher';
 import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
@@ -277,10 +277,24 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
     case '/hook': {
       const cwd = body.cwd as string;
+      const hookContext = (body.bifrost_context as string) || 'code';
+      const hookTaskId = body.bifrost_task_id as string;
+      const hookReviewId = body.bifrost_review_id as string;
       if (!cwd) {
         errorResponse(res, 'Missing cwd');
         return;
       }
+
+      // Review stop — read the review file and send it to the renderer
+      if (hookContext === 'review' && hookTaskId && hookReviewId) {
+        const content = loadReview(hookTaskId, hookReviewId);
+        if (content && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.REVIEW_PROGRESS, hookTaskId, hookReviewId, content);
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
       const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
       if (!task) {
         errorResponse(res, 'No matching task', 404);
