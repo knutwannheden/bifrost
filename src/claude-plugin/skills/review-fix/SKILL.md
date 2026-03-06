@@ -1,7 +1,7 @@
 ---
 name: bifrost:review-fix
 description: Use when the user asks to "fix review items", "address review feedback", "resolve review comments", or invokes /bifrost:review-fix. Addresses all checked items in a code review checklist.
-argument-hint: <task-id> [review-id]
+argument-hint: [review-file-path]
 ---
 
 ## 🚨 IRON LAW
@@ -14,17 +14,14 @@ Skipping this step = silently ignoring real issues because you're confident you 
 
 ## Workflow
 
-1. **Resolve IDs:**
-   - Let `TASK_ID` = first argument (`$1`). If not provided, fall back to `$BIFROST_TASK_ID`. If neither is available, tell user and **stop**.
-   - Let `REVIEW_ID` = second argument (`$2`), if provided.
-   - Verify `~/.bifrost/tasks/{TASK_ID}/` exists. If not, tell user and **stop — do NOT search for files.**
-
-2. **Read review file:**
-   - Read `~/.bifrost/tasks/{TASK_ID}/reviews/index.json` (array of review entries with `id` field)
-   - If `REVIEW_ID` was set in step 1, find that entry; otherwise use the last entry (most recent) and set `REVIEW_ID` from its `id` field
-   - Read `~/.bifrost/tasks/{TASK_ID}/reviews/{REVIEW_ID}.md`
-   - If `reviews/` directory doesn't exist, fall back to `~/.bifrost/tasks/{TASK_ID}/review.md`
-   - **If neither file exists, tell user and stop. Do NOT search for files.**
+1. **Find review file:**
+   - If a file path argument was provided, use it directly.
+   - Otherwise, derive it from `$BIFROST_TASK_ID`:
+     - Read `~/.bifrost/tasks/{BIFROST_TASK_ID}/reviews/index.json` (array of review entries with `id` field)
+     - Use the last entry (most recent) and read `~/.bifrost/tasks/{BIFROST_TASK_ID}/reviews/{id}.md`
+     - If `reviews/` directory doesn't exist, fall back to `~/.bifrost/tasks/{BIFROST_TASK_ID}/review.md`
+   - If no argument and `$BIFROST_TASK_ID` is not set, tell user and **stop**.
+   - **If the file doesn't exist, tell user and stop. Do NOT search for files.**
 
 3. **Fix each item** marked `[x]`:
    - Read the code at the flagged location

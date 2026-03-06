@@ -334,7 +334,10 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   }, [lines, taskId, reviewId, dispatch]);
 
   const handleCopyPrompt = useCallback(() => {
-    const prompt = reviewId ? `/bifrost:review-fix ${taskId} ${reviewId}` : `/bifrost:review-fix ${taskId}`;
+    const reviewPath = reviewId
+      ? `~/.bifrost/tasks/${taskId}/reviews/${reviewId}.md`
+      : `~/.bifrost/tasks/${taskId}/review.md`;
+    const prompt = `/bifrost:review-fix ${reviewPath}`;
     navigator.clipboard.writeText(prompt);
     dispatch({ type: 'SHOW_TOAST', message: 'Copied /bifrost:review-fix \u2014 paste into Claude session' });
   }, [taskId, reviewId, dispatch]);
