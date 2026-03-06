@@ -576,7 +576,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         const line = parseInt(parsed.hash.replace(/^#L?/, ''), 10)
           || parseInt(parsed.searchParams.get('line') ?? '', 10)
           || undefined;
-        return openFileInIde(filePath, line);
+        // Match file path to a task worktree so the IDE opens in the right window
+        const worktree = getTasks().find(t => t.worktreePath && filePath.startsWith(t.worktreePath + '/'))?.worktreePath;
+        return openFileInIde(filePath, line, worktree);
       } catch {
         return;
       }

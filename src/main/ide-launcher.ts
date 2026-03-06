@@ -6,7 +6,11 @@ import { loadConfig } from './config';
  * Open a file directly in the configured IDE without specifying a project/worktree.
  * This avoids opening a new window when the IDE already has the project open.
  */
-export function openFileInIde(filePath: string, line?: number): Promise<void> {
+export function openFileInIde(filePath: string, line?: number, worktreePath?: string): Promise<void> {
+  if (worktreePath) {
+    return openInIde(worktreePath, undefined, filePath, line);
+  }
+
   const ide = loadConfig().ide;
   const command = ide === 'idea' ? 'idea' : ide === 'zed' ? 'zed' : 'code';
 
