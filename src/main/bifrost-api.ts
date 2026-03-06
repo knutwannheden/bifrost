@@ -358,12 +358,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: true });
         return;
       }
-      // Only update task.sessionId for 'code' context (the main Claude session in the Bifrost tab)
-      // Other contexts (dev, review, etc.) don't update the stored sessionId
-      if (context !== 'code') {
-        jsonResponse(res, { ok: true });
-        return;
-      }
       // Look up task by ID first (most reliable), then fall back to CWD matching
       const task = taskId
         ? (() => { try { return getTask(taskId); } catch { return undefined; } })()
@@ -372,6 +366,25 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
       }
+
+      // Review context — capture session ID and start activity watch
+      if (context === 'review' && reviewId) {
+        setReviewSessionId(task.id, reviewId, sessionId);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
+          startReviewActivityWatch(task.id, reviewId, cwd, sessionId, mainWindow);
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // Only update task.sessionId for 'code' context (the main Claude session in the Bifrost tab)
+      // Other contexts (dev, etc.) don't update the stored sessionId
+      if (context !== 'code') {
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
       // During --resume, Claude fires two SessionStart events:
       //   1. source=startup with a transient wrapper session ID
       //   2. source=resume  with the actual resumed session ID
@@ -383,13 +396,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       if (task.sessionId !== sessionId) {
         updateTask(task.id, { sessionId });
-      }
-      if (reviewId) {
-        setReviewSessionId(task.id, reviewId, sessionId);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
-          startReviewActivityWatch(task.id, reviewId, cwd, sessionId, mainWindow);
-        }
       }
       jsonResponse(res, { ok: true });
       return;
