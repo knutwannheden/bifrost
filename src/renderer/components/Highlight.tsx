@@ -6,15 +6,16 @@ export default function Highlight({ text, search }: { text: string; search: stri
   const terms = searchTerms(search);
   if (terms.length === 0) return <>{text}</>;
   const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = text.split(regex);
+  const pattern = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const parts = text.split(pattern);
+  const testRegex = new RegExp(`^(?:${escaped.join('|')})$`, 'i');
   return (
-    <>
+    <span>
       {parts.map((part, i) =>
-        regex.test(part)
-          ? <mark key={i} className="bg-highlight text-inherit rounded-sm">{part}</mark>
+        testRegex.test(part)
+          ? <span key={i} className="bg-highlight rounded-sm">{part}</span>
           : part,
       )}
-    </>
+    </span>
   );
 }
