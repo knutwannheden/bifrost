@@ -31,6 +31,8 @@ export default function NotificationPopover() {
 
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
         dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' });
       }
     };
