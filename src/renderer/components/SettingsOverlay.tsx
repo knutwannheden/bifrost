@@ -12,7 +12,7 @@ interface SettingDef {
   render: (config: BifrostConfig, update: (updates: Partial<BifrostConfig>) => void) => React.ReactNode;
 }
 
-const CATEGORIES = ['Appearance', 'Claude Code', 'General'] as const;
+const CATEGORIES = ['Appearance', 'Claude Code', 'General', 'Slack'] as const;
 
 function buildSettings(): SettingDef[] {
   return [
@@ -226,6 +226,102 @@ function buildSettings(): SettingDef[] {
           onChange={(e) => update({ ollamaModels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
           className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
           placeholder="phi4-mini, gemma3:1b"
+        />
+      ),
+    },
+    {
+      key: 'slack-enabled',
+      category: 'Slack',
+      label: 'Enabled',
+      description: 'Monitor Slack for emoji reactions',
+      render: (config, update) => (
+        <ToggleSwitch
+          checked={config.slack?.enabled ?? false}
+          onChange={(v) => update({ slack: { ...config.slack, enabled: v } } as Partial<BifrostConfig>)}
+        />
+      ),
+    },
+    {
+      key: 'slack-clientId',
+      category: 'Slack',
+      label: 'Client ID',
+      description: 'Slack app Client ID',
+      render: (config, update) => (
+        <input
+          type="text"
+          value={config.slack?.clientId ?? ''}
+          onChange={(e) => update({ slack: { ...config.slack, clientId: e.target.value } } as Partial<BifrostConfig>)}
+          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+        />
+      ),
+    },
+    {
+      key: 'slack-clientSecret',
+      category: 'Slack',
+      label: 'Client Secret',
+      description: 'Slack app Client Secret',
+      render: (config, update) => (
+        <input
+          type="password"
+          value={config.slack?.clientSecret ?? ''}
+          onChange={(e) => update({ slack: { ...config.slack, clientSecret: e.target.value } } as Partial<BifrostConfig>)}
+          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+        />
+      ),
+    },
+    {
+      key: 'slack-connect',
+      category: 'Slack',
+      label: 'Connection',
+      render: (config, update) => {
+        if (config.slack?.userToken) {
+          return (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-green-400">Connected ✓</span>
+              <button
+                onClick={async () => {
+                  await window.bifrost.disconnectSlack();
+                  const fresh = await window.bifrost.loadConfig();
+                  update(fresh);
+                }}
+                className="text-xs text-red-400 hover:text-red-300 underline"
+              >
+                Disconnect
+              </button>
+            </div>
+          );
+        }
+        return (
+          <button
+            onClick={async () => {
+              try {
+                await window.bifrost.startSlackOAuth();
+                const fresh = await window.bifrost.loadConfig();
+                update(fresh);
+              } catch (err) {
+                console.error('OAuth failed:', err);
+              }
+            }}
+            disabled={!config.slack?.clientId || !config.slack?.clientSecret}
+            className="px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Connect to Slack
+          </button>
+        );
+      },
+    },
+    {
+      key: 'slack-reactions',
+      category: 'Slack',
+      label: 'Reactions',
+      description: 'Emoji names to watch for (without colons)',
+      render: (config, update) => (
+        <input
+          type="text"
+          value={(config.slack?.reactions ?? []).join(', ')}
+          onChange={(e) => update({ slack: { ...config.slack, reactions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } } as Partial<BifrostConfig>)}
+          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+          placeholder="bifrost, robot_face"
         />
       ),
     },
