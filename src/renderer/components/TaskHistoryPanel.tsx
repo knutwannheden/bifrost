@@ -560,7 +560,7 @@ export default function TaskHistoryPanel() {
         {branchConfirm && (
           <div className="mx-4 mt-3 px-3 py-2 bg-warning/10 border border-warning/30 rounded flex items-center gap-3">
             <span className="text-xs text-warning flex-1">
-              Branch changed from <span className="font-mono font-medium">{branchConfirm.task.branch}</span> to <span className="font-mono font-medium">{branchConfirm.currentBranch}</span>
+              Branch changed from <span className="font-medium">{branchConfirm.task.branch}</span> to <span className="font-medium">{branchConfirm.currentBranch}</span>
             </span>
             <button
               onClick={() => doReopen(branchConfirm.task)}
