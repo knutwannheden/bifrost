@@ -3,8 +3,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { execSync } from 'node:child_process';
-import { shell, BrowserWindow } from 'electron';
+import { BrowserWindow } from 'electron';
 import { loadConfig, saveConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
@@ -218,79 +217,6 @@ function exchangeCodeForToken(
   });
 }
 
-let oauthServer: https.Server | null = null;
-
-const CERT_DIR = path.join(os.homedir(), '.bifrost', 'certs');
-const CA_KEY_PATH = path.join(CERT_DIR, 'ca-key.pem');
-const CA_CERT_PATH = path.join(CERT_DIR, 'ca.pem');
-const SERVER_KEY_PATH = path.join(CERT_DIR, 'server-key.pem');
-const SERVER_CERT_PATH = path.join(CERT_DIR, 'server.pem');
-
-/**
- * Get or create a locally-trusted TLS cert for localhost.
- * On first run: generates a CA, adds it to the macOS login keychain (prompts
- * for password), and signs a localhost cert. Certs persist in ~/.bifrost/certs/.
- */
-function getOrCreateCert(): { key: string; cert: string } {
-  if (fs.existsSync(SERVER_KEY_PATH) && fs.existsSync(SERVER_CERT_PATH)) {
-    // Check if the server cert is still valid (not expired)
-    try {
-      execSync(`openssl x509 -checkend 86400 -noout -in "${SERVER_CERT_PATH}"`, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      return {
-        key: fs.readFileSync(SERVER_KEY_PATH, 'utf-8'),
-        cert: fs.readFileSync(SERVER_CERT_PATH, 'utf-8'),
-      };
-    } catch {
-      // Cert expired or invalid — regenerate
-    }
-  }
-
-  if (!fs.existsSync(CERT_DIR)) {
-    fs.mkdirSync(CERT_DIR, { recursive: true });
-  }
-
-  // Generate CA key + cert (valid 10 years)
-  if (!fs.existsSync(CA_KEY_PATH) || !fs.existsSync(CA_CERT_PATH)) {
-    execSync(
-      `openssl req -x509 -newkey rsa:2048 -keyout "${CA_KEY_PATH}" -out "${CA_CERT_PATH}" -days 3650 -nodes -subj "/CN=Bifrost Local CA"`,
-      { stdio: ['pipe', 'pipe', 'pipe'] },
-    );
-
-    // Trust the CA in the macOS login keychain (shows native password dialog)
-    execSync(
-      `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "${CA_CERT_PATH}"`,
-      { stdio: 'inherit' },
-    );
-  }
-
-  // Generate server key + CSR, sign with CA (valid 1 year)
-  execSync(
-    `openssl req -newkey rsa:2048 -keyout "${SERVER_KEY_PATH}" -out "${CERT_DIR}/server.csr" -nodes -subj "/CN=localhost"`,
-    { stdio: ['pipe', 'pipe', 'pipe'] },
-  );
-
-  // Create extensions file for SAN (required by modern browsers)
-  const extPath = path.join(CERT_DIR, 'ext.cnf');
-  fs.writeFileSync(extPath, 'subjectAltName=DNS:localhost,IP:127.0.0.1\n');
-
-  execSync(
-    `openssl x509 -req -in "${CERT_DIR}/server.csr" -CA "${CA_CERT_PATH}" -CAkey "${CA_KEY_PATH}" -CAcreateserial -out "${SERVER_CERT_PATH}" -days 365 -extfile "${extPath}"`,
-    { stdio: ['pipe', 'pipe', 'pipe'] },
-  );
-
-  // Clean up temp files
-  try { fs.unlinkSync(path.join(CERT_DIR, 'server.csr')); } catch { /* ignore */ }
-  try { fs.unlinkSync(extPath); } catch { /* ignore */ }
-  try { fs.unlinkSync(path.join(CERT_DIR, 'ca.srl')); } catch { /* ignore */ }
-
-  return {
-    key: fs.readFileSync(SERVER_KEY_PATH, 'utf-8'),
-    cert: fs.readFileSync(SERVER_CERT_PATH, 'utf-8'),
-  };
-}
-
 export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
   const config = loadConfig();
   const clientId = config.slack?.clientId;
@@ -299,116 +225,80 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
     return Promise.reject(new Error('Slack client ID and secret must be configured first'));
   }
 
-  // Close any leftover server from a previous timed-out attempt
-  if (oauthServer) {
-    oauthServer.close();
-    oauthServer = null;
-  }
+  const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
+  const oauthState = crypto.randomBytes(16).toString('hex');
+  const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
+
+  const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
+  authorizeUrl.searchParams.set('client_id', clientId);
+  authorizeUrl.searchParams.set('user_scope', userScope);
+  authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+  authorizeUrl.searchParams.set('state', oauthState);
 
   return new Promise((resolve, reject) => {
     let settled = false;
-    const oauthState = crypto.randomBytes(16).toString('hex');
-    const { key, cert } = getOrCreateCert();
 
-    const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
-    const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
-
-    const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
-    authorizeUrl.searchParams.set('client_id', clientId);
-    authorizeUrl.searchParams.set('user_scope', userScope);
-    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-    authorizeUrl.searchParams.set('state', oauthState);
-
-    // HTTPS server with a locally-trusted cert (CA in login keychain).
-    const server = https.createServer({ key, cert }, async (req, res) => {
-      try {
-        const url = new URL(req.url ?? '', `https://localhost`);
-
-        if (url.pathname !== '/callback') {
-          res.writeHead(404);
-          res.end('Not found');
-          return;
-        }
-
-        const returnedState = url.searchParams.get('state');
-        const code = url.searchParams.get('code');
-        const error = url.searchParams.get('error');
-
-        if (error) {
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end('<html><body><h1>Authorization denied</h1><p>You can close this window.</p></body></html>');
-          cleanup();
-          reject(new Error(`Slack OAuth denied: ${error}`));
-          return;
-        }
-
-        if (returnedState !== oauthState) {
-          res.writeHead(400);
-          res.end('State mismatch');
-          cleanup();
-          reject(new Error('OAuth state mismatch'));
-          return;
-        }
-
-        if (!code) {
-          res.writeHead(400);
-          res.end('Missing code');
-          cleanup();
-          reject(new Error('OAuth callback missing code'));
-          return;
-        }
-
-        const token = await exchangeCodeForToken(clientId, clientSecret, code, redirectUri);
-
-        const freshConfig = loadConfig();
-        freshConfig.slack = {
-          ...freshConfig.slack!,
-          userToken: token,
-        };
-        saveConfig(freshConfig);
-
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end('<html><body><h1>Connected to Slack!</h1><p>You can close this window.</p></body></html>');
-
-        restartPolling(mainWindow);
-        cleanup();
-        resolve();
-      } catch (err) {
-        console.error('[slack] OAuth callback error:', err);
-        res.writeHead(500);
-        res.end('Internal error');
-        cleanup();
-        reject(err);
-      }
+    const authWindow = new BrowserWindow({
+      width: 600,
+      height: 700,
+      parent: mainWindow,
+      show: true,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+      },
     });
 
-    oauthServer = server;
-
-    const timeout = setTimeout(() => {
-      cleanup();
-      if (!settled) {
-        settled = true;
-        reject(new Error('OAuth timed out after 120 seconds'));
-      }
-    }, 120_000);
-
-    function cleanup(): void {
-      clearTimeout(timeout);
-      server.close();
-      oauthServer = null;
+    function finish(err?: Error): void {
+      if (settled) return;
+      settled = true;
+      if (!authWindow.isDestroyed()) authWindow.close();
+      if (err) reject(err);
+      else resolve();
     }
 
-    server.on('error', (err: NodeJS.ErrnoException) => {
-      cleanup();
+    async function handleRedirect(url: string): Promise<void> {
+      if (!url.startsWith(redirectUri)) return;
+
+      const parsed = new URL(url);
+      const error = parsed.searchParams.get('error');
+      const returnedState = parsed.searchParams.get('state');
+      const code = parsed.searchParams.get('code');
+
+      if (error) { finish(new Error(`Slack OAuth denied: ${error}`)); return; }
+      if (returnedState !== oauthState) { finish(new Error('OAuth state mismatch')); return; }
+      if (!code) { finish(new Error('OAuth callback missing code')); return; }
+
+      try {
+        const token = await exchangeCodeForToken(clientId, clientSecret, code, redirectUri);
+        const freshConfig = loadConfig();
+        freshConfig.slack = { ...freshConfig.slack!, userToken: token };
+        saveConfig(freshConfig);
+        restartPolling(mainWindow);
+        finish();
+      } catch (err) {
+        console.error('[slack] OAuth token exchange error:', err);
+        finish(err as Error);
+      }
+    }
+
+    // Intercept the redirect to localhost before the browser tries to load it
+    authWindow.webContents.on('will-redirect', (_event, url) => { handleRedirect(url); });
+    authWindow.webContents.on('will-navigate', (_event, url) => { handleRedirect(url); });
+
+    // Allow Esc to close the OAuth window
+    authWindow.webContents.on('before-input-event', (_event, input) => {
+      if (input.key === 'Escape') authWindow.close();
+    });
+
+    authWindow.on('closed', () => {
       if (!settled) {
         settled = true;
-        reject(new Error(`OAuth server failed: ${err.message}`));
+        reject(new Error('OAuth window closed'));
       }
     });
 
-    server.listen(OAUTH_PORT, () => {
-      shell.openExternal(authorizeUrl.toString());
-    });
+    authWindow.loadURL(authorizeUrl.toString());
   });
 }
 
