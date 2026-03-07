@@ -257,7 +257,7 @@ export default function RepoManager() {
           {/* Recent from Claude */}
           {suggestions.length > 0 && (
             <div>
-              <label className="block text-xs text-muted mb-1">Recent from Claude</label>
+              <label className="block text-xs text-secondary mb-1">Recent from Claude</label>
               <div className="space-y-1">
                 {suggestions.map((repo, idx) => {
                   const isFocused = focusedSection === 'suggestions' && idx === focusedSuggestionIdx;
