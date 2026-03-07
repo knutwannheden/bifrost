@@ -90,16 +90,16 @@ function IconButton({ active, badge, label, shortcut, onClick, children, ...rest
       {...rest}
       className={`group relative w-full flex items-center justify-center h-8 transition-colors ${
         active
-          ? 'text-blue-400 bg-slate-700/50 border-l-2 border-blue-400'
-          : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/30 border-l-2 border-transparent'
+          ? 'text-accent-hover bg-surface-alt/50 border-l-2 border-accent-hover'
+          : 'text-muted hover:text-secondary hover:bg-surface-alt/30 border-l-2 border-transparent'
       }`}
     >
       {children}
       {badge && (
         <span className={`absolute top-1 right-1.5 w-2 h-2 rounded-full ${badgeClasses[badge]}`} />
       )}
-      <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 border border-slate-700 shadow-lg whitespace-nowrap z-50">
-        <span className="text-xs text-slate-200">{label}</span>
+      <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded bg-app border border-border-default shadow-lg whitespace-nowrap z-50">
+        <span className="text-xs text-primary">{label}</span>
         {shortcut && <Kbd>{shortcut}</Kbd>}
       </span>
     </button>
@@ -138,7 +138,7 @@ export default function RightIconBar() {
   };
 
   return (
-    <div className="flex flex-col w-11 bg-slate-800 border-l border-slate-700 shrink-0">
+    <div className="flex flex-col w-11 bg-surface border-l border-border-default shrink-0">
       <IconButton
         label="Notifications"
         active={state.showNotificationPopover}
@@ -149,7 +149,7 @@ export default function RightIconBar() {
         <BellIcon />
       </IconButton>
 
-      <div className="mx-2 my-1 border-t border-slate-700" />
+      <div className="mx-2 my-1 border-t border-border-default" />
 
       <IconButton
         label="Diff"
@@ -186,7 +186,7 @@ export default function RightIconBar() {
           onClick={() => dispatch({ type: 'TOGGLE_SUPERVISOR' })}
         >
           <SupervisorIcon />
-          <span className="absolute bottom-0.5 left-1 text-green-400 opacity-70" title="Experimental">
+          <span className="absolute bottom-0.5 left-1 text-success opacity-70" title="Experimental">
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
               <path d="M6 1h4v1H9v4l3.5 6.5a1 1 0 0 1-.9 1.5H4.4a1 1 0 0 1-.9-1.5L7 6V2H6V1z" />
               <path d="M5.5 10.5L7.5 7h1l2 3.5a1 1 0 0 1-.9 1.5H6.4a1 1 0 0 1-.9-1.5z" fill="currentColor" opacity="0.5" stroke="none" />
@@ -197,7 +197,7 @@ export default function RightIconBar() {
 
       <div className="flex-1" />
 
-      <div className="mx-2 my-1 border-t border-slate-700" />
+      <div className="mx-2 my-1 border-t border-border-default" />
 
       <IconButton
         label="Statistics"
