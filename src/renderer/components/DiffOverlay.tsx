@@ -9,6 +9,7 @@ import { parseDiff, extFromPath, diffFileStats } from '../utils/diff-parser';
 import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
+import Highlight from './Highlight';
 import PillToggle, { type PillOption } from './PillToggle';
 import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
@@ -235,7 +236,7 @@ function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
   );
 }
 
-function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
+function ActivityEntryView({ entry, search }: { entry: ActivityEntry; search: string }) {
   const highlighted = useHighlightedFiles(entry.diff ?? null);
 
   if (entry.type === 'claude_event') {
@@ -248,7 +249,7 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
         <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
         <span className="text-accent-hover font-semibold">Commit</span>
         <span className="text-secondary font-mono">{entry.commitSha?.slice(0, 8)}</span>
-        <span className="text-primary">{entry.commitMessage}</span>
+        <span className="text-primary"><Highlight text={entry.commitMessage ?? ''} search={search} /></span>
       </div>
     );
   }
@@ -257,7 +258,7 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
     <div>
       <div className="flex items-center gap-2 mb-1 text-xs">
         <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
-        <span className="text-primary font-mono">{entry.filePath}</span>
+        <span className="text-primary font-mono"><Highlight text={entry.filePath ?? ''} search={search} /></span>
       </div>
       {highlighted && highlighted.map((data, i) => (
         <FileSection key={i} data={data} />
@@ -415,6 +416,7 @@ function FileTreeItem({
   onSelectFile,
   fileStatuses,
   fileRefs,
+  search,
 }: {
   node: FileTreeNode;
   depth: number;
@@ -424,6 +426,7 @@ function FileTreeItem({
   onSelectFile: (index: number) => void;
   fileStatuses: Record<string, GitFileStage[]>;
   fileRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
+  search: string;
 }) {
   const isCollapsed = collapsed.has(node.path);
   const stats = useMemo(() => treeNodeStats(node), [node]);
@@ -439,7 +442,7 @@ function FileTreeItem({
         <span className="text-muted w-3 text-center flex-shrink-0">
           {isCollapsed ? '▸' : '▾'}
         </span>
-        <span className="text-secondary truncate">{node.label}</span>
+        <span className="text-secondary truncate"><Highlight text={node.label} search={search} /></span>
         <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
       </div>
       {/* Children (dirs then files) when expanded */}
@@ -456,6 +459,7 @@ function FileTreeItem({
               onSelectFile={onSelectFile}
               fileStatuses={fileStatuses}
               fileRefs={fileRefs}
+              search={search}
             />
           ))}
           {node.files.map(({ file, flatIndex }) => {
@@ -487,7 +491,7 @@ function FileTreeItem({
                     ) : null;
                   })}
                 </span>
-                <span className="text-primary truncate">{basename}</span>
+                <span className="text-primary truncate"><Highlight text={basename} search={search} /></span>
                 {file.binary
                   ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
                   : <DiffStatsBadge additions={fileStat.additions} deletions={fileStat.deletions} className="flex-shrink-0 ml-auto" />
@@ -506,11 +510,13 @@ function FileListSidebar({
   selectedIndex,
   onSelectFile,
   fileStatuses,
+  search,
 }: {
   files: DiffFile[];
   selectedIndex: number;
   onSelectFile: (index: number) => void;
   fileStatuses: Record<string, GitFileStage[]>;
+  search: string;
 }) {
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -578,6 +584,7 @@ function FileListSidebar({
               onSelectFile={onSelectFile}
               fileStatuses={fileStatuses}
               fileRefs={itemRefs}
+              search={search}
             />
           ))}
           {/* Root-level files (no directory) */}
@@ -609,7 +616,7 @@ function FileListSidebar({
                     ) : null;
                   })}
                 </span>
-                <span className="text-primary truncate">{basename}</span>
+                <span className="text-primary truncate"><Highlight text={basename} search={search} /></span>
                 {file.binary
                   ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
                   : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
@@ -647,7 +654,7 @@ function FileListSidebar({
                   ) : null;
                 })}
               </span>
-              <span className="text-primary truncate">{path}</span>
+              <span className="text-primary truncate"><Highlight text={path} search={search} /></span>
               {file.binary
                 ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
                 : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
@@ -775,6 +782,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
             ? Object.fromEntries(Object.entries(fileStatuses).map(([k, v]) => [k, v.filter((s) => s !== 'committed')]))
             : fileStatuses
           }
+          search={search}
         />
         <div className="flex-1 overflow-auto px-4 pb-4">
           {filtered.map((file, i) => (
@@ -791,16 +799,16 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
 }
 
 
-function GitLogEntryView({ entry, focused }: { entry: GitLogEntry; focused: boolean }) {
+function GitLogEntryView({ entry, focused, search }: { entry: GitLogEntry; focused: boolean; search: string }) {
   return (
     <div
       className={`flex items-start gap-3 px-3 py-2 bg-surface/40 border border-border-default/50 rounded text-xs ${
         focused ? 'ring-1 ring-accent-muted bg-accent/10' : ''
       }`}
     >
-      <span className="text-warning font-mono flex-shrink-0">{entry.shortSha}</span>
-      <span className="text-primary flex-1 min-w-0 break-words">{entry.subject}</span>
-      <span className="text-muted flex-shrink-0">{entry.author}</span>
+      <span className="text-warning font-mono flex-shrink-0"><Highlight text={entry.shortSha} search={search} /></span>
+      <span className="text-primary flex-1 min-w-0 break-words"><Highlight text={entry.subject} search={search} /></span>
+      <span className="text-muted flex-shrink-0"><Highlight text={entry.author} search={search} /></span>
       <span className="text-faint flex-shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
     </div>
   );
@@ -1211,7 +1219,7 @@ export default function DiffOverlay() {
                   ref={(el) => { itemRefs.current[idx] = el; }}
                   onMouseEnter={() => setFocusedIdx(idx)}
                 >
-                  <GitLogEntryView entry={entry} focused={idx === focusedIdx} />
+                  <GitLogEntryView entry={entry} focused={idx === focusedIdx} search={search} />
                 </div>
               ))}
             </div>
@@ -1252,7 +1260,7 @@ export default function DiffOverlay() {
                         : ''
                     }`}
                   >
-                    <ActivityEntryView entry={entry} />
+                    <ActivityEntryView entry={entry} search={search} />
                   </div>
                 ))}
               </div>

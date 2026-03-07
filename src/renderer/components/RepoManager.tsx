@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
+import Highlight from './Highlight';
 import SearchIndicator from './SearchIndicator';
 import { altSymbol } from '../utils/platform';
 
@@ -281,8 +282,8 @@ export default function RepoManager() {
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-secondary">{repo.githubPath ?? repo.name}</p>
-                        <p className="text-xs text-muted truncate">{shortPath(repo.path)}</p>
+                        <p className="text-sm text-secondary"><Highlight text={repo.githubPath ?? repo.name} search={search} /></p>
+                        <p className="text-xs text-muted truncate"><Highlight text={shortPath(repo.path)} search={search} /></p>
                       </div>
                       <button
                         onClick={() => handleAddSuggestion(repo.path)}
@@ -320,8 +321,8 @@ export default function RepoManager() {
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-primary truncate">{repoDisplayName(repo)}</p>
-                    <p className="text-xs text-secondary truncate">{shortPath(repo.path)}</p>
+                    <p className="text-sm text-primary truncate"><Highlight text={repoDisplayName(repo)} search={search} /></p>
+                    <p className="text-xs text-secondary truncate"><Highlight text={shortPath(repo.path)} search={search} /></p>
                   </div>
                   <div className="flex items-center gap-1 ml-3">
                     <button

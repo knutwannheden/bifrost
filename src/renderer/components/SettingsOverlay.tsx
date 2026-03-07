@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { BifrostConfig } from '../../shared/types';
 import { modSymbol } from '../utils/platform';
+import Highlight from './Highlight';
 import PillToggle from './PillToggle';
 
 interface SettingDef {
@@ -473,13 +474,13 @@ export default function SettingsOverlay() {
                       <div key={setting.key} className="flex items-start justify-between gap-4">
                         <div className="min-w-0 group/tip relative">
                           <label className="text-sm text-secondary flex items-center gap-1.5">
-                            {setting.label}
+                            <Highlight text={setting.label} search={search} />
                             {setting.tooltip && (
                               <span className="text-faint hover:text-secondary cursor-help text-xs">&#9432;</span>
                             )}
                           </label>
                           {setting.description && (
-                            <p className="text-xs text-muted">{setting.description}</p>
+                            <p className="text-xs text-muted"><Highlight text={setting.description} search={search} /></p>
                           )}
                           {setting.tooltip && (
                             <div className="hidden group-hover/tip:block absolute left-0 top-full mt-1 z-50 bg-app border border-border-input rounded px-3 py-2 shadow-lg w-96 whitespace-pre-line text-xs text-secondary leading-relaxed">
