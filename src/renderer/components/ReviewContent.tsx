@@ -6,7 +6,7 @@ import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import TerminalPane from './TerminalPane';
 import Kbd from './Kbd';
-import { isModKey, modSymbol } from '../utils/platform';
+import { isModKey } from '../utils/platform';
 
 type ReviewScope = 'working' | 'all';
 
@@ -599,7 +599,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
             {hasChecked && (
               <>
                 {hasReviewSession && ' · '}
-                <Kbd>{modSymbol}Enter</Kbd>
+                <Kbd>Cmd+Enter</Kbd>
                 {' '}copy prompt
               </>
             )}

@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useApp, getActiveDiffState } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
 import type { SupervisorState } from '../../shared/types';
-import { modSymbol, altSymbol } from '../utils/platform';
 import Kbd from './Kbd';
 
 function BellIcon() {
@@ -154,7 +153,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Diff"
-        shortcut={`${modSymbol}D`}
+        shortcut="Cmd+D"
         active={isDiffActive && diffMode === 'git'}
         onClick={() => toggleDiffMode('git')}
       >
@@ -163,7 +162,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Activity"
-        shortcut={`${modSymbol}A`}
+        shortcut="Cmd+A"
         active={isDiffActive && diffMode === 'activity'}
         onClick={() => toggleDiffMode('activity')}
       >
@@ -172,7 +171,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Review"
-        shortcut={`${altSymbol}U`}
+        shortcut="Alt+U"
         active={isDiffActive && diffMode === 'review'}
         onClick={() => toggleDiffMode('review')}
       >
@@ -210,7 +209,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Settings"
-        shortcut={`${modSymbol},`}
+        shortcut="Cmd+,"
         active={state.showSettings}
         onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
       >

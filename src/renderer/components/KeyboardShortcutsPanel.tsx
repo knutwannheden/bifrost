@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { requestArchive } from '../utils/archive';
-import { modSymbol, shiftSymbol } from '../utils/platform';
 import Kbd from './Kbd';
 
 interface Shortcut {
@@ -246,9 +245,7 @@ export default function KeyboardShortcutsPanel() {
                   onMouseEnter={() => setSelectedIndex(navIdx)}
                 >
                   <span className="text-sm text-slate-300"><Highlight text={item.shortcut.label} search={query} /></span>
-                  <Kbd size="sm">
-                    {item.shortcut.key.includes('Shift+') ? `${modSymbol}${shiftSymbol}${item.shortcut.key.replace('Shift+', '')}` : `${modSymbol}${item.shortcut.key}`}
-                  </Kbd>
+                  <Kbd size="sm">{`Cmd+${item.shortcut.key}`}</Kbd>
                 </div>
               );
             })

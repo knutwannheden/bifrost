@@ -6,10 +6,10 @@ import Kbd from './Kbd';
 import { modSymbol, shiftSymbol, altSymbol } from '../utils/platform';
 
 const shortcuts = [
-  { keys: `${modSymbol}R`, label: 'Add a repository' },
-  { keys: `${modSymbol}T`, label: 'Create a new task' },
-  { keys: `${modSymbol}H`, label: 'Resume from history' },
-  { keys: `${modSymbol}K`, label: 'Command palette' },
+  { keys: 'Cmd+R', label: 'Add a repository' },
+  { keys: 'Cmd+T', label: 'Create a new task' },
+  { keys: 'Cmd+H', label: 'Resume from history' },
+  { keys: 'Cmd+K', label: 'Command palette' },
 ];
 
 const tips = [
