@@ -407,7 +407,7 @@ export default function SettingsOverlay() {
     <div
       ref={overlayRef}
       tabIndex={-1}
-      className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
       onClick={close}
       onKeyDown={handleKeyDown}
     >
