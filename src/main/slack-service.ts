@@ -73,6 +73,8 @@ async function getTeamDomain(token: string): Promise<string> {
 
 // --- Reaction polling ---
 
+const OAUTH_PORT = 17843;
+
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function fetchReactions(mainWindow: BrowserWindow): Promise<void> {
@@ -276,11 +278,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
           return;
         }
 
-        const address = server.address();
-        const port = typeof address === 'object' && address ? address.port : 0;
-        const redirectUri = `https://localhost:${port}/callback`;
-
-        const token = await exchangeCodeForToken(clientId, clientSecret, code, redirectUri);
+        const token = await exchangeCodeForToken(clientId, clientSecret, code, `https://localhost:${OAUTH_PORT}/callback`);
 
         // Store token in config
         const freshConfig = loadConfig();
@@ -319,10 +317,8 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
       server.close();
     }
 
-    server.listen(0, () => {
-      const address = server.address();
-      const port = typeof address === 'object' && address ? address.port : 0;
-      const redirectUri = `https://localhost:${port}/callback`;
+    server.listen(OAUTH_PORT, () => {
+      const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
       const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
 
       const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
