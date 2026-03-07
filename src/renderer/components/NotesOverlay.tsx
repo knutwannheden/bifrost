@@ -380,7 +380,7 @@ export default function NotesOverlay() {
               }}
               onKeyDown={handleRepoInputKeyDown}
               placeholder="Select repository..."
-              className="w-full px-2.5 py-1 bg-slate-700 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono"
+              className="w-full px-2.5 py-1 bg-slate-700 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             {repoDropdownOpen && filteredRepos.length > 0 && (
               <div
@@ -398,7 +398,7 @@ export default function NotesOverlay() {
                         : 'text-slate-200 hover:bg-slate-600'
                     }`}
                   >
-                    <div className="text-xs font-mono">{repoDisplayName(repo)}</div>
+                    <div className="text-xs">{repoDisplayName(repo)}</div>
                     <div className={`text-[10px] font-mono ${idx === repoFocusedIdx ? 'text-blue-200' : 'text-slate-400'}`}>
                       {shortPath(repo.path)}
                     </div>

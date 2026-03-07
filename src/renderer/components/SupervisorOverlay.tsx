@@ -29,7 +29,7 @@ function ItemRow({ item, repoName, onAction }: {
     <div className="flex items-start gap-2 px-3 py-2 rounded hover:bg-slate-700/50 group">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-mono">{item.name}</span>
+          <span className="text-xs text-slate-500">{item.name}</span>
           <span className="text-xs text-slate-600">{repoName}</span>
         </div>
         <div className="text-sm text-slate-300 truncate">{item.noteText}</div>
