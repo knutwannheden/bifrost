@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { BifrostConfig } from '../../shared/types';
 import { modSymbol } from '../utils/platform';
+import PillToggle from './PillToggle';
 
 interface SettingDef {
   key: string;
@@ -170,21 +171,16 @@ function buildSettings(): SettingDef[] {
       label: 'IDE',
       tooltip: `Which IDE to open when you press ${modSymbol}O. VS Code uses the "code" CLI, IntelliJ uses the "idea" CLI, Zed uses the "zed" CLI. The IDE opens the task\u2019s worktree directory.`,
       render: (config, update) => (
-        <div className="flex gap-1">
-          {(['code', 'idea', 'zed'] as const).map((ide) => (
-            <button
-              key={ide}
-              onClick={() => update({ ide })}
-              className={`px-3 py-1 text-xs rounded ${
-                config.ide === ide
-                  ? 'bg-accent text-white'
-                  : 'bg-surface-alt text-secondary hover:bg-surface-hover'
-              }`}
-            >
-              {ide === 'code' ? 'VS Code' : ide === 'idea' ? 'IntelliJ' : 'Zed'}
-            </button>
-          ))}
-        </div>
+        <PillToggle
+          options={[
+            { value: 'code' as const, label: 'VS Code' },
+            { value: 'idea' as const, label: 'IntelliJ' },
+            { value: 'zed' as const, label: 'Zed' },
+          ]}
+          value={config.ide}
+          onChange={(v) => update({ ide: v })}
+          size="md"
+        />
       ),
     },
     {
