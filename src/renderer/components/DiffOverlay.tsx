@@ -19,6 +19,7 @@ import { formatTimestamp, formatRelative } from '../utils/format-time';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { isModKey } from '../utils/platform';
+import { useInstantSearch } from '../hooks/useInstantSearch';
 import type { ActivityEntry, CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
 
 interface HighlightedFile {
@@ -881,7 +882,7 @@ export default function DiffOverlay() {
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const gitFilesRef = useRef<DiffFile[]>([]);
 
-  const [search, setSearch] = useState('');
+  const { search, handleSearchKey, clearSearch } = useInstantSearch();
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [gitFileIdx, setGitFileIdx] = useState(0);
   const [gitFileCount, setGitFileCount] = useState(0);
@@ -916,7 +917,7 @@ export default function DiffOverlay() {
 
   // Reset search and focus when mode changes
   useEffect(() => {
-    setSearch('');
+    clearSearch();
     setFocusedIdx(0);
     setGitFileIdx(0);
   }, [diffMode]);
@@ -1039,15 +1040,13 @@ export default function DiffOverlay() {
       }
     }
 
+    if (handleSearchKey(e)) return;
+
     switch (e.key) {
       case 'Escape':
         e.preventDefault();
         e.stopPropagation();
-        if (search) {
-          setSearch('');
-        } else {
-          dispatch({ type: 'TOGGLE_DIFF' });
-        }
+        dispatch({ type: 'TOGGLE_DIFF' });
         break;
 
       case 'Tab': {
@@ -1059,11 +1058,6 @@ export default function DiffOverlay() {
         dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + step) % modes.length] });
         break;
       }
-
-      case 'Backspace':
-        e.preventDefault();
-        setSearch((s) => s.slice(0, -1));
-        break;
 
       case 'ArrowUp':
         e.preventDefault();
@@ -1128,10 +1122,6 @@ export default function DiffOverlay() {
               }
               break;
           }
-        } else if (!e.metaKey && !e.ctrlKey && e.key.length === 1) {
-          // Incremental search
-          e.preventDefault();
-          setSearch((s) => s + e.key);
         }
         break;
     }

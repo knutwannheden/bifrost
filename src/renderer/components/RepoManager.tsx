@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { RecentRepo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useInstantSearch } from '../hooks/useInstantSearch';
 import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
@@ -11,7 +12,7 @@ import { altSymbol } from '../utils/platform';
 export default function RepoManager() {
   const { state, dispatch } = useApp();
   const [localPath, setLocalPath] = useState('');
-  const [search, setSearch] = useState('');
+  const { search, handleSearchKey } = useInstantSearch();
   const [focusedSection, setFocusedSection] = useState<'suggestions' | 'repos'>('suggestions');
   const [focusedSuggestionIdx, setFocusedSuggestionIdx] = useState(0);
   const [focusedRepoIdx, setFocusedRepoIdx] = useState(0);
@@ -140,15 +141,13 @@ export default function RepoManager() {
 
     const focusedRepo = focusedSection === 'repos' ? filteredRepos[focusedRepoIdx] : undefined;
 
+    if (handleSearchKey(e)) return;
+
     switch (e.key) {
       case 'Escape':
         e.preventDefault();
         e.stopPropagation();
-        if (search) {
-          setSearch('');
-        } else {
-          close();
-        }
+        close();
         break;
 
       case 'ArrowUp':
@@ -174,11 +173,6 @@ export default function RepoManager() {
         if (focusedSection === 'suggestions' && suggestions[focusedSuggestionIdx]) {
           handleAddSuggestion(suggestions[focusedSuggestionIdx].path);
         }
-        break;
-
-      case 'Backspace':
-        e.preventDefault();
-        setSearch((s) => s.slice(0, -1));
         break;
 
       case 'Tab':
@@ -226,9 +220,6 @@ export default function RepoManager() {
               handleAddLocal();
               break;
           }
-        } else if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1) {
-          e.preventDefault();
-          setSearch((s) => s + e.key);
         }
         break;
     }

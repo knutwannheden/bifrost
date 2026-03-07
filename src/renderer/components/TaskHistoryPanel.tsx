@@ -6,6 +6,7 @@ import { shortPath } from '../utils/paths';
 import type { Task, ClaudeSession, DiffStats } from '../../shared/types';
 import { requestArchive } from '../utils/archive';
 import { matchesAllTerms } from '../utils/search';
+import { useInstantSearch } from '../hooks/useInstantSearch';
 import Highlight from './Highlight';
 import SearchIndicator from './SearchIndicator';
 import PillToggle, { type PillOption } from './PillToggle';
@@ -209,7 +210,7 @@ function TaskRow({
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
   const [filter, setFilter] = useState<Filter>('active');
-  const [search, setSearch] = useState('');
+  const { search, handleSearchKey } = useInstantSearch();
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -424,24 +425,13 @@ export default function TaskHistoryPanel() {
     // Don't handle keys while editing a name
     if (editingId) return;
 
+    if (handleSearchKey(e)) return;
+
     switch (e.key) {
       case 'Escape':
         e.preventDefault();
         e.stopPropagation();
-        if (search) {
-          setSearch('');
-        } else {
-          close();
-        }
-        break;
-
-      case 'Backspace':
-        e.preventDefault();
-        if (e.altKey) {
-          setSearch((s) => s.replace(/\S+\s*$/, ''));
-        } else {
-          setSearch((s) => s.slice(0, -1));
-        }
+        close();
         break;
 
       case 'ArrowUp':
@@ -519,11 +509,6 @@ export default function TaskHistoryPanel() {
                 break;
             }
           }
-        }
-        if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.length === 1) {
-          // Incremental search
-          e.preventDefault();
-          setSearch((s) => s + e.key);
         }
         break;
     }
