@@ -56,7 +56,7 @@ function BarChart({ entries, done }: { entries: { name: string; count: number }[
           <div key={entry.name} className="flex items-center gap-2">
             <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
               <div
-                className="h-full bg-indigo-500 rounded"
+                className="h-full bg-accent rounded"
                 style={{ width: `${pct}%` }}
               />
               <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">
@@ -166,7 +166,7 @@ function EscalationTable({ entries, done }: { entries: EscalationEntry[]; done: 
               <span className="text-xs text-secondary tabular-nums shrink-0 w-20 text-right">
                 {entry.clusters} cluster{entry.clusters !== 1 ? 's' : ''}
               </span>
-              <span className="text-xs text-amber-400 tabular-nums shrink-0 w-20 text-right font-medium">
+              <span className="text-xs text-warning tabular-nums shrink-0 w-20 text-right font-medium">
                 {entry.wastedRuns} wasted
               </span>
               <span className="text-xs text-muted tabular-nums shrink-0 w-16 text-right">
@@ -278,7 +278,7 @@ export default function StatsOverlay() {
               >
                 {tab.label}
                 {tab.experimental && (
-                  <svg width="10" height="10" viewBox="0 0 16 16" className="text-green-400 opacity-70" fill="none" stroke="currentColor" strokeWidth="1.2">
+                  <svg width="10" height="10" viewBox="0 0 16 16" className="text-success opacity-70" fill="none" stroke="currentColor" strokeWidth="1.2">
                     <path d="M6 1h4v1H9v4l3.5 6.5a1 1 0 0 1-.9 1.5H4.4a1 1 0 0 1-.9-1.5L7 6V2H6V1z" />
                     <path d="M5.5 10.5L7.5 7h1l2 3.5a1 1 0 0 1-.9 1.5H6.4a1 1 0 0 1-.9-1.5z" fill="currentColor" opacity="0.5" stroke="none" />
                   </svg>
