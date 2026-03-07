@@ -52,6 +52,7 @@ export default function TaskCreateDialog() {
   const nameRef = useRef<HTMLInputElement>(null);
   const branchRef = useRef<HTMLInputElement>(null);
   const branchListRef = useRef<HTMLDivElement>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
   const createRef = useRef<HTMLButtonElement>(null);
 
   const close = useCallback(() => {
@@ -339,6 +340,10 @@ export default function TaskCreateDialog() {
           }
           break;
         }
+        case 'KeyP':
+          e.preventDefault();
+          promptRef.current?.focus();
+          break;
       }
     }
   };
@@ -686,8 +691,9 @@ export default function TaskCreateDialog() {
 
           {/* Prompt */}
           <div>
-            <label className="block text-xs text-secondary mb-1">Prompt</label>
+            <label className="block text-xs text-secondary mb-1"><ActionLabel text="Prompt" showHint={true} /></label>
             <textarea
+              ref={promptRef}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={(e) => {
@@ -704,7 +710,7 @@ export default function TaskCreateDialog() {
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-faint flex-1">
-              Enter create &middot; {altSymbol}N new name &middot; Esc cancel
+              Enter create &middot; {altSymbol}N name &middot; {altSymbol}P prompt &middot; Esc cancel
             </span>
             <button
               onClick={close}

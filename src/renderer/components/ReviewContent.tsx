@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { ReviewStatus } from '../context/AppContext';
 import type { DiffStats, ReviewEntry } from '../../shared/types';
@@ -195,6 +195,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   // New review form state
   const [reviewScope, setReviewScope] = useState<ReviewScope>('working');
   const [reviewInstructions, setReviewInstructions] = useState('');
+  const instructionsRef = useRef<HTMLTextAreaElement>(null);
 
   // Discussion terminal state (persisted in AppContext so it survives overlay close/reopen)
   const discussion = state.reviewDiscussion[taskId];
@@ -373,7 +374,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
         return;
       }
 
-      // Scope toggle in new review form: left/right arrows or Alt+T/Alt+C
+      // New review form shortcuts
       if (!reviewId && !showDiscussion) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           e.preventDefault();
@@ -383,6 +384,12 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
         if (e.altKey && (e.code === 'KeyT' || e.code === 'KeyC')) {
           e.preventDefault();
           setReviewScope(e.code === 'KeyT' ? 'working' : 'all');
+          return;
+        }
+        // Alt+I: focus instructions textarea
+        if (e.altKey && e.code === 'KeyI') {
+          e.preventDefault();
+          instructionsRef.current?.focus();
           return;
         }
       }
@@ -449,8 +456,9 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
             <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
           </div>
           <div className="flex flex-col gap-2 w-full max-w-md">
-            <div className="text-xs text-secondary font-medium">Instructions (optional):</div>
+            <div className="text-xs text-secondary font-medium"><ActionLabel text="Instructions" showHint={true} /> (optional):</div>
             <textarea
+              ref={instructionsRef}
               value={reviewInstructions}
               onChange={(e) => setReviewInstructions(e.target.value)}
               onKeyDown={(e) => {

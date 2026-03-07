@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import type { Note } from '../../shared/types';
 import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesRepoSearch } from '../utils/search';
+import ActionLabel from './ActionLabel';
 import { isModKey, modSymbol, altSymbol, deleteSymbol } from '../utils/platform';
 import { formatTime } from '../utils/format-time';
 
@@ -355,7 +356,7 @@ export default function NotesOverlay() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default gap-3">
           <span className="text-sm font-medium text-primary flex-shrink-0">Notes</span>
           <div className="flex items-center gap-1.5 flex-1 max-w-[280px]">
-          <label className="text-xs text-secondary flex-shrink-0"><span className="underline">R</span>epo</label>
+          <label className="text-xs text-secondary flex-shrink-0"><ActionLabel text="Repo" showHint={true} /></label>
           <div className="relative flex-1">
             <input
               ref={repoInputRef}
