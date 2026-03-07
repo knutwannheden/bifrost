@@ -154,7 +154,7 @@ function TaskRow({
             onClick={(e) => { e.stopPropagation(); startRename(task); }}
             title="Rename (F2)"
             tabIndex={-1}
-            className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
+            className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded transition-colors"
           >
             <ActionLabel text="Rename" showHint={idx === focusedIdx} />
           </button>
@@ -163,7 +163,7 @@ function TaskRow({
               onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
               title={`Reopen task (${altSymbol}O)`}
               tabIndex={-1}
-              className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
+              className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
             >
               <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
             </button>
@@ -173,7 +173,7 @@ function TaskRow({
               onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
               title={`Archive task (${altSymbol}A)`}
               tabIndex={-1}
-              className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
+              className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded transition-colors"
             >
               <ActionLabel text="Archive" showHint={idx === focusedIdx} />
             </button>
@@ -182,7 +182,7 @@ function TaskRow({
             onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
             title={task.inPlace || task.isExternal ? `Delete task (${altSymbol}D)` : `Delete task and worktree (${altSymbol}D)`}
             tabIndex={-1}
-            className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded"
+            className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
           >
             <ActionLabel text="Delete" showHint={idx === focusedIdx} />
           </button>
@@ -534,7 +534,7 @@ export default function TaskHistoryPanel() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none"
+            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
           >
             &times;
           </button>
@@ -561,7 +561,7 @@ export default function TaskHistoryPanel() {
             </span>
             <button
               onClick={() => doReopen(branchConfirm.task)}
-              className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded"
+              className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded transition-colors"
             >
               Reopen on {branchConfirm.currentBranch}
             </button>

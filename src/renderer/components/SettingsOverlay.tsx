@@ -28,14 +28,14 @@ function buildSettings(): SettingDef[] {
         <div className="flex items-center gap-2">
           <button
             onClick={() => update({ fontSize: Math.max(8, config.fontSize - 1) })}
-            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm"
+            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm transition-colors"
           >
             -
           </button>
           <span className="text-sm text-primary w-6 text-center tabular-nums">{config.fontSize}</span>
           <button
             onClick={() => update({ fontSize: Math.min(32, config.fontSize + 1) })}
-            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm"
+            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm transition-colors"
           >
             +
           </button>
@@ -301,7 +301,7 @@ function buildSettings(): SettingDef[] {
               }
             }}
             disabled={!config.slack?.clientId || !config.slack?.clientSecret}
-            className="px-3 py-1 text-xs rounded bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-xs rounded bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Connect to Slack
           </button>
@@ -443,7 +443,7 @@ export default function SettingsOverlay() {
             <button
               onClick={close}
               tabIndex={-1}
-              className="text-secondary hover:text-primary text-lg leading-none"
+              className="text-secondary hover:text-primary text-lg leading-none transition-colors"
             >
               &times;
             </button>

@@ -118,13 +118,13 @@ export default function NotificationPopover() {
                 <div className="mt-1.5 flex gap-2">
                   <button
                     onClick={() => handleAction(n.id, n.action!.handler)}
-                    className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded"
+                    className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded transition-colors"
                   >
                     {n.action.label}
                   </button>
                   <button
                     onClick={() => dispatch({ type: 'DISMISS_NOTIFICATION', id: n.id })}
-                    className="px-2 py-0.5 text-xs text-secondary hover:text-primary"
+                    className="px-2 py-0.5 text-xs text-secondary hover:text-primary transition-colors"
                   >
                     Dismiss
                   </button>

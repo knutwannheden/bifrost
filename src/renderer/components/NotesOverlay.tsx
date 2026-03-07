@@ -311,7 +311,7 @@ export default function NotesOverlay() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none flex-shrink-0"
+            className="text-secondary hover:text-primary text-lg leading-none flex-shrink-0 transition-colors"
           >
             &times;
           </button>

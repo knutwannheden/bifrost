@@ -337,7 +337,7 @@ export default function TaskCreateDialog() {
             <button
               onClick={close}
               tabIndex={-1}
-              className="text-secondary hover:text-primary text-lg leading-none"
+              className="text-secondary hover:text-primary text-lg leading-none transition-colors"
             >
               &times;
             </button>
@@ -405,7 +405,7 @@ export default function TaskCreateDialog() {
                   close();
                   dispatch({ type: 'TOGGLE_REPO_MANAGER' });
                 }}
-                className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
               >
                 Add a Repository
               </button>
@@ -444,7 +444,7 @@ export default function TaskCreateDialog() {
                 onClick={regenerateName}
                 title={`Generate new name (${altSymbol}N)`}
                 tabIndex={-1}
-                className="px-2 py-1.5 bg-surface-alt border border-border-input rounded text-secondary hover:text-primary hover:border-border-input text-sm"
+                className="px-2 py-1.5 bg-surface-alt border border-border-input rounded text-secondary hover:text-primary hover:border-border-input text-sm transition-colors"
               >
                 &#x21bb;
               </button>
@@ -614,7 +614,7 @@ export default function TaskCreateDialog() {
           </span>
           <button
             onClick={close}
-            className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input"
+            className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input transition-colors"
           >
             Cancel
           </button>
@@ -622,7 +622,7 @@ export default function TaskCreateDialog() {
             ref={createRef}
             onClick={handleSubmit}
             disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
-            className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
+            className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
           >
             {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
           </button>

@@ -191,13 +191,13 @@ export default function PermissionPanel() {
       <div className="px-3 py-2 flex gap-2">
         <button
           onClick={() => handleDecision('allow')}
-          className="flex-1 px-3 py-1.5 bg-success/80 hover:bg-success text-white text-sm font-medium rounded"
+          className="flex-1 px-3 py-1.5 bg-success/80 hover:bg-success text-white text-sm font-medium rounded transition-colors"
         >
           Allow <span className="opacity-60 text-xs">(A)</span>
         </button>
         <button
           onClick={() => handleDecision('deny')}
-          className="flex-1 px-3 py-1.5 bg-danger/80 hover:bg-danger text-white text-sm font-medium rounded"
+          className="flex-1 px-3 py-1.5 bg-danger/80 hover:bg-danger text-white text-sm font-medium rounded transition-colors"
         >
           Deny <span className="opacity-60 text-xs">(D)</span>
         </button>

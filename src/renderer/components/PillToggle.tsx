@@ -32,7 +32,7 @@ export default function PillToggle<T extends string>({
           key={opt.value}
           tabIndex={-1}
           onClick={() => onChange(opt.value)}
-          className={`${sizeClass} rounded inline-flex items-center gap-1.5 ${
+          className={`${sizeClass} rounded inline-flex items-center gap-1.5 transition-colors ${
             value === opt.value
               ? 'bg-surface-hover text-primary'
               : 'text-secondary hover:text-primary hover:bg-surface-alt'

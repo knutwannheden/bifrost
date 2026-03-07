@@ -292,7 +292,7 @@ export default function StatsOverlay() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none ml-2"
+            className="text-secondary hover:text-primary text-lg leading-none ml-2 transition-colors"
           >
             &times;
           </button>

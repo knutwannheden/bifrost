@@ -28,7 +28,7 @@ function ItemRow({ item, repoName, onAction, focused }: {
         {item.status === 'running' && (
           <button
             onClick={() => onAction('pause', item.id)}
-            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
+            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             Pause
           </button>
@@ -36,7 +36,7 @@ function ItemRow({ item, repoName, onAction, focused }: {
         {item.status === 'paused' && (
           <button
             onClick={() => onAction('resume', item.id)}
-            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
+            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             Resume
           </button>
@@ -44,7 +44,7 @@ function ItemRow({ item, repoName, onAction, focused }: {
         {(item.status === 'done' || item.status === 'error' || item.status === 'paused') && (
           <button
             onClick={() => onAction('open', item.id)}
-            className="text-xs text-accent-hover hover:brightness-125 px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
+            className="text-xs text-accent-hover hover:brightness-125 px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             Open
           </button>
@@ -52,7 +52,7 @@ function ItemRow({ item, repoName, onAction, focused }: {
         {item.status !== 'running' && item.status !== 'opened' && (
           <button
             onClick={() => onAction('remove', item.id)}
-            className="text-xs text-muted hover:text-danger px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
+            className="text-xs text-muted hover:text-danger px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             &times;
           </button>
@@ -206,14 +206,14 @@ export default function SupervisorOverlay() {
             <span className="text-xs text-secondary">Concurrency</span>
             <button
               onClick={() => handleConcurrency(-1)}
-              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm"
+              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm transition-colors"
             >
               &minus;
             </button>
             <span className="text-xs text-secondary w-4 text-center">{svState?.concurrency ?? 2}</span>
             <button
               onClick={() => handleConcurrency(1)}
-              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm"
+              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm transition-colors"
             >
               +
             </button>
@@ -234,7 +234,7 @@ export default function SupervisorOverlay() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none ml-1"
+            className="text-secondary hover:text-primary text-lg leading-none ml-1 transition-colors"
           >
             &times;
           </button>

@@ -440,7 +440,7 @@ export default function App() {
               <button
                 autoFocus
                 onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
-                className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded"
+                className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded transition-colors"
               >
                 Cancel
               </button>
@@ -450,7 +450,7 @@ export default function App() {
                   dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
                   performArchive(taskId, state, dispatch);
                 }}
-                className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded"
+                className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded transition-colors"
               >
                 Force Archive
               </button>
@@ -470,7 +470,7 @@ export default function App() {
                   state.toastAction!.callback();
                   dispatch({ type: 'HIDE_TOAST' });
                 }}
-                className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded"
+                className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded transition-colors"
               >
                 {state.toastAction.label}
               </button>

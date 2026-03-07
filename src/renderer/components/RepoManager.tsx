@@ -242,7 +242,7 @@ export default function RepoManager() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none"
+            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
           >
             &times;
           </button>
@@ -276,7 +276,7 @@ export default function RepoManager() {
                       <button
                         onClick={() => handleAddSuggestion(repo.path)}
                         tabIndex={-1}
-                        className="ml-3 px-2 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
+                        className="ml-3 px-2 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
                       >
                         <ActionLabel text="+ Add" showHint={isFocused} />
                       </button>
@@ -317,7 +317,7 @@ export default function RepoManager() {
                       onClick={() => { close(); dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id }); }}
                       tabIndex={-1}
                       title={`Create task (${altSymbol}T)`}
-                      className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
+                      className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
                     >
                       <ActionLabel text="Task" showHint={isFocused} />
                     </button>
@@ -325,7 +325,7 @@ export default function RepoManager() {
                       onClick={() => handleRemove(repo.id)}
                       tabIndex={-1}
                       title={`Remove (${altSymbol}R)`}
-                      className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded"
+                      className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
                     >
                       <ActionLabel text="Remove" showHint={isFocused} />
                     </button>
@@ -366,7 +366,7 @@ export default function RepoManager() {
                 onClick={handleAddLocal}
                 disabled={!localPath.trim()}
                 tabIndex={-1}
-                className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
               >
                 <ActionLabel text="Add" showHint={!!localPath.trim()} />
               </button>

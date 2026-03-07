@@ -117,21 +117,21 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
       <button
         onClick={findPrevious}
         title="Previous match (Shift+Enter)"
-        className="text-secondary hover:text-primary text-sm px-1"
+        className="text-secondary hover:text-primary text-sm px-1 transition-colors"
       >
         &#x25B2;
       </button>
       <button
         onClick={findNext}
         title="Next match (Enter)"
-        className="text-secondary hover:text-primary text-sm px-1"
+        className="text-secondary hover:text-primary text-sm px-1 transition-colors"
       >
         &#x25BC;
       </button>
       <button
         onClick={onClose}
         title="Close (Escape)"
-        className="text-secondary hover:text-primary text-lg leading-none px-1"
+        className="text-secondary hover:text-primary text-lg leading-none px-1 transition-colors"
       >
         &times;
       </button>

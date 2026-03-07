@@ -1146,7 +1146,7 @@ export default function DiffOverlay() {
           </span>
           <button
             tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none"
+            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
             onClick={() => dispatch({ type: 'TOGGLE_DIFF' })}
           >
             &times;
