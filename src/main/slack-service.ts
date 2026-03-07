@@ -1,8 +1,181 @@
 import https from 'node:https';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs';
 import { execSync } from 'node:child_process';
 import { shell, BrowserWindow } from 'electron';
 import { loadConfig, saveConfig } from './config';
+import { IPC_STREAM } from '../shared/ipc-channels';
+
+// --- State persistence ---
+
+const SLACK_STATE_PATH = path.join(os.homedir(), '.bifrost', 'slack.json');
+
+interface SlackState {
+  lastProcessedTimestamp: number;
+  processedReactions: string[]; // "channelId:messageTs"
+}
+
+function loadSlackState(): SlackState {
+  try {
+    const data = fs.readFileSync(SLACK_STATE_PATH, 'utf-8');
+    return JSON.parse(data) as SlackState;
+  } catch {
+    return { lastProcessedTimestamp: 0, processedReactions: [] };
+  }
+}
+
+function saveSlackState(state: SlackState): void {
+  // Cap processedReactions at 500 entries (keep most recent)
+  if (state.processedReactions.length > 500) {
+    state.processedReactions = state.processedReactions.slice(-500);
+  }
+  const dir = path.dirname(SLACK_STATE_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(SLACK_STATE_PATH, JSON.stringify(state, null, 2));
+}
+
+// --- Slack API helpers ---
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function slackGet(endpoint: string, token: string, params: Record<string, string> = {}): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const url = new URL(`https://slack.com/api/${endpoint}`);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+    const req = https.request(url, {
+      headers: { Authorization: `Bearer ${token}` },
+    }, (res) => {
+      let body = '';
+      res.on('data', (chunk: string) => body += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+let cachedTeamDomain: string | null = null;
+
+async function getTeamDomain(token: string): Promise<string> {
+  if (cachedTeamDomain) return cachedTeamDomain;
+  const result = await slackGet('auth.test', token);
+  if (!result.ok) throw new Error(`auth.test failed: ${result.error}`);
+  cachedTeamDomain = result.url.replace(/^https?:\/\//, '').replace(/\/$/, '').split('.')[0];
+  return cachedTeamDomain;
+}
+
+// --- Reaction polling ---
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function fetchReactions(mainWindow: BrowserWindow): Promise<void> {
+  const config = loadConfig();
+  const token = config.slack?.userToken;
+  const reactions = config.slack?.reactions;
+  if (!token || !reactions?.length) return;
+
+  const state = loadSlackState();
+  const processedSet = new Set(state.processedReactions);
+
+  let teamDomain: string;
+  try {
+    teamDomain = await getTeamDomain(token);
+  } catch (err) {
+    console.error('[slack] Failed to get team domain:', err);
+    return;
+  }
+
+  let cursor: string | undefined;
+  let newTimestamp = state.lastProcessedTimestamp;
+
+  do {
+    const params: Record<string, string> = { limit: '100' };
+    if (cursor) params.cursor = cursor;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let result: any;
+    try {
+      result = await slackGet('reactions.list', token, params);
+    } catch (err) {
+      console.error('[slack] Failed to fetch reactions:', err);
+      return;
+    }
+
+    if (!result.ok) {
+      console.error('[slack] reactions.list error:', result.error);
+      return;
+    }
+
+    const items = result.items ?? [];
+    for (const item of items) {
+      if (item.type !== 'message' || !item.message || !item.channel) continue;
+
+      const messageTs = item.message.ts as string;
+      const channelId = item.channel as string;
+      const dedup = `${channelId}:${messageTs}`;
+
+      // Parse timestamp for comparison (Slack ts is "seconds.microseconds")
+      const tsNum = parseFloat(messageTs);
+
+      if (tsNum <= state.lastProcessedTimestamp) continue;
+      if (processedSet.has(dedup)) continue;
+
+      const messageReactions: Array<{ name: string }> = item.message.reactions ?? [];
+      const hasMatch = messageReactions.some((r) => reactions.includes(r.name));
+      if (!hasMatch) continue;
+
+      // Build Slack message URL
+      const tsWithoutDot = messageTs.replace('.', '');
+      const messageUrl = `https://${teamDomain}.slack.com/archives/${channelId}/p${tsWithoutDot}`;
+      const messagePreview = (item.message.text ?? '').slice(0, 100);
+
+      mainWindow.webContents.send(IPC_STREAM.SLACK_REACTION, channelId, messageTs, messageUrl, messagePreview);
+
+      processedSet.add(dedup);
+      state.processedReactions.push(dedup);
+      if (tsNum > newTimestamp) newTimestamp = tsNum;
+    }
+
+    cursor = result.response_metadata?.next_cursor || undefined;
+  } while (cursor);
+
+  state.lastProcessedTimestamp = newTimestamp;
+  saveSlackState(state);
+}
+
+export function startPolling(mainWindow: BrowserWindow): void {
+  const config = loadConfig();
+  if (!config.slack?.enabled || !config.slack?.userToken || !config.slack?.reactions?.length) return;
+
+  // Clear any existing timer
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  pollTimer = setInterval(() => {
+    fetchReactions(mainWindow).catch((err) => {
+      console.error('[slack] Poll error:', err);
+    });
+  }, 30_000);
+
+  // Run immediately on start
+  fetchReactions(mainWindow).catch((err) => {
+    console.error('[slack] Initial poll error:', err);
+  });
+}
+
+export function restartPolling(mainWindow: BrowserWindow): void {
+  stopPolling();
+  startPolling(mainWindow);
+}
 
 function generateSelfSignedCert(): { key: string; cert: string } {
   const result = execSync(
@@ -120,6 +293,9 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
         res.writeHead(200, { 'Content-Type': 'text/html' });
         res.end('<html><body><h1>Connected to Slack!</h1><p>You can close this window.</p></body></html>');
 
+        // Start polling with new token
+        restartPolling(mainWindow);
+
         // Notify renderer
         mainWindow.webContents.send('slack:oauth-complete');
 
@@ -169,7 +345,10 @@ export function disconnectSlack(): void {
   stopPolling();
 }
 
-/** Stub — filled in by Task 4 (slack polling) */
 export function stopPolling(): void {
-  // no-op for now
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  cachedTeamDomain = null;
 }
