@@ -101,8 +101,8 @@ function TaskRow({
       onClick={() => handleActivate(task)}
       className={`rounded border p-3 cursor-default transition-colors ${
         idx === focusedIdx
-          ? 'bg-slate-700 border-blue-500/70 ring-1 ring-blue-500/40'
-          : 'bg-slate-700/50 border-slate-600/50'
+          ? 'bg-surface-alt border-accent-muted ring-1 ring-accent-muted'
+          : 'bg-surface-alt/50 border-border-input/50'
       }`}
     >
       <div className="flex items-center justify-between">
@@ -117,12 +117,12 @@ function TaskRow({
                 if (e.key === 'Escape') { e.stopPropagation(); setEditingId(null); }
               }}
               onBlur={() => submitRename(task.id)}
-              className="px-2 py-0.5 bg-slate-600 border border-slate-500 rounded text-sm text-slate-200 focus:outline-none focus:border-blue-500 w-48"
+              className="px-2 py-0.5 bg-surface-hover border border-border-input rounded text-sm text-primary focus:outline-none focus:border-accent w-48"
             />
           ) : (
             <span
               className={`text-sm font-medium truncate ${
-                task.status === 'archived' ? 'text-slate-400' : 'text-slate-200'
+                task.status === 'archived' ? 'text-secondary' : 'text-primary'
               }`}
             >
               <Highlight text={task.name} search={search} />
@@ -135,10 +135,10 @@ function TaskRow({
             <DiffStatsBadge additions={diffStats.additions} deletions={diffStats.deletions} />
           )}
           {task.isExternal && (
-            <span className="text-xs text-slate-600">external</span>
+            <span className="text-xs text-faint">external</span>
           )}
           {task.inPlace && (
-            <span className="text-xs text-slate-600">in-place</span>
+            <span className="text-xs text-faint">in-place</span>
           )}
         </div>
         <div className="flex items-center gap-1 ml-2 flex-shrink-0">
@@ -146,7 +146,7 @@ function TaskRow({
             onClick={(e) => { e.stopPropagation(); startRename(task); }}
             title="Rename (F2)"
             tabIndex={-1}
-            className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+            className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
           >
             <ActionLabel text="Rename" showHint={idx === focusedIdx} />
           </button>
@@ -155,7 +155,7 @@ function TaskRow({
               onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
               title="Reopen task (Alt+O)"
               tabIndex={-1}
-              className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+              className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
             >
               <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
             </button>
@@ -165,7 +165,7 @@ function TaskRow({
               onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
               title="Archive task (Alt+A)"
               tabIndex={-1}
-              className="px-1.5 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+              className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
             >
               <ActionLabel text="Archive" showHint={idx === focusedIdx} />
             </button>
@@ -181,9 +181,9 @@ function TaskRow({
         </div>
       </div>
       {task.summary && (
-        <div className="mt-1 text-xs text-slate-500"><Highlight text={task.summary} search={search} /></div>
+        <div className="mt-1 text-xs text-muted"><Highlight text={task.summary} search={search} /></div>
       )}
-      <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
         {task.isExternal ? (
           <span className="font-mono">{shortPath(task.worktreePath)}</span>
         ) : (
@@ -531,18 +531,18 @@ export default function TaskHistoryPanel() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[720px] h-[90vh] flex flex-col shadow-xl"
+        className="bg-surface rounded-lg border border-border-input w-[720px] h-[90vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <h2 className="text-sm font-semibold text-slate-200">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+          <h2 className="text-sm font-semibold text-primary">
             {isSessionsMode ? 'Claude Sessions' : 'Task History'}
           </h2>
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-slate-400 hover:text-slate-200 text-lg leading-none"
+            className="text-secondary hover:text-primary text-lg leading-none"
           >
             &times;
           </button>
@@ -557,14 +557,14 @@ export default function TaskHistoryPanel() {
               tabIndex={-1}
               className={`px-3 py-1 text-xs rounded ${
                 filter === f
-                  ? 'bg-slate-600 text-slate-200'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                  ? 'bg-surface-hover text-primary'
+                  : 'text-secondary hover:text-primary hover:bg-surface-alt'
               }`}
             >
               {f === 'sessions' ? 'Sessions' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
-          <span className="ml-auto text-xs text-slate-600 self-center">
+          <span className="ml-auto text-xs text-faint self-center">
             Tab/&larr;&rarr; tabs &uarr;&darr; {isSessionsMode ? 'sessions' : 'tasks'}
           </span>
         </div>
@@ -580,13 +580,13 @@ export default function TaskHistoryPanel() {
             </span>
             <button
               onClick={() => doReopen(branchConfirm.task)}
-              className="px-2 py-0.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded"
+              className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded"
             >
               Reopen on {branchConfirm.currentBranch}
             </button>
             <button
               onClick={() => setBranchConfirm(null)}
-              className="px-2 py-0.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-600 rounded"
+              className="px-2 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
             >
               Cancel
             </button>
@@ -600,13 +600,13 @@ export default function TaskHistoryPanel() {
           {isSessionsMode ? (
             <>
               {sessionsLoading && (
-                <div className="flex items-center justify-center py-4 gap-2 text-slate-400">
+                <div className="flex items-center justify-center py-4 gap-2 text-secondary">
                   <Spinner />
                   <span className="text-sm">Scanning sessions...</span>
                 </div>
               )}
               {!sessionsLoading && filteredSessions.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-4">No recent Claude sessions found.</p>
+                <p className="text-sm text-muted text-center py-4">No recent Claude sessions found.</p>
               )}
               {filteredSessions.map((session, idx) => (
                 <div
@@ -616,22 +616,22 @@ export default function TaskHistoryPanel() {
                   onClick={() => handleResumeSession(session)}
                   className={`rounded border p-3 cursor-default transition-colors ${
                     idx === focusedIdx
-                      ? 'bg-slate-700 border-blue-500/70 ring-1 ring-blue-500/40'
-                      : 'bg-slate-700/50 border-slate-600/50'
+                      ? 'bg-surface-alt border-accent-muted ring-1 ring-accent-muted'
+                      : 'bg-surface-alt/50 border-border-input/50'
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-200 truncate">
+                    <span className="text-sm font-medium text-primary truncate">
                       {shortPath(session.cwd)}
                     </span>
-                    <span className="text-xs text-blue-400 flex-shrink-0 ml-2">
+                    <span className="text-xs text-accent-hover flex-shrink-0 ml-2">
                       Resume
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                    {session.slug && <span className="text-slate-400">{session.slug}</span>}
+                  <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
+                    {session.slug && <span className="text-secondary">{session.slug}</span>}
                     <span>{formatRelative(session.lastModified)}</span>
-                    <span className="font-mono text-slate-600">{session.sessionId.slice(0, 8)}</span>
+                    <span className="font-mono text-faint">{session.sessionId.slice(0, 8)}</span>
                   </div>
                 </div>
               ))}
@@ -639,13 +639,13 @@ export default function TaskHistoryPanel() {
           ) : (
             <>
               {flatTaskList.length === 0 && (
-                <p className="text-sm text-slate-500 text-center py-4">No tasks found.</p>
+                <p className="text-sm text-muted text-center py-4">No tasks found.</p>
               )}
               {(() => {
                   let flatIdx = 0;
                   return taskGroups.map((group) => (
                     <div key={group.name} className="space-y-2">
-                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide px-1 pt-2 pb-1">
+                      <div className="text-xs font-semibold text-secondary uppercase tracking-wide px-1 pt-2 pb-1">
                         {group.name}
                       </div>
                       {group.tasks.map((task) => {
