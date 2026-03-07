@@ -152,9 +152,9 @@ export default function TaskView() {
           )}
           {ghMissing && (
             <div className="mb-6">
-              <div className="inline-flex items-center gap-2 bg-amber-900/30 border border-amber-700/40 rounded-full px-4 py-2">
-                <span className="text-xs text-amber-300">
-                  Install <a href="https://cli.github.com" onClick={(e) => { e.preventDefault(); window.bifrost.openUrl('https://cli.github.com'); }} className="underline hover:text-amber-200">GitHub CLI</a> to enable PR-based task creation
+              <div className="inline-flex items-center gap-2 bg-warning/10 border border-warning/30 rounded-full px-4 py-2">
+                <span className="text-xs text-warning">
+                  Install <a href="https://cli.github.com" onClick={(e) => { e.preventDefault(); window.bifrost.openUrl('https://cli.github.com'); }} className="underline hover:text-warning/70">GitHub CLI</a> to enable PR-based task creation
                 </span>
               </div>
             </div>

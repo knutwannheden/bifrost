@@ -416,13 +416,13 @@ export default function TaskCreateDialog() {
 
           {/* Existing task banner */}
           {existingTask && (
-            <div className="flex items-center justify-between bg-amber-900/40 border border-amber-700/50 rounded px-3 py-2">
-              <p className="text-xs text-amber-300">
+            <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded px-3 py-2">
+              <p className="text-xs text-warning">
                 Task &ldquo;{existingTask.name}&rdquo; already uses this branch
               </p>
               <button
                 onClick={() => openExistingTask(existingTask.id, existingTask.status)}
-                className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
+                className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap"
               >
                 <ActionLabel text="Open" showHint={true} />
               </button>
@@ -583,13 +583,13 @@ export default function TaskCreateDialog() {
 
           {/* In-place conflict banner */}
           {existingInPlaceTask && (
-            <div className="flex items-center justify-between bg-amber-900/40 border border-amber-700/50 rounded px-3 py-2">
-              <p className="text-xs text-amber-300">
+            <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded px-3 py-2">
+              <p className="text-xs text-warning">
                 Task &ldquo;{existingInPlaceTask.name}&rdquo; already uses the main worktree
               </p>
               <button
                 onClick={() => openExistingTask(existingInPlaceTask.id, existingInPlaceTask.status)}
-                className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
+                className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap"
               >
                 <ActionLabel text="Open" showHint={true} />
               </button>

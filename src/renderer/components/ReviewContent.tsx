@@ -132,7 +132,7 @@ function renderInline(text: string): React.ReactNode {
       const endCode = remaining.indexOf('`', codeIdx + 1);
       if (endCode >= 0) {
         if (codeIdx > 0) parts.push(remaining.slice(0, codeIdx));
-        parts.push(<code key={key++} className="px-1 py-0.5 bg-surface-alt rounded text-sm text-amber-300 font-mono">{remaining.slice(codeIdx + 1, endCode)}</code>);
+        parts.push(<code key={key++} className="px-1 py-0.5 bg-surface-alt rounded text-sm text-warning font-mono">{remaining.slice(codeIdx + 1, endCode)}</code>);
         remaining = remaining.slice(endCode + 1);
         continue;
       }
