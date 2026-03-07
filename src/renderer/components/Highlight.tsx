@@ -12,7 +12,7 @@ export default function Highlight({ text, search }: { text: string; search: stri
     <>
       {parts.map((part, i) =>
         regex.test(part)
-          ? <mark key={i} className="bg-yellow-500/30 text-inherit rounded-sm">{part}</mark>
+          ? <mark key={i} className="bg-highlight text-inherit rounded-sm">{part}</mark>
           : part,
       )}
     </>

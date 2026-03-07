@@ -2,12 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Bifrost Theme – Semantic color tokens
+ *
+ * All UI colors are defined here as CSS custom properties so themes can
+ * override them in a single place.  Tailwind references these via
+ * theme.extend.colors in tailwind.config.ts, giving us classes like
+ * bg-app, text-primary, border-default, etc.
+ *
+ * To create a new theme: duplicate the :root block, change the values,
+ * and apply it via a class or media query on <html>.
+ */
+:root {
+  /* ── Backgrounds ────────────────────────────────────────────── */
+  --color-app:            #282a36;   /* body / app background (Dracula BG) */
+  --color-surface:        #1e293b;   /* panels, overlays (≈ slate-800) */
+  --color-surface-alt:    #334155;   /* inputs, secondary surfaces (≈ slate-700) */
+  --color-surface-hover:  #475569;   /* hovered rows, buttons (≈ slate-600) */
+  --color-overlay:        rgba(0, 0, 0, 0.3); /* modal backdrop */
+
+  /* ── Text ───────────────────────────────────────────────────── */
+  --color-text-primary:   #e2e8f0;   /* main text (≈ slate-200) */
+  --color-text-secondary: #94a3b8;   /* labels, hints (≈ slate-400) */
+  --color-text-muted:     #64748b;   /* disabled, timestamps (≈ slate-500) */
+  --color-text-faint:     #475569;   /* very subtle (≈ slate-600) */
+
+  /* ── Borders ────────────────────────────────────────────────── */
+  --color-border:         #334155;   /* dividers, separators (≈ slate-700) */
+  --color-border-input:   #475569;   /* input borders (≈ slate-600) */
+
+  /* ── Accent ─────────────────────────────────────────────────── */
+  --color-accent:         #2563eb;   /* primary buttons (≈ blue-600) */
+  --color-accent-hover:   #3b82f6;   /* button hover (≈ blue-500) */
+  --color-accent-muted:   rgba(59, 130, 246, 0.5); /* focus rings */
+
+  /* ── Status ─────────────────────────────────────────────────── */
+  --color-success:        #4ade80;   /* green-400 */
+  --color-danger:         #f87171;   /* red-400 */
+  --color-warning:        #fbbf24;   /* amber-400 */
+
+  /* ── Special ────────────────────────────────────────────────── */
+  --color-highlight:      rgba(234, 179, 8, 0.3); /* search match (≈ yellow-500/30) */
+}
+
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background-color: #282a36;
-  color: #f8f8f2;
+  background-color: var(--color-app);
+  color: var(--color-text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 

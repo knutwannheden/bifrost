@@ -6,11 +6,11 @@ export default function SearchIndicator({ search, matchInfo, className }: {
 }) {
   if (!search) return null;
   return (
-    <div className={`px-3 py-1.5 bg-slate-700/70 border border-slate-600 rounded flex items-center gap-2 ${className ?? ''}`}>
-      <span className="text-xs text-slate-500">Search:</span>
-      <span className="text-sm text-slate-200">{search}</span>
-      {matchInfo && <span className="text-xs text-slate-600">{matchInfo}</span>}
-      <span className="ml-auto text-xs text-slate-600">Esc to clear</span>
+    <div className={`px-3 py-1.5 bg-surface-alt/70 border border-border-input rounded flex items-center gap-2 ${className ?? ''}`}>
+      <span className="text-xs text-muted">Search:</span>
+      <span className="text-sm text-primary">{search}</span>
+      {matchInfo && <span className="text-xs text-faint">{matchInfo}</span>}
+      <span className="ml-auto text-xs text-faint">Esc to clear</span>
     </div>
   );
 }
