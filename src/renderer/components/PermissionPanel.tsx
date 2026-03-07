@@ -107,38 +107,38 @@ export default function PermissionPanel() {
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       data-permission-panel
-      className="fixed bottom-14 right-4 z-40 w-96 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl focus:outline-none focus:ring-1 focus:ring-blue-500/50"
+      className="fixed bottom-14 right-4 z-40 w-96 bg-surface border border-border-input rounded-lg shadow-2xl focus:outline-none focus:ring-1 focus:ring-accent-muted"
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border-default">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          <span className="text-xs font-semibold text-slate-300">
+          <div className="w-2 h-2 rounded-full bg-warning animate-pulse" />
+          <span className="text-xs font-semibold text-secondary">
             Permission Request
           </span>
-          <span className="text-xs text-slate-600">Tab to focus</span>
+          <span className="text-xs text-faint">Tab to focus</span>
         </div>
         <div className="flex items-center gap-2">
           {queueCount > 1 && (
-            <span className="text-xs text-slate-500">+{queueCount - 1} more</span>
+            <span className="text-xs text-muted">+{queueCount - 1} more</span>
           )}
-          <span className="text-xs text-slate-500">{request.taskName}</span>
+          <span className="text-xs text-muted">{request.taskName}</span>
         </div>
       </div>
 
       {/* Tool info */}
-      <div className="px-3 py-2 border-b border-slate-700">
-        <div className="text-sm font-medium text-slate-200">{request.toolName}</div>
-        <pre className="mt-1 text-xs text-slate-400 font-mono whitespace-pre-wrap break-all max-h-20 overflow-y-auto">
+      <div className="px-3 py-2 border-b border-border-default">
+        <div className="text-sm font-medium text-primary">{request.toolName}</div>
+        <pre className="mt-1 text-xs text-secondary font-mono whitespace-pre-wrap break-all max-h-20 overflow-y-auto">
           {inputSummary}
         </pre>
       </div>
 
       {/* Rule options */}
       {persist && (
-        <div className="px-3 py-2 border-b border-slate-700">
-          <div className="text-xs text-slate-400 mb-1">
-            Rule pattern <span className="text-slate-500">(Tab to cycle)</span>
+        <div className="px-3 py-2 border-b border-border-default">
+          <div className="text-xs text-secondary mb-1">
+            Rule pattern <span className="text-muted">(Tab to cycle)</span>
           </div>
           <div className="space-y-1">
             {request.ruleOptions.map((opt, i) => (
@@ -147,12 +147,12 @@ export default function PermissionPanel() {
                 onClick={() => setSelectedRule(i)}
                 className={`w-full text-left px-2 py-1 rounded text-xs ${
                   i === selectedRule
-                    ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50'
-                    : 'text-slate-400 hover:bg-slate-700'
+                    ? 'bg-accent/30 text-blue-300 border border-accent-muted'
+                    : 'text-secondary hover:bg-surface-alt'
                 }`}
               >
                 <span>{opt.label}</span>
-                <span className="ml-2 font-mono text-slate-500">{opt.pattern}</span>
+                <span className="ml-2 font-mono text-muted">{opt.pattern}</span>
               </button>
             ))}
           </div>
@@ -160,15 +160,15 @@ export default function PermissionPanel() {
       )}
 
       {/* Scope selector & persist toggle */}
-      <div className="px-3 py-2 border-b border-slate-700 flex items-center gap-3">
-        <label className="flex items-center gap-1.5 text-xs text-slate-400">
+      <div className="px-3 py-2 border-b border-border-default flex items-center gap-3">
+        <label className="flex items-center gap-1.5 text-xs text-secondary">
           <input
             type="checkbox"
             checked={persist}
             onChange={(e) => setPersist(e.target.checked)}
-            className="rounded border-slate-600 bg-slate-700 text-blue-500"
+            className="rounded border-border-input bg-surface-alt text-accent"
           />
-          <span>Remember <span className="text-slate-500">(P)</span></span>
+          <span>Remember <span className="text-muted">(P)</span></span>
         </label>
 
         {persist && (
@@ -179,11 +179,11 @@ export default function PermissionPanel() {
                 onClick={() => setScope(s)}
                 className={`px-2 py-0.5 rounded text-xs ${
                   scope === s
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+                    ? 'bg-accent text-white'
+                    : 'bg-surface-alt text-secondary hover:bg-surface-hover'
                 }`}
               >
-                {s} <span className="text-slate-500">{i + 1}</span>
+                {s} <span className="text-muted">{i + 1}</span>
               </button>
             ))}
           </div>

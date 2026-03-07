@@ -72,7 +72,7 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
             e.stopPropagation();
           }}
           onBlur={submitEdit}
-          className="px-1.5 py-0.5 bg-slate-600 border border-blue-500 rounded text-xs text-slate-200 focus:outline-none w-28"
+          className="px-1.5 py-0.5 bg-surface-hover border border-accent rounded text-xs text-primary focus:outline-none w-28"
         />
       </div>
     );
@@ -92,8 +92,8 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
         draggable
         className={`group flex items-center gap-1.5 px-3 h-full whitespace-nowrap transition-colors ${
           isActive
-            ? 'bg-slate-700 border-b-2 border-blue-500 text-slate-200'
-            : 'bg-transparent hover:bg-slate-700/50 text-slate-400'
+            ? 'bg-surface-alt border-b-2 border-accent text-primary'
+            : 'bg-transparent hover:bg-surface-alt/50 text-secondary'
         }`}
         onClick={onClick}
         onDoubleClick={startEdit}
@@ -113,10 +113,10 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
             ) : null}
             <span className="text-xs leading-tight truncate">{task.name}</span>
           </span>
-          <span className="text-[9px] leading-tight truncate max-w-full text-slate-500">{repoName}</span>
+          <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
         </span>
         <span
-          className="ml-1 text-slate-500 hover:text-slate-200 flex-shrink-0 hidden group-hover:inline"
+          className="ml-1 text-muted hover:text-primary flex-shrink-0 hidden group-hover:inline"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -127,11 +127,11 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
       </button>
       {showTooltip && tooltipPos && createPortal(
         <div
-          className="fixed z-50 pointer-events-none bg-slate-900 border border-slate-600 rounded px-2 py-1.5 shadow-lg max-w-xl"
+          className="fixed z-50 pointer-events-none bg-app border border-border-input rounded px-2 py-1.5 shadow-lg max-w-xl"
           style={{ left: tooltipPos.x, top: tooltipPos.y }}
         >
           {tooltipLines.map((line, i) => (
-            <div key={i} className={`text-xs ${i === 0 ? 'text-slate-200 font-medium' : 'text-slate-400'}`}>{line}</div>
+            <div key={i} className={`text-xs ${i === 0 ? 'text-primary font-medium' : 'text-secondary'}`}>{line}</div>
           ))}
         </div>,
         document.body,
