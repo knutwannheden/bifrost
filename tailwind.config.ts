@@ -6,10 +6,6 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        slate: {
-          850: '#172033',
-          950: '#0a1122',
-        },
         // Semantic theme tokens — reference CSS custom properties from index.css
         app:            'var(--color-app)',
         surface:        'var(--color-surface)',
