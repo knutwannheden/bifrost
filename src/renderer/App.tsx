@@ -415,7 +415,7 @@ export default function App() {
       {/* Archive confirmation dialog */}
       {state.archiveConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay"
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.stopPropagation();
@@ -442,7 +442,7 @@ export default function App() {
                   dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
                   performArchive(taskId, state, dispatch);
                 }}
-                className="px-4 py-1.5 text-sm bg-red-600 hover:bg-red-500 text-white rounded"
+                className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded"
               >
                 Force Archive
               </button>
@@ -453,7 +453,7 @@ export default function App() {
 
       {/* Toast notification */}
       {state.toast && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-xl shadow-2xl border border-white/10 animate-fade-in max-w-lg">
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-lg shadow-2xl border border-border-input animate-fade-in max-w-lg">
           <div className="flex items-center gap-3">
             <SimpleMarkdown text={state.toast} />
             {state.toastAction && (
