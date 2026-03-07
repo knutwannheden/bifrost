@@ -266,25 +266,24 @@ export default function StatsOverlay() {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
           <div className="flex items-center gap-1">
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab.id}
-                className={`text-sm px-2 py-0.5 rounded flex items-center gap-1 ${
-                  activeTab === tab.id
-                    ? 'bg-surface-hover text-primary'
-                    : 'text-secondary hover:text-primary hover:bg-surface-alt'
-                }`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.label}
-                {tab.experimental && (
-                  <svg width="10" height="10" viewBox="0 0 16 16" className="text-success opacity-70" fill="none" stroke="currentColor" strokeWidth="1.2">
-                    <path d="M6 1h4v1H9v4l3.5 6.5a1 1 0 0 1-.9 1.5H4.4a1 1 0 0 1-.9-1.5L7 6V2H6V1z" />
-                    <path d="M5.5 10.5L7.5 7h1l2 3.5a1 1 0 0 1-.9 1.5H6.4a1 1 0 0 1-.9-1.5z" fill="currentColor" opacity="0.5" stroke="none" />
-                  </svg>
-                )}
-              </button>
-            ))}
+            <PillToggle
+              options={visibleTabs.map((tab) => ({
+                value: tab.id,
+                label: (
+                  <>
+                    {tab.label}
+                    {tab.experimental && (
+                      <svg width="10" height="10" viewBox="0 0 16 16" className="text-success opacity-70" fill="none" stroke="currentColor" strokeWidth="1.2">
+                        <path d="M6 1h4v1H9v4l3.5 6.5a1 1 0 0 1-.9 1.5H4.4a1 1 0 0 1-.9-1.5L7 6V2H6V1z" />
+                        <path d="M5.5 10.5L7.5 7h1l2 3.5a1 1 0 0 1-.9 1.5H6.4a1 1 0 0 1-.9-1.5z" fill="currentColor" opacity="0.5" stroke="none" />
+                      </svg>
+                    )}
+                  </>
+                ),
+              }))}
+              value={activeTab}
+              onChange={(v) => setActiveTab(v)}
+            />
             {!done && (
               <Spinner size="sm" className="ml-2" />
             )}
