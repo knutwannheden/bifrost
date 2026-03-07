@@ -396,7 +396,7 @@ export default function NotesOverlay() {
                     }`}
                   >
                     <div className="text-xs">{repoDisplayName(repo)}</div>
-                    <div className={`text-[10px] font-mono ${idx === repoFocusedIdx ? 'text-blue-200' : 'text-secondary'}`}>
+                    <div className={`text-[10px] ${idx === repoFocusedIdx ? 'text-white/70' : 'text-secondary'}`}>
                       {shortPath(repo.path)}
                     </div>
                   </div>

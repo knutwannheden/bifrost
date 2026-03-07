@@ -29,7 +29,7 @@ function buildSettings(): SettingDef[] {
           >
             -
           </button>
-          <span className="text-sm text-primary w-6 text-center font-mono">{config.fontSize}</span>
+          <span className="text-sm text-primary w-6 text-center tabular-nums">{config.fontSize}</span>
           <button
             onClick={() => update({ fontSize: Math.min(32, config.fontSize + 1) })}
             className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm"
@@ -77,9 +77,9 @@ function buildSettings(): SettingDef[] {
             step={100}
             value={config.fontWeight}
             onChange={(e) => update({ fontWeight: Number(e.target.value) })}
-            className="w-24 accent-blue-500"
+            className="w-24 accent-accent"
           />
-          <span className="text-sm text-primary w-6 text-center font-mono">{config.fontWeight}</span>
+          <span className="text-sm text-primary w-6 text-center tabular-nums">{config.fontWeight}</span>
         </div>
       ),
     },

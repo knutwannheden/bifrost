@@ -185,7 +185,7 @@ function TaskRow({
       )}
       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
         {task.isExternal ? (
-          <span className="font-mono">{shortPath(task.worktreePath)}</span>
+          <span>{shortPath(task.worktreePath)}</span>
         ) : (
           <>
             <span><Highlight text={repoName(task.repoId)} search={search} /></span>

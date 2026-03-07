@@ -20,7 +20,7 @@ function formatChildren(children: React.ReactNode): React.ReactNode {
 export default function Kbd({ children, size = 'xs' }: { children: React.ReactNode; size?: KbdSize }) {
   const sizeClass = size === 'sm' ? 'px-2 py-0.5 text-xs' : 'px-1 py-0.5 text-[10px]';
   return (
-    <kbd className={`${sizeClass} font-mono bg-surface-alt border border-border-input rounded text-secondary`}>
+    <kbd className={`${sizeClass} bg-surface-alt border border-border-input rounded text-secondary`}>
       {formatChildren(children)}
     </kbd>
   );
