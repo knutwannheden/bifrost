@@ -629,7 +629,7 @@ export default function TaskHistoryPanel() {
                   let flatIdx = 0;
                   return taskGroups.map((group) => (
                     <div key={group.name} className="space-y-2">
-                      <div className="text-xs font-semibold text-secondary uppercase tracking-wide px-1 pt-2 pb-1">
+                      <div className="text-xs font-semibold text-secondary uppercase tracking-wider px-1 pt-2 pb-1">
                         {group.name}
                       </div>
                       {group.tasks.map((task) => {

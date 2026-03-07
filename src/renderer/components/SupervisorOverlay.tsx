@@ -291,7 +291,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
   return (
     <div className="mb-2">
       <div className="flex items-center gap-2 px-3 py-1">
-        <span className="text-xs font-medium text-secondary uppercase tracking-wider">{title}</span>
+        <span className="text-xs font-semibold text-secondary uppercase tracking-wider">{title}</span>
         <span className="text-xs text-faint">{count}</span>
       </div>
       {children}

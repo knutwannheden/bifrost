@@ -215,7 +215,7 @@ export default function KeyboardShortcutsPanel() {
                 return (
                   <div
                     key={`group-${item.label}`}
-                    className={`px-2 pt-3 pb-1 text-xs font-semibold text-muted uppercase tracking-wider ${i === 0 ? 'pt-1' : ''}`}
+                    className={`px-2 pt-3 pb-1 text-xs font-semibold text-secondary uppercase tracking-wider ${i === 0 ? 'pt-1' : ''}`}
                   >
                     {item.label}
                   </div>

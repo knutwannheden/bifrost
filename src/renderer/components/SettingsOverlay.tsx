@@ -476,7 +476,7 @@ export default function SettingsOverlay() {
               if (catSettings.length === 0) return null;
               return (
                 <div key={cat} ref={(el) => { categoryRefs.current[cat] = el; }}>
-                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">
+                  <h3 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-3">
                     {cat}
                   </h3>
                   <div className="space-y-4">
