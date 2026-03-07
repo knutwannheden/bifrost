@@ -420,17 +420,22 @@ export default function App() {
           ref={(el) => el?.focus()}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
+              e.preventDefault();
               e.stopPropagation();
               dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
             }
           }}
         >
-          <div className="bg-surface rounded-lg border border-border-input p-6 w-[400px] shadow-xl">
+          <div
+            className="bg-surface rounded-lg border border-border-input p-6 w-[400px] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-sm font-semibold text-primary mb-3">Uncommitted Changes</h3>
             <p className="text-sm text-secondary mb-5">
               <span className="font-medium text-primary">{state.archiveConfirm.taskName}</span> has uncommitted changes that will be lost when the worktree is removed.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-faint flex-1">Esc cancel</span>
               <button
                 autoFocus
                 onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
