@@ -131,7 +131,7 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
           style={{ left: tooltipPos.x, top: tooltipPos.y }}
         >
           {tooltipLines.map((line, i) => (
-            <div key={i} className={`text-xs ${i === 0 ? 'text-primary font-medium' : 'text-secondary'}`}>{line}</div>
+            <div key={i} className={`text-xs ${i === 0 ? 'text-primary font-semibold' : 'text-secondary'}`}>{line}</div>
           ))}
         </div>,
         document.body,

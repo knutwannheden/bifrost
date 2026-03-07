@@ -3,6 +3,7 @@ import { useApp, getActiveDiffState } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
 import type { SupervisorState } from '../../shared/types';
 import Kbd from './Kbd';
+import FlaskIcon from './FlaskIcon';
 
 function BellIcon() {
   return (
@@ -185,11 +186,8 @@ export default function RightIconBar() {
           onClick={() => dispatch({ type: 'TOGGLE_SUPERVISOR' })}
         >
           <SupervisorIcon />
-          <span className="absolute bottom-0.5 left-1 text-success opacity-70" title="Experimental">
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
-              <path d="M6 1h4v1H9v4l3.5 6.5a1 1 0 0 1-.9 1.5H4.4a1 1 0 0 1-.9-1.5L7 6V2H6V1z" />
-              <path d="M5.5 10.5L7.5 7h1l2 3.5a1 1 0 0 1-.9 1.5H6.4a1 1 0 0 1-.9-1.5z" fill="currentColor" opacity="0.5" stroke="none" />
-            </svg>
+          <span className="absolute bottom-0.5 left-1" title="Experimental">
+            <FlaskIcon />
           </span>
         </IconButton>
       )}

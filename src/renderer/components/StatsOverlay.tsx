@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import type { StatsData, ContextRotEntry, EscalationEntry } from '../../shared/types';
 import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
+import FlaskIcon from './FlaskIcon';
 
 type TabId = 'tool-usage' | 'skill-usage' | 'bash-commands' | 'context-rot' | 'tail-escalation';
 type TimeRange = '24h' | 'week' | 'all';
@@ -273,10 +274,7 @@ export default function StatsOverlay() {
                   <>
                     {tab.label}
                     {tab.experimental && (
-                      <svg width="10" height="10" viewBox="0 0 16 16" className="text-success opacity-70" fill="none" stroke="currentColor" strokeWidth="1.2">
-                        <path d="M6 1h4v1H9v4l3.5 6.5a1 1 0 0 1-.9 1.5H4.4a1 1 0 0 1-.9-1.5L7 6V2H6V1z" />
-                        <path d="M5.5 10.5L7.5 7h1l2 3.5a1 1 0 0 1-.9 1.5H6.4a1 1 0 0 1-.9-1.5z" fill="currentColor" opacity="0.5" stroke="none" />
-                      </svg>
+                      <FlaskIcon />
                     )}
                   </>
                 ),
