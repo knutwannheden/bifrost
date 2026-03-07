@@ -27,8 +27,8 @@ function ReviewScopeToggle({ scope, onChange, stats }: { scope: ReviewScope; onC
           onClick={() => onChange(s)}
           className={`px-2 py-0.5 text-xs rounded inline-flex items-center gap-1.5 ${
             scope === s
-              ? 'bg-slate-600 text-slate-200'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+              ? 'bg-surface-hover text-primary'
+              : 'text-secondary hover:text-primary hover:bg-surface-alt'
           }`}
         >
           <span><ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} /></span>
@@ -51,13 +51,13 @@ function renderMarkdownLine(
 ): React.ReactNode {
   // Headings
   if (line.startsWith('### ')) {
-    return <h3 key={lineIndex} className="text-base font-semibold text-slate-200 mt-4 mb-1">{renderInline(line.slice(4))}</h3>;
+    return <h3 key={lineIndex} className="text-base font-semibold text-primary mt-4 mb-1">{renderInline(line.slice(4))}</h3>;
   }
   if (line.startsWith('## ')) {
-    return <h2 key={lineIndex} className="text-lg font-semibold text-slate-200 mt-5 mb-2">{renderInline(line.slice(3))}</h2>;
+    return <h2 key={lineIndex} className="text-lg font-semibold text-primary mt-5 mb-2">{renderInline(line.slice(3))}</h2>;
   }
   if (line.startsWith('# ')) {
-    return <h1 key={lineIndex} className="text-xl font-bold text-slate-100 mt-5 mb-2">{renderInline(line.slice(2))}</h1>;
+    return <h1 key={lineIndex} className="text-xl font-bold text-primary mt-5 mb-2">{renderInline(line.slice(2))}</h1>;
   }
 
   // Checkbox lines: - [ ] or - [x]
@@ -68,7 +68,7 @@ function renderMarkdownLine(
     return (
       <label
         key={lineIndex}
-        className="flex items-start gap-2 py-0.5 cursor-pointer hover:bg-slate-700/30 rounded px-1 -mx-1"
+        className="flex items-start gap-2 py-0.5 cursor-pointer hover:bg-surface-alt/30 rounded px-1 -mx-1"
         style={{ paddingLeft: indent * 4 }}
       >
         <input
@@ -77,7 +77,7 @@ function renderMarkdownLine(
           onChange={() => onToggle(lineIndex)}
           className="mt-1 accent-accent flex-shrink-0"
         />
-        <span className="text-base text-slate-300">{renderInline(checkboxMatch[3])}</span>
+        <span className="text-base text-primary">{renderInline(checkboxMatch[3])}</span>
       </label>
     );
   }
@@ -88,8 +88,8 @@ function renderMarkdownLine(
     const indent = bulletMatch[1].length;
     return (
       <div key={lineIndex} className="flex items-start gap-2 py-0.5" style={{ paddingLeft: indent * 4 }}>
-        <span className="text-slate-500 flex-shrink-0 mt-0.5">-</span>
-        <span className="text-base text-slate-300">{renderInline(bulletMatch[2])}</span>
+        <span className="text-muted flex-shrink-0 mt-0.5">-</span>
+        <span className="text-base text-primary">{renderInline(bulletMatch[2])}</span>
       </div>
     );
   }
@@ -100,7 +100,7 @@ function renderMarkdownLine(
   }
 
   // Paragraphs
-  return <p key={lineIndex} className="text-base text-slate-300 py-0.5">{renderInline(line)}</p>;
+  return <p key={lineIndex} className="text-base text-primary py-0.5">{renderInline(line)}</p>;
 }
 
 /** Render inline formatting: **bold**, `code` */
@@ -128,7 +128,7 @@ function renderInline(text: string): React.ReactNode {
       const endBold = remaining.indexOf('**', boldIdx + 2);
       if (endBold >= 0) {
         if (boldIdx > 0) parts.push(remaining.slice(0, boldIdx));
-        parts.push(<strong key={key++} className="text-slate-100 font-semibold">{renderInline(remaining.slice(boldIdx + 2, endBold))}</strong>);
+        parts.push(<strong key={key++} className="text-primary font-semibold">{renderInline(remaining.slice(boldIdx + 2, endBold))}</strong>);
         remaining = remaining.slice(endBold + 2);
         continue;
       }
@@ -139,7 +139,7 @@ function renderInline(text: string): React.ReactNode {
       const endCode = remaining.indexOf('`', codeIdx + 1);
       if (endCode >= 0) {
         if (codeIdx > 0) parts.push(remaining.slice(0, codeIdx));
-        parts.push(<code key={key++} className="px-1 py-0.5 bg-slate-700 rounded text-sm text-amber-300 font-mono">{remaining.slice(codeIdx + 1, endCode)}</code>);
+        parts.push(<code key={key++} className="px-1 py-0.5 bg-surface-alt rounded text-sm text-amber-300 font-mono">{remaining.slice(codeIdx + 1, endCode)}</code>);
         remaining = remaining.slice(endCode + 1);
         continue;
       }
@@ -430,17 +430,17 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <Spinner />
-          <span className="text-sm text-slate-400">Running review... <span className="text-slate-500">{formatElapsed(elapsed)}</span></span>
+          <span className="text-sm text-secondary">Running review... <span className="text-muted">{formatElapsed(elapsed)}</span></span>
           {reviewActivity && (
-            <span className="text-xs text-slate-500 max-w-md truncate" title={reviewActivity}>{reviewActivity}</span>
+            <span className="text-xs text-muted max-w-md truncate" title={reviewActivity}>{reviewActivity}</span>
           )}
           <button
             onClick={handleCancelReview}
-            className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+            className="px-3 py-1.5 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded transition-colors"
           >
             Cancel
           </button>
-          <span className="text-xs text-slate-600">
+          <span className="text-xs text-faint">
             <Kbd>Alt+C</Kbd>
             {' '}to cancel
           </span>
@@ -452,11 +452,11 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
           <div className="flex flex-col gap-2 w-full max-w-md">
-            <div className="text-xs text-slate-400 font-medium">Scope:</div>
+            <div className="text-xs text-secondary font-medium">Scope:</div>
             <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
           </div>
           <div className="flex flex-col gap-2 w-full max-w-md">
-            <div className="text-xs text-slate-400 font-medium">Instructions (optional):</div>
+            <div className="text-xs text-secondary font-medium">Instructions (optional):</div>
             <textarea
               value={reviewInstructions}
               onChange={(e) => setReviewInstructions(e.target.value)}
@@ -467,7 +467,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
                 }
               }}
               placeholder="Focus on error handling, security..."
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-slate-200 placeholder-slate-500 resize-none focus:outline-none focus:border-blue-500"
+              className="w-full px-3 py-2 bg-surface border border-border-input rounded-lg text-sm text-primary placeholder-muted resize-none focus:outline-none focus:border-accent"
               rows={2}
             />
           </div>
@@ -476,19 +476,19 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
             disabled={!canRunReview}
             className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${
               canRunReview
-                ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                ? 'bg-accent hover:bg-accent-hover text-white'
+                : 'bg-surface text-faint cursor-not-allowed'
             }`}
           >
             Run Review
           </button>
           {canRunReview ? (
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted">
               <Kbd>Enter</Kbd>
               {' '}to run
             </span>
           ) : (
-            <span className="text-xs text-slate-500">No changes to review for this scope.</span>
+            <span className="text-xs text-muted">No changes to review for this scope.</span>
           )}
         </div>
       </div>
@@ -499,22 +499,22 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   if (status === 'running') {
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 flex-shrink-0 text-slate-400">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-default flex-shrink-0 text-secondary">
           <Spinner />
-          <span className="text-sm">Running review... <span className="text-slate-500">{formatElapsed(elapsed)}</span></span>
+          <span className="text-sm">Running review... <span className="text-muted">{formatElapsed(elapsed)}</span></span>
           {activeEntry && (
             <span className={`px-1.5 py-0.5 text-[10px] rounded ${
-              activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-blue-900/40 text-blue-400'
+              activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-accent/10 text-accent-hover'
             }`}>
               {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
             </span>
           )}
           {reviewActivity && !content && (
-            <span className="text-xs text-slate-500 truncate max-w-xs" title={reviewActivity}>{reviewActivity}</span>
+            <span className="text-xs text-muted truncate max-w-xs" title={reviewActivity}>{reviewActivity}</span>
           )}
           <button
             onClick={handleCancelReview}
-            className="ml-auto px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors flex-shrink-0"
+            className="ml-auto px-2 py-1 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded transition-colors flex-shrink-0"
           >
             Cancel
           </button>
@@ -542,9 +542,9 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     <div className="flex-1 flex flex-col min-h-0">
       {/* Metadata bar */}
       {activeEntry && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-slate-700 flex-shrink-0 text-xs text-slate-500">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-default flex-shrink-0 text-xs text-muted">
           <span className={`px-1.5 py-0.5 rounded ${
-            activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-blue-900/40 text-blue-400'
+            activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-accent/10 text-accent-hover'
           }`}>
             {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
           </span>
@@ -561,14 +561,14 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
         <div className="flex-1 overflow-auto p-4">
           {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
         </div>
-        <div className="flex items-center gap-3 px-4 py-3 border-t border-slate-700 flex-shrink-0">
+        <div className="flex items-center gap-3 px-4 py-3 border-t border-border-default flex-shrink-0">
           <button
             onClick={handleCopyPrompt}
             disabled={!hasChecked}
             className={`px-3 py-1.5 rounded text-xs transition-colors ${
               hasChecked
-                ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                : 'bg-slate-800 text-slate-600 cursor-not-allowed'
+                ? 'bg-accent hover:bg-accent-hover text-white'
+                : 'bg-surface text-faint cursor-not-allowed'
             }`}
           >
             Copy Prompt
@@ -576,15 +576,15 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
           {hasReviewSession && !showDiscussion && (
             <button
               onClick={handleDiscuss}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs transition-colors"
+              className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white rounded text-xs transition-colors"
             >
               Discuss
             </button>
           )}
           {hasChecked && (
-            <span className="text-xs text-slate-500">{checkedLines.size} item{checkedLines.size !== 1 ? 's' : ''} selected</span>
+            <span className="text-xs text-muted">{checkedLines.size} item{checkedLines.size !== 1 ? 's' : ''} selected</span>
           )}
-          <span className="ml-auto text-xs text-slate-500">
+          <span className="ml-auto text-xs text-muted">
             {hasReviewSession && !showDiscussion && (
               <>
                 <Kbd>Enter</Kbd>
@@ -612,14 +612,14 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
               focused={showDiscussion}
             />
           </div>
-          <div className="flex items-center gap-3 px-4 py-2 border-t border-slate-700 flex-shrink-0">
+          <div className="flex items-center gap-3 px-4 py-2 border-t border-border-default flex-shrink-0">
             <button
               onClick={handleCloseDiscussion}
-              className="px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-slate-700 rounded transition-colors"
+              className="px-3 py-1.5 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded transition-colors"
             >
               Close Discussion
             </button>
-            <span className="text-xs text-slate-600">
+            <span className="text-xs text-faint">
               <Kbd>Esc</Kbd>
               {' '}back to review
             </span>
