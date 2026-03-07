@@ -3,6 +3,7 @@ import { useApp, getActiveDiffState } from '../context/AppContext';
 import type { DiffMode } from '../context/AppContext';
 import type { SupervisorState } from '../../shared/types';
 import { modSymbol, altSymbol } from '../utils/platform';
+import Kbd from './Kbd';
 
 function BellIcon() {
   return (
@@ -100,7 +101,7 @@ function IconButton({ active, badge, label, shortcut, onClick, children, ...rest
       )}
       <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900 border border-slate-700 shadow-lg whitespace-nowrap z-50">
         <span className="text-xs text-slate-200">{label}</span>
-        {shortcut && <kbd className="text-[10px] text-slate-400 bg-slate-800 px-1 py-0.5 rounded border border-slate-600">{shortcut}</kbd>}
+        {shortcut && <Kbd>{shortcut}</Kbd>}
       </span>
     </button>
   );

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useApp, defaultPaneState } from '../context/AppContext';
 import type { PaneTarget } from '../context/AppContext';
 import TerminalPane from './TerminalPane';
+import Kbd from './Kbd';
 import { modSymbol, shiftSymbol, altSymbol } from '../utils/platform';
 
 const shortcuts = [
@@ -161,9 +162,7 @@ export default function TaskView() {
           <div className="inline-grid grid-cols-[auto_auto] gap-x-4 gap-y-1.5 text-left">
             {shortcuts.map((s) => (
               <React.Fragment key={s.keys}>
-                <kbd className="px-1.5 py-0.5 bg-slate-700 rounded text-slate-300 text-xs text-center">
-                  {s.keys}
-                </kbd>
+                <Kbd size="sm">{s.keys}</Kbd>
                 <span className="text-xs text-slate-400">{s.label}</span>
               </React.Fragment>
             ))}

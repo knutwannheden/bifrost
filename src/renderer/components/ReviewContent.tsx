@@ -5,6 +5,7 @@ import type { DiffStats, ReviewEntry } from '../../shared/types';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import TerminalPane from './TerminalPane';
+import Kbd from './Kbd';
 import { isModKey, modSymbol } from '../utils/platform';
 
 type ReviewScope = 'working' | 'all';
@@ -445,7 +446,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
             Cancel
           </button>
           <span className="text-xs text-slate-600">
-            <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-500 font-mono">Alt+C</kbd>
+            <Kbd>Alt+C</Kbd>
             {' '}to cancel
           </span>
         </div>
@@ -488,7 +489,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
           </button>
           {canRunReview ? (
             <span className="text-xs text-slate-500">
-              <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
+              <Kbd>Enter</Kbd>
               {' '}to run
             </span>
           ) : (
@@ -591,14 +592,14 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
           <span className="ml-auto text-xs text-slate-500">
             {hasReviewSession && !showDiscussion && (
               <>
-                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">Enter</kbd>
+                <Kbd>Enter</Kbd>
                 {' '}discuss
               </>
             )}
             {hasChecked && (
               <>
                 {hasReviewSession && ' · '}
-                <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-400 font-mono">{modSymbol}Enter</kbd>
+                <Kbd>{modSymbol}Enter</Kbd>
                 {' '}copy prompt
               </>
             )}
@@ -624,7 +625,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
               Close Discussion
             </button>
             <span className="text-xs text-slate-600">
-              <kbd className="px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-slate-500 font-mono">Esc</kbd>
+              <Kbd>Esc</Kbd>
               {' '}back to review
             </span>
           </div>
