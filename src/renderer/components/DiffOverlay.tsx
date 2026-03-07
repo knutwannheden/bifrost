@@ -790,7 +790,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
     return (
       <div className="flex-1 flex flex-col">
         <ScopeToggle scope={scope} onChange={onSetScope} />
-        <div className="text-slate-500 p-4">No matching files</div>
+        <div className="text-sm text-slate-500 text-center py-4">No matching files</div>
       </div>
     );
   }
@@ -1233,7 +1233,7 @@ export default function DiffOverlay() {
           )}
 
           {!gitLog.loading && !gitLog.error && filteredLogEntries.length === 0 && (
-            <div className="text-slate-500">
+            <div className="text-sm text-slate-500 text-center py-4">
               {search ? 'No matching commits' : 'No commits'}
             </div>
           )}
@@ -1269,7 +1269,7 @@ export default function DiffOverlay() {
             )}
 
             {!activityLog.loading && !activityLog.error && filteredEntries.length === 0 && (
-              <div className="text-slate-500">
+              <div className="text-sm text-slate-500 text-center py-4">
                 {search ? 'No matching entries' : 'No activity recorded yet'}
               </div>
             )}

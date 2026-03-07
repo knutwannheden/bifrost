@@ -300,10 +300,10 @@ export default function RepoManager() {
           {/* Repo list */}
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {state.repos.length === 0 && !search && (
-              <p className="text-sm text-slate-500">No repositories added yet.</p>
+              <p className="text-sm text-slate-500 text-center py-4">No repositories added yet.</p>
             )}
             {filteredRepos.length === 0 && search && (
-              <p className="text-sm text-slate-500 text-center py-2">No matching repositories.</p>
+              <p className="text-sm text-slate-500 text-center py-4">No matching repositories.</p>
             )}
             {filteredRepos.map((repo, idx) => {
               const isFocused = focusedSection === 'repos' && idx === focusedRepoIdx;

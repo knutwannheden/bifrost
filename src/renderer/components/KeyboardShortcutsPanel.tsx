@@ -200,7 +200,7 @@ export default function KeyboardShortcutsPanel() {
         </div>
         <div ref={listRef} className="p-2 overflow-y-auto">
           {items.length === 0 ? (
-            <div className="px-2 py-3 text-sm text-slate-500 text-center">No matches</div>
+            <div className="text-sm text-slate-500 text-center py-4">No matches</div>
           ) : (
             items.map((item, i) => {
               if (item.type === 'header') {
