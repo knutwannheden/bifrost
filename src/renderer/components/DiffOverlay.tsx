@@ -68,7 +68,7 @@ const lineNumWidth = 'w-12';
 
 function LineNumber({ num }: { num: number | null }) {
   return (
-    <span className={`${lineNumWidth} inline-block text-right pr-2 select-none text-slate-600 text-xs leading-5 flex-shrink-0`}>
+    <span className={`${lineNumWidth} inline-block text-right pr-2 select-none text-faint text-xs leading-5 flex-shrink-0`}>
       {num ?? ''}
     </span>
   );
@@ -77,7 +77,7 @@ function LineNumber({ num }: { num: number | null }) {
 const lineStyles: Record<DiffLine['type'], { bg: string; signColor: string; sign: string }> = {
   add: { bg: 'bg-[#1a3a1a]', signColor: 'text-green-500', sign: '+' },
   remove: { bg: 'bg-[#3a1a1a]', signColor: 'text-red-500', sign: '-' },
-  context: { bg: '', signColor: 'text-slate-600', sign: ' ' },
+  context: { bg: '', signColor: 'text-faint', sign: ' ' },
 };
 
 function DiffLineRow({
@@ -113,19 +113,19 @@ function FileSection({ data }: { data: HighlightedFile }) {
 
   return (
     <div className="mb-6">
-      <div className="sticky top-0 z-10 bg-slate-800 border border-slate-600 rounded-t px-3 py-1.5 text-xs font-semibold text-slate-300">
+      <div className="sticky top-0 z-10 bg-surface border border-border-input rounded-t px-3 py-1.5 text-xs font-semibold text-primary">
         {file.newPath || file.oldPath}
       </div>
       {file.binary ? (
-        <div className="border border-t-0 border-slate-700 rounded-b px-3 py-2 text-xs text-slate-500 italic">
+        <div className="border border-t-0 border-border-default rounded-b px-3 py-2 text-xs text-muted italic">
           Binary file not shown
         </div>
       ) : (
-        <div className="border border-t-0 border-slate-700 rounded-b overflow-x-auto font-mono">
+        <div className="border border-t-0 border-border-default rounded-b overflow-x-auto font-mono">
           {file.hunks.map((hunk, hi) => (
             <React.Fragment key={hi}>
               {hi > 0 && (
-                <div className="border-t border-slate-700/50 bg-slate-800/50 px-3 py-0.5 text-xs text-blue-400">
+                <div className="border-t border-border-default/50 bg-surface/50 px-3 py-0.5 text-xs text-accent-hover">
                   {hunk.header}
                 </div>
               )}
@@ -183,10 +183,10 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
 
     return (
       <div ref={(el) => { observerRef.current = el; sectionRef?.(el); }} className="mb-6">
-        <div className="sticky top-0 z-10 bg-slate-800 border border-slate-600 rounded-t px-3 py-1.5 text-xs font-semibold text-slate-300">
+        <div className="sticky top-0 z-10 bg-surface border border-border-input rounded-t px-3 py-1.5 text-xs font-semibold text-primary">
           {file.newPath || file.oldPath}
         </div>
-        <div className="border border-t-0 border-slate-700 rounded-b" style={{ height: estimatedHeight }} />
+        <div className="border border-t-0 border-border-default rounded-b" style={{ height: estimatedHeight }} />
       </div>
     );
   }
@@ -206,7 +206,7 @@ function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
     user_message: { label: 'User', color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-700/40' },
     assistant_text: { label: 'Claude', color: 'text-purple-400', bg: 'bg-purple-900/20', border: 'border-purple-700/40' },
     tool_use: { label: '', color: 'text-amber-400', bg: 'bg-amber-900/15', border: 'border-amber-700/30' },
-    tool_result: { label: 'Result', color: 'text-slate-400', bg: 'bg-slate-800/50', border: 'border-slate-700/30' },
+    tool_result: { label: 'Result', color: 'text-secondary', bg: 'bg-surface/50', border: 'border-border-default/30' },
   };
 
   const config = kindConfig[entry.claudeEventKind ?? ''] ?? kindConfig.assistant_text;
@@ -214,10 +214,10 @@ function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
   if (entry.claudeEventKind === 'tool_use') {
     return (
       <div className={`flex items-start gap-2 px-3 py-1.5 ${config.bg} border ${config.border} rounded text-xs`}>
-        <span className="text-slate-500 flex-shrink-0">{formatTimestamp(entry.timestamp)}</span>
+        <span className="text-muted flex-shrink-0">{formatTimestamp(entry.timestamp)}</span>
         <span className={`${config.color} font-semibold flex-shrink-0`}>{entry.claudeToolName}</span>
         {entry.claudeText && (
-          <span className="text-slate-400 font-mono truncate">{entry.claudeText}</span>
+          <span className="text-secondary font-mono truncate">{entry.claudeText}</span>
         )}
       </div>
     );
@@ -226,10 +226,10 @@ function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
   return (
     <div className={`px-3 py-2 ${config.bg} border ${config.border} rounded text-xs`}>
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
+        <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
         <span className={`${config.color} font-semibold`}>{config.label}</span>
       </div>
-      <p className="text-slate-300 whitespace-pre-wrap">{entry.claudeText}</p>
+      <p className="text-primary whitespace-pre-wrap">{entry.claudeText}</p>
     </div>
   );
 }
@@ -243,11 +243,11 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
 
   if (entry.type === 'commit') {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-blue-900/30 border border-blue-700/50 rounded text-xs">
-        <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
-        <span className="text-blue-400 font-semibold">Commit</span>
-        <span className="text-slate-400 font-mono">{entry.commitSha?.slice(0, 8)}</span>
-        <span className="text-slate-300">{entry.commitMessage}</span>
+      <div className="flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent-muted rounded text-xs">
+        <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
+        <span className="text-accent-hover font-semibold">Commit</span>
+        <span className="text-secondary font-mono">{entry.commitSha?.slice(0, 8)}</span>
+        <span className="text-primary">{entry.commitMessage}</span>
       </div>
     );
   }
@@ -255,14 +255,14 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
   return (
     <div>
       <div className="flex items-center gap-2 mb-1 text-xs">
-        <span className="text-slate-500">{formatTimestamp(entry.timestamp)}</span>
-        <span className="text-slate-300 font-mono">{entry.filePath}</span>
+        <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
+        <span className="text-primary font-mono">{entry.filePath}</span>
       </div>
       {highlighted && highlighted.map((data, i) => (
         <FileSection key={i} data={data} />
       ))}
       {!highlighted && entry.diff && (
-        <pre className="text-xs text-slate-400 font-mono overflow-x-auto p-2 bg-slate-800/50 rounded border border-slate-700">
+        <pre className="text-xs text-secondary font-mono overflow-x-auto p-2 bg-surface/50 rounded border border-border-default">
           {entry.diff}
         </pre>
       )}
@@ -287,8 +287,8 @@ function ModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (m: DiffMode
           onClick={() => onChange(m)}
           className={`px-3 py-1 text-xs rounded ${
             mode === m
-              ? 'bg-slate-600 text-slate-200'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+              ? 'bg-surface-hover text-primary'
+              : 'text-secondary hover:text-primary hover:bg-surface-alt'
           }`}
         >
           <ActionLabel text={modeLabels[m].text} hintIndex={modeLabels[m].hintIndex} showHint={true} />
@@ -323,7 +323,7 @@ const statusConfig: Record<DiffFileStatus, { letter: string; color: string }> = 
   added: { letter: 'A', color: 'text-green-400' },
   modified: { letter: 'M', color: 'text-yellow-400' },
   deleted: { letter: 'D', color: 'text-red-400' },
-  renamed: { letter: 'R', color: 'text-blue-400' },
+  renamed: { letter: 'R', color: 'text-accent-hover' },
 };
 
 type GitFileStage = 'unstaged' | 'staged' | 'committed' | 'untracked';
@@ -331,8 +331,8 @@ type GitFileStage = 'unstaged' | 'staged' | 'committed' | 'untracked';
 const stageIndicator: Record<GitFileStage, { label: string; color: string; title: string }> = {
   staged: { label: 'S', color: 'text-green-400', title: 'Staged' },
   unstaged: { label: 'U', color: 'text-yellow-400', title: 'Unstaged' },
-  committed: { label: 'C', color: 'text-blue-400', title: 'Committed' },
-  untracked: { label: '?', color: 'text-slate-500', title: 'Untracked' },
+  committed: { label: 'C', color: 'text-accent-hover', title: 'Committed' },
+  untracked: { label: '?', color: 'text-muted', title: 'Untracked' },
 };
 
 interface FileTreeNode {
@@ -452,14 +452,14 @@ function FileTreeItem({
     <>
       {/* Directory row */}
       <div
-        className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-slate-800 text-xs"
+        className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-surface text-xs"
         style={{ paddingLeft: depth * 16 + 8 }}
         onClick={() => onToggle(node.path)}
       >
-        <span className="text-slate-500 w-3 text-center flex-shrink-0">
+        <span className="text-muted w-3 text-center flex-shrink-0">
           {isCollapsed ? '▸' : '▾'}
         </span>
-        <span className="text-slate-400 truncate">{node.label}</span>
+        <span className="text-secondary truncate">{node.label}</span>
         <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
       </div>
       {/* Children (dirs then files) when expanded */}
@@ -493,8 +493,8 @@ function FileTreeItem({
                 onClick={() => onSelectFile(flatIndex)}
                 className={`flex items-center gap-2 py-1 cursor-pointer text-xs ${
                   isSelected
-                    ? 'bg-slate-700/50 border-l-2 border-blue-400'
-                    : 'border-l-2 border-transparent hover:bg-slate-800'
+                    ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
+                    : 'border-l-2 border-transparent hover:bg-surface'
                 }`}
                 style={{ paddingLeft: (depth + 1) * 16 + 8 }}
               >
@@ -507,9 +507,9 @@ function FileTreeItem({
                     ) : null;
                   })}
                 </span>
-                <span className="text-slate-200 truncate">{basename}</span>
+                <span className="text-primary truncate">{basename}</span>
                 {file.binary
-                  ? <span className="text-xs text-slate-600 italic flex-shrink-0 ml-auto">binary</span>
+                  ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
                   : <DiffStatsBadge additions={fileStat.additions} deletions={fileStat.deletions} className="flex-shrink-0 ml-auto" />
                 }
               </div>
@@ -579,8 +579,8 @@ function FileListSidebar({
   const hasTree = tree.children.length > 0;
 
   return (
-    <div className="w-72 flex-shrink-0 border-r border-slate-700 overflow-y-auto">
-      <div className="px-3 py-2 border-b border-slate-700 text-xs text-slate-400 flex items-center gap-2">
+    <div className="w-72 flex-shrink-0 border-r border-border-default overflow-y-auto">
+      <div className="px-3 py-2 border-b border-border-default text-xs text-secondary flex items-center gap-2">
         <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
         <DiffStatsBadge additions={totalStats.additions} deletions={totalStats.deletions} />
       </div>
@@ -616,8 +616,8 @@ function FileListSidebar({
                 onClick={() => onSelectFile(flatIndex)}
                 className={`flex items-center gap-2 px-3 py-1 cursor-pointer text-xs ${
                   isSelected
-                    ? 'bg-slate-700/50 border-l-2 border-blue-400'
-                    : 'border-l-2 border-transparent hover:bg-slate-800'
+                    ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
+                    : 'border-l-2 border-transparent hover:bg-surface'
                 }`}
               >
                 <span className="flex gap-0.5 flex-shrink-0">
@@ -629,9 +629,9 @@ function FileListSidebar({
                     ) : null;
                   })}
                 </span>
-                <span className="text-slate-200 truncate">{basename}</span>
+                <span className="text-primary truncate">{basename}</span>
                 {file.binary
-                  ? <span className="text-xs text-slate-600 italic flex-shrink-0 ml-auto">binary</span>
+                  ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
                   : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
                 }
               </div>
@@ -654,8 +654,8 @@ function FileListSidebar({
               onClick={() => onSelectFile(flatIndex)}
               className={`flex items-center gap-2 px-3 py-1 cursor-pointer text-xs ${
                 isSelected
-                  ? 'bg-slate-700/50 border-l-2 border-blue-400'
-                  : 'border-l-2 border-transparent hover:bg-slate-800'
+                  ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
+                  : 'border-l-2 border-transparent hover:bg-surface'
               }`}
             >
               <span className="flex gap-0.5 flex-shrink-0">
@@ -667,9 +667,9 @@ function FileListSidebar({
                   ) : null;
                 })}
               </span>
-              <span className="text-slate-200 truncate">{path}</span>
+              <span className="text-primary truncate">{path}</span>
               {file.binary
-                ? <span className="text-xs text-slate-600 italic flex-shrink-0 ml-auto">binary</span>
+                ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
                 : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
               }
             </div>
@@ -689,7 +689,7 @@ const scopeLabels: Record<DiffScope, { text: string; hintIndex: number }> = {
 
 function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: DiffScope) => void }) {
   return (
-    <div className="flex gap-1 px-3 py-2 border-b border-slate-700 flex-shrink-0">
+    <div className="flex gap-1 px-3 py-2 border-b border-border-default flex-shrink-0">
       {(['working', 'all'] as const).map((s) => (
         <button
           key={s}
@@ -697,8 +697,8 @@ function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: Diff
           onClick={() => onChange(s)}
           className={`px-2 py-0.5 text-xs rounded ${
             scope === s
-              ? 'bg-slate-600 text-slate-200'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+              ? 'bg-surface-hover text-primary'
+              : 'text-secondary hover:text-primary hover:bg-surface-alt'
           }`}
         >
           <ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} />
@@ -754,7 +754,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
     return (
       <div className="flex-1 flex flex-col">
         <ScopeToggle scope={scope} onChange={onSetScope} />
-        <div className="flex items-center gap-2 text-slate-400 p-4">
+        <div className="flex items-center gap-2 text-secondary p-4">
           <Spinner />
           <span>Loading diff...</span>
         </div>
@@ -775,7 +775,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
     return (
       <div className="flex-1 flex flex-col">
         <ScopeToggle scope={scope} onChange={onSetScope} />
-        <div className="text-slate-500 p-4">No changes</div>
+        <div className="text-muted p-4">No changes</div>
       </div>
     );
   }
@@ -784,7 +784,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
     return (
       <div className="flex-1 flex flex-col">
         <ScopeToggle scope={scope} onChange={onSetScope} />
-        <div className="text-sm text-slate-500 text-center py-4">No matching files</div>
+        <div className="text-sm text-muted text-center py-4">No matching files</div>
       </div>
     );
   }
@@ -822,14 +822,14 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
 function GitLogEntryView({ entry, focused }: { entry: GitLogEntry; focused: boolean }) {
   return (
     <div
-      className={`flex items-start gap-3 px-3 py-2 bg-slate-800/40 border border-slate-700/50 rounded text-xs ${
-        focused ? 'ring-1 ring-blue-500/40 bg-blue-900/10' : ''
+      className={`flex items-start gap-3 px-3 py-2 bg-surface/40 border border-border-default/50 rounded text-xs ${
+        focused ? 'ring-1 ring-accent-muted bg-accent/10' : ''
       }`}
     >
       <span className="text-yellow-400 font-mono flex-shrink-0">{entry.shortSha}</span>
-      <span className="text-slate-200 flex-1 min-w-0 break-words">{entry.subject}</span>
-      <span className="text-slate-500 flex-shrink-0">{entry.author}</span>
-      <span className="text-slate-600 flex-shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
+      <span className="text-primary flex-1 min-w-0 break-words">{entry.subject}</span>
+      <span className="text-muted flex-shrink-0">{entry.author}</span>
+      <span className="text-faint flex-shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
     </div>
   );
 }
@@ -1155,7 +1155,7 @@ export default function DiffOverlay() {
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
-      <div className="flex items-center justify-between h-10 px-4 border-b border-slate-700 flex-shrink-0">
+      <div className="flex items-center justify-between h-10 px-4 border-b border-border-default flex-shrink-0">
         <div className="flex items-center gap-4">
           <ModeToggle
             mode={diffMode}
@@ -1163,12 +1163,12 @@ export default function DiffOverlay() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-600">
+          <span className="text-xs text-faint">
             &uarr;&darr; navigate &middot; Tab/&#8679;Tab cycle
           </span>
           <button
             tabIndex={-1}
-            className="text-slate-400 hover:text-slate-200 text-lg"
+            className="text-secondary hover:text-primary text-lg"
             onClick={() => dispatch({ type: 'TOGGLE_DIFF' })}
           >
             &times;
@@ -1203,7 +1203,7 @@ export default function DiffOverlay() {
       {state.activeTaskId && isLog && (
         <div className="flex-1 overflow-auto p-4">
           {gitLog.loading && (
-            <div className="flex items-center gap-2 text-slate-400">
+            <div className="flex items-center gap-2 text-secondary">
               <Spinner />
               <span>Loading git log...</span>
             </div>
@@ -1214,7 +1214,7 @@ export default function DiffOverlay() {
           )}
 
           {!gitLog.loading && !gitLog.error && filteredLogEntries.length === 0 && (
-            <div className="text-sm text-slate-500 text-center py-4">
+            <div className="text-sm text-muted text-center py-4">
               {search ? 'No matching commits' : 'No commits'}
             </div>
           )}
@@ -1239,7 +1239,7 @@ export default function DiffOverlay() {
         {state.activeTaskId && isActivity && (
           <>
             {activityLog.loading && (
-              <div className="flex items-center gap-2 text-slate-400">
+              <div className="flex items-center gap-2 text-secondary">
                 <Spinner />
                 <span>Loading activity log...</span>
               </div>
@@ -1250,7 +1250,7 @@ export default function DiffOverlay() {
             )}
 
             {!activityLog.loading && !activityLog.error && filteredEntries.length === 0 && (
-              <div className="text-sm text-slate-500 text-center py-4">
+              <div className="text-sm text-muted text-center py-4">
                 {search ? 'No matching entries' : 'No activity recorded yet'}
               </div>
             )}
@@ -1264,7 +1264,7 @@ export default function DiffOverlay() {
                     onMouseEnter={() => setFocusedIdx(idx)}
                     className={`rounded transition-colors ${
                       idx === focusedIdx
-                        ? 'ring-1 ring-blue-500/40 bg-blue-900/10'
+                        ? 'ring-1 ring-accent-muted bg-accent/10'
                         : ''
                     }`}
                   >
@@ -1281,7 +1281,7 @@ export default function DiffOverlay() {
       )}
 
       {!state.activeTaskId && (
-        <div className="flex-1 p-4 text-slate-500">No active task</div>
+        <div className="flex-1 p-4 text-muted">No active task</div>
       )}
     </div>
   );
