@@ -99,7 +99,7 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
 
   return (
     <div
-      className="absolute top-1 right-4 z-10 flex items-center gap-1 rounded bg-slate-800 border border-slate-600 px-2 py-1 shadow-lg"
+      className="absolute top-1 right-4 z-10 flex items-center gap-1 rounded bg-surface border border-border-input px-2 py-1 shadow-lg"
       onMouseDown={(e) => e.stopPropagation()}
     >
       <input
@@ -109,29 +109,29 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="Find…"
-        className="bg-transparent text-sm text-slate-200 placeholder-slate-500 outline-none w-40"
+        className="bg-transparent text-sm text-primary placeholder-muted outline-none w-40"
       />
       {matchLabel && (
-        <span className="text-xs text-slate-400 whitespace-nowrap mr-1">{matchLabel}</span>
+        <span className="text-xs text-secondary whitespace-nowrap mr-1">{matchLabel}</span>
       )}
       <button
         onClick={findPrevious}
         title="Previous match (Shift+Enter)"
-        className="text-slate-400 hover:text-slate-200 text-sm px-1"
+        className="text-secondary hover:text-primary text-sm px-1"
       >
         &#x25B2;
       </button>
       <button
         onClick={findNext}
         title="Next match (Enter)"
-        className="text-slate-400 hover:text-slate-200 text-sm px-1"
+        className="text-secondary hover:text-primary text-sm px-1"
       >
         &#x25BC;
       </button>
       <button
         onClick={onClose}
         title="Close (Escape)"
-        className="text-slate-400 hover:text-slate-200 text-lg leading-none px-1"
+        className="text-secondary hover:text-primary text-lg leading-none px-1"
       >
         &times;
       </button>
