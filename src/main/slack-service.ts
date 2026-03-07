@@ -12,23 +12,23 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 const SLACK_STATE_PATH = path.join(os.homedir(), '.bifrost', 'slack.json');
 
 interface SlackState {
-  lastProcessedTimestamp: number;
-  processedReactions: string[]; // "channelId:messageTs"
+  seenReactions: string[]; // "channelId:messageTs:emoji"
 }
 
 function loadSlackState(): SlackState {
   try {
     const data = fs.readFileSync(SLACK_STATE_PATH, 'utf-8');
-    return JSON.parse(data) as SlackState;
+    const parsed = JSON.parse(data);
+    return { seenReactions: Array.isArray(parsed.seenReactions) ? parsed.seenReactions : [] };
   } catch {
-    return { lastProcessedTimestamp: 0, processedReactions: [] };
+    return { seenReactions: [] };
   }
 }
 
 function saveSlackState(state: SlackState): void {
-  // Cap processedReactions at 500 entries (keep most recent)
-  if (state.processedReactions.length > 500) {
-    state.processedReactions = state.processedReactions.slice(-500);
+  // Cap at 500 entries (keep most recent)
+  if (state.seenReactions.length > 500) {
+    state.seenReactions = state.seenReactions.slice(-500);
   }
   const dir = path.dirname(SLACK_STATE_PATH);
   if (!fs.existsSync(dir)) {
@@ -39,8 +39,15 @@ function saveSlackState(state: SlackState): void {
 
 // --- Slack API helpers ---
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function slackGet(endpoint: string, token: string, params: Record<string, string> = {}): Promise<any> {
+interface SlackResponse {
+  ok: boolean;
+  error?: string;
+  retryAfter?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
+}
+
+function slackGet(endpoint: string, token: string, params: Record<string, string> = {}): Promise<SlackResponse> {
   return new Promise((resolve, reject) => {
     const url = new URL(`https://slack.com/api/${endpoint}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -51,7 +58,13 @@ function slackGet(endpoint: string, token: string, params: Record<string, string
       let body = '';
       res.on('data', (chunk: string) => body += chunk);
       res.on('end', () => {
-        try { resolve(JSON.parse(body)); }
+        try {
+          const json = JSON.parse(body) as SlackResponse;
+          if (res.headers['retry-after']) {
+            json.retryAfter = parseInt(res.headers['retry-after'] as string, 10);
+          }
+          resolve(json);
+        }
         catch (e) { reject(e); }
       });
     });
@@ -74,7 +87,10 @@ async function getTeamDomain(token: string): Promise<string> {
 
 const OAUTH_PORT = 17843;
 
-let pollTimer: ReturnType<typeof setInterval> | null = null;
+const POLL_INTERVAL = 60_000;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let nextPollDelay = POLL_INTERVAL;
+let polling = false;
 
 async function fetchReactions(mainWindow: BrowserWindow): Promise<void> {
   const config = loadConfig();
@@ -82,73 +98,76 @@ async function fetchReactions(mainWindow: BrowserWindow): Promise<void> {
   const reactions = config.slack?.reactions;
   if (!token || !reactions?.length) return;
 
-  const state = loadSlackState();
-  const processedSet = new Set(state.processedReactions);
+  if (polling) return;
+  polling = true;
 
-  let teamDomain: string;
   try {
-    teamDomain = await getTeamDomain(token);
-  } catch (err) {
-    console.error('[slack] Failed to get team domain:', err);
-    return;
+    const state = loadSlackState();
+    const seenSet = new Set(state.seenReactions);
+    const isFirstRun = seenSet.size === 0;
+
+    // Search for messages the user reacted to with each configured emoji
+    for (const emoji of reactions) {
+      let result: SlackResponse;
+      try {
+        result = await slackGet('search.messages', token, {
+          query: `hasmy::${emoji}:`,
+          sort: 'timestamp',
+          sort_dir: 'desc',
+          count: '20',
+        });
+      } catch (err) {
+        console.error('[slack] Failed to search reactions:', err);
+        return;
+      }
+
+      if (!result.ok) {
+        if (result.error === 'ratelimited') {
+          const backoff = result.retryAfter ?? 60;
+          console.warn(`[slack] Rate limited, backing off ${backoff}s`);
+          nextPollDelay = backoff * 1000;
+          return;
+        }
+        console.error('[slack] search.messages error:', result.error);
+        return;
+      }
+
+      const matches = result.messages?.matches ?? [];
+
+      for (const match of matches) {
+        const messageTs = match.ts as string;
+        const channelId = (match.channel?.id ?? '') as string;
+        if (!channelId) continue;
+
+        const key = `${channelId}:${messageTs}:${emoji}`;
+
+        if (seenSet.has(key)) continue;
+        seenSet.add(key);
+        state.seenReactions.push(key);
+
+        // First run: snapshot existing reactions without notifying
+        if (isFirstRun) continue;
+
+        let teamDomain: string;
+        try {
+          teamDomain = await getTeamDomain(token);
+        } catch (err) {
+          console.error('[slack] Failed to get team domain:', err);
+          return;
+        }
+
+        const tsWithoutDot = messageTs.replace('.', '');
+        const messageUrl = `https://${teamDomain}.slack.com/archives/${channelId}/p${tsWithoutDot}`;
+        const messagePreview = ((match.text ?? '') as string).slice(0, 200);
+
+        mainWindow.webContents.send(IPC_STREAM.SLACK_REACTION, channelId, messageTs, messageUrl, messagePreview);
+      }
+    }
+
+    saveSlackState(state);
+  } finally {
+    polling = false;
   }
-
-  let cursor: string | undefined;
-  let newTimestamp = state.lastProcessedTimestamp;
-
-  do {
-    const params: Record<string, string> = { limit: '100' };
-    if (cursor) params.cursor = cursor;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let result: any;
-    try {
-      result = await slackGet('reactions.list', token, params);
-    } catch (err) {
-      console.error('[slack] Failed to fetch reactions:', err);
-      return;
-    }
-
-    if (!result.ok) {
-      console.error('[slack] reactions.list error:', result.error);
-      return;
-    }
-
-    const items = result.items ?? [];
-    for (const item of items) {
-      if (item.type !== 'message' || !item.message || !item.channel) continue;
-
-      const messageTs = item.message.ts as string;
-      const channelId = item.channel as string;
-      const dedup = `${channelId}:${messageTs}`;
-
-      // Parse timestamp for comparison (Slack ts is "seconds.microseconds")
-      const tsNum = parseFloat(messageTs);
-
-      if (tsNum <= state.lastProcessedTimestamp) continue;
-      if (processedSet.has(dedup)) continue;
-
-      const messageReactions: Array<{ name: string }> = item.message.reactions ?? [];
-      const hasMatch = messageReactions.some((r) => reactions.includes(r.name));
-      if (!hasMatch) continue;
-
-      // Build Slack message URL
-      const tsWithoutDot = messageTs.replace('.', '');
-      const messageUrl = `https://${teamDomain}.slack.com/archives/${channelId}/p${tsWithoutDot}`;
-      const messagePreview = (item.message.text ?? '').slice(0, 100);
-
-      mainWindow.webContents.send(IPC_STREAM.SLACK_REACTION, channelId, messageTs, messageUrl, messagePreview);
-
-      processedSet.add(dedup);
-      state.processedReactions.push(dedup);
-      if (tsNum > newTimestamp) newTimestamp = tsNum;
-    }
-
-    cursor = result.response_metadata?.next_cursor || undefined;
-  } while (cursor);
-
-  state.lastProcessedTimestamp = newTimestamp;
-  saveSlackState(state);
 }
 
 export function startPolling(mainWindow: BrowserWindow): void {
@@ -157,20 +176,27 @@ export function startPolling(mainWindow: BrowserWindow): void {
 
   // Clear any existing timer
   if (pollTimer) {
-    clearInterval(pollTimer);
+    clearTimeout(pollTimer);
     pollTimer = null;
   }
 
-  pollTimer = setInterval(() => {
-    fetchReactions(mainWindow).catch((err) => {
-      console.error('[slack] Poll error:', err);
-    });
-  }, 30_000);
+  function schedulePoll(): void {
+    pollTimer = setTimeout(async () => {
+      nextPollDelay = POLL_INTERVAL; // reset; fetchReactions may override on rate limit
+      try {
+        await fetchReactions(mainWindow);
+      } catch (err) {
+        console.error('[slack] Poll error:', err);
+      }
+      schedulePoll();
+    }, nextPollDelay);
+  }
 
-  // Run immediately on start
-  fetchReactions(mainWindow).catch((err) => {
-    console.error('[slack] Initial poll error:', err);
-  });
+  // Run immediately on start, then schedule
+  nextPollDelay = POLL_INTERVAL;
+  fetchReactions(mainWindow)
+    .catch((err) => console.error('[slack] Initial poll error:', err))
+    .then(() => schedulePoll());
 }
 
 export function restartPolling(mainWindow: BrowserWindow): void {
@@ -227,7 +253,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
 
   const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
   const oauthState = crypto.randomBytes(16).toString('hex');
-  const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
+  const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read,search:read';
 
   const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
   authorizeUrl.searchParams.set('client_id', clientId);
@@ -313,7 +339,7 @@ export function disconnectSlack(): void {
 
 export function stopPolling(): void {
   if (pollTimer) {
-    clearInterval(pollTimer);
+    clearTimeout(pollTimer);
     pollTimer = null;
   }
   cachedTeamDomain = null;

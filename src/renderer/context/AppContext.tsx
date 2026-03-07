@@ -25,6 +25,7 @@ export interface AppState {
   showRepoManager: boolean;
   showCreateDialog: boolean;
   createDialogRepoId: string | null;
+  createDialogSlackUrl: string | null;
   showTaskHistory: boolean;
   showKeyboardShortcuts: boolean;
   showSettings: boolean;
@@ -66,7 +67,7 @@ export type AppAction =
   | { type: 'SET_TASK_UNREAD'; taskId: string; hasUnread: boolean }
   | { type: 'SET_TASK_STATUS'; taskId: string; status: TaskStatus }
   | { type: 'TOGGLE_REPO_MANAGER' }
-  | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean; repoId?: string }
+  | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean; repoId?: string; slackUrl?: string }
   | { type: 'TOGGLE_DIFF' }
   | { type: 'TOGGLE_TASK_HISTORY' }
   | { type: 'TOGGLE_KEYBOARD_SHORTCUTS' }
@@ -113,6 +114,7 @@ const initialState: AppState = {
   showRepoManager: false,
   showCreateDialog: false,
   createDialogRepoId: null,
+  createDialogSlackUrl: null,
   showTaskHistory: false,
   showKeyboardShortcuts: false,
   showSettings: false,
@@ -248,7 +250,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_REPO_MANAGER':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showRepoManager: !state.showRepoManager });
     case 'SHOW_CREATE_TASK_DIALOG':
-      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null });
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null, createDialogSlackUrl: action.slackUrl ?? null });
     case 'TOGGLE_DIFF': {
       if (!state.activeTaskId) return state;
       const ps = getPaneState(state, state.activeTaskId);

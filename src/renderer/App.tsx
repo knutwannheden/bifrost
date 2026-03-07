@@ -21,6 +21,7 @@ import StatsOverlay from './components/StatsOverlay';
 import SupervisorOverlay from './components/SupervisorOverlay';
 import { requestArchive, performArchive } from './utils/archive';
 import { parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
+import { slackToPlainText } from './utils/slack-markup';
 
 declare global {
   interface Window {
@@ -145,17 +146,17 @@ export default function App() {
   useEffect(() => {
     const unsub = window.bifrost.onSlackReaction((channelId, messageTs, messageUrl, messagePreview) => {
       const notificationId = `slack-${channelId}-${messageTs}`;
+      const plainPreview = slackToPlainText(messagePreview);
       // Show toast with Create Task action
       dispatch({
         type: 'SHOW_TOAST',
-        message: `Slack: ${messagePreview}`,
+        message: `Slack: ${plainPreview}`,
         duration: 8000,
         action: {
           label: 'Create Task',
           callback: () => {
-            navigator.clipboard.writeText(messageUrl).catch(() => {});
             dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
-            dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true });
+            dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, slackUrl: messageUrl });
           },
         },
       });
@@ -167,7 +168,7 @@ export default function App() {
           id: notificationId,
           type: 'slack-reaction',
           title: 'Slack Reaction',
-          message: messagePreview,
+          message: plainPreview,
           action: { label: 'Create Task', handler: `slack-create-task:${messageUrl}` },
           persistent: true,
           read: false,

@@ -45,10 +45,8 @@ export default function NotificationPopover() {
     dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' });
     if (handler.startsWith('slack-create-task:')) {
       const url = handler.slice('slack-create-task:'.length);
-      // Copy URL to clipboard so TaskCreateDialog picks it up
-      navigator.clipboard.writeText(url).catch(() => {});
       dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
-      dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true });
+      dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, slackUrl: url });
       return;
     }
     if (handler === 'install-plugin') {

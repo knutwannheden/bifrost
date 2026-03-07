@@ -46,7 +46,12 @@ export default function TaskCreateDialog() {
   const [error, setError] = useState<string | null>(null);
   const [prBanner, setPrBanner] = useState<{ number: number; title?: string; repoId?: string; headBranch?: string; message?: string } | null>(null);
   const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
-  const [slackUrl, setSlackUrl] = useState<string | null>(null);
+  const [slackUrl, setSlackUrl] = useState<string | null>(state.createDialogSlackUrl ?? null);
+  const [prompt, setPrompt] = useState(
+    state.createDialogSlackUrl
+      ? `Read the following Slack message and the thread which it is part of and try to understand what is requested: ${state.createDialogSlackUrl}`
+      : '',
+  );
   const [inPlace, setInPlace] = useState(false);
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
 
@@ -123,8 +128,9 @@ export default function TaskCreateDialog() {
     }
   }, [state.repos.length]);
 
-  // Detect PR or Slack URL on clipboard when dialog opens
+  // Detect PR or Slack URL on clipboard when dialog opens (skip if slackUrl was passed via action)
   useEffect(() => {
+    if (slackUrl) return;
     (async () => {
       try {
         const text = await window.bifrost.readClipboard();
@@ -133,6 +139,7 @@ export default function TaskCreateDialog() {
         const slack = parseSlackUrl(text);
         if (slack) {
           setSlackUrl(slack);
+          setPrompt(`Read the following Slack message and the thread which it is part of and try to understand what is requested: ${slack}`);
           return;
         }
 
@@ -287,16 +294,13 @@ export default function TaskCreateDialog() {
     setLoading(true);
     setError(null);
     try {
-      const slackPrompt = slackUrl
-        ? `Read the following Slack message and the thread which it is part of and try to understand what is requested: ${slackUrl}`
-        : undefined;
       const task = await window.bifrost.createTask({
         repoId,
         name: taskName.trim(),
         branch: inPlace ? '' : branch,
         ...(prInfo && !inPlace && { prInfo }),
         ...(inPlace && { inPlace: true }),
-        ...(slackPrompt && { prompt: slackPrompt }),
+        ...(prompt.trim() && { prompt: prompt.trim() }),
       });
       localStorage.setItem('bifrost:lastRepoId', repoId);
       dispatch({ type: 'ADD_TASK', task });
@@ -689,6 +693,22 @@ export default function TaskCreateDialog() {
             )}
             </>
             )}
+          </div>
+
+          {/* Prompt */}
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Prompt</label>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                // Allow Enter in textarea without triggering form submit
+                if (e.key === 'Enter') e.stopPropagation();
+              }}
+              placeholder="Initial prompt sent to Claude (optional)"
+              rows={3}
+              className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
+            />
           </div>
 
           {error && <p className="text-xs text-red-400">{error}</p>}
