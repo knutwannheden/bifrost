@@ -81,13 +81,13 @@ export default function ReviewSidebar({
   const sortedReviews = [...reviews].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
-    <div className="w-48 flex-shrink-0 border-r border-slate-700 flex flex-col overflow-hidden">
+    <div className="w-48 flex-shrink-0 border-r border-border-default flex flex-col overflow-hidden">
       <button
         onClick={onNewReview}
         className={`mx-2 mt-2 mb-1 px-3 py-1.5 text-xs rounded transition-colors ${
           activeReviewId === null
-            ? 'bg-blue-600 text-white'
-            : 'bg-slate-700 hover:bg-slate-600 text-slate-300'
+            ? 'bg-accent text-white'
+            : 'bg-surface-alt hover:bg-surface-hover text-secondary'
         }`}
       >
         + <span className="underline underline-offset-2">N</span>ew Review
@@ -107,12 +107,12 @@ export default function ReviewSidebar({
               onClick={() => onSelect(review.id)}
               className={`px-3 py-2 cursor-pointer border-l-2 transition-colors ${
                 isActive
-                  ? 'bg-slate-700/50 border-blue-400'
-                  : 'border-transparent hover:bg-slate-800'
+                  ? 'bg-surface-alt/50 border-accent-hover'
+                  : 'border-transparent hover:bg-surface'
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500">#{number}</span>
+                <span className="text-xs text-muted">#{number}</span>
                 <span className={`px-1.5 py-0.5 text-[10px] rounded ${
                   review.scope === 'working'
                     ? 'bg-emerald-900/40 text-emerald-400'
@@ -125,10 +125,10 @@ export default function ReviewSidebar({
                 )}
                 {isDiscussing && <span className="text-xs" title="Discussion active">💬</span>}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+              <div className="text-[11px] text-muted mt-0.5 truncate">
                 {review.instructions || 'No instructions'}
               </div>
-              <div className="text-[10px] text-slate-600 mt-0.5">
+              <div className="text-[10px] text-faint mt-0.5">
                 {formatRelative(review.timestamp)}
               </div>
             </div>

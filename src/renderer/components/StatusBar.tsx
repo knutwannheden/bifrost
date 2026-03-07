@@ -17,7 +17,7 @@ export default function StatusBar({
   onToggleIde,
 }: StatusBarProps) {
   return (
-    <div className="h-6 bg-slate-800 border-t border-slate-700 flex items-center px-4 text-xs text-slate-500">
+    <div className="h-6 bg-surface border-t border-border-default flex items-center px-4 text-xs text-muted">
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {activeTask && (
           <>
@@ -32,7 +32,7 @@ export default function StatusBar({
         {config && (
           <button
             type="button"
-            className="hover:text-slate-300 transition-colors"
+            className="hover:text-secondary transition-colors"
             onClick={onToggleIde}
             title={`IDE: ${config.ide} (click to toggle)`}
           >

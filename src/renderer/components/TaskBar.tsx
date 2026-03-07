@@ -52,7 +52,7 @@ export default function TaskBar() {
   };
 
   return (
-    <div className="flex items-stretch h-10 bg-slate-800/50 border-b border-slate-700 overflow-x-auto">
+    <div className="flex items-stretch h-10 bg-surface/50 border-b border-border-default overflow-x-auto">
       {openTasks.map((task) => {
         const repo = repos.find((r) => r.id === task.repoId);
         const repoName = repo ? repoLabel(repo.path) : repoLabel(task.worktreePath);

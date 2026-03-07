@@ -8,9 +8,9 @@ export default function DiffStatsBadge({ additions, deletions, className = '' }:
   if (additions === 0 && deletions === 0) return null;
 
   return (
-    <span className={`inline-flex items-center gap-1 bg-slate-700/80 rounded-full px-2 py-0.5 text-xs ${className}`}>
-      {additions > 0 && <span className="text-green-400">+{additions}</span>}
-      {deletions > 0 && <span className="text-red-400">-{deletions}</span>}
+    <span className={`inline-flex items-center gap-1 bg-surface-alt/80 rounded-full px-2 py-0.5 text-xs ${className}`}>
+      {additions > 0 && <span className="text-success">+{additions}</span>}
+      {deletions > 0 && <span className="text-danger">-{deletions}</span>}
     </span>
   );
 }
