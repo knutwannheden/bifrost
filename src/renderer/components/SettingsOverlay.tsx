@@ -370,6 +370,19 @@ export default function SettingsOverlay() {
       } else {
         close();
       }
+      return;
+    }
+
+    // Arrow keys navigate categories when not in an input
+    const tag = (e.target as HTMLElement).tagName;
+    if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const curIdx = visibleCategories.indexOf(activeCategory);
+        const step = e.key === 'ArrowDown' ? 1 : visibleCategories.length - 1;
+        const nextCat = visibleCategories[(curIdx + step) % visibleCategories.length];
+        scrollToCategory(nextCat);
+      }
     }
   };
 
@@ -497,7 +510,7 @@ export default function SettingsOverlay() {
 
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
-          <span className="text-xs text-faint">Esc close &middot; type to search</span>
+          <span className="text-xs text-faint">&uarr;&darr; categories &middot; type to search &middot; Esc close</span>
         </div>
       </div>
     </div>
