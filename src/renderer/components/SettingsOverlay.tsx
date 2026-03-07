@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import type { BifrostConfig } from '../../shared/types';
 import { modSymbol } from '../utils/platform';
+import { matchesAllTerms } from '../utils/search';
 import Highlight from './Highlight';
 import PillToggle from './PillToggle';
 
@@ -381,12 +382,8 @@ export default function SettingsOverlay() {
 
   const filteredSettings = useMemo(() => {
     if (!search.trim()) return settings;
-    const q = search.toLowerCase();
     return settings.filter(
-      (s) =>
-        s.label.toLowerCase().includes(q) ||
-        (s.description && s.description.toLowerCase().includes(q)) ||
-        s.category.toLowerCase().includes(q),
+      (s) => matchesAllTerms(`${s.label} ${s.description ?? ''} ${s.category}`, search),
     );
   }, [settings, search]);
 

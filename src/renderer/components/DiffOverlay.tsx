@@ -19,6 +19,7 @@ import { formatTimestamp, formatRelative } from '../utils/format-time';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { isModKey } from '../utils/platform';
+import { matchesAllTerms } from '../utils/search';
 import { useInstantSearch } from '../hooks/useInstantSearch';
 import type { ActivityEntry, CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
 
@@ -900,8 +901,7 @@ export default function DiffOverlay() {
 
   const filteredEntries = useMemo(() => {
     if (!search) return activityLog.entries;
-    const s = search.toLowerCase();
-    return activityLog.entries.filter((e) => entrySearchText(e).includes(s));
+    return activityLog.entries.filter((e) => matchesAllTerms(entrySearchText(e), search));
   }, [activityLog.entries, search]);
 
   // Fetch git log data at DiffOverlay level for search/navigation
@@ -911,8 +911,7 @@ export default function DiffOverlay() {
 
   const filteredLogEntries = useMemo(() => {
     if (!search) return gitLog.entries;
-    const s = search.toLowerCase();
-    return gitLog.entries.filter((e) => e.subject.toLowerCase().includes(s));
+    return gitLog.entries.filter((e) => matchesAllTerms(e.subject, search));
   }, [gitLog.entries, search]);
 
   // Reset search and focus when mode changes
