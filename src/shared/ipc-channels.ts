@@ -135,6 +135,10 @@ export const IPC = {
   SUPERVISOR_RESUME_ITEM: 'supervisor:resume-item',
   SUPERVISOR_OPEN_ITEM: 'supervisor:open-item',
   SUPERVISOR_REMOVE_ITEM: 'supervisor:remove-item',
+
+  // Slack
+  SLACK_START_OAUTH: 'slack:start-oauth',
+  SLACK_DISCONNECT: 'slack:disconnect',
 } as const;
 
 // Streaming channels (send/on)
@@ -152,6 +156,7 @@ export const IPC_STREAM = {
   STATS_UPDATE: 'stats:update',
   SUPERVISOR_UPDATE: 'supervisor:update',
   TASK_CREATED: 'task:created',
+  SLACK_REACTION: 'slack:reaction',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -288,6 +293,11 @@ export interface BifrostAPI {
   openSupervisorItem(itemId: string): Promise<Task>;
   removeSupervisorItem(itemId: string): Promise<SupervisorState>;
   onSupervisorUpdate(callback: (state: SupervisorState) => void): () => void;
+
+  // Slack
+  startSlackOAuth(): Promise<void>;
+  disconnectSlack(): Promise<void>;
+  onSlackReaction(callback: (channelId: string, messageTs: string, messageUrl: string, messagePreview: string) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

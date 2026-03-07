@@ -199,6 +199,16 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.SUPERVISOR_UPDATE, handler);
   },
 
+  // Slack
+  startSlackOAuth: () => ipcRenderer.invoke(IPC.SLACK_START_OAUTH),
+  disconnectSlack: () => ipcRenderer.invoke(IPC.SLACK_DISCONNECT),
+  onSlackReaction: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, channelId: string, messageTs: string, messageUrl: string, messagePreview: string) =>
+      callback(channelId, messageTs, messageUrl, messagePreview);
+    ipcRenderer.on(IPC_STREAM.SLACK_REACTION, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.SLACK_REACTION, handler);
+  },
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) =>
