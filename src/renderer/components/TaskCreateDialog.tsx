@@ -602,29 +602,32 @@ export default function TaskCreateDialog() {
           </div>
 
           {error && <p className="text-xs text-danger">{error}</p>}
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-faint flex-1">
-              Enter create &middot; {altSymbol}N name &middot; {altSymbol}P prompt &middot; Esc cancel
-            </span>
-            <button
-              onClick={close}
-              className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input"
-            >
-              Cancel
-            </button>
-            <button
-              ref={createRef}
-              onClick={handleSubmit}
-              disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
-              className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
-            </button>
-          </div>
           </>
           )}
         </div>
+
+        {/* Footer */}
+        {state.repos.length > 0 && (
+        <div className="flex items-center gap-2 px-4 pb-3 pt-2 border-t border-border-default">
+          <span className="text-xs text-faint flex-1">
+            Enter create &middot; {altSymbol}N name &middot; {altSymbol}P prompt &middot; Esc cancel
+          </span>
+          <button
+            onClick={close}
+            className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input"
+          >
+            Cancel
+          </button>
+          <button
+            ref={createRef}
+            onClick={handleSubmit}
+            disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
+            className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
+          >
+            {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
+          </button>
+        </div>
+        )}
       </div>
     </div>
   );
