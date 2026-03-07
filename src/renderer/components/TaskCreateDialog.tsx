@@ -310,7 +310,12 @@ export default function TaskCreateDialog() {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      close();
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        (e.target as HTMLElement).blur();
+      } else {
+        close();
+      }
       return;
     }
 

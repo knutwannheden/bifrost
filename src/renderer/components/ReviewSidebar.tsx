@@ -36,12 +36,16 @@ export default function ReviewSidebar({
   // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Don't intercept when focus is in an input/textarea or terminal
-      if (
-        document.activeElement instanceof HTMLTextAreaElement ||
-        document.activeElement instanceof HTMLInputElement ||
-        (document.activeElement as HTMLElement)?.closest?.('.xterm')
-      ) return;
+      // Don't intercept when focus is in terminal
+      if ((document.activeElement as HTMLElement)?.closest?.('.xterm')) return;
+      // Esc in an input: blur first, second Esc closes overlay
+      if (document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          (document.activeElement as HTMLElement).blur();
+        }
+        return;
+      }
 
       if (e.altKey && e.code === 'KeyN') {
         e.preventDefault();

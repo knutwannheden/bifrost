@@ -394,11 +394,18 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
         }
       }
 
-      // Escape: return from discussion to review text
-      if (e.key === 'Escape' && showDiscussion) {
-        e.preventDefault();
-        setShowDiscussion(false);
-        return;
+      // Escape: blur input first, then return from discussion
+      if (e.key === 'Escape') {
+        if (document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement) {
+          e.preventDefault();
+          (document.activeElement as HTMLElement).blur();
+          return;
+        }
+        if (showDiscussion) {
+          e.preventDefault();
+          setShowDiscussion(false);
+          return;
+        }
       }
 
       if (e.key !== 'Enter') return;

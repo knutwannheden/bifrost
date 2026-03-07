@@ -365,7 +365,12 @@ export default function SettingsOverlay() {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      close();
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        (e.target as HTMLElement).blur();
+      } else {
+        close();
+      }
     }
   };
 

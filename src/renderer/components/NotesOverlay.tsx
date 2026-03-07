@@ -223,7 +223,7 @@ export default function NotesOverlay() {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
-      close();
+      textareaRef.current?.blur();
       return;
     }
     if (e.altKey && e.code === 'KeyN') {
@@ -299,6 +299,12 @@ export default function NotesOverlay() {
   };
 
   const handleRepoInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      repoInputRef.current?.blur();
+      return;
+    }
     // Let overlay-level Alt shortcuts work from the repo input
     if (e.altKey && e.code === 'KeyN') {
       e.preventDefault();

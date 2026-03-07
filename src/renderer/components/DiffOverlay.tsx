@@ -954,7 +954,16 @@ export default function DiffOverlay() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Don't intercept keys when focus is inside a terminal or form input
     const tag = (e.target as HTMLElement).tagName;
-    if ((e.target as HTMLElement).closest?.('.xterm') || tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const isInInput = tag === 'INPUT' || tag === 'TEXTAREA';
+    if ((e.target as HTMLElement).closest?.('.xterm')) return;
+    // Esc in an input: blur first, second Esc closes overlay
+    if (isInInput) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        (document.activeElement as HTMLElement)?.blur?.();
+      }
+      return;
+    }
 
     // Mod+O: open the focused entry's file in the IDE
     if (isModKey(e) && !e.shiftKey && e.key.toLowerCase() === 'o') {
