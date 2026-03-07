@@ -87,7 +87,7 @@ async function getTeamDomain(token: string): Promise<string> {
 
 const OAUTH_PORT = 17843;
 
-const POLL_INTERVAL = 60_000;
+const POLL_INTERVAL = 10_000;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let nextPollDelay = POLL_INTERVAL;
 let polling = false;
