@@ -11,6 +11,7 @@ import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
+import SearchIndicator from './SearchIndicator';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { isModKey } from '../utils/platform';
@@ -1194,23 +1195,16 @@ export default function DiffOverlay() {
         </div>
       </div>
 
-      {/* Search indicator */}
-      {search && (
-        <div className="mx-4 mt-3 px-3 py-1.5 bg-slate-700/70 border border-slate-600 rounded flex items-center gap-2 flex-shrink-0">
-          <span className="text-xs text-slate-500">Search:</span>
-          <span className="text-sm text-slate-200 font-mono">{search}</span>
-          {isActivity && (
-            <span className="text-xs text-slate-600">{filteredEntries.length} match{filteredEntries.length !== 1 ? 'es' : ''}</span>
-          )}
-          {isLog && (
-            <span className="text-xs text-slate-600">{filteredLogEntries.length} commit{filteredLogEntries.length !== 1 ? 's' : ''}</span>
-          )}
-          {diffMode === 'git' && (
-            <span className="text-xs text-slate-600">{gitFileCount} file{gitFileCount !== 1 ? 's' : ''}</span>
-          )}
-          <span className="ml-auto text-xs text-slate-600">Esc to clear</span>
-        </div>
-      )}
+      <SearchIndicator
+        search={search}
+        className="mx-4 mt-3 flex-shrink-0"
+        matchInfo={
+          isActivity ? `${filteredEntries.length} match${filteredEntries.length !== 1 ? 'es' : ''}` :
+          isLog ? `${filteredLogEntries.length} commit${filteredLogEntries.length !== 1 ? 's' : ''}` :
+          diffMode === 'git' ? `${gitFileCount} file${gitFileCount !== 1 ? 's' : ''}` :
+          undefined
+        }
+      />
 
       {state.activeTaskId && diffMode === 'git' && (
         <GitDiffContent

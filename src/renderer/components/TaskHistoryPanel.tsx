@@ -7,6 +7,7 @@ import type { Task, ClaudeSession, DiffStats } from '../../shared/types';
 import { requestArchive } from '../utils/archive';
 import { matchesAllTerms } from '../utils/search';
 import Highlight from './Highlight';
+import SearchIndicator from './SearchIndicator';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -610,14 +611,7 @@ export default function TaskHistoryPanel() {
           </div>
         )}
 
-        {/* Search indicator */}
-        {search && (
-          <div className="mx-4 mt-3 px-3 py-1.5 bg-slate-700/70 border border-slate-600 rounded flex items-center gap-2">
-            <span className="text-xs text-slate-500">Search:</span>
-            <span className="text-sm text-slate-200 font-mono">{search}</span>
-            <span className="ml-auto text-xs text-slate-600">Esc to clear</span>
-          </div>
-        )}
+        <SearchIndicator search={search} className="mx-4 mt-3" />
 
         {/* List content */}
         <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-2">

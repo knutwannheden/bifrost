@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
+import SearchIndicator from './SearchIndicator';
 
 export default function RepoManager() {
   const { state, dispatch } = useApp();
@@ -258,14 +259,7 @@ export default function RepoManager() {
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Search indicator */}
-          {search && (
-            <div className="px-3 py-1.5 bg-slate-700/70 border border-slate-600 rounded flex items-center gap-2">
-              <span className="text-xs text-slate-500">Search:</span>
-              <span className="text-sm text-slate-200 font-mono">{search}</span>
-              <span className="ml-auto text-xs text-slate-600">Esc to clear</span>
-            </div>
-          )}
+          <SearchIndicator search={search} />
 
           {/* Recent from Claude */}
           {suggestions.length > 0 && (
