@@ -493,12 +493,12 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
             Run Review
           </button>
           {canRunReview ? (
-            <span className="text-xs text-muted">
+            <span className="text-xs text-faint">
               <Kbd>Enter</Kbd>
               {' '}to run
             </span>
           ) : (
-            <span className="text-xs text-muted">No changes to review for this scope.</span>
+            <span className="text-xs text-faint">No changes to review for this scope.</span>
           )}
         </div>
       </div>
@@ -592,9 +592,9 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
             </button>
           )}
           {hasChecked && (
-            <span className="text-xs text-muted">{checkedLines.size} item{checkedLines.size !== 1 ? 's' : ''} selected</span>
+            <span className="text-xs text-faint">{checkedLines.size} item{checkedLines.size !== 1 ? 's' : ''} selected</span>
           )}
-          <span className="ml-auto text-xs text-muted">
+          <span className="ml-auto text-xs text-faint">
             {hasReviewSession && !showDiscussion && (
               <>
                 <Kbd>Enter</Kbd>
