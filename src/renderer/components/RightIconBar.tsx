@@ -162,7 +162,6 @@ export default function RightIconBar() {
 
       <IconButton
         label="Activity"
-        shortcut="Cmd+A"
         active={isDiffActive && diffMode === 'activity'}
         onClick={() => toggleDiffMode('activity')}
       >
@@ -171,7 +170,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Review"
-        shortcut="Alt+U"
+        shortcut="Cmd+U"
         active={isDiffActive && diffMode === 'review'}
         onClick={() => toggleDiffMode('review')}
       >

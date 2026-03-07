@@ -25,7 +25,7 @@ const tips = [
   `Press ${modSymbol}, to open settings and customize font size, IDE, and more.`,
   `Press ${modSymbol}/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.`,
   `Press ${modSymbol}${shiftSymbol}C to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.`,
-  `Press ${altSymbol}U to run an AI review of your task\u2019s changes \u2014 get actionable feedback before committing.`,
+  `Press ${modSymbol}U to run an AI review of your task\u2019s changes \u2014 get actionable feedback before committing.`,
   'When a permission prompt appears, press Tab to focus it \u2014 then use A/D to allow/deny, Esc to deny once.',
   `Press ${modSymbol}- to jump back to your previous tab \u2014 like cd - for tasks.`,
   `Press ${modSymbol}= to jump to the last tab that had a notification.`,
