@@ -348,14 +348,14 @@ export default function NotesOverlay() {
         ref={panelRef}
         tabIndex={-1}
         onKeyDown={handleOverlayKeyDown}
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[720px] flex flex-col shadow-xl min-h-[80vh] max-h-[90vh] outline-none"
+        className="bg-surface rounded-lg border border-border-input w-[720px] flex flex-col shadow-xl min-h-[80vh] max-h-[90vh] outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700 gap-3">
-          <span className="text-sm font-medium text-slate-200 flex-shrink-0">Notes</span>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default gap-3">
+          <span className="text-sm font-medium text-primary flex-shrink-0">Notes</span>
           <div className="flex items-center gap-1.5 flex-1 max-w-[280px]">
-          <label className="text-xs text-slate-400 flex-shrink-0"><span className="underline">R</span>epo</label>
+          <label className="text-xs text-secondary flex-shrink-0"><span className="underline">R</span>epo</label>
           <div className="relative flex-1">
             <input
               ref={repoInputRef}
@@ -377,12 +377,12 @@ export default function NotesOverlay() {
               }}
               onKeyDown={handleRepoInputKeyDown}
               placeholder="Select repository..."
-              className="w-full px-2.5 py-1 bg-slate-700 border border-slate-600 rounded text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full px-2.5 py-1 bg-surface-alt border border-border-input rounded text-xs text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
             {repoDropdownOpen && filteredRepos.length > 0 && (
               <div
                 ref={repoListRef}
-                className="absolute z-10 mt-1 w-full bg-slate-700 border border-slate-600 rounded shadow-lg max-h-[200px] overflow-y-auto"
+                className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
               >
                 {filteredRepos.map((repo, idx) => (
                   <div
@@ -391,12 +391,12 @@ export default function NotesOverlay() {
                     onMouseEnter={() => setRepoFocusedIdx(idx)}
                     className={`px-2.5 py-1.5 cursor-pointer ${
                       idx === repoFocusedIdx
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-200 hover:bg-slate-600'
+                        ? 'bg-accent text-white'
+                        : 'text-primary hover:bg-surface-hover'
                     }`}
                   >
                     <div className="text-xs">{repoDisplayName(repo)}</div>
-                    <div className={`text-[10px] font-mono ${idx === repoFocusedIdx ? 'text-blue-200' : 'text-slate-400'}`}>
+                    <div className={`text-[10px] font-mono ${idx === repoFocusedIdx ? 'text-blue-200' : 'text-secondary'}`}>
                       {shortPath(repo.path)}
                     </div>
                   </div>
@@ -408,7 +408,7 @@ export default function NotesOverlay() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-slate-400 hover:text-slate-200 text-lg leading-none flex-shrink-0"
+            className="text-secondary hover:text-primary text-lg leading-none flex-shrink-0"
           >
             &times;
           </button>
@@ -417,14 +417,14 @@ export default function NotesOverlay() {
         {/* Body: sidebar + content */}
         <div className="flex-1 flex min-h-0">
           {/* Sidebar */}
-          <div ref={sidebarRef} className="w-44 flex-shrink-0 border-r border-slate-700 flex flex-col overflow-hidden">
+          <div ref={sidebarRef} className="w-44 flex-shrink-0 border-r border-border-default flex flex-col overflow-hidden">
             {/* New Note button */}
             <button
               onClick={startNewNote}
               className={`mx-2 mt-2 mb-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
                 isNewNote
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface-alt text-secondary hover:bg-surface-hover'
               }`}
             >
               + <span className="underline">N</span>ew Note
@@ -433,11 +433,11 @@ export default function NotesOverlay() {
             {/* Note list */}
             <div className="flex-1 overflow-y-auto">
               {!repoId ? (
-                <div className="px-3 py-4 text-xs text-slate-500 text-center">
+                <div className="px-3 py-4 text-xs text-muted text-center">
                   Select a repository
                 </div>
               ) : displayNotes.length === 0 ? (
-                <div className="px-3 py-4 text-xs text-slate-500 text-center">
+                <div className="px-3 py-4 text-xs text-muted text-center">
                   No notes yet
                 </div>
               ) : (
@@ -450,8 +450,8 @@ export default function NotesOverlay() {
                       onClick={() => selectNote(note.id)}
                       className={`group px-3 py-2 cursor-pointer border-l-2 transition-colors ${
                         isActive
-                          ? 'bg-slate-700/50 border-blue-400'
-                          : 'border-transparent hover:bg-slate-800'
+                          ? 'bg-surface-alt/50 border-accent-hover'
+                          : 'border-transparent hover:bg-surface'
                       }`}
                     >
                       <div className="flex items-center gap-1.5">
@@ -462,7 +462,7 @@ export default function NotesOverlay() {
                           onClick={(e) => e.stopPropagation()}
                           className="accent-blue-500 flex-shrink-0"
                         />
-                        <span className="text-xs text-slate-300 truncate flex-1">
+                        <span className="text-xs text-secondary truncate flex-1">
                           {firstLine.length > 30 ? firstLine.slice(0, 30) + '\u2026' : firstLine}
                         </span>
                         <button
@@ -475,7 +475,7 @@ export default function NotesOverlay() {
                           </svg>
                         </button>
                       </div>
-                      <span className="text-[10px] text-slate-500 ml-5 block">
+                      <span className="text-[10px] text-muted ml-5 block">
                         {formatTime(note.createdAt)}
                       </span>
                     </div>
@@ -488,7 +488,7 @@ export default function NotesOverlay() {
           {/* Content area */}
           <div className="flex-1 flex flex-col min-w-0">
             {!repoId ? (
-              <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
+              <div className="flex-1 flex items-center justify-center text-sm text-muted">
                 Select a repository
               </div>
             ) : (
@@ -500,7 +500,7 @@ export default function NotesOverlay() {
                   onBlur={handleTextareaBlur}
                   onKeyDown={handleTextareaKeyDown}
                   placeholder={isNewNote ? 'Type a new note...' : 'Note text...'}
-                  className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 p-4 resize-none outline-none min-h-0"
+                  className="flex-1 bg-transparent text-sm text-primary placeholder-muted p-4 resize-none outline-none min-h-0"
                 />
               </>
             )}
@@ -508,8 +508,8 @@ export default function NotesOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-slate-700">
-          <p className="text-xs text-slate-500">
+        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+          <p className="text-xs text-muted">
             Esc to close · {altSymbol}N new note · ↑↓ navigate · {modSymbol}{deleteSymbol} delete
           </p>
         </div>
