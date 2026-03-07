@@ -701,7 +701,10 @@ export default function TaskCreateDialog() {
 
           {error && <p className="text-xs text-danger">{error}</p>}
 
-          <div className="flex justify-end gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-faint flex-1">
+              Enter create &middot; Alt+N new name &middot; Esc cancel
+            </span>
             <button
               onClick={close}
               className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input"

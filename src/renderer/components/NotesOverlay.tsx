@@ -510,7 +510,7 @@ export default function NotesOverlay() {
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
           <p className="text-xs text-muted">
-            Esc to close · {altSymbol}N new note · ↑↓ navigate · {modSymbol}{deleteSymbol} delete
+            Esc close · {altSymbol}N new note · {altSymbol}R repo · ↑↓ navigate · {modSymbol}{deleteSymbol} delete
           </p>
         </div>
       </div>
