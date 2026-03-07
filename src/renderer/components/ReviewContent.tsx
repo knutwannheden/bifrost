@@ -512,7 +512,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
           <span className="text-sm">Running review... <span className="text-muted">{formatElapsed(elapsed)}</span></span>
           {activeEntry && (
             <span className={`px-1.5 py-0.5 text-[10px] rounded ${
-              activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-accent/10 text-accent-hover'
+              activeEntry.scope === 'working' ? 'bg-success/15 text-success' : 'bg-accent/10 text-accent-hover'
             }`}>
               {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
             </span>
@@ -552,7 +552,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       {activeEntry && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border-default flex-shrink-0 text-xs text-muted">
           <span className={`px-1.5 py-0.5 rounded ${
-            activeEntry.scope === 'working' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-accent/10 text-accent-hover'
+            activeEntry.scope === 'working' ? 'bg-success/15 text-success' : 'bg-accent/10 text-accent-hover'
           }`}>
             {activeEntry.scope === 'working' ? 'Working tree' : 'All changes'}
           </span>

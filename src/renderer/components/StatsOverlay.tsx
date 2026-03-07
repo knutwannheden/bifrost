@@ -105,7 +105,7 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
             <div className="flex items-center gap-2">
               <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
                 <div
-                  className="h-full bg-cyan-600 rounded"
+                  className="h-full bg-accent-hover rounded"
                   style={{ width: `${pct}%` }}
                 />
                 <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">

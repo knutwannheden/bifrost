@@ -120,7 +120,7 @@ export default function ReviewSidebar({
                 <span className="text-xs text-muted">#{number}</span>
                 <span className={`px-1.5 py-0.5 text-[10px] rounded ${
                   review.scope === 'working'
-                    ? 'bg-emerald-900/40 text-emerald-400'
+                    ? 'bg-success/15 text-success'
                     : 'bg-accent/10 text-accent-hover'
                 }`}>
                   {review.scope === 'working' ? 'Working' : 'All'}
