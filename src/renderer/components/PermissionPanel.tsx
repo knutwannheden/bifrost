@@ -147,7 +147,7 @@ export default function PermissionPanel() {
                 onClick={() => setSelectedRule(i)}
                 className={`w-full text-left px-2 py-1 rounded text-xs ${
                   i === selectedRule
-                    ? 'bg-accent/30 text-blue-300 border border-accent-muted'
+                    ? 'bg-accent/30 text-accent-hover border border-accent-muted'
                     : 'text-secondary hover:bg-surface-alt'
                 }`}
               >

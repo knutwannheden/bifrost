@@ -109,7 +109,7 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
         <span className="flex flex-col items-center min-w-0 max-w-[200px]">
           <span className="flex items-center gap-1.5">
             {task.hasUnread && !isActive ? (
-              <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
             ) : null}
             <span className="text-xs leading-tight truncate">{task.name}</span>
           </span>

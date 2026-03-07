@@ -114,7 +114,7 @@ function buildSettings(): SettingDef[] {
                 name="permissionMode"
                 checked={config.permissionMode === opt.value}
                 onChange={() => update({ permissionMode: opt.value })}
-                className="mt-0.5 accent-blue-500"
+                className="mt-0.5 accent-accent"
               />
               <span className="text-sm text-secondary group-hover:text-primary">
                 {opt.label}

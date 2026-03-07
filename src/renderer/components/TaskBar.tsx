@@ -66,7 +66,7 @@ export default function TaskBar() {
           onDragLeave={() => { if (dragOverId === task.id) setDragOverId(null); }}
         >
           {isOver && dropSide === 'left' && (
-            <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-blue-500 z-10" />
+            <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-accent z-10" />
           )}
           <TaskTab
             task={task}
@@ -94,7 +94,7 @@ export default function TaskBar() {
             onDragEnd={() => { draggingId.current = null; setDragOverId(null); }}
           />
           {isOver && dropSide === 'right' && (
-            <div className="absolute right-0 top-1 bottom-1 w-0.5 bg-blue-500 z-10" />
+            <div className="absolute right-0 top-1 bottom-1 w-0.5 bg-accent z-10" />
           )}
         </div>
         );

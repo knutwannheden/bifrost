@@ -460,7 +460,7 @@ export default function NotesOverlay() {
                           checked={note.addressed}
                           onChange={(e) => { e.stopPropagation(); toggleAddressed(note); }}
                           onClick={(e) => e.stopPropagation()}
-                          className="accent-blue-500 flex-shrink-0"
+                          className="accent-accent flex-shrink-0"
                         />
                         <span className="text-xs text-secondary truncate flex-1">
                           {firstLine.length > 30 ? firstLine.slice(0, 30) + '\u2026' : firstLine}

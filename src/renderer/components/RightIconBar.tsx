@@ -80,7 +80,7 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 const badgeClasses = {
   amber: 'bg-amber-400',
   green: 'bg-green-400 animate-pulse',
-  blue: 'bg-blue-500',
+  blue: 'bg-accent',
 };
 
 function IconButton({ active, badge, label, shortcut, onClick, children, ...rest }: IconButtonProps) {

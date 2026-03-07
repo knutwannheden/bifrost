@@ -75,7 +75,7 @@ function renderMarkdownLine(
           type="checkbox"
           checked={isChecked}
           onChange={() => onToggle(lineIndex)}
-          className="mt-1 accent-blue-500 flex-shrink-0"
+          className="mt-1 accent-accent flex-shrink-0"
         />
         <span className="text-base text-slate-300">{renderInline(checkboxMatch[3])}</span>
       </label>
