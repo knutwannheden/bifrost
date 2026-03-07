@@ -234,24 +234,21 @@ export default function RepoManager() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-surface rounded-lg border border-border-input w-[500px] max-h-[80vh] overflow-hidden shadow-xl"
+        className="bg-surface rounded-lg border border-border-input w-[500px] max-h-[80vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
           <h2 className="text-sm font-semibold text-primary">Manage Repositories</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-faint">&uarr;&darr; navigate &middot; type to search &middot; {altSymbol}B browse &middot; {altSymbol}A add &middot; Esc close</span>
-            <button
-              onClick={close}
-              tabIndex={-1}
-              className="text-secondary hover:text-primary text-lg leading-none"
-            >
-              &times;
-            </button>
-          </div>
+          <button
+            onClick={close}
+            tabIndex={-1}
+            className="text-secondary hover:text-primary text-lg leading-none"
+          >
+            &times;
+          </button>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           <SearchIndicator search={search} />
 
           {/* Recent from Claude */}
@@ -291,7 +288,7 @@ export default function RepoManager() {
           )}
 
           {/* Repo list */}
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+          <div className="space-y-2">
             {state.repos.length === 0 && !search && (
               <p className="text-sm text-muted text-center py-4">No repositories added yet.</p>
             )}
@@ -376,6 +373,13 @@ export default function RepoManager() {
             </div>
             {error && <p className="mt-1 text-xs text-danger">{error}</p>}
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+          <span className="text-xs text-faint">
+            &uarr;&darr; navigate &middot; Tab cycle &middot; type to search &middot; {altSymbol}B browse &middot; {altSymbol}A add &middot; Esc close
+          </span>
         </div>
       </div>
     </div>
