@@ -54,7 +54,7 @@ function renderInline(text: string): React.ReactNode[] {
     if (match.index > last) parts.push(text.slice(last, match.index));
     if (match[2]) parts.push(<strong key={match.index}>{match[2]}</strong>);
     else if (match[3]) parts.push(<em key={match.index}>{match[3]}</em>);
-    else if (match[4]) parts.push(<code key={match.index} className="bg-slate-600 px-1 rounded text-xs">{match[4]}</code>);
+    else if (match[4]) parts.push(<code key={match.index} className="bg-surface-alt px-1 rounded text-xs">{match[4]}</code>);
     last = match.index + match[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
@@ -361,11 +361,11 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-slate-900 text-slate-200">
+    <div className="flex flex-col h-screen bg-app text-primary">
       {/* Title bar drag area */}
-      <div className="h-8 bg-slate-800 border-b border-slate-700 flex items-center justify-center"
+      <div className="h-8 bg-surface border-b border-border-default flex items-center justify-center"
            style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}>
-        <span className="text-xs font-semibold tracking-wide text-slate-500">BIFROST</span>
+        <span className="text-xs font-semibold tracking-wide text-faint">BIFROST</span>
       </div>
 
       {/* Main area: content + right icon bar */}
@@ -423,16 +423,16 @@ export default function App() {
             }
           }}
         >
-          <div className="bg-slate-800 rounded-lg border border-slate-600 p-6 w-[400px] shadow-xl">
-            <h3 className="text-sm font-semibold text-slate-200 mb-3">Uncommitted Changes</h3>
-            <p className="text-sm text-slate-400 mb-5">
-              <span className="font-medium text-slate-300">{state.archiveConfirm.taskName}</span> has uncommitted changes that will be lost when the worktree is removed.
+          <div className="bg-surface rounded-lg border border-border-input p-6 w-[400px] shadow-xl">
+            <h3 className="text-sm font-semibold text-primary mb-3">Uncommitted Changes</h3>
+            <p className="text-sm text-secondary mb-5">
+              <span className="font-medium text-primary">{state.archiveConfirm.taskName}</span> has uncommitted changes that will be lost when the worktree is removed.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 autoFocus
                 onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
-                className="px-4 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded"
+                className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded"
               >
                 Cancel
               </button>
@@ -453,7 +453,7 @@ export default function App() {
 
       {/* Toast notification */}
       {state.toast && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-slate-900/60 backdrop-blur-xl text-slate-200 text-sm rounded-xl shadow-2xl border border-white/10 animate-fade-in max-w-lg">
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-xl shadow-2xl border border-white/10 animate-fade-in max-w-lg">
           <div className="flex items-center gap-3">
             <SimpleMarkdown text={state.toast} />
             {state.toastAction && (
@@ -462,14 +462,14 @@ export default function App() {
                   state.toastAction!.callback();
                   dispatch({ type: 'HIDE_TOAST' });
                 }}
-                className="shrink-0 px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded"
+                className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded"
               >
                 {state.toastAction.label}
               </button>
             )}
           </div>
           {state.toastHint && (
-            <div className="text-right text-xs text-slate-500 mt-1">{state.toastHint}</div>
+            <div className="text-right text-xs text-faint mt-1">{state.toastHint}</div>
           )}
         </div>
       )}

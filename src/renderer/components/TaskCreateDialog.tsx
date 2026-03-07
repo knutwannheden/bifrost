@@ -351,16 +351,16 @@ export default function TaskCreateDialog() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[550px] shadow-xl"
+        className="bg-surface rounded-lg border border-border-input w-[550px] shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <h2 className="text-sm font-semibold text-slate-200">Create Task</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+          <h2 className="text-sm font-semibold text-primary">Create Task</h2>
           <div className="flex items-center gap-3">
             <button
               onClick={close}
               tabIndex={-1}
-              className="text-slate-400 hover:text-slate-200 text-lg leading-none"
+              className="text-secondary hover:text-primary text-lg leading-none"
             >
               &times;
             </button>
@@ -370,8 +370,8 @@ export default function TaskCreateDialog() {
         <div className="p-4 space-y-4">
           {/* PR detection banner */}
           {prBanner && (
-            <div className="flex items-center justify-between bg-blue-900/40 border border-blue-700/50 rounded px-3 py-2">
-              <p className="text-xs text-blue-300">
+            <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded px-3 py-2">
+              <p className="text-xs text-accent-hover">
                 {prBanner.message
                   ? prBanner.message
                   : `PR #${prBanner.number}${prBanner.title ? `: ${prBanner.title}` : ''}`}
@@ -381,7 +381,7 @@ export default function TaskCreateDialog() {
                   setPrBanner(null);
                   setPrInfo(null);
                 }}
-                className="text-xs text-blue-400 hover:text-blue-200 ml-3 whitespace-nowrap"
+                className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap"
               >
                 Ignore
               </button>
@@ -390,13 +390,13 @@ export default function TaskCreateDialog() {
 
           {/* Slack link banner */}
           {slackUrl && (
-            <div className="flex items-center justify-between bg-blue-900/40 border border-blue-700/50 rounded px-3 py-2">
-              <p className="text-xs text-blue-300 truncate">
+            <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded px-3 py-2">
+              <p className="text-xs text-accent-hover truncate">
                 Slack message detected
               </p>
               <button
                 onClick={() => setSlackUrl(null)}
-                className="text-xs text-blue-400 hover:text-blue-200 ml-3 whitespace-nowrap"
+                className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap"
               >
                 Ignore
               </button>
@@ -421,14 +421,14 @@ export default function TaskCreateDialog() {
           {/* No repos message */}
           {state.repos.length === 0 && (
             <div className="text-center py-2">
-              <p className="text-sm text-slate-400 mb-2">No repositories added yet.</p>
+              <p className="text-sm text-secondary mb-2">No repositories added yet.</p>
               <button
                 autoFocus
                 onClick={() => {
                   close();
                   dispatch({ type: 'TOGGLE_REPO_MANAGER' });
                 }}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 Add a Repository
               </button>
@@ -438,7 +438,7 @@ export default function TaskCreateDialog() {
           {/* Repo select */}
           {state.repos.length > 0 && (
           <div className="relative">
-            <label className="block text-xs text-slate-400 mb-1">Repository</label>
+            <label className="block text-xs text-secondary mb-1">Repository</label>
             <input
               ref={repoRef}
               type="text"
@@ -496,12 +496,12 @@ export default function TaskCreateDialog() {
                 }
               }}
               placeholder="Type to search..."
-              className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
             {repoDropdownOpen && filteredRepos.length > 0 && (
               <div
                 ref={repoListRef}
-                className="absolute z-10 mt-1 w-full bg-slate-700 border border-slate-600 rounded shadow-lg max-h-[200px] overflow-y-auto"
+                className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
               >
                 {filteredRepos.map((repo, idx) => (
                   <div
@@ -510,12 +510,12 @@ export default function TaskCreateDialog() {
                     onMouseEnter={() => setRepoFocusedIdx(idx)}
                     className={`px-3 py-1.5 cursor-pointer ${
                       idx === repoFocusedIdx
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-200 hover:bg-slate-600'
+                        ? 'bg-accent text-white'
+                        : 'text-primary hover:bg-surface-hover'
                     }`}
                   >
                     <div className="text-sm">{repoDisplayName(repo)}</div>
-                    <div className={`text-xs ${idx === repoFocusedIdx ? 'text-blue-200' : 'text-slate-400'}`}>
+                    <div className={`text-xs ${idx === repoFocusedIdx ? 'text-white/70' : 'text-secondary'}`}>
                       {shortPath(repo.path)}
                     </div>
                   </div>
@@ -529,7 +529,7 @@ export default function TaskCreateDialog() {
           <>
           {/* Task name */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Task <span className="underline underline-offset-2">N</span>ame</label>
+            <label className="block text-xs text-secondary mb-1">Task <span className="underline underline-offset-2">N</span>ame</label>
             <div className="flex gap-2">
               <input
                 ref={nameRef}
@@ -537,13 +537,13 @@ export default function TaskCreateDialog() {
                 value={taskName}
                 onChange={(e) => setTaskName(e.target.value)}
                 placeholder="select a repo to generate..."
-                className="flex-1 px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="flex-1 px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
               <button
                 onClick={regenerateName}
                 title="Generate new name (Alt+N)"
                 tabIndex={-1}
-                className="px-2 py-1.5 bg-slate-700 border border-slate-600 rounded text-slate-400 hover:text-slate-200 hover:border-slate-500 text-sm"
+                className="px-2 py-1.5 bg-surface-alt border border-border-input rounded text-secondary hover:text-primary hover:border-border-input text-sm"
               >
                 &#x21bb;
               </button>
@@ -565,9 +565,9 @@ export default function TaskCreateDialog() {
                   setPrInfo(null);
                 }
               }}
-              className="rounded border-slate-500 bg-slate-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+              className="rounded border-border-input bg-surface-alt text-accent focus:ring-accent focus:ring-offset-0"
             />
-            <span className="text-xs text-slate-400">Use main worktree (no separate checkout)</span>
+            <span className="text-xs text-secondary">Use main worktree (no separate checkout)</span>
           </label>
 
           {/* In-place conflict banner */}
@@ -587,9 +587,9 @@ export default function TaskCreateDialog() {
 
           {/* Branch select */}
           <div className="relative">
-            <label className="block text-xs text-slate-400 mb-1">Branch</label>
+            <label className="block text-xs text-secondary mb-1">Branch</label>
             {inPlace ? (
-              <div className="w-full px-3 py-1.5 bg-slate-700/50 border border-slate-600 rounded text-sm text-slate-400">
+              <div className="w-full px-3 py-1.5 bg-surface-alt/50 border border-border-input rounded text-sm text-secondary">
                 {currentBranch ?? 'Detecting...'}
               </div>
             ) : (
@@ -649,19 +649,19 @@ export default function TaskCreateDialog() {
               }}
               placeholder={branchesLoading ? '' : branches.length === 0 ? 'Select a repo first' : 'Type to search...'}
               disabled={branchesLoading || branches.length === 0}
-              className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
+              className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
             />
             {branchesLoading && (
               <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
                 <Spinner size="sm" className="mr-2" />
-                <span className="text-sm text-slate-400">Fetching branches...</span>
+                <span className="text-sm text-secondary">Fetching branches...</span>
               </div>
             )}
             </div>
             {branchDropdownOpen && filteredBranches.length > 0 && (
               <div
                 ref={branchListRef}
-                className="absolute z-10 mt-1 w-full bg-slate-700 border border-slate-600 rounded shadow-lg max-h-[200px] overflow-y-auto"
+                className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
               >
                 {filteredBranches.map((b, idx) => (
                   <div
@@ -670,8 +670,8 @@ export default function TaskCreateDialog() {
                     onMouseEnter={() => setBranchFocusedIdx(idx)}
                     className={`px-3 py-1.5 cursor-pointer text-sm ${
                       idx === branchFocusedIdx
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-200 hover:bg-slate-600'
+                        ? 'bg-accent text-white'
+                        : 'text-primary hover:bg-surface-hover'
                     }`}
                   >
                     {b}
@@ -685,7 +685,7 @@ export default function TaskCreateDialog() {
 
           {/* Prompt */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Prompt</label>
+            <label className="block text-xs text-secondary mb-1">Prompt</label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -695,7 +695,7 @@ export default function TaskCreateDialog() {
               }}
               placeholder="Initial prompt sent to Claude (optional)"
               rows={3}
-              className="w-full px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
+              className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
             />
           </div>
 
@@ -704,7 +704,7 @@ export default function TaskCreateDialog() {
           <div className="flex justify-end gap-2">
             <button
               onClick={close}
-              className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-slate-500"
+              className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input"
             >
               Cancel
             </button>
@@ -712,7 +712,7 @@ export default function TaskCreateDialog() {
               ref={createRef}
               onClick={handleSubmit}
               disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+              className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
             >
               {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
             </button>
