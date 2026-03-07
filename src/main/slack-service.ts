@@ -75,6 +75,7 @@ async function getTeamDomain(token: string): Promise<string> {
 
 const OAUTH_PORT = 17843;
 
+let oauthServer: https.Server | null = null;
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function fetchReactions(mainWindow: BrowserWindow): Promise<void> {
@@ -237,7 +238,14 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
     return Promise.reject(new Error('Slack client ID and secret must be configured first'));
   }
 
+  // Close any leftover server from a previous timed-out attempt
+  if (oauthServer) {
+    oauthServer.close();
+    oauthServer = null;
+  }
+
   return new Promise((resolve, reject) => {
+    let settled = false;
     const state = crypto.randomBytes(16).toString('hex');
     const { key, cert } = generateSelfSignedCert();
 
@@ -294,9 +302,6 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
         // Start polling with new token
         restartPolling(mainWindow);
 
-        // Notify renderer
-        mainWindow.webContents.send('slack:oauth-complete');
-
         cleanup();
         resolve();
       } catch (err) {
@@ -307,15 +312,29 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
       }
     });
 
+    oauthServer = server;
+
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error('OAuth timed out after 60 seconds'));
+      if (!settled) {
+        settled = true;
+        reject(new Error('OAuth timed out after 60 seconds'));
+      }
     }, 60_000);
 
     function cleanup(): void {
       clearTimeout(timeout);
       server.close();
+      oauthServer = null;
     }
+
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      cleanup();
+      if (!settled) {
+        settled = true;
+        reject(new Error(`OAuth server failed: ${err.message}`));
+      }
+    });
 
     server.listen(OAUTH_PORT, () => {
       const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
