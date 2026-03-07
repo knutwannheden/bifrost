@@ -178,36 +178,36 @@ export default function KeyboardShortcutsPanel() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[400px] flex flex-col shadow-xl max-h-[80vh]"
+        className="bg-surface rounded-lg border border-border-input w-[400px] flex flex-col shadow-xl max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center px-4 py-3 border-b border-slate-700">
+        <div className="flex items-center px-4 py-3 border-b border-border-default">
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search shortcuts…"
-            className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 outline-none"
+            className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-none"
           />
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-slate-400 hover:text-slate-200 text-lg leading-none ml-2"
+            className="text-secondary hover:text-primary text-lg leading-none ml-2"
           >
             &times;
           </button>
         </div>
         <div ref={listRef} className="p-2 overflow-y-auto">
           {items.length === 0 ? (
-            <div className="text-sm text-slate-500 text-center py-4">No matches</div>
+            <div className="text-sm text-muted text-center py-4">No matches</div>
           ) : (
             items.map((item, i) => {
               if (item.type === 'header') {
                 return (
                   <div
                     key={`group-${item.label}`}
-                    className={`px-2 pt-3 pb-1 text-xs font-semibold text-slate-500 uppercase tracking-wider ${i === 0 ? 'pt-1' : ''}`}
+                    className={`px-2 pt-3 pb-1 text-xs font-semibold text-muted uppercase tracking-wider ${i === 0 ? 'pt-1' : ''}`}
                   >
                     {item.label}
                   </div>
@@ -218,20 +218,20 @@ export default function KeyboardShortcutsPanel() {
                 <div
                   key={item.shortcut.key}
                   className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer ${
-                    navIdx === selectedIndex ? 'bg-slate-700' : 'hover:bg-slate-700/50'
+                    navIdx === selectedIndex ? 'bg-surface-alt' : 'hover:bg-surface-alt/50'
                   }`}
                   onClick={() => execute(item.shortcut)}
                   onMouseEnter={() => setSelectedIndex(navIdx)}
                 >
-                  <span className="text-sm text-slate-300"><Highlight text={item.shortcut.label} search={query} /></span>
+                  <span className="text-sm text-secondary"><Highlight text={item.shortcut.label} search={query} /></span>
                   <Kbd size="sm">{`Cmd+${item.shortcut.key}`}</Kbd>
                 </div>
               );
             })
           )}
         </div>
-        <div className="px-4 pb-3 pt-2 border-t border-slate-700">
-          <p className="text-xs text-slate-500">Click URLs in terminal to open in browser</p>
+        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+          <p className="text-xs text-muted">Click URLs in terminal to open in browser</p>
         </div>
       </div>
     </div>
