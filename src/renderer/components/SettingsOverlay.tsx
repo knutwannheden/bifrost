@@ -25,14 +25,14 @@ function buildSettings(): SettingDef[] {
         <div className="flex items-center gap-2">
           <button
             onClick={() => update({ fontSize: Math.max(8, config.fontSize - 1) })}
-            className="w-7 h-7 flex items-center justify-center rounded bg-slate-700 text-slate-300 hover:bg-slate-600 text-sm"
+            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm"
           >
             -
           </button>
-          <span className="text-sm text-slate-200 w-6 text-center font-mono">{config.fontSize}</span>
+          <span className="text-sm text-primary w-6 text-center font-mono">{config.fontSize}</span>
           <button
             onClick={() => update({ fontSize: Math.min(32, config.fontSize + 1) })}
-            className="w-7 h-7 flex items-center justify-center rounded bg-slate-700 text-slate-300 hover:bg-slate-600 text-sm"
+            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm"
           >
             +
           </button>
@@ -48,7 +48,7 @@ function buildSettings(): SettingDef[] {
         <select
           value={config.fontFamily}
           onChange={(e) => update({ fontFamily: e.target.value })}
-          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary focus:outline-none focus:border-accent"
         >
           {[
             { label: 'MesloLGS NF', value: 'MesloLGS NF' },
@@ -79,7 +79,7 @@ function buildSettings(): SettingDef[] {
             onChange={(e) => update({ fontWeight: Number(e.target.value) })}
             className="w-24 accent-blue-500"
           />
-          <span className="text-sm text-slate-200 w-6 text-center font-mono">{config.fontWeight}</span>
+          <span className="text-sm text-primary w-6 text-center font-mono">{config.fontWeight}</span>
         </div>
       ),
     },
@@ -116,9 +116,9 @@ function buildSettings(): SettingDef[] {
                 onChange={() => update({ permissionMode: opt.value })}
                 className="mt-0.5 accent-blue-500"
               />
-              <span className="text-sm text-slate-300 group-hover:text-slate-200">
+              <span className="text-sm text-secondary group-hover:text-primary">
                 {opt.label}
-                {opt.desc && <span className="text-slate-500"> — {opt.desc}</span>}
+                {opt.desc && <span className="text-muted"> — {opt.desc}</span>}
               </span>
             </label>
           ))}
@@ -177,8 +177,8 @@ function buildSettings(): SettingDef[] {
               onClick={() => update({ ide })}
               className={`px-3 py-1 text-xs rounded ${
                 config.ide === ide
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  ? 'bg-accent text-white'
+                  : 'bg-surface-alt text-secondary hover:bg-surface-hover'
               }`}
             >
               {ide === 'code' ? 'VS Code' : ide === 'idea' ? 'IntelliJ' : 'Zed'}
@@ -224,7 +224,7 @@ function buildSettings(): SettingDef[] {
           type="text"
           value={(config.ollamaModels ?? []).join(', ')}
           onChange={(e) => update({ ollamaModels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
           placeholder="phi4-mini, gemma3:1b"
         />
       ),
@@ -251,7 +251,7 @@ function buildSettings(): SettingDef[] {
           type="text"
           value={config.slack?.clientId ?? ''}
           onChange={(e) => update({ slack: { ...config.slack, clientId: e.target.value } } as Partial<BifrostConfig>)}
-          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
         />
       ),
     },
@@ -265,7 +265,7 @@ function buildSettings(): SettingDef[] {
           type="password"
           value={config.slack?.clientSecret ?? ''}
           onChange={(e) => update({ slack: { ...config.slack, clientSecret: e.target.value } } as Partial<BifrostConfig>)}
-          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
         />
       ),
     },
@@ -303,7 +303,7 @@ function buildSettings(): SettingDef[] {
               }
             }}
             disabled={!config.slack?.clientId || !config.slack?.clientSecret}
-            className="px-3 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-1 text-xs rounded bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Connect to Slack
           </button>
@@ -320,7 +320,7 @@ function buildSettings(): SettingDef[] {
           type="text"
           value={(config.slack?.reactions ?? []).join(', ')}
           onChange={(e) => update({ slack: { ...config.slack, reactions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } } as Partial<BifrostConfig>)}
-          className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 w-48 focus:outline-none focus:border-blue-500"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
           placeholder="bifrost, robot_face"
         />
       ),
@@ -333,7 +333,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
     <button
       onClick={() => onChange(!checked)}
       className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
-        checked ? 'bg-blue-600' : 'bg-slate-600'
+        checked ? 'bg-accent' : 'bg-surface-hover'
       }`}
     >
       <span
@@ -412,12 +412,12 @@ export default function SettingsOverlay() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[720px] flex flex-col shadow-xl max-h-[80vh]"
+        className="bg-surface rounded-lg border border-border-input w-[720px] flex flex-col shadow-xl max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <h2 className="text-sm font-semibold text-slate-200">Settings</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+          <h2 className="text-sm font-semibold text-primary">Settings</h2>
           <div className="flex items-center gap-3">
             <input
               ref={searchRef}
@@ -425,12 +425,12 @@ export default function SettingsOverlay() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search settings..."
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-200 placeholder-slate-500 w-48 focus:outline-none focus:border-blue-500"
+              className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary placeholder-muted w-48 focus:outline-none focus:border-accent"
             />
             <button
               onClick={close}
               tabIndex={-1}
-              className="text-slate-400 hover:text-slate-200 text-lg leading-none"
+              className="text-secondary hover:text-primary text-lg leading-none"
             >
               &times;
             </button>
@@ -440,15 +440,15 @@ export default function SettingsOverlay() {
         {/* Body */}
         <div className="flex flex-1 min-h-0">
           {/* Left nav */}
-          <div className="w-[140px] flex-shrink-0 border-r border-slate-700 py-2">
+          <div className="w-[140px] flex-shrink-0 border-r border-border-default py-2">
             {visibleCategories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => scrollToCategory(cat)}
                 className={`w-full text-left px-4 py-1.5 text-sm ${
                   activeCategory === cat
-                    ? 'text-blue-400 bg-slate-700/50'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
+                    ? 'text-accent-hover bg-surface-alt/50'
+                    : 'text-secondary hover:text-primary hover:bg-surface-alt/30'
                 }`}
               >
                 {cat}
@@ -463,24 +463,24 @@ export default function SettingsOverlay() {
               if (catSettings.length === 0) return null;
               return (
                 <div key={cat} ref={(el) => { categoryRefs.current[cat] = el; }}>
-                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+                  <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">
                     {cat}
                   </h3>
                   <div className="space-y-4">
                     {catSettings.map((setting) => (
                       <div key={setting.key} className="flex items-start justify-between gap-4">
                         <div className="min-w-0 group/tip relative">
-                          <label className="text-sm text-slate-300 flex items-center gap-1.5">
+                          <label className="text-sm text-secondary flex items-center gap-1.5">
                             {setting.label}
                             {setting.tooltip && (
-                              <span className="text-slate-600 hover:text-slate-400 cursor-help text-xs">&#9432;</span>
+                              <span className="text-faint hover:text-secondary cursor-help text-xs">&#9432;</span>
                             )}
                           </label>
                           {setting.description && (
-                            <p className="text-xs text-slate-500">{setting.description}</p>
+                            <p className="text-xs text-muted">{setting.description}</p>
                           )}
                           {setting.tooltip && (
-                            <div className="hidden group-hover/tip:block absolute left-0 top-full mt-1 z-50 bg-slate-900 border border-slate-600 rounded px-3 py-2 shadow-lg w-96 whitespace-pre-line text-xs text-slate-300 leading-relaxed">
+                            <div className="hidden group-hover/tip:block absolute left-0 top-full mt-1 z-50 bg-app border border-border-input rounded px-3 py-2 shadow-lg w-96 whitespace-pre-line text-xs text-secondary leading-relaxed">
                               {setting.tooltip}
                             </div>
                           )}
@@ -496,8 +496,8 @@ export default function SettingsOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end px-4 py-2 border-t border-slate-700">
-          <span className="text-xs text-slate-500">{modSymbol}, to close</span>
+        <div className="flex justify-end px-4 py-2 border-t border-border-default">
+          <span className="text-xs text-muted">{modSymbol}, to close</span>
         </div>
       </div>
     </div>
