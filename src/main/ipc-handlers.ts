@@ -34,6 +34,7 @@ import {
   initSupervisor, getSupervisorState, startSupervisor, stopSupervisor,
   setSupervisorConcurrency, pauseItem, resumeItem, openItem, removeItem,
 } from './supervisor-service';
+import { startOAuth, disconnectSlack } from './slack-service';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -949,4 +950,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.SUPERVISOR_RESUME_ITEM, (_event, itemId: string) => resumeItem(itemId));
   ipcMain.handle(IPC.SUPERVISOR_OPEN_ITEM, (_event, itemId: string) => openItem(itemId));
   ipcMain.handle(IPC.SUPERVISOR_REMOVE_ITEM, (_event, itemId: string) => removeItem(itemId));
+
+  // Slack
+  ipcMain.handle(IPC.SLACK_START_OAUTH, () => startOAuth(mainWindow));
+  ipcMain.handle(IPC.SLACK_DISCONNECT, () => disconnectSlack());
 }
