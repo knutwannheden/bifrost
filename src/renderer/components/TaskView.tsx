@@ -133,7 +133,7 @@ export default function TaskView() {
           {(integrationNeeded || updateAvailable || justInstalled) && (
             <div className="mb-6 flex flex-col items-center gap-2">
               {justInstalled ? (
-                <span className="text-sm text-green-400">&#10003; {updateAvailable ? 'Updated' : 'Installed'}</span>
+                <span className="text-sm text-success">&#10003; {updateAvailable ? 'Updated' : 'Installed'}</span>
               ) : (
                 <button
                   onClick={handleInstallIntegration}

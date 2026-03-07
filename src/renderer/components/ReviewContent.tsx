@@ -532,7 +532,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
   if (status === 'error') {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <div className="text-red-400 text-sm">{content || 'Review failed'}</div>
+        <div className="text-danger text-sm">{content || 'Review failed'}</div>
       </div>
     );
   }

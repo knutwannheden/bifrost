@@ -467,7 +467,7 @@ export default function NotesOverlay() {
                         </span>
                         <button
                           onClick={(e) => { e.stopPropagation(); deleteNoteById(note.id); }}
-                          className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 flex-shrink-0 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 text-danger hover:brightness-125 flex-shrink-0 transition-opacity"
                           title="Delete note"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">

@@ -19,10 +19,10 @@ const statusLabel: Record<string, string> = {
 };
 
 const statusColor: Record<string, string> = {
-  running: 'text-green-400',
-  stopped: 'text-slate-400',
-  error: 'text-red-400',
-  archived: 'text-slate-500',
+  running: 'text-success',
+  stopped: 'text-secondary',
+  error: 'text-danger',
+  archived: 'text-muted',
 };
 
 const filters = ['active', 'all', 'archived', 'sessions'] as const;
@@ -174,7 +174,7 @@ function TaskRow({
             onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
             title={task.inPlace || task.isExternal ? 'Delete task (Alt+D)' : 'Delete task and worktree (Alt+D)'}
             tabIndex={-1}
-            className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
+            className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded"
           >
             <ActionLabel text="Delete" showHint={idx === focusedIdx} />
           </button>
@@ -570,7 +570,7 @@ export default function TaskHistoryPanel() {
         </div>
 
         {error && (
-          <p className="text-xs text-red-400 px-4 pt-2">{error}</p>
+          <p className="text-xs text-danger px-4 pt-2">{error}</p>
         )}
 
         {branchConfirm && (

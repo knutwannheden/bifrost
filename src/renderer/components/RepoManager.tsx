@@ -335,7 +335,7 @@ export default function RepoManager() {
                       onClick={() => handleRemove(repo.id)}
                       tabIndex={-1}
                       title="Remove (Alt+R)"
-                      className="px-1.5 py-0.5 text-xs text-red-400 hover:text-red-300 hover:bg-slate-600 rounded"
+                      className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded"
                     >
                       <ActionLabel text="Remove" showHint={isFocused} />
                     </button>
@@ -381,7 +381,7 @@ export default function RepoManager() {
                 <ActionLabel text="Add" showHint={!!localPath.trim()} />
               </button>
             </div>
-            {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
+            {error && <p className="mt-1 text-xs text-danger">{error}</p>}
           </div>
         </div>
       </div>

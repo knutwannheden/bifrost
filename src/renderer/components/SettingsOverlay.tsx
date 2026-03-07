@@ -277,14 +277,14 @@ function buildSettings(): SettingDef[] {
         if (config.slack?.userToken) {
           return (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-green-400">Connected ✓</span>
+              <span className="text-sm text-success">Connected ✓</span>
               <button
                 onClick={async () => {
                   await window.bifrost.disconnectSlack();
                   const fresh = await window.bifrost.loadConfig();
                   update(fresh);
                 }}
-                className="text-xs text-red-400 hover:text-red-300 underline"
+                className="text-xs text-danger hover:brightness-125 underline"
               >
                 Disconnect
               </button>

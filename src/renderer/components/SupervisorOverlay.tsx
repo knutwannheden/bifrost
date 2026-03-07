@@ -18,7 +18,7 @@ function ItemRow({ item, repoName, onAction }: {
         </div>
         <div className="text-sm text-slate-300 truncate">{item.noteText}</div>
         {item.errorMessage && (
-          <div className="text-xs text-red-400 truncate mt-0.5">{item.errorMessage}</div>
+          <div className="text-xs text-danger truncate mt-0.5">{item.errorMessage}</div>
         )}
       </div>
       <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
