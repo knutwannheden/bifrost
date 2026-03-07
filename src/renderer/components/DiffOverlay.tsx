@@ -13,6 +13,7 @@ import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
 import SearchIndicator from './SearchIndicator';
 import Spinner from './Spinner';
+import { formatTimestamp, formatRelative } from '../utils/format-time';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { isModKey } from '../utils/platform';
@@ -198,14 +199,6 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
       <FileSection data={{ file, tokensByLine: displayTokens }} />
     </div>
   );
-}
-
-function formatTimestamp(ts: number): string {
-  return new Date(ts).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
 }
 
 function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
@@ -825,19 +818,6 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
   );
 }
 
-function formatRelativeDate(isoDate: string): string {
-  const date = new Date(isoDate);
-  const now = Date.now();
-  const diffMs = now - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
-}
 
 function GitLogEntryView({ entry, focused }: { entry: GitLogEntry; focused: boolean }) {
   return (
@@ -849,7 +829,7 @@ function GitLogEntryView({ entry, focused }: { entry: GitLogEntry; focused: bool
       <span className="text-yellow-400 font-mono flex-shrink-0">{entry.shortSha}</span>
       <span className="text-slate-200 flex-1 min-w-0 break-words">{entry.subject}</span>
       <span className="text-slate-500 flex-shrink-0">{entry.author}</span>
-      <span className="text-slate-600 flex-shrink-0 w-16 text-right">{formatRelativeDate(entry.date)}</span>
+      <span className="text-slate-600 flex-shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
     </div>
   );
 }

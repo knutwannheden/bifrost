@@ -9,6 +9,7 @@ import { matchesAllTerms } from '../utils/search';
 import Highlight from './Highlight';
 import SearchIndicator from './SearchIndicator';
 import Spinner from './Spinner';
+import { formatDate, formatRelative } from '../utils/format-time';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -26,26 +27,6 @@ const statusColor: Record<string, string> = {
 
 const filters = ['active', 'all', 'archived', 'sessions'] as const;
 type Filter = (typeof filters)[number];
-
-function formatDate(ts: number): string {
-  return new Date(ts).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function formatRelative(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 const TIME_BUCKETS = [
   'Last 10 minutes',

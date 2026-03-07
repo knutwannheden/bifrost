@@ -7,6 +7,7 @@ import DiffStatsBadge from './DiffStatsBadge';
 import TerminalPane from './TerminalPane';
 import Kbd from './Kbd';
 import Spinner from './Spinner';
+import { formatElapsed } from '../utils/format-time';
 import { isModKey } from '../utils/platform';
 
 type ReviewScope = 'working' | 'all';
@@ -161,13 +162,6 @@ function parseCheckedLines(content: string): Set<number> {
     }
   }
   return checked;
-}
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
 }
 
 function useElapsed(running: boolean, startedAt: number | null): number {

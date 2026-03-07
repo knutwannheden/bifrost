@@ -2,18 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import type { ReviewEntry } from '../../shared/types';
 import type { ReviewStatus } from '../context/AppContext';
 import Spinner from './Spinner';
-
-function formatRelativeTime(timestamp: number): string {
-  const diffMs = Date.now() - timestamp;
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 30) return `${diffDays}d ago`;
-  return new Date(timestamp).toLocaleDateString();
-}
+import { formatRelative } from '../utils/format-time';
 
 interface ReviewSidebarProps {
   reviews: ReviewEntry[];
@@ -140,7 +129,7 @@ export default function ReviewSidebar({
                 {review.instructions || 'No instructions'}
               </div>
               <div className="text-[10px] text-slate-600 mt-0.5">
-                {formatRelativeTime(review.timestamp)}
+                {formatRelative(review.timestamp)}
               </div>
             </div>
           );

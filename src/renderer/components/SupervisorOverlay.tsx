@@ -2,15 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { SupervisorState, SupervisorItem } from '../../shared/types';
 import Spinner from './Spinner';
-
-function formatTime(ts: number): string {
-  const d = new Date(ts);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
+import { formatTime } from '../utils/format-time';
 
 function ItemRow({ item, repoName, onAction }: {
   item: SupervisorItem;

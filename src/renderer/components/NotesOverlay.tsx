@@ -4,6 +4,7 @@ import type { Note, Repo } from '../../shared/types';
 import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesAllTerms } from '../utils/search';
 import { isModKey, modSymbol, altSymbol, deleteSymbol } from '../utils/platform';
+import { formatTime } from '../utils/format-time';
 
 function matchesRepoSearch(repo: Repo, search: string): boolean {
   return matchesAllTerms(`${repoDisplayName(repo)} ${repo.path}`, search);
@@ -519,13 +520,4 @@ export default function NotesOverlay() {
       </div>
     </div>
   );
-}
-
-function formatTime(ts: number): string {
-  const d = new Date(ts);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
