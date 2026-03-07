@@ -115,15 +115,16 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
           </span>
           <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
         </span>
-        <span
-          className="ml-1 text-muted hover:text-primary flex-shrink-0 hidden group-hover:inline"
+        <button
+          className="ml-1 text-muted hover:text-primary flex-shrink-0 hidden group-hover:inline transition-colors"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
+          tabIndex={-1}
         >
           &times;
-        </span>
+        </button>
       </button>
       {showTooltip && tooltipPos && createPortal(
         <div
