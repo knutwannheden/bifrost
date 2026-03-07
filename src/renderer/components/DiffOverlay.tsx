@@ -766,7 +766,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
     return (
       <div className="flex-1 flex flex-col">
         <ScopeToggle scope={scope} onChange={onSetScope} />
-        <div className="text-red-400 p-4">Error: {error}</div>
+        <div className="text-sm text-danger p-4">Error: {error}</div>
       </div>
     );
   }
@@ -1210,7 +1210,7 @@ export default function DiffOverlay() {
           )}
 
           {gitLog.error && (
-            <div className="text-red-400">Error: {gitLog.error}</div>
+            <div className="text-sm text-danger">Error: {gitLog.error}</div>
           )}
 
           {!gitLog.loading && !gitLog.error && filteredLogEntries.length === 0 && (
@@ -1246,7 +1246,7 @@ export default function DiffOverlay() {
             )}
 
             {activityLog.error && (
-              <div className="text-red-400">Error: {activityLog.error}</div>
+              <div className="text-sm text-danger">Error: {activityLog.error}</div>
             )}
 
             {!activityLog.loading && !activityLog.error && filteredEntries.length === 0 && (

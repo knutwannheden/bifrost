@@ -1,14 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import type { Note, Repo } from '../../shared/types';
+import type { Note } from '../../shared/types';
 import { shortPath, repoDisplayName } from '../utils/paths';
-import { matchesAllTerms } from '../utils/search';
+import { matchesRepoSearch } from '../utils/search';
 import { isModKey, modSymbol, altSymbol, deleteSymbol } from '../utils/platform';
 import { formatTime } from '../utils/format-time';
-
-function matchesRepoSearch(repo: Repo, search: string): boolean {
-  return matchesAllTerms(`${repoDisplayName(repo)} ${repo.path}`, search);
-}
 
 export default function NotesOverlay() {
   const { state, dispatch } = useApp();

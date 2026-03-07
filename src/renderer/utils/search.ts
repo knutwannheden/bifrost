@@ -9,3 +9,8 @@ export function matchesAllTerms(haystack: string, search: string): boolean {
   const lower = haystack.toLowerCase();
   return searchTerms(search).every((term) => lower.includes(term));
 }
+
+/** Match a Repo by its display name and path against a search string. */
+export function matchesRepoSearch(repo: { githubPath?: string; name: string; path: string }, search: string): boolean {
+  return matchesAllTerms(`${repo.githubPath ?? repo.name} ${repo.path}`, search);
+}

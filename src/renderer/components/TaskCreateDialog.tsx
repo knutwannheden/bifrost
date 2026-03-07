@@ -3,14 +3,10 @@ import { useApp } from '../context/AppContext';
 import type { PrInfo, Repo } from '../../shared/types';
 import { generateTaskName } from '../../shared/name-generator';
 import { shortPath, repoDisplayName } from '../utils/paths';
-import { matchesAllTerms } from '../utils/search';
+import { matchesRepoSearch } from '../utils/search';
 import ActionLabel from './ActionLabel';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 import Spinner from './Spinner';
-
-function matchesRepoSearch(repo: Repo, search: string): boolean {
-  return matchesAllTerms(`${repoDisplayName(repo)} ${repo.path}`, search);
-}
 
 // Cache branches per repo so subsequent opens are instant
 const branchCache = new Map<string, string[]>();
