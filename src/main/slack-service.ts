@@ -246,12 +246,31 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
 
   return new Promise((resolve, reject) => {
     let settled = false;
-    const state = crypto.randomBytes(16).toString('hex');
+    const oauthState = crypto.randomBytes(16).toString('hex');
     const { key, cert } = generateSelfSignedCert();
 
+    const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
+    const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
+
+    const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
+    authorizeUrl.searchParams.set('client_id', clientId);
+    authorizeUrl.searchParams.set('user_scope', userScope);
+    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+    authorizeUrl.searchParams.set('state', oauthState);
+
+    // HTTPS server with self-signed cert. Browser opens /start first so the user
+    // accepts the cert warning BEFORE Slack redirects back to /callback.
     const server = https.createServer({ key, cert }, async (req, res) => {
       try {
         const url = new URL(req.url ?? '', `https://localhost`);
+
+        // Landing page — user sees cert warning here, then gets redirected to Slack
+        if (url.pathname === '/start') {
+          res.writeHead(302, { Location: authorizeUrl.toString() });
+          res.end();
+          return;
+        }
+
         if (url.pathname !== '/callback') {
           res.writeHead(404);
           res.end('Not found');
@@ -270,7 +289,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
           return;
         }
 
-        if (returnedState !== state) {
+        if (returnedState !== oauthState) {
           res.writeHead(400);
           res.end('State mismatch');
           cleanup();
@@ -286,7 +305,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
           return;
         }
 
-        const token = await exchangeCodeForToken(clientId, clientSecret, code, `https://localhost:${OAUTH_PORT}/callback`);
+        const token = await exchangeCodeForToken(clientId, clientSecret, code, redirectUri);
 
         // Store token in config
         const freshConfig = loadConfig();
@@ -305,6 +324,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
         cleanup();
         resolve();
       } catch (err) {
+        console.error('[slack] OAuth callback error:', err);
         res.writeHead(500);
         res.end('Internal error');
         cleanup();
@@ -318,9 +338,9 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
       cleanup();
       if (!settled) {
         settled = true;
-        reject(new Error('OAuth timed out after 60 seconds'));
+        reject(new Error('OAuth timed out after 120 seconds'));
       }
-    }, 60_000);
+    }, 120_000);
 
     function cleanup(): void {
       clearTimeout(timeout);
@@ -336,17 +356,9 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
       }
     });
 
+    // Open /start — cert warning happens here, then redirects to Slack OAuth
     server.listen(OAUTH_PORT, () => {
-      const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
-      const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
-
-      const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
-      authorizeUrl.searchParams.set('client_id', clientId);
-      authorizeUrl.searchParams.set('user_scope', userScope);
-      authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-      authorizeUrl.searchParams.set('state', state);
-
-      shell.openExternal(authorizeUrl.toString());
+      shell.openExternal(`https://localhost:${OAUTH_PORT}/start`);
     });
   });
 }
