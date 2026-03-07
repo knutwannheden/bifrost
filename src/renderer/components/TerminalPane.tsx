@@ -24,7 +24,7 @@ function LoadingOverlay() {
   }, []);
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-      <span className="text-muted text-sm font-mono">
+      <span className="text-muted text-sm">
         Loading{'.'.repeat(dots)}
       </span>
     </div>

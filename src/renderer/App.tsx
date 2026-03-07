@@ -415,7 +415,9 @@ export default function App() {
       {/* Archive confirmation dialog */}
       {state.archiveConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay focus:outline-none"
+          tabIndex={-1}
+          ref={(el) => el?.focus()}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.stopPropagation();
