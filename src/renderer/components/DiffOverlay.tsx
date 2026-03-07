@@ -207,9 +207,9 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
 
 function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
   const kindConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    user_message: { label: 'User', color: 'text-green-400', bg: 'bg-green-900/20', border: 'border-green-700/40' },
-    assistant_text: { label: 'Claude', color: 'text-purple-400', bg: 'bg-purple-900/20', border: 'border-purple-700/40' },
-    tool_use: { label: '', color: 'text-amber-400', bg: 'bg-amber-900/15', border: 'border-amber-700/30' },
+    user_message: { label: 'User', color: 'text-success', bg: 'bg-success/10', border: 'border-success/30' },
+    assistant_text: { label: 'Claude', color: 'text-accent-hover', bg: 'bg-accent/10', border: 'border-accent-muted' },
+    tool_use: { label: '', color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30' },
     tool_result: { label: 'Result', color: 'text-secondary', bg: 'bg-surface/50', border: 'border-border-default/30' },
   };
 
