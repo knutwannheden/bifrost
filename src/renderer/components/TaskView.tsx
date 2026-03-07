@@ -123,9 +123,9 @@ export default function TaskView() {
     }
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="text-center text-slate-500 max-w-md">
-          <p className="text-2xl font-semibold text-slate-300 mb-2">BIFROST</p>
-          <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+        <div className="text-center text-muted max-w-md">
+          <p className="text-2xl font-semibold text-primary mb-2">BIFROST</p>
+          <p className="text-sm text-secondary mb-6 leading-relaxed">
             A keyboard-centric command center for orchestrating parallel Claude Code sessions.
             Each task runs in its own isolated git worktree, so agents work independently without
             stepping on each other.
@@ -138,12 +138,12 @@ export default function TaskView() {
                 <button
                   onClick={handleInstallIntegration}
                   disabled={installing}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:bg-surface-alt text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   {installing ? (updateAvailable ? 'Updating...' : 'Installing...') : (updateAvailable ? 'Update Claude Integration' : 'Install Claude Integration')}
                 </button>
               )}
-              <p className="text-xs text-slate-500 max-w-sm text-center">
+              <p className="text-xs text-muted max-w-sm text-center">
                 {updateAvailable
                   ? 'A new version of the Bifrost plugin is available.'
                   : 'Adds the Bifrost MCP server and skills to your Claude Code configuration.'}
@@ -163,26 +163,26 @@ export default function TaskView() {
             {shortcuts.map((s) => (
               <React.Fragment key={s.keys}>
                 <Kbd size="sm">{s.keys}</Kbd>
-                <span className="text-xs text-slate-400">{s.label}</span>
+                <span className="text-xs text-secondary">{s.label}</span>
               </React.Fragment>
             ))}
           </div>
           {state.config?.showTips !== false && (
             <div className="mt-6 flex flex-col items-center gap-1.5">
-              <div className="bg-slate-700/50 border border-slate-600/50 rounded-full px-4 py-2 flex items-center gap-2 max-w-sm">
-                <span className="text-amber-400 text-sm flex-shrink-0">&#x1F4A1;</span>
-                <p className="text-xs text-slate-300 leading-relaxed">
+              <div className="bg-surface-alt/50 border border-border-input/50 rounded-full px-4 py-2 flex items-center gap-2 max-w-sm">
+                <span className="text-warning text-sm flex-shrink-0">&#x1F4A1;</span>
+                <p className="text-xs text-secondary leading-relaxed">
                   {tips[tipIndex]}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setTipIndex((i) => (i + 1) % tips.length)}
-                  className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
+                  className="text-[10px] text-muted hover:text-secondary transition-colors"
                 >
                   Next tip
                 </button>
-                <span className="text-[10px] text-slate-700">|</span>
+                <span className="text-[10px] text-faint">|</span>
                 <button
                   onClick={async () => {
                     if (!state.config) return;
@@ -190,7 +190,7 @@ export default function TaskView() {
                     await window.bifrost.saveConfig(newConfig);
                     dispatch({ type: 'SET_CONFIG', config: newConfig });
                   }}
-                  className="text-[10px] text-slate-600 hover:text-slate-400 transition-colors"
+                  className="text-[10px] text-faint hover:text-secondary transition-colors"
                 >
                   Don&apos;t show tips
                 </button>
@@ -241,7 +241,7 @@ export default function TaskView() {
             {/* Draggable divider between panes */}
             {showDev && showClaude && (
               <div
-                className="flex-shrink-0 bg-slate-700 hover:bg-blue-500 cursor-row-resize transition-colors"
+                className="flex-shrink-0 bg-border-default hover:bg-accent cursor-row-resize transition-colors"
                 style={{ height: 4 }}
                 onMouseDown={handleDividerMouseDown}
               />
