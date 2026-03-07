@@ -10,13 +10,13 @@ function ItemRow({ item, repoName, onAction }: {
   onAction: (action: string, itemId: string) => void;
 }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded hover:bg-slate-700/50 group">
+    <div className="flex items-start gap-2 px-3 py-2 rounded hover:bg-surface-alt/50 group">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">{item.name}</span>
-          <span className="text-xs text-slate-600">{repoName}</span>
+          <span className="text-xs text-muted">{item.name}</span>
+          <span className="text-xs text-faint">{repoName}</span>
         </div>
-        <div className="text-sm text-slate-300 truncate">{item.noteText}</div>
+        <div className="text-sm text-secondary truncate">{item.noteText}</div>
         {item.errorMessage && (
           <div className="text-xs text-danger truncate mt-0.5">{item.errorMessage}</div>
         )}
@@ -25,7 +25,7 @@ function ItemRow({ item, repoName, onAction }: {
         {item.status === 'running' && (
           <button
             onClick={() => onAction('pause', item.id)}
-            className="text-xs text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600"
+            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
           >
             Pause
           </button>
@@ -33,7 +33,7 @@ function ItemRow({ item, repoName, onAction }: {
         {item.status === 'paused' && (
           <button
             onClick={() => onAction('resume', item.id)}
-            className="text-xs text-slate-400 hover:text-slate-200 px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600"
+            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
           >
             Resume
           </button>
@@ -41,7 +41,7 @@ function ItemRow({ item, repoName, onAction }: {
         {(item.status === 'done' || item.status === 'error' || item.status === 'paused') && (
           <button
             onClick={() => onAction('open', item.id)}
-            className="text-xs text-blue-400 hover:text-blue-300 px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600"
+            className="text-xs text-accent-hover hover:brightness-125 px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
           >
             Open
           </button>
@@ -49,13 +49,13 @@ function ItemRow({ item, repoName, onAction }: {
         {item.status !== 'running' && item.status !== 'opened' && (
           <button
             onClick={() => onAction('remove', item.id)}
-            className="text-xs text-slate-500 hover:text-red-400 px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600"
+            className="text-xs text-muted hover:text-danger px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover"
           >
             &times;
           </button>
         )}
       </div>
-      <span className="text-xs text-slate-600 whitespace-nowrap shrink-0">
+      <span className="text-xs text-faint whitespace-nowrap shrink-0">
         {formatTime(item.startedAt ?? item.createdAt)}
       </span>
     </div>
@@ -139,15 +139,15 @@ export default function SupervisorOverlay() {
         ref={panelRef}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[640px] flex flex-col shadow-xl max-h-[80vh] outline-none"
+        className="bg-surface rounded-lg border border-border-input w-[640px] flex flex-col shadow-xl max-h-[80vh] outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700">
-          <span className="text-sm font-medium text-slate-200">Supervisor</span>
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-default">
+          <span className="text-sm font-medium text-primary">Supervisor</span>
           {svState?.running && <Spinner />}
           {svState && svState.items.length > 0 && (
-            <span className="text-xs text-slate-500">
+            <span className="text-xs text-muted">
               {running.length} running · {queued.length} queued · {done.length} done
             </span>
           )}
@@ -155,17 +155,17 @@ export default function SupervisorOverlay() {
 
           {/* Concurrency */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">Concurrency</span>
+            <span className="text-xs text-muted">Concurrency</span>
             <button
               onClick={() => handleConcurrency(-1)}
-              className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 text-sm"
+              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm"
             >
               &minus;
             </button>
-            <span className="text-xs text-slate-300 w-4 text-center">{svState?.concurrency ?? 2}</span>
+            <span className="text-xs text-secondary w-4 text-center">{svState?.concurrency ?? 2}</span>
             <button
               onClick={() => handleConcurrency(1)}
-              className="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700 text-sm"
+              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm"
             >
               +
             </button>
@@ -186,7 +186,7 @@ export default function SupervisorOverlay() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-slate-400 hover:text-slate-200 text-lg leading-none ml-1"
+            className="text-secondary hover:text-primary text-lg leading-none ml-1"
           >
             &times;
           </button>
@@ -195,7 +195,7 @@ export default function SupervisorOverlay() {
         {/* Body */}
         <div className="overflow-y-auto flex-1 min-h-0 p-2">
           {!svState || svState.items.length === 0 ? (
-            <div className="px-2 py-8 text-sm text-slate-500 text-center">
+            <div className="px-2 py-8 text-sm text-muted text-center">
               {svState?.running ? 'No notes found across repos' : 'Press Start to queue notes for processing'}
             </div>
           ) : (
@@ -226,8 +226,8 @@ export default function SupervisorOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-slate-700">
-          <p className="text-xs text-slate-500">
+        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+          <p className="text-xs text-muted">
             Start scans all repos for notes and queues them for processing
           </p>
         </div>
@@ -240,8 +240,8 @@ function Section({ title, count, children }: { title: string; count: number; chi
   return (
     <div className="mb-2">
       <div className="flex items-center gap-2 px-3 py-1">
-        <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</span>
-        <span className="text-xs text-slate-600">{count}</span>
+        <span className="text-xs font-medium text-secondary uppercase tracking-wider">{title}</span>
+        <span className="text-xs text-faint">{count}</span>
       </div>
       {children}
     </div>
