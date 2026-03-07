@@ -223,8 +223,8 @@ export default function SupervisorOverlay() {
             onClick={handleToggle}
             className={`text-xs px-2.5 py-1 rounded ${
               svState?.running
-                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                ? 'bg-danger/20 text-danger hover:bg-danger/30'
+                : 'bg-success/20 text-success hover:bg-success/30'
             }`}
           >
             {svState?.running ? <><u>S</u>top</> : <><u>S</u>tart</>}

@@ -96,7 +96,7 @@ export default function NotificationPopover() {
   return (
     <div
       ref={popoverRef}
-      className="fixed right-11 top-20 z-50 w-72 max-h-[300px] flex flex-col bg-app/60 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+      className="fixed right-11 top-20 z-50 w-72 max-h-[300px] flex flex-col bg-app/60 backdrop-blur-xl border border-border-input rounded-lg shadow-2xl overflow-hidden"
     >
       <div className="px-3 py-2 border-b border-border-default">
         <span className="text-xs font-semibold text-secondary">Notifications</span>

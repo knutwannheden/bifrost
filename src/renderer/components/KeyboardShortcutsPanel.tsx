@@ -151,7 +151,11 @@ export default function KeyboardShortcutsPanel() {
       case 'Escape':
         e.preventDefault();
         e.stopPropagation();
-        close();
+        if ((e.target as HTMLElement).tagName === 'INPUT') {
+          (e.target as HTMLElement).blur();
+        } else {
+          close();
+        }
         break;
       case 'ArrowDown':
         e.preventDefault();

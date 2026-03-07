@@ -78,8 +78,8 @@ interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
 }
 
 const badgeClasses = {
-  amber: 'bg-amber-400',
-  green: 'bg-green-400 animate-pulse',
+  amber: 'bg-warning',
+  green: 'bg-success animate-pulse',
   blue: 'bg-accent',
 };
 

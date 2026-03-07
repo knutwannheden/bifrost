@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import type { PermissionDecision } from '../../shared/types';
+import PillToggle from './PillToggle';
 
 type Scope = 'local' | 'project' | 'user';
 
@@ -172,20 +173,16 @@ export default function PermissionPanel() {
         </label>
 
         {persist && (
-          <div className="flex gap-1 ml-auto">
-            {(['local', 'project', 'user'] as Scope[]).map((s, i) => (
-              <button
-                key={s}
-                onClick={() => setScope(s)}
-                className={`px-2 py-0.5 rounded text-xs ${
-                  scope === s
-                    ? 'bg-accent text-white'
-                    : 'bg-surface-alt text-secondary hover:bg-surface-hover'
-                }`}
-              >
-                {s} <span className="text-muted">{i + 1}</span>
-              </button>
-            ))}
+          <div className="ml-auto">
+            <PillToggle
+              options={[
+                { value: 'local' as Scope, label: <>local <span className="text-muted">1</span></> },
+                { value: 'project' as Scope, label: <>project <span className="text-muted">2</span></> },
+                { value: 'user' as Scope, label: <>user <span className="text-muted">3</span></> },
+              ]}
+              value={scope}
+              onChange={(v) => setScope(v)}
+            />
           </div>
         )}
       </div>
@@ -194,15 +191,15 @@ export default function PermissionPanel() {
       <div className="px-3 py-2 flex gap-2">
         <button
           onClick={() => handleDecision('allow')}
-          className="flex-1 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded"
+          className="flex-1 px-3 py-1.5 bg-success/80 hover:bg-success text-white text-sm font-medium rounded"
         >
-          Allow <span className="text-green-200 text-xs">(A)</span>
+          Allow <span className="opacity-60 text-xs">(A)</span>
         </button>
         <button
           onClick={() => handleDecision('deny')}
-          className="flex-1 px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded"
+          className="flex-1 px-3 py-1.5 bg-danger/80 hover:bg-danger text-white text-sm font-medium rounded"
         >
-          Deny <span className="text-red-200 text-xs">(D)</span>
+          Deny <span className="opacity-60 text-xs">(D)</span>
         </button>
       </div>
     </div>
