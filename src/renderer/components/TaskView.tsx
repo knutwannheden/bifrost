@@ -138,7 +138,7 @@ export default function TaskView() {
                 <button
                   onClick={handleInstallIntegration}
                   disabled={installing}
-                  className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:bg-surface-alt text-white rounded-lg text-sm font-medium transition-colors"
+                  className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors"
                 >
                   {installing ? (updateAvailable ? 'Updating...' : 'Installing...') : (updateAvailable ? 'Update Claude Integration' : 'Install Claude Integration')}
                 </button>
