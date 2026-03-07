@@ -144,6 +144,7 @@ export default function App() {
   // Listen for Slack reactions
   useEffect(() => {
     const unsub = window.bifrost.onSlackReaction((channelId, messageTs, messageUrl, messagePreview) => {
+      const notificationId = `slack-${channelId}-${messageTs}`;
       // Show toast with Create Task action
       dispatch({
         type: 'SHOW_TOAST',
@@ -151,7 +152,11 @@ export default function App() {
         duration: 8000,
         action: {
           label: 'Create Task',
-          callback: () => dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true }),
+          callback: () => {
+            navigator.clipboard.writeText(messageUrl).catch(() => {});
+            dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
+            dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true });
+          },
         },
       });
 
@@ -159,7 +164,7 @@ export default function App() {
       dispatch({
         type: 'PUSH_NOTIFICATION',
         notification: {
-          id: `slack-${channelId}-${messageTs}`,
+          id: notificationId,
           type: 'slack-reaction',
           title: 'Slack Reaction',
           message: messagePreview,
