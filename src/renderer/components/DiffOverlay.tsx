@@ -9,6 +9,7 @@ import { parseDiff, extFromPath, diffFileStats } from '../utils/diff-parser';
 import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
+import PillToggle, { type PillOption } from './PillToggle';
 import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
 import SearchIndicator from './SearchIndicator';
@@ -270,33 +271,12 @@ function ActivityEntryView({ entry }: { entry: ActivityEntry }) {
   );
 }
 
-const modeLabels: Record<DiffMode, { text: string; hintIndex?: number }> = {
-  git: { text: 'Git Diff' },
-  activity: { text: 'Activity Log' },
-  log: { text: 'Git Log', hintIndex: 4 },
-  review: { text: 'Review' },
-};
-
-function ModeToggle({ mode, onChange }: { mode: DiffMode; onChange: (m: DiffMode) => void }) {
-  return (
-    <div className="flex gap-1">
-      {(['git', 'activity', 'log', 'review'] as const).map((m) => (
-        <button
-          key={m}
-          tabIndex={-1}
-          onClick={() => onChange(m)}
-          className={`px-3 py-1 text-xs rounded ${
-            mode === m
-              ? 'bg-surface-hover text-primary'
-              : 'text-secondary hover:text-primary hover:bg-surface-alt'
-          }`}
-        >
-          <ActionLabel text={modeLabels[m].text} hintIndex={modeLabels[m].hintIndex} showHint={true} />
-        </button>
-      ))}
-    </div>
-  );
-}
+const modeOptions: PillOption<DiffMode>[] = [
+  { value: 'git', label: <ActionLabel text="Git Diff" showHint={true} /> },
+  { value: 'activity', label: <ActionLabel text="Activity Log" showHint={true} /> },
+  { value: 'log', label: <ActionLabel text="Git Log" hintIndex={4} showHint={true} /> },
+  { value: 'review', label: <ActionLabel text="Review" showHint={true} /> },
+];
 
 /** Get searchable text from an activity entry */
 function entrySearchText(entry: ActivityEntry): string {
@@ -687,23 +667,15 @@ const scopeLabels: Record<DiffScope, { text: string; hintIndex: number }> = {
   all: { text: 'All changes', hintIndex: 4 },
 };
 
+const scopeOptions: PillOption<DiffScope>[] = (['working', 'all'] as const).map((s) => ({
+  value: s,
+  label: <ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} />,
+}));
+
 function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: DiffScope) => void }) {
   return (
-    <div className="flex gap-1 px-3 py-2 border-b border-border-default flex-shrink-0">
-      {(['working', 'all'] as const).map((s) => (
-        <button
-          key={s}
-          tabIndex={-1}
-          onClick={() => onChange(s)}
-          className={`px-2 py-0.5 text-xs rounded ${
-            scope === s
-              ? 'bg-surface-hover text-primary'
-              : 'text-secondary hover:text-primary hover:bg-surface-alt'
-          }`}
-        >
-          <ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} />
-        </button>
-      ))}
+    <div className="px-3 py-2 border-b border-border-default flex-shrink-0">
+      <PillToggle options={scopeOptions} value={scope} onChange={onChange} />
     </div>
   );
 }
@@ -1157,9 +1129,11 @@ export default function DiffOverlay() {
     >
       <div className="flex items-center justify-between h-10 px-4 border-b border-border-default flex-shrink-0">
         <div className="flex items-center gap-4">
-          <ModeToggle
-            mode={diffMode}
+          <PillToggle
+            options={modeOptions}
+            value={diffMode}
             onChange={(m) => dispatch({ type: 'SET_DIFF_MODE', mode: m })}
+            size="md"
           />
         </div>
         <div className="flex items-center gap-3">

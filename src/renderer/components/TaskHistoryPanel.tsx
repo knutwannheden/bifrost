@@ -8,6 +8,7 @@ import { requestArchive } from '../utils/archive';
 import { matchesAllTerms } from '../utils/search';
 import Highlight from './Highlight';
 import SearchIndicator from './SearchIndicator';
+import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
 import { formatDate, formatRelative } from '../utils/format-time';
 
@@ -27,6 +28,11 @@ const statusColor: Record<string, string> = {
 
 const filters = ['active', 'all', 'archived', 'sessions'] as const;
 type Filter = (typeof filters)[number];
+
+const filterOptions: PillOption<Filter>[] = filters.map((f) => ({
+  value: f,
+  label: f === 'sessions' ? 'Sessions' : f.charAt(0).toUpperCase() + f.slice(1),
+}));
 
 const TIME_BUCKETS = [
   'Last 10 minutes',
@@ -550,20 +556,12 @@ export default function TaskHistoryPanel() {
 
         {/* Filter tabs */}
         <div className="flex gap-1 px-4 pt-3">
-          {filters.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              tabIndex={-1}
-              className={`px-3 py-1 text-xs rounded ${
-                filter === f
-                  ? 'bg-surface-hover text-primary'
-                  : 'text-secondary hover:text-primary hover:bg-surface-alt'
-              }`}
-            >
-              {f === 'sessions' ? 'Sessions' : f.charAt(0).toUpperCase() + f.slice(1)}
-            </button>
-          ))}
+          <PillToggle
+            options={filterOptions}
+            value={filter}
+            onChange={(v) => setFilter(v)}
+            size="md"
+          />
           <span className="ml-auto text-xs text-faint self-center">
             Tab/&larr;&rarr; tabs &uarr;&darr; {isSessionsMode ? 'sessions' : 'tasks'}
           </span>

@@ -4,6 +4,7 @@ import type { ReviewStatus } from '../context/AppContext';
 import type { DiffStats, ReviewEntry } from '../../shared/types';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
+import PillToggle, { type PillOption } from './PillToggle';
 import TerminalPane from './TerminalPane';
 import Kbd from './Kbd';
 import Spinner from './Spinner';
@@ -18,25 +19,17 @@ const scopeLabels: Record<ReviewScope, { text: string; hintIndex: number }> = {
 };
 
 function ReviewScopeToggle({ scope, onChange, stats }: { scope: ReviewScope; onChange: (s: ReviewScope) => void; stats: Record<ReviewScope, DiffStats | null | undefined> }) {
-  return (
-    <div className="flex gap-1">
-      {(['working', 'all'] as const).map((s) => (
-        <button
-          key={s}
-          tabIndex={-1}
-          onClick={() => onChange(s)}
-          className={`px-2 py-0.5 text-xs rounded inline-flex items-center gap-1.5 ${
-            scope === s
-              ? 'bg-surface-hover text-primary'
-              : 'text-secondary hover:text-primary hover:bg-surface-alt'
-          }`}
-        >
-          <span><ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} /></span>
-          {stats[s] && <DiffStatsBadge additions={stats[s].additions} deletions={stats[s].deletions} />}
-        </button>
-      ))}
-    </div>
-  );
+  const options: PillOption<ReviewScope>[] = (['working', 'all'] as const).map((s) => ({
+    value: s,
+    label: (
+      <>
+        <span><ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} /></span>
+        {stats[s] && <DiffStatsBadge additions={stats[s].additions} deletions={stats[s].deletions} />}
+      </>
+    ),
+  }));
+
+  return <PillToggle options={options} value={scope} onChange={onChange} />;
 }
 
 /**

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { StatsData, ContextRotEntry, EscalationEntry } from '../../shared/types';
+import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
 
 type TabId = 'tool-usage' | 'skill-usage' | 'bash-commands' | 'context-rot' | 'tail-escalation';
@@ -19,6 +20,11 @@ const TIME_RANGES: { id: TimeRange; label: string }[] = [
   { id: 'week', label: 'Week' },
   { id: 'all', label: 'All' },
 ];
+
+const timeRangeOptions: PillOption<TimeRange>[] = TIME_RANGES.map((r) => ({
+  value: r.id,
+  label: r.label,
+}));
 
 function sinceForRange(range: TimeRange): number | undefined {
   if (range === '24h') return Date.now() - 24 * 60 * 60 * 1000;
@@ -246,8 +252,8 @@ export default function StatsOverlay() {
                 key={tab.id}
                 className={`text-sm px-2 py-0.5 rounded flex items-center gap-1 ${
                   activeTab === tab.id
-                    ? 'bg-surface-alt text-primary'
-                    : 'text-secondary hover:text-primary'
+                    ? 'bg-surface-hover text-primary'
+                    : 'text-secondary hover:text-primary hover:bg-surface-alt'
                 }`}
                 onClick={() => setActiveTab(tab.id)}
               >
@@ -264,20 +270,8 @@ export default function StatsOverlay() {
               <Spinner size="sm" className="ml-2" />
             )}
           </div>
-          <div className="flex items-center gap-0.5 bg-surface-alt/50 rounded px-0.5 py-0.5">
-            {TIME_RANGES.map((r) => (
-              <button
-                key={r.id}
-                className={`text-xs px-1.5 py-0.5 rounded ${
-                  timeRange === r.id
-                    ? 'bg-surface-hover text-primary'
-                    : 'text-secondary hover:text-primary'
-                }`}
-                onClick={() => setTimeRange(r.id)}
-              >
-                {r.label}
-              </button>
-            ))}
+          <div className="bg-surface-alt/50 rounded px-0.5 py-0.5">
+            <PillToggle options={timeRangeOptions} value={timeRange} onChange={(v) => setTimeRange(v)} />
           </div>
           <button
             onClick={close}
