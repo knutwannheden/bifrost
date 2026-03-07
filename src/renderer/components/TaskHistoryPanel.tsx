@@ -5,6 +5,8 @@ import DiffStatsBadge from './DiffStatsBadge';
 import { shortPath } from '../utils/paths';
 import type { Task, ClaudeSession, DiffStats } from '../../shared/types';
 import { requestArchive } from '../utils/archive';
+import { matchesAllTerms } from '../utils/search';
+import Highlight from './Highlight';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -30,24 +32,6 @@ function formatDate(ts: number): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function Highlight({ text, search }: { text: string; search: string }) {
-  if (!search) return <>{text}</>;
-  const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return <>{text}</>;
-  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = text.split(regex);
-  return (
-    <>
-      {parts.map((part, i) =>
-        regex.test(part)
-          ? <mark key={i} className="bg-yellow-500/30 text-inherit rounded-sm">{part}</mark>
-          : part,
-      )}
-    </>
-  );
 }
 
 function formatRelative(ts: number): string {
@@ -291,27 +275,20 @@ export default function TaskHistoryPanel() {
     }
   }, [isSessionsMode]);
 
-  const searchTerms = search.toLowerCase().split(/\s+/).filter(Boolean);
-
   const filteredTasks = isSessionsMode ? [] : state.tasks
     .filter((t) => {
       if (filter === 'active' && t.status === 'archived') return false;
       if (filter === 'archived' && t.status !== 'archived') return false;
-      if (searchTerms.length > 0) {
+      if (search) {
         const repo = state.repos.find((r) => r.id === t.repoId);
-        const haystack = `${t.name} ${t.branch} ${repo?.name ?? ''} ${t.summary ?? ''}`.toLowerCase();
-        return searchTerms.every((term) => haystack.includes(term));
+        return matchesAllTerms(`${t.name} ${t.branch} ${repo?.name ?? ''} ${t.summary ?? ''}`, search);
       }
       return true;
     })
     .sort((a, b) => (sessionMtimes[b.id] ?? b.createdAt) - (sessionMtimes[a.id] ?? a.createdAt));
 
   const filteredSessions = isSessionsMode
-    ? sessions.filter((s) => {
-        if (searchTerms.length === 0) return true;
-        const haystack = `${s.cwd} ${s.slug ?? ''}`.toLowerCase();
-        return searchTerms.every((term) => haystack.includes(term));
-      })
+    ? sessions.filter((s) => matchesAllTerms(`${s.cwd} ${s.slug ?? ''}`, search))
     : [];
 
   const repoName = (repoId: string) =>

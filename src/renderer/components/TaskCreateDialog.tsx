@@ -2,19 +2,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import type { PrInfo, Repo } from '../../shared/types';
 import { generateTaskName } from '../../shared/name-generator';
-import { shortPath } from '../utils/paths';
+import { shortPath, repoDisplayName } from '../utils/paths';
+import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
-
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 
-function repoDisplayName(repo: Repo): string {
-  return repo.githubPath ?? repo.name;
-}
-
-function matchesSearch(repo: Repo, search: string): boolean {
-  if (!search) return true;
-  const haystack = `${repoDisplayName(repo)} ${repo.path}`.toLowerCase();
-  return search.toLowerCase().split(/\s+/).filter(Boolean).every((term) => haystack.includes(term));
+function matchesRepoSearch(repo: Repo, search: string): boolean {
+  return matchesAllTerms(`${repoDisplayName(repo)} ${repo.path}`, search);
 }
 
 // Cache branches per repo so subsequent opens are instant
@@ -77,7 +71,7 @@ export default function TaskCreateDialog() {
 
   const filteredRepos = state.repos.filter((r) => {
     if (!repoSearch || inputFullySelected) return true;
-    return matchesSearch(r, repoSearch);
+    return matchesRepoSearch(r, repoSearch);
   });
 
   const branchInputFullySelected =
@@ -457,7 +451,7 @@ export default function TaskCreateDialog() {
                 setRepoDropdownOpen(true);
                 // Clear selection if search no longer matches
                 const match = state.repos.find((r) => r.id === repoId);
-                if (match && !matchesSearch(match, e.target.value)) {
+                if (match && !matchesRepoSearch(match, e.target.value)) {
                   setRepoId('');
                 }
               }}

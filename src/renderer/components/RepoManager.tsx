@@ -1,12 +1,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { Repo, RecentRepo } from '../../shared/types';
+import type { RecentRepo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
-import { shortPath } from '../utils/paths';
+import { shortPath, repoDisplayName } from '../utils/paths';
+import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
-
-function repoDisplayName(repo: Repo): string {
-  return repo.githubPath ?? repo.name;
-}
 
 export default function RepoManager() {
   const { state, dispatch } = useApp();
@@ -31,11 +28,7 @@ export default function RepoManager() {
     overlayRef.current?.focus();
   }, []);
 
-  const searchLower = search.toLowerCase();
-  const filteredRepos = state.repos.filter((r) => {
-    if (!searchLower) return true;
-    return `${repoDisplayName(r)} ${r.path}`.toLowerCase().includes(searchLower);
-  });
+  const filteredRepos = state.repos.filter((r) => matchesAllTerms(`${repoDisplayName(r)} ${r.path}`, search));
 
   // Reset focus when search changes
   useEffect(() => {
@@ -67,8 +60,7 @@ export default function RepoManager() {
   const repoPaths = new Set(state.repos.map((r) => r.path));
   const suggestions = recentRepos.filter((r) => {
     if (repoPaths.has(r.path)) return false;
-    if (!searchLower) return true;
-    return `${r.githubPath ?? r.name} ${r.path}`.toLowerCase().includes(searchLower);
+    return matchesAllTerms(`${r.githubPath ?? r.name} ${r.path}`, search);
   });
 
   const handleAddSuggestion = async (repoPath: string) => {

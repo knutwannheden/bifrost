@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { requestArchive } from '../utils/archive';
+import { matchesAllTerms } from '../utils/search';
+import Highlight from './Highlight';
 import Kbd from './Kbd';
 
 interface Shortcut {
@@ -16,24 +18,6 @@ interface Shortcut {
 }
 
 const GROUPS = ['Tasks', 'Navigation', 'Views', 'Actions', 'App'] as const;
-
-function Highlight({ text, search }: { text: string; search: string }) {
-  if (!search) return <>{text}</>;
-  const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return <>{text}</>;
-  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = text.split(regex);
-  return (
-    <>
-      {parts.map((part, i) =>
-        regex.test(part)
-          ? <mark key={i} className="bg-yellow-500/30 text-inherit rounded-sm">{part}</mark>
-          : part,
-      )}
-    </>
-  );
-}
 
 const shortcuts: Shortcut[] = [
   // Tasks
@@ -77,12 +61,7 @@ export default function KeyboardShortcutsPanel() {
 
   const filtered = useMemo(() => {
     if (!query) return shortcuts;
-    const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-    if (terms.length === 0) return shortcuts;
-    return shortcuts.filter((s) => {
-      const haystack = `${s.label} ${s.key}`.toLowerCase();
-      return terms.every((term) => haystack.includes(term));
-    });
+    return shortcuts.filter((s) => matchesAllTerms(`${s.label} ${s.key}`, query));
   }, [query]);
 
   // Build a flat list of items (group headers + shortcuts) for rendering and navigation
