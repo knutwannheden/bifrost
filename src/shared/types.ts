@@ -66,6 +66,7 @@ export interface BifrostConfig {
   managePermissions: boolean;
   experimentalFeatures: boolean;
   ollamaModels: string[];
+  slack?: SlackConfig;
 }
 
 export interface CreateTaskParams {
@@ -293,14 +294,23 @@ export interface PermissionDecision {
   rulePattern?: string;
 }
 
+export interface SlackConfig {
+  clientId: string;
+  clientSecret: string;
+  userToken: string;
+  reactions: string[];
+  enabled: boolean;
+}
+
 // Notification types
 
 export interface AppNotification {
   id: string;
-  type: 'plugin-update' | 'restart-sessions' | 'info';
+  type: 'plugin-update' | 'restart-sessions' | 'info' | 'slack-reaction';
   title: string;
   message: string;
   action?: { label: string; handler: string };
+  persistent?: boolean;
   read: boolean;
   timestamp: number;
 }
