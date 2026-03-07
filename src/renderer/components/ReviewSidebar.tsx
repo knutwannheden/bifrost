@@ -42,7 +42,9 @@ export default function ReviewSidebar({
       if (document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement) {
         if (e.key === 'Escape') {
           e.preventDefault();
+          const container = (document.activeElement as HTMLElement).closest<HTMLElement>('[tabindex]');
           (document.activeElement as HTMLElement).blur();
+          container?.focus();
         }
         return;
       }

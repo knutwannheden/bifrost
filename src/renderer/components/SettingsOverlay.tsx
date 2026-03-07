@@ -364,6 +364,7 @@ export default function SettingsOverlay() {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
         (e.target as HTMLElement).blur();
+        overlayRef.current?.focus();
       } else {
         close();
       }

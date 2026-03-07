@@ -961,6 +961,7 @@ export default function DiffOverlay() {
       if (e.key === 'Escape') {
         e.preventDefault();
         (document.activeElement as HTMLElement)?.blur?.();
+        containerRef.current?.focus();
       }
       return;
     }

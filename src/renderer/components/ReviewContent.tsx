@@ -398,7 +398,9 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       if (e.key === 'Escape') {
         if (document.activeElement instanceof HTMLTextAreaElement || document.activeElement instanceof HTMLInputElement) {
           e.preventDefault();
+          const container = (document.activeElement as HTMLElement).closest<HTMLElement>('[tabindex]');
           (document.activeElement as HTMLElement).blur();
+          container?.focus();
           return;
         }
         if (showDiscussion) {

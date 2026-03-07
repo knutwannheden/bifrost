@@ -224,6 +224,7 @@ export default function NotesOverlay() {
       e.preventDefault();
       e.stopPropagation();
       textareaRef.current?.blur();
+      panelRef.current?.focus();
       return;
     }
     if (e.altKey && e.code === 'KeyN') {
@@ -303,6 +304,7 @@ export default function NotesOverlay() {
       e.preventDefault();
       e.stopPropagation();
       repoInputRef.current?.blur();
+      panelRef.current?.focus();
       return;
     }
     // Let overlay-level Alt shortcuts work from the repo input

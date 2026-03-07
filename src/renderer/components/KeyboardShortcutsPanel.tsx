@@ -54,6 +54,7 @@ const shortcuts: Shortcut[] = [
 
 export default function KeyboardShortcutsPanel() {
   const { state, dispatch } = useApp();
+  const overlayRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -153,6 +154,7 @@ export default function KeyboardShortcutsPanel() {
         e.stopPropagation();
         if ((e.target as HTMLElement).tagName === 'INPUT') {
           (e.target as HTMLElement).blur();
+          overlayRef.current?.focus();
         } else {
           close();
         }
@@ -177,6 +179,8 @@ export default function KeyboardShortcutsPanel() {
 
   return (
     <div
+      ref={overlayRef}
+      tabIndex={-1}
       className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
       onClick={close}
       onKeyDown={handleKeyDown}

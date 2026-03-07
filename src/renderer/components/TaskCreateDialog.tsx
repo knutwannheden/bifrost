@@ -313,6 +313,7 @@ export default function TaskCreateDialog() {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') {
         (e.target as HTMLElement).blur();
+        overlayRef.current?.focus();
       } else {
         close();
       }
