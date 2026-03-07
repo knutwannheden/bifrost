@@ -548,9 +548,6 @@ export default function TaskHistoryPanel() {
             onChange={(v) => setFilter(v)}
             size="md"
           />
-          <span className="ml-auto text-xs text-faint self-center">
-            Tab/&larr;&rarr; tabs &middot; &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'} &middot; {!isSessionsMode && <>F2 rename &middot; {altSymbol}O/{altSymbol}A/{altSymbol}D actions &middot; </>}type to search &middot; Esc close
-          </span>
         </div>
 
         {error && (
@@ -666,6 +663,13 @@ export default function TaskHistoryPanel() {
                 })()}
             </>
           )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+          <span className="text-xs text-faint">
+            Tab/&larr;&rarr; tabs &middot; &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'} &middot; {!isSessionsMode && <>F2 rename &middot; {altSymbol}O/{altSymbol}A/{altSymbol}D actions &middot; </>}type to search &middot; Esc close
+          </span>
         </div>
       </div>
     </div>
