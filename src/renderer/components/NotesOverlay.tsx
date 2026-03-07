@@ -436,7 +436,7 @@ export default function NotesOverlay() {
                   : 'bg-surface-alt text-secondary hover:bg-surface-hover'
               }`}
             >
-              + <span className="underline">N</span>ew Note
+              + <ActionLabel text="New Note" showHint={true} />
             </button>
 
             {/* Note list */}
