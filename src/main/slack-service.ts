@@ -3,7 +3,8 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { BrowserWindow } from 'electron';
+import { execSync } from 'node:child_process';
+import { shell, BrowserWindow } from 'electron';
 import { loadConfig, saveConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
@@ -217,6 +218,19 @@ function exchangeCodeForToken(
   });
 }
 
+let oauthServer: https.Server | null = null;
+
+function generateSelfSignedCert(): { key: string; cert: string } {
+  const result = execSync(
+    'openssl req -x509 -newkey rsa:2048 -keyout /dev/stdout -out /dev/stdout -days 1 -nodes -subj "/CN=localhost"',
+    { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  const keyMatch = result.match(/-----BEGIN PRIVATE KEY-----[\s\S]+?-----END PRIVATE KEY-----/);
+  const certMatch = result.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/);
+  if (!keyMatch || !certMatch) throw new Error('Failed to generate self-signed certificate');
+  return { key: keyMatch[0], cert: certMatch[0] };
+}
+
 export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
   const config = loadConfig();
   const clientId = config.slack?.clientId;
@@ -225,66 +239,74 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
     return Promise.reject(new Error('Slack client ID and secret must be configured first'));
   }
 
-  // Use a redirect URI that Slack has configured but we never actually serve.
-  // The BrowserWindow intercepts the navigation before it loads.
-  const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
-  const oauthState = crypto.randomBytes(16).toString('hex');
-  const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
-
-  const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
-  authorizeUrl.searchParams.set('client_id', clientId);
-  authorizeUrl.searchParams.set('user_scope', userScope);
-  authorizeUrl.searchParams.set('redirect_uri', redirectUri);
-  authorizeUrl.searchParams.set('state', oauthState);
+  // Close any leftover server from a previous timed-out attempt
+  if (oauthServer) {
+    oauthServer.close();
+    oauthServer = null;
+  }
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    const oauthState = crypto.randomBytes(16).toString('hex');
+    const { key, cert } = generateSelfSignedCert();
 
-    // Open Slack OAuth in an Electron BrowserWindow — no local server needed.
-    // We intercept the redirect to localhost before the browser tries to load it.
-    const authWindow = new BrowserWindow({
-      width: 600,
-      height: 700,
-      parent: mainWindow,
-      modal: true,
-      show: true,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-      },
-    });
+    const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
+    const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
 
-    function finish(err?: Error): void {
-      if (settled) return;
-      settled = true;
-      authWindow.close();
-      if (err) reject(err);
-      else resolve();
-    }
+    const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
+    authorizeUrl.searchParams.set('client_id', clientId);
+    authorizeUrl.searchParams.set('user_scope', userScope);
+    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+    authorizeUrl.searchParams.set('state', oauthState);
 
-    // Intercept navigation to the redirect URI
-    authWindow.webContents.on('will-redirect', async (_event, url) => {
-      if (!url.startsWith(redirectUri)) return;
-
-      const parsed = new URL(url);
-      const error = parsed.searchParams.get('error');
-      const returnedState = parsed.searchParams.get('state');
-      const code = parsed.searchParams.get('code');
-
-      if (error) {
-        finish(new Error(`Slack OAuth denied: ${error}`));
-        return;
-      }
-      if (returnedState !== oauthState) {
-        finish(new Error('OAuth state mismatch'));
-        return;
-      }
-      if (!code) {
-        finish(new Error('OAuth callback missing code'));
-        return;
-      }
-
+    // HTTPS server with self-signed cert. Browser opens /start first — user
+    // accepts the cert warning there, then gets redirected to Slack. When Slack
+    // redirects back to /callback, the cert is already accepted — no delay.
+    const server = https.createServer({ key, cert }, async (req, res) => {
       try {
+        const url = new URL(req.url ?? '', `https://localhost`);
+
+        // Landing page — cert warning happens here, then redirect to Slack
+        if (url.pathname === '/start') {
+          res.writeHead(302, { Location: authorizeUrl.toString() });
+          res.end();
+          return;
+        }
+
+        if (url.pathname !== '/callback') {
+          res.writeHead(404);
+          res.end('Not found');
+          return;
+        }
+
+        const returnedState = url.searchParams.get('state');
+        const code = url.searchParams.get('code');
+        const error = url.searchParams.get('error');
+
+        if (error) {
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.end('<html><body><h1>Authorization denied</h1><p>You can close this window.</p></body></html>');
+          cleanup();
+          reject(new Error(`Slack OAuth denied: ${error}`));
+          return;
+        }
+
+        if (returnedState !== oauthState) {
+          res.writeHead(400);
+          res.end('State mismatch');
+          cleanup();
+          reject(new Error('OAuth state mismatch'));
+          return;
+        }
+
+        if (!code) {
+          res.writeHead(400);
+          res.end('Missing code');
+          cleanup();
+          reject(new Error('OAuth callback missing code'));
+          return;
+        }
+
         const token = await exchangeCodeForToken(clientId, clientSecret, code, redirectUri);
 
         const freshConfig = loadConfig();
@@ -294,63 +316,49 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
         };
         saveConfig(freshConfig);
 
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<html><body><h1>Connected to Slack!</h1><p>You can close this window.</p></body></html>');
+
         restartPolling(mainWindow);
-        finish();
+        cleanup();
+        resolve();
       } catch (err) {
-        console.error('[slack] OAuth token exchange error:', err);
-        finish(err as Error);
+        console.error('[slack] OAuth callback error:', err);
+        res.writeHead(500);
+        res.end('Internal error');
+        cleanup();
+        reject(err);
       }
     });
 
-    // Also check will-navigate for the same redirect (some flows use navigate instead of redirect)
-    authWindow.webContents.on('will-navigate', async (_event, url) => {
-      if (!url.startsWith(redirectUri)) return;
+    oauthServer = server;
 
-      const parsed = new URL(url);
-      const code = parsed.searchParams.get('code');
-      const returnedState = parsed.searchParams.get('state');
-      const error = parsed.searchParams.get('error');
-
-      if (error) {
-        finish(new Error(`Slack OAuth denied: ${error}`));
-        return;
-      }
-      if (returnedState !== oauthState) {
-        finish(new Error('OAuth state mismatch'));
-        return;
-      }
-      if (!code) {
-        finish(new Error('OAuth callback missing code'));
-        return;
-      }
-
-      try {
-        const token = await exchangeCodeForToken(clientId, clientSecret, code, redirectUri);
-
-        const freshConfig = loadConfig();
-        freshConfig.slack = {
-          ...freshConfig.slack!,
-          userToken: token,
-        };
-        saveConfig(freshConfig);
-
-        restartPolling(mainWindow);
-        finish();
-      } catch (err) {
-        console.error('[slack] OAuth token exchange error:', err);
-        finish(err as Error);
-      }
-    });
-
-    // User closed the window without completing OAuth
-    authWindow.on('closed', () => {
+    const timeout = setTimeout(() => {
+      cleanup();
       if (!settled) {
         settled = true;
-        reject(new Error('OAuth window closed'));
+        reject(new Error('OAuth timed out after 120 seconds'));
+      }
+    }, 120_000);
+
+    function cleanup(): void {
+      clearTimeout(timeout);
+      server.close();
+      oauthServer = null;
+    }
+
+    server.on('error', (err: NodeJS.ErrnoException) => {
+      cleanup();
+      if (!settled) {
+        settled = true;
+        reject(new Error(`OAuth server failed: ${err.message}`));
       }
     });
 
-    authWindow.loadURL(authorizeUrl.toString());
+    // Open /start in system browser — cert warning happens here, then redirects to Slack
+    server.listen(OAUTH_PORT, () => {
+      shell.openExternal(`https://localhost:${OAUTH_PORT}/start`);
+    });
   });
 }
 
