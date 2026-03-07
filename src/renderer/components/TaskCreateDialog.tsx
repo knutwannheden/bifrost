@@ -49,7 +49,7 @@ export default function TaskCreateDialog() {
   const [slackUrl, setSlackUrl] = useState<string | null>(state.createDialogSlackUrl ?? null);
   const [prompt, setPrompt] = useState(
     state.createDialogSlackUrl
-      ? `Read the following Slack message and the thread which it is part of and try to understand what is requested: ${state.createDialogSlackUrl}`
+      ? `Read the following Slack message and its thread to understand what is being requested, then create a plan and implement it: ${state.createDialogSlackUrl}`
       : '',
   );
   const [inPlace, setInPlace] = useState(false);
@@ -139,7 +139,7 @@ export default function TaskCreateDialog() {
         const slack = parseSlackUrl(text);
         if (slack) {
           setSlackUrl(slack);
-          setPrompt(`Read the following Slack message and the thread which it is part of and try to understand what is requested: ${slack}`);
+          setPrompt(`Read the following Slack message and its thread to understand what is being requested, then create a plan and implement it: ${slack}`);
           return;
         }
 
