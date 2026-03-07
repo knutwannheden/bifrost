@@ -409,6 +409,60 @@ function findAncestorPaths(node: FileTreeNode, flatIndex: number): string[] | nu
   return null;
 }
 
+function FileRowItem({
+  file,
+  flatIndex,
+  displayName,
+  isSelected,
+  stages,
+  onSelect,
+  itemRef,
+  style,
+  search,
+}: {
+  file: DiffFile;
+  flatIndex: number;
+  displayName: string;
+  isSelected: boolean;
+  stages: GitFileStage[];
+  onSelect: (index: number) => void;
+  itemRef: (el: HTMLDivElement | null) => void;
+  style?: React.CSSProperties;
+  search: string;
+}) {
+  const cfg = statusConfig[file.status];
+  const stats = diffFileStats(file);
+
+  return (
+    <div
+      key={flatIndex}
+      ref={itemRef}
+      onClick={() => onSelect(flatIndex)}
+      className={`flex items-center gap-2 py-1 cursor-pointer text-xs ${
+        isSelected
+          ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
+          : 'border-l-2 border-transparent hover:bg-surface'
+      }`}
+      style={style}
+    >
+      <span className="flex gap-0.5 flex-shrink-0">
+        <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
+        {stages.map((stage) => {
+          const si = stageIndicator[stage];
+          return si ? (
+            <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
+          ) : null;
+        })}
+      </span>
+      <span className="text-primary truncate"><Highlight text={displayName} search={search} /></span>
+      {file.binary
+        ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
+        : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
+      }
+    </div>
+  );
+}
+
 function FileTreeItem({
   node,
   depth,
@@ -466,39 +520,19 @@ function FileTreeItem({
           ))}
           {node.files.map(({ file, flatIndex }) => {
             const path = file.newPath || file.oldPath;
-            const basename = path.split('/').pop()!;
-            const fileStat = diffFileStats(file);
-            const cfg = statusConfig[file.status];
-            const stages = fileStatuses[path] ?? [];
-            const isSelected = flatIndex === selectedIndex;
-
             return (
-              <div
+              <FileRowItem
                 key={flatIndex}
-                ref={(el) => { fileRefs.current[flatIndex] = el; }}
-                onClick={() => onSelectFile(flatIndex)}
-                className={`flex items-center gap-2 py-1 cursor-pointer text-xs ${
-                  isSelected
-                    ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
-                    : 'border-l-2 border-transparent hover:bg-surface'
-                }`}
+                file={file}
+                flatIndex={flatIndex}
+                displayName={path.split('/').pop()!}
+                isSelected={flatIndex === selectedIndex}
+                stages={fileStatuses[path] ?? []}
+                onSelect={onSelectFile}
+                itemRef={(el) => { fileRefs.current[flatIndex] = el; }}
                 style={{ paddingLeft: (depth + 1) * 16 + 8 }}
-              >
-                <span className="flex gap-0.5 flex-shrink-0">
-                  <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
-                  {stages.map((stage) => {
-                    const si = stageIndicator[stage as GitFileStage];
-                    return si ? (
-                      <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
-                    ) : null;
-                  })}
-                </span>
-                <span className="text-primary truncate"><Highlight text={basename} search={search} /></span>
-                {file.binary
-                  ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
-                  : <DiffStatsBadge additions={fileStat.additions} deletions={fileStat.deletions} className="flex-shrink-0 ml-auto" />
-                }
-              </div>
+                search={search}
+              />
             );
           })}
         </>
@@ -592,38 +626,19 @@ function FileListSidebar({
           {/* Root-level files (no directory) */}
           {tree.files.map(({ file, flatIndex }) => {
             const path = file.newPath || file.oldPath;
-            const basename = path.split('/').pop() || path;
-            const stats = diffFileStats(file);
-            const cfg = statusConfig[file.status];
-            const stages = fileStatuses[path] ?? [];
-            const isSelected = flatIndex === selectedIndex;
-
             return (
-              <div
+              <FileRowItem
                 key={flatIndex}
-                ref={(el) => { itemRefs.current[flatIndex] = el; }}
-                onClick={() => onSelectFile(flatIndex)}
-                className={`flex items-center gap-2 px-3 py-1 cursor-pointer text-xs ${
-                  isSelected
-                    ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
-                    : 'border-l-2 border-transparent hover:bg-surface'
-                }`}
-              >
-                <span className="flex gap-0.5 flex-shrink-0">
-                  <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
-                  {stages.map((stage) => {
-                    const si = stageIndicator[stage as GitFileStage];
-                    return si ? (
-                      <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
-                    ) : null;
-                  })}
-                </span>
-                <span className="text-primary truncate"><Highlight text={basename} search={search} /></span>
-                {file.binary
-                  ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
-                  : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
-                }
-              </div>
+                file={file}
+                flatIndex={flatIndex}
+                displayName={path.split('/').pop() || path}
+                isSelected={flatIndex === selectedIndex}
+                stages={fileStatuses[path] ?? []}
+                onSelect={onSelectFile}
+                itemRef={(el) => { itemRefs.current[flatIndex] = el; }}
+                style={{ paddingLeft: 12 }}
+                search={search}
+              />
             );
           })}
         </>
@@ -631,37 +646,19 @@ function FileListSidebar({
         /* Flat fallback when all files are in root */
         tree.files.map(({ file, flatIndex }) => {
           const path = file.newPath || file.oldPath;
-          const stats = diffFileStats(file);
-          const cfg = statusConfig[file.status];
-          const stages = fileStatuses[path] ?? [];
-          const isSelected = flatIndex === selectedIndex;
-
           return (
-            <div
+            <FileRowItem
               key={flatIndex}
-              ref={(el) => { itemRefs.current[flatIndex] = el; }}
-              onClick={() => onSelectFile(flatIndex)}
-              className={`flex items-center gap-2 px-3 py-1 cursor-pointer text-xs ${
-                isSelected
-                  ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
-                  : 'border-l-2 border-transparent hover:bg-surface'
-              }`}
-            >
-              <span className="flex gap-0.5 flex-shrink-0">
-                <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
-                {stages.map((stage) => {
-                  const si = stageIndicator[stage as GitFileStage];
-                  return si ? (
-                    <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
-                  ) : null;
-                })}
-              </span>
-              <span className="text-primary truncate"><Highlight text={path} search={search} /></span>
-              {file.binary
-                ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
-                : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
-              }
-            </div>
+              file={file}
+              flatIndex={flatIndex}
+              displayName={path}
+              isSelected={flatIndex === selectedIndex}
+              stages={fileStatuses[path] ?? []}
+              onSelect={onSelectFile}
+              itemRef={(el) => { itemRefs.current[flatIndex] = el; }}
+              style={{ paddingLeft: 12 }}
+              search={search}
+            />
           );
         })
       )}
