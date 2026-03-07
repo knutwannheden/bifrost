@@ -6,6 +6,7 @@ import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
+import Spinner from './Spinner';
 
 function matchesRepoSearch(repo: Repo, search: string): boolean {
   return matchesAllTerms(`${repoDisplayName(repo)} ${repo.path}`, search);
@@ -656,10 +657,7 @@ export default function TaskCreateDialog() {
             />
             {branchesLoading && (
               <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
-                <svg className="animate-spin h-3.5 w-3.5 text-slate-400 mr-2" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
+                <Spinner size="sm" className="mr-2" />
                 <span className="text-sm text-slate-400">Fetching branches...</span>
               </div>
             )}

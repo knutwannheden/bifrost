@@ -6,6 +6,7 @@ import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
 import TerminalPane from './TerminalPane';
 import Kbd from './Kbd';
+import Spinner from './Spinner';
 import { isModKey } from '../utils/platform';
 
 type ReviewScope = 'working' | 'all';
@@ -434,7 +435,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     if (isRunning) {
       return (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <div className="w-5 h-5 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+          <Spinner />
           <span className="text-sm text-slate-400">Running review... <span className="text-slate-500">{formatElapsed(elapsed)}</span></span>
           {reviewActivity && (
             <span className="text-xs text-slate-500 max-w-md truncate" title={reviewActivity}>{reviewActivity}</span>
@@ -505,7 +506,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-700 flex-shrink-0 text-slate-400">
-          <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin flex-shrink-0" />
+          <Spinner />
           <span className="text-sm">Running review... <span className="text-slate-500">{formatElapsed(elapsed)}</span></span>
           {activeEntry && (
             <span className={`px-1.5 py-0.5 text-[10px] rounded ${

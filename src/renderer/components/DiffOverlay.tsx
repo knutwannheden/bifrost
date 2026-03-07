@@ -12,6 +12,7 @@ import DiffStatsBadge from './DiffStatsBadge';
 import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
 import SearchIndicator from './SearchIndicator';
+import Spinner from './Spinner';
 import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { isModKey } from '../utils/platform';
@@ -761,7 +762,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
       <div className="flex-1 flex flex-col">
         <ScopeToggle scope={scope} onChange={onSetScope} />
         <div className="flex items-center gap-2 text-slate-400 p-4">
-          <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+          <Spinner />
           <span>Loading diff...</span>
         </div>
       </div>
@@ -1223,7 +1224,7 @@ export default function DiffOverlay() {
         <div className="flex-1 overflow-auto p-4">
           {gitLog.loading && (
             <div className="flex items-center gap-2 text-slate-400">
-              <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+              <Spinner />
               <span>Loading git log...</span>
             </div>
           )}
@@ -1259,7 +1260,7 @@ export default function DiffOverlay() {
           <>
             {activityLog.loading && (
               <div className="flex items-center gap-2 text-slate-400">
-                <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+                <Spinner />
                 <span>Loading activity log...</span>
               </div>
             )}

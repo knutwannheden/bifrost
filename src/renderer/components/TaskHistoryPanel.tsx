@@ -8,6 +8,7 @@ import { requestArchive } from '../utils/archive';
 import { matchesAllTerms } from '../utils/search';
 import Highlight from './Highlight';
 import SearchIndicator from './SearchIndicator';
+import Spinner from './Spinner';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -619,7 +620,7 @@ export default function TaskHistoryPanel() {
             <>
               {sessionsLoading && (
                 <div className="flex items-center justify-center py-4 gap-2 text-slate-400">
-                  <div className="w-4 h-4 border-2 border-slate-500 border-t-slate-200 rounded-full animate-spin" />
+                  <Spinner />
                   <span className="text-sm">Scanning sessions...</span>
                 </div>
               )}

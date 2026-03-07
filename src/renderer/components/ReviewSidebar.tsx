@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { ReviewEntry } from '../../shared/types';
 import type { ReviewStatus } from '../context/AppContext';
+import Spinner from './Spinner';
 
 function formatRelativeTime(timestamp: number): string {
   const diffMs = Date.now() - timestamp;
@@ -131,7 +132,7 @@ export default function ReviewSidebar({
                   {review.scope === 'working' ? 'Working' : 'All'}
                 </span>
                 {status === 'running' && (
-                  <div className="w-3 h-3 border border-slate-500 border-t-slate-200 rounded-full animate-spin flex-shrink-0" />
+                  <Spinner size="sm" />
                 )}
                 {isDiscussing && <span className="text-xs" title="Discussion active">💬</span>}
               </div>
