@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { ReviewEntry } from '../../shared/types';
 import type { ReviewStatus } from '../context/AppContext';
+import ActionLabel from './ActionLabel';
 import Spinner from './Spinner';
 import { formatRelative } from '../utils/format-time';
 
@@ -90,7 +91,7 @@ export default function ReviewSidebar({
             : 'bg-surface-alt hover:bg-surface-hover text-secondary'
         }`}
       >
-        + <span className="underline underline-offset-2">N</span>ew Review
+        + <ActionLabel text="New Review" showHint={true} />
       </button>
 
       <div className="flex-1 overflow-y-auto">

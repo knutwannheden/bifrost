@@ -414,7 +414,7 @@ export default function TaskCreateDialog() {
                 onClick={() => openExistingTask(existingTask.id, existingTask.status)}
                 className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
               >
-                <span className="underline underline-offset-2">O</span>pen
+                <ActionLabel text="Open" showHint={true} />
               </button>
             </div>
           )}
@@ -530,7 +530,7 @@ export default function TaskCreateDialog() {
           <>
           {/* Task name */}
           <div>
-            <label className="block text-xs text-secondary mb-1">Task <span className="underline underline-offset-2">N</span>ame</label>
+            <label className="block text-xs text-secondary mb-1">Task <ActionLabel text="Name" showHint={true} /></label>
             <div className="flex gap-2">
               <input
                 ref={nameRef}
@@ -581,7 +581,7 @@ export default function TaskCreateDialog() {
                 onClick={() => openExistingTask(existingInPlaceTask.id, existingInPlaceTask.status)}
                 className="text-xs text-amber-400 hover:text-amber-200 ml-3 whitespace-nowrap"
               >
-                <span className="underline underline-offset-2">O</span>pen
+                <ActionLabel text="Open" showHint={true} />
               </button>
             </div>
           )}
