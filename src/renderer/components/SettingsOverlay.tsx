@@ -496,8 +496,8 @@ export default function SettingsOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end px-4 py-2 border-t border-border-default">
-          <span className="text-xs text-muted">{modSymbol}, to close</span>
+        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+          <span className="text-xs text-faint">Esc close &middot; type to search</span>
         </div>
       </div>
     </div>

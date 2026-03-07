@@ -239,7 +239,7 @@ export default function KeyboardShortcutsPanel() {
           )}
         </div>
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
-          <p className="text-xs text-muted">Click URLs in terminal to open in browser</p>
+          <span className="text-xs text-faint">&uarr;&darr; navigate &middot; Enter execute &middot; type to search &middot; Esc close</span>
         </div>
       </div>
     </div>
