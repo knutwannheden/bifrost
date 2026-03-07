@@ -1,14 +1,7 @@
 import { useState, useRef } from 'react';
 import TaskTab from './TaskTab';
 import { useApp } from '../context/AppContext';
-
-function repoLabel(repoPath: string): string {
-  const parts = repoPath.split('/').filter(Boolean);
-  if (parts.length >= 2) {
-    return `${parts[parts.length - 2]}/${parts[parts.length - 1]}`;
-  }
-  return parts[parts.length - 1] || '';
-}
+import { repoDisplayName, shortPath } from '../utils/paths';
 
 export default function TaskBar() {
   const { state, dispatch } = useApp();
@@ -20,7 +13,7 @@ export default function TaskBar() {
 
   if (openTasks.length === 0) return null;
 
-  const repos = state.config?.repos ?? [];
+  const repos = state.repos;
 
   const handleDragOver = (e: React.DragEvent, taskId: string) => {
     e.preventDefault();
@@ -55,7 +48,7 @@ export default function TaskBar() {
     <div className="flex items-stretch h-10 bg-surface/50 border-b border-border-default overflow-x-auto">
       {openTasks.map((task) => {
         const repo = repos.find((r) => r.id === task.repoId);
-        const repoName = repo ? repoLabel(repo.path) : repoLabel(task.worktreePath);
+        const repoName = repo ? repoDisplayName(repo) : shortPath(task.worktreePath);
         const isOver = dragOverId === task.id && draggingId.current !== task.id;
         return (
         <div
