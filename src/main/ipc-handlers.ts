@@ -34,7 +34,7 @@ import {
   initSupervisor, getSupervisorState, startSupervisor, stopSupervisor,
   setSupervisorConcurrency, pauseItem, resumeItem, openItem, removeItem,
 } from './supervisor-service';
-import { startOAuth, disconnectSlack } from './slack-service';
+import { startOAuth, disconnectSlack, restartPolling } from './slack-service';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -275,7 +275,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Config
   ipcMain.handle(IPC.LOAD_CONFIG, () => loadConfig());
-  ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => saveConfig(config));
+  ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => {
+    saveConfig(config);
+    restartPolling(mainWindow);
+  });
   ipcMain.handle(IPC.SET_IDE, (_event, ide: 'code' | 'idea' | 'zed') => {
     const config = loadConfig();
     config.ide = ide;

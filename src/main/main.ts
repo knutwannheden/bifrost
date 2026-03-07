@@ -7,6 +7,7 @@ import { initNotificationService } from './notification-service';
 import { startApi, stopApi, initApi } from './bifrost-api';
 import { ensureHooks } from './integration-installer';
 import { stopAllWatching } from './activity-watcher';
+import { startPolling } from './slack-service';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 if (started) {
@@ -163,6 +164,7 @@ app.on('ready', async () => {
     registerIpcHandlers(mainWindow);
     initNotificationService(mainWindow);
     initApi(mainWindow);
+    startPolling(mainWindow);
   }
 
   globalShortcut.register('CommandOrControl+Shift+B', () => {
