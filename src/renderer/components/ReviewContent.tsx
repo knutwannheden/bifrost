@@ -477,7 +477,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
                 }
               }}
               placeholder="Focus on error handling, security..."
-              className="w-full px-3 py-2 bg-surface border border-border-input rounded-lg text-sm text-primary placeholder-muted resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              className="w-full px-3 py-2 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               rows={2}
             />
           </div>

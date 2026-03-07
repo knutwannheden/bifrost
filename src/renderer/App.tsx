@@ -418,6 +418,7 @@ export default function App() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-overlay focus:outline-none"
           tabIndex={-1}
           ref={(el) => el?.focus()}
+          onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
               e.preventDefault();
