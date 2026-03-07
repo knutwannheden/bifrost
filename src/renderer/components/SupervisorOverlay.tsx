@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { SupervisorState, SupervisorItem } from '../../shared/types';
 import { altSymbol } from '../utils/platform';
+import ActionLabel from './ActionLabel';
 import Spinner from './Spinner';
 import { formatTime } from '../utils/format-time';
 
@@ -227,7 +228,7 @@ export default function SupervisorOverlay() {
                 : 'bg-success/20 text-success hover:bg-success/30'
             }`}
           >
-            {svState?.running ? <><u>S</u>top</> : <><u>S</u>tart</>}
+            <ActionLabel text={svState?.running ? 'Stop' : 'Start'} showHint={true} />
           </button>
 
           <button
@@ -278,7 +279,7 @@ export default function SupervisorOverlay() {
             Start scans all repos for notes and queues them for processing
           </span>
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop
+            &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop &middot; Esc close
           </span>
         </div>
       </div>

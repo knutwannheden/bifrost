@@ -249,7 +249,7 @@ export default function RepoManager() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
           <h2 className="text-sm font-semibold text-primary">Manage Repositories</h2>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-faint">&uarr;&darr; navigate &middot; {altSymbol}B browse &middot; {altSymbol}A add</span>
+            <span className="text-xs text-faint">&uarr;&darr; navigate &middot; type to search &middot; {altSymbol}B browse &middot; {altSymbol}A add &middot; Esc close</span>
             <button
               onClick={close}
               tabIndex={-1}

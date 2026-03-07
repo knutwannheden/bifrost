@@ -311,7 +311,7 @@ export default function StatsOverlay() {
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
           <span className="text-xs text-faint">
-            Tab/&#8679;Tab tabs &middot; &larr;&rarr; time range
+            Tab/&#8679;Tab tabs &middot; &larr;&rarr; time range &middot; Esc close
           </span>
         </div>
       </div>
