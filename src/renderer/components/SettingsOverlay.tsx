@@ -48,7 +48,7 @@ function buildSettings(): SettingDef[] {
         <select
           value={config.fontFamily}
           onChange={(e) => update({ fontFamily: e.target.value })}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary focus:outline-none focus:border-accent"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         >
           {[
             { label: 'MesloLGS NF', value: 'MesloLGS NF' },
@@ -224,7 +224,7 @@ function buildSettings(): SettingDef[] {
           type="text"
           value={(config.ollamaModels ?? []).join(', ')}
           onChange={(e) => update({ ollamaModels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           placeholder="phi4-mini, gemma3:1b"
         />
       ),
@@ -251,7 +251,7 @@ function buildSettings(): SettingDef[] {
           type="text"
           value={config.slack?.clientId ?? ''}
           onChange={(e) => update({ slack: { ...config.slack, clientId: e.target.value } } as Partial<BifrostConfig>)}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       ),
     },
@@ -265,7 +265,7 @@ function buildSettings(): SettingDef[] {
           type="password"
           value={config.slack?.clientSecret ?? ''}
           onChange={(e) => update({ slack: { ...config.slack, clientSecret: e.target.value } } as Partial<BifrostConfig>)}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       ),
     },
@@ -320,7 +320,7 @@ function buildSettings(): SettingDef[] {
           type="text"
           value={(config.slack?.reactions ?? []).join(', ')}
           onChange={(e) => update({ slack: { ...config.slack, reactions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } } as Partial<BifrostConfig>)}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent"
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           placeholder="bifrost, robot_face"
         />
       ),
@@ -425,7 +425,7 @@ export default function SettingsOverlay() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search settings..."
-              className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary placeholder-muted w-48 focus:outline-none focus:border-accent"
+              className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary placeholder-muted w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
             <button
               onClick={close}

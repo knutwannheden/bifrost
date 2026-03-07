@@ -123,7 +123,7 @@ function TaskRow({
                 if (e.key === 'Escape') { e.stopPropagation(); setEditingId(null); }
               }}
               onBlur={() => submitRename(task.id)}
-              className="px-2 py-0.5 bg-surface-hover border border-border-input rounded text-sm text-primary focus:outline-none focus:border-accent w-48"
+              className="px-2 py-0.5 bg-surface-hover border border-border-input rounded text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent w-48"
             />
           ) : (
             <span
