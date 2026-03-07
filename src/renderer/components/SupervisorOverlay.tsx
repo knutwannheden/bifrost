@@ -132,7 +132,7 @@ export default function SupervisorOverlay() {
 
   return (
     <div
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
       onClick={close}
     >
       <div
