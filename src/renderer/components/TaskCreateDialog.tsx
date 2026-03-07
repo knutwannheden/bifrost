@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import type { PrInfo, Repo } from '../../shared/types';
 import { generateTaskName } from '../../shared/name-generator';
-import { shortPath, repoDisplayName } from '../utils/paths';
-import { matchesRepoSearch } from '../utils/search';
 import ActionLabel from './ActionLabel';
+import RepoDropdown from './RepoDropdown';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 import { altSymbol } from '../utils/platform';
 import Spinner from './Spinner';
@@ -24,9 +23,6 @@ export default function TaskCreateDialog() {
     return state.repos[0];
   })();
   const [repoId, setRepoId] = useState(initialRepo?.id ?? '');
-  const [repoSearch, setRepoSearch] = useState(initialRepo ? repoDisplayName(initialRepo) : '');
-  const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
-  const [repoFocusedIdx, setRepoFocusedIdx] = useState(0);
   const [taskName, setTaskName] = useState('');
   const [branch, setBranch] = useState('');
   const [branchSearch, setBranchSearch] = useState('');
@@ -48,7 +44,6 @@ export default function TaskCreateDialog() {
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
 
   const repoRef = useRef<HTMLInputElement>(null);
-  const repoListRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const branchRef = useRef<HTMLInputElement>(null);
   const branchListRef = useRef<HTMLDivElement>(null);
@@ -61,17 +56,6 @@ export default function TaskCreateDialog() {
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  // Treat filter as empty when the entire input is selected (user hasn't typed yet)
-  const inputFullySelected =
-    repoRef.current &&
-    repoRef.current.selectionStart === 0 &&
-    repoRef.current.selectionEnd === repoRef.current.value.length &&
-    repoRef.current.value.length > 0;
-
-  const filteredRepos = state.repos.filter((r) => {
-    if (!repoSearch || inputFullySelected) return true;
-    return matchesRepoSearch(r, repoSearch);
-  });
 
   const branchInputFullySelected =
     branchRef.current &&
@@ -93,30 +77,17 @@ export default function TaskCreateDialog() {
     ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path)
     : undefined;
 
-  // Keep focused index in bounds and auto-select first match
-  useEffect(() => {
-    setRepoFocusedIdx(0);
-  }, [repoSearch]);
-
   useEffect(() => {
     setBranchFocusedIdx(0);
   }, [branchSearch]);
-
-  // Scroll focused dropdown items into view
-  useEffect(() => {
-    repoListRef.current?.children[repoFocusedIdx]?.scrollIntoView({ block: 'nearest' });
-  }, [repoFocusedIdx]);
 
   useEffect(() => {
     branchListRef.current?.children[branchFocusedIdx]?.scrollIntoView({ block: 'nearest' });
   }, [branchFocusedIdx]);
 
-  // Focus the repo input on open and select text
+  // Focus overlay when no repos (RepoDropdown handles its own autoFocus)
   useEffect(() => {
-    if (state.repos.length > 0) {
-      repoRef.current?.focus();
-      repoRef.current?.select();
-    } else {
+    if (state.repos.length === 0) {
       overlayRef.current?.focus();
     }
   }, [state.repos.length]);
@@ -162,7 +133,6 @@ export default function TaskCreateDialog() {
 
         // Auto-fill: select repo and set branch
         setRepoId(matchedRepo.id);
-        setRepoSearch(repoDisplayName(matchedRepo));
         setPrBanner({
           number: info.number,
           title: info.title,
@@ -249,14 +219,9 @@ export default function TaskCreateDialog() {
     }
   }, [branches, prBanner]);
 
-  const selectRepo = (id: string) => {
-    const repo = state.repos.find((r) => r.id === id);
-    if (repo) {
-      setRepoId(id);
-      setRepoSearch(repoDisplayName(repo));
-      setRepoDropdownOpen(false);
-      nameRef.current?.focus();
-    }
+  const handleRepoSelect = (id: string) => {
+    setRepoId(id);
+    if (id) nameRef.current?.focus();
   };
 
   const selectBranch = (b: string) => {
@@ -449,91 +414,15 @@ export default function TaskCreateDialog() {
 
           {/* Repo select */}
           {state.repos.length > 0 && (
-          <div className="relative">
+          <div>
             <label className="block text-xs text-secondary mb-1">Repository</label>
-            <input
-              ref={repoRef}
-              type="text"
-              value={repoSearch}
-              onChange={(e) => {
-                setRepoSearch(e.target.value);
-                setRepoDropdownOpen(true);
-                // Clear selection if search no longer matches
-                const match = state.repos.find((r) => r.id === repoId);
-                if (match && !matchesRepoSearch(match, e.target.value)) {
-                  setRepoId('');
-                }
-              }}
-              onFocus={() => {
-                // Select all text on focus so typing replaces it
-                repoRef.current?.select();
-              }}
-              onBlur={() => {
-                // Delay to allow click on dropdown items
-                setTimeout(() => setRepoDropdownOpen(false), 150);
-              }}
-              onKeyDown={(e) => {
-                if (filteredRepos.length === 0) return;
-                switch (e.key) {
-                  case 'ArrowDown':
-                    e.preventDefault();
-                    if (!repoDropdownOpen) {
-                      setRepoDropdownOpen(true);
-                    } else {
-                      setRepoFocusedIdx((i) => i < filteredRepos.length - 1 ? i + 1 : 0);
-                    }
-                    break;
-                  case 'ArrowUp':
-                    e.preventDefault();
-                    if (!repoDropdownOpen) {
-                      setRepoDropdownOpen(true);
-                    } else {
-                      setRepoFocusedIdx((i) => i > 0 ? i - 1 : filteredRepos.length - 1);
-                    }
-                    break;
-                  case 'Enter':
-                    if (repoDropdownOpen) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (filteredRepos[repoFocusedIdx]) {
-                        selectRepo(filteredRepos[repoFocusedIdx].id);
-                      }
-                    }
-                    break;
-                  case 'Tab':
-                    if (repoDropdownOpen && filteredRepos[repoFocusedIdx]) {
-                      selectRepo(filteredRepos[repoFocusedIdx].id);
-                    }
-                    break;
-                }
-              }}
-              placeholder="Type to search..."
-              className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            <RepoDropdown
+              repos={state.repos}
+              selectedId={repoId}
+              onSelect={handleRepoSelect}
+              inputRef={repoRef}
+              autoFocus
             />
-            {repoDropdownOpen && filteredRepos.length > 0 && (
-              <div
-                ref={repoListRef}
-                className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
-              >
-                {filteredRepos.map((repo, idx) => (
-                  <div
-                    key={repo.id}
-                    onMouseDown={() => selectRepo(repo.id)}
-                    onMouseEnter={() => setRepoFocusedIdx(idx)}
-                    className={`px-3 py-1.5 cursor-pointer ${
-                      idx === repoFocusedIdx
-                        ? 'bg-accent text-white'
-                        : 'text-primary hover:bg-surface-hover'
-                    }`}
-                  >
-                    <div className="text-sm">{repoDisplayName(repo)}</div>
-                    <div className={`text-xs ${idx === repoFocusedIdx ? 'text-white/70' : 'text-secondary'}`}>
-                      {shortPath(repo.path)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
           )}
 

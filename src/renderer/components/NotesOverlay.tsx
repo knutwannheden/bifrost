@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { Note } from '../../shared/types';
-import { shortPath, repoDisplayName } from '../utils/paths';
-import { matchesRepoSearch } from '../utils/search';
 import ActionLabel from './ActionLabel';
+import RepoDropdown from './RepoDropdown';
 import { isModKey, modSymbol, altSymbol, deleteSymbol } from '../utils/platform';
 import { formatTime } from '../utils/format-time';
 
@@ -13,7 +12,6 @@ export default function NotesOverlay() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const repoInputRef = useRef<HTMLInputElement>(null);
-  const repoListRef = useRef<HTMLDivElement>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
@@ -21,36 +19,12 @@ export default function NotesOverlay() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const creatingRef = useRef(false);
 
-  // Repo selection state
   const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
   const initialRepoId = activeTask?.repoId ?? state.repos[0]?.id ?? '';
   const [repoId, setRepoId] = useState(initialRepoId);
-  const initialRepo = state.repos.find((r) => r.id === initialRepoId);
-  const [repoSearch, setRepoSearch] = useState(initialRepo ? repoDisplayName(initialRepo) : '');
-  const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
-  const [repoFocusedIdx, setRepoFocusedIdx] = useState(0);
-
-  const inputFullySelected =
-    repoInputRef.current &&
-    repoInputRef.current.selectionStart === 0 &&
-    repoInputRef.current.selectionEnd === repoInputRef.current.value.length &&
-    repoInputRef.current.value.length > 0;
-
-  const filteredRepos = state.repos.filter((r) => {
-    if (!repoSearch || inputFullySelected) return true;
-    return matchesRepoSearch(r, repoSearch);
-  });
 
   // Sorted newest first
   const displayNotes = [...notes].reverse();
-  // Keep focused index in bounds
-  useEffect(() => {
-    setRepoFocusedIdx(0);
-  }, [repoSearch]);
-
-  useEffect(() => {
-    repoListRef.current?.children[repoFocusedIdx]?.scrollIntoView({ block: 'nearest' });
-  }, [repoFocusedIdx]);
 
   // Load notes when repoId changes
   useEffect(() => {
@@ -107,15 +81,6 @@ export default function NotesOverlay() {
       window.bifrost.updateNote(repoId, selectedNoteId, { text: draftText });
     }
     dispatch({ type: 'TOGGLE_NOTES' });
-  };
-
-  const selectRepo = (id: string) => {
-    const repo = state.repos.find((r) => r.id === id);
-    if (repo) {
-      setRepoId(id);
-      setRepoSearch(repoDisplayName(repo));
-      setRepoDropdownOpen(false);
-    }
   };
 
   const saveNote = useCallback((noteId: string, text: string) => {
@@ -305,46 +270,12 @@ export default function NotesOverlay() {
       e.stopPropagation();
       repoInputRef.current?.blur();
       panelRef.current?.focus();
-      return;
+      return true;
     }
-    // Let overlay-level Alt shortcuts work from the repo input
     if (e.altKey && e.code === 'KeyN') {
       e.preventDefault();
       startNewNote();
-      return;
-    }
-    if (filteredRepos.length === 0) return;
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        if (!repoDropdownOpen) {
-          setRepoDropdownOpen(true);
-        } else {
-          setRepoFocusedIdx((i) => i < filteredRepos.length - 1 ? i + 1 : 0);
-        }
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        if (!repoDropdownOpen) {
-          setRepoDropdownOpen(true);
-        } else {
-          setRepoFocusedIdx((i) => i > 0 ? i - 1 : filteredRepos.length - 1);
-        }
-        break;
-      case 'Enter':
-        if (repoDropdownOpen) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (filteredRepos[repoFocusedIdx]) {
-            selectRepo(filteredRepos[repoFocusedIdx].id);
-          }
-        }
-        break;
-      case 'Tab':
-        if (repoDropdownOpen && filteredRepos[repoFocusedIdx]) {
-          selectRepo(filteredRepos[repoFocusedIdx].id);
-        }
-        break;
+      return true;
     }
   };
 
@@ -365,53 +296,16 @@ export default function NotesOverlay() {
           <span className="text-sm font-medium text-primary flex-shrink-0">Notes</span>
           <div className="flex items-center gap-1.5 flex-1 max-w-[280px]">
           <label className="text-xs text-secondary flex-shrink-0"><ActionLabel text="Repo" showHint={true} /></label>
-          <div className="relative flex-1">
-            <input
-              ref={repoInputRef}
-              type="text"
-              value={repoSearch}
-              onChange={(e) => {
-                setRepoSearch(e.target.value);
-                setRepoDropdownOpen(true);
-                const match = state.repos.find((r) => r.id === repoId);
-                if (match && !matchesRepoSearch(match, e.target.value)) {
-                  setRepoId('');
-                }
-              }}
-              onFocus={() => {
-                repoInputRef.current?.select();
-              }}
-              onBlur={() => {
-                setTimeout(() => setRepoDropdownOpen(false), 150);
-              }}
+          <div className="flex-1">
+            <RepoDropdown
+              repos={state.repos}
+              selectedId={repoId}
+              onSelect={setRepoId}
               onKeyDown={handleRepoInputKeyDown}
+              inputRef={repoInputRef}
               placeholder="Select repository..."
-              className="w-full px-2.5 py-1 bg-surface-alt border border-border-input rounded text-xs text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              size="sm"
             />
-            {repoDropdownOpen && filteredRepos.length > 0 && (
-              <div
-                ref={repoListRef}
-                className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
-              >
-                {filteredRepos.map((repo, idx) => (
-                  <div
-                    key={repo.id}
-                    onMouseDown={() => selectRepo(repo.id)}
-                    onMouseEnter={() => setRepoFocusedIdx(idx)}
-                    className={`px-2.5 py-1.5 cursor-pointer ${
-                      idx === repoFocusedIdx
-                        ? 'bg-accent text-white'
-                        : 'text-primary hover:bg-surface-hover'
-                    }`}
-                  >
-                    <div className="text-xs">{repoDisplayName(repo)}</div>
-                    <div className={`text-[10px] ${idx === repoFocusedIdx ? 'text-white/70' : 'text-secondary'}`}>
-                      {shortPath(repo.path)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
           </div>
           <button
