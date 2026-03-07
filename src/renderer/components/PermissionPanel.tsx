@@ -139,7 +139,7 @@ export default function PermissionPanel() {
       {persist && (
         <div className="px-3 py-2 border-b border-border-default">
           <div className="text-xs text-secondary mb-1">
-            Rule pattern <span className="text-muted">(Tab to cycle)</span>
+            Rule pattern <span className="text-faint">(Tab to cycle)</span>
           </div>
           <div className="space-y-1">
             {request.ruleOptions.map((opt, i) => (
@@ -169,16 +169,16 @@ export default function PermissionPanel() {
             onChange={(e) => setPersist(e.target.checked)}
             className="rounded border-border-input bg-surface-alt text-accent"
           />
-          <span>Remember <span className="text-muted">(P)</span></span>
+          <span>Remember <span className="text-faint">(P)</span></span>
         </label>
 
         {persist && (
           <div className="ml-auto">
             <PillToggle
               options={[
-                { value: 'local' as Scope, label: <>local <span className="text-muted">1</span></> },
-                { value: 'project' as Scope, label: <>project <span className="text-muted">2</span></> },
-                { value: 'user' as Scope, label: <>user <span className="text-muted">3</span></> },
+                { value: 'local' as Scope, label: <>local <span className="text-faint">1</span></> },
+                { value: 'project' as Scope, label: <>project <span className="text-faint">2</span></> },
+                { value: 'user' as Scope, label: <>user <span className="text-faint">3</span></> },
               ]}
               value={scope}
               onChange={(v) => setScope(v)}
