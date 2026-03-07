@@ -162,14 +162,12 @@ export function useTerminal(
         // to the dev terminal instead of intercepting them for app shortcuts.
         // Users can Ctrl+/ to switch to the Claude pane for those shortcuts.
         if (!isMac && paneType === 'dev' && 'adrhkl'.includes(key)) return true;
-        if ('atdrhko,lgf/'.includes(key)) return false;
+        if ('atdrhkuno,lgf/'.includes(key)) return false;
       }
       if (isModKey(e) && e.shiftKey) {
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'c') return false;
       }
-      // Let Alt+U through for review mode toggle
-      if (e.altKey && !e.metaKey && e.code === 'KeyU') return false;
       return true;
     });
 
