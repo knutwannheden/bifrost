@@ -461,11 +461,11 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
           <div className="flex flex-col gap-2 w-full max-w-md">
-            <div className="text-xs text-secondary font-medium">Scope:</div>
+            <label className="text-xs text-secondary">Scope:</label>
             <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
           </div>
           <div className="flex flex-col gap-2 w-full max-w-md">
-            <div className="text-xs text-secondary font-medium"><ActionLabel text="Instructions" showHint={true} /> (optional):</div>
+            <label className="text-xs text-secondary"><ActionLabel text="Instructions" showHint={true} /> (optional):</label>
             <textarea
               ref={instructionsRef}
               value={reviewInstructions}
