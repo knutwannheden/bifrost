@@ -35,8 +35,8 @@ function formatBytes(bytes: number): string {
 
 function BarChart({ entries, done }: { entries: { name: string; count: number }[]; done: boolean }) {
   if (entries.length === 0) {
-    if (done) return <div className="px-4 py-8 text-sm text-slate-500 text-center">No data found</div>;
-    return <div className="px-4 py-8 text-sm text-slate-500 text-center">Scanning...</div>;
+    if (done) return <div className="px-4 py-8 text-sm text-muted text-center">No data found</div>;
+    return <div className="px-4 py-8 text-sm text-muted text-center">Scanning...</div>;
   }
 
   const maxCount = entries[0].count;
@@ -48,17 +48,17 @@ function BarChart({ entries, done }: { entries: { name: string; count: number }[
         const pct = (entry.count / maxCount) * 100;
         return (
           <div key={entry.name} className="flex items-center gap-2">
-            <div className="flex-1 h-5 bg-slate-700/50 rounded overflow-hidden relative">
+            <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
               <div
                 className="h-full bg-indigo-500 rounded"
                 style={{ width: `${pct}%` }}
               />
-              <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-slate-200 truncate pointer-events-none">
+              <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">
                 {entry.name}
               </span>
             </div>
-            <span className="text-xs text-right text-slate-400 tabular-nums shrink-0">{entry.count}</span>
-            <span className="text-xs w-8 text-right text-slate-500 tabular-nums shrink-0">
+            <span className="text-xs text-right text-secondary tabular-nums shrink-0">{entry.count}</span>
+            <span className="text-xs w-8 text-right text-muted tabular-nums shrink-0">
               {((entry.count / total) * 100).toFixed(0)}%
             </span>
           </div>
@@ -72,8 +72,8 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   if (entries.length === 0) {
-    if (done) return <div className="px-4 py-8 text-sm text-slate-500 text-center">No data found</div>;
-    return <div className="px-4 py-8 text-sm text-slate-500 text-center">Scanning...</div>;
+    if (done) return <div className="px-4 py-8 text-sm text-muted text-center">No data found</div>;
+    return <div className="px-4 py-8 text-sm text-muted text-center">Scanning...</div>;
   }
 
   const toggle = (name: string) =>
@@ -93,31 +93,31 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
         return (
           <div
             key={entry.name}
-            className="cursor-pointer hover:bg-slate-700/30 rounded px-1 -mx-1"
+            className="cursor-pointer hover:bg-surface-alt/30 rounded px-1 -mx-1"
             onClick={() => toggle(entry.name)}
           >
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-5 bg-slate-700/50 rounded overflow-hidden relative">
+              <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
                 <div
                   className="h-full bg-cyan-600 rounded"
                   style={{ width: `${pct}%` }}
                 />
-                <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-slate-200 truncate pointer-events-none">
+                <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">
                   {entry.name}
                 </span>
               </div>
-              <span className="text-xs text-right text-slate-400 tabular-nums shrink-0 w-16">
+              <span className="text-xs text-right text-secondary tabular-nums shrink-0 w-16">
                 {formatBytes(entry.totalBytes)}
               </span>
-              <span className="text-xs text-right text-slate-500 tabular-nums shrink-0 w-14">
+              <span className="text-xs text-right text-muted tabular-nums shrink-0 w-14">
                 {entry.count.toLocaleString()}x
               </span>
-              <span className="text-xs text-right text-slate-500 tabular-nums shrink-0 w-16">
+              <span className="text-xs text-right text-muted tabular-nums shrink-0 w-16">
                 avg {formatBytes(entry.avgBytes)}
               </span>
             </div>
             {isExpanded && (
-              <div className="text-[11px] text-slate-300 whitespace-pre-wrap break-all py-1 px-1.5">
+              <div className="text-[11px] text-secondary whitespace-pre-wrap break-all py-1 px-1.5">
                 {entry.name}
               </div>
             )}
@@ -132,8 +132,8 @@ function EscalationTable({ entries, done }: { entries: EscalationEntry[]; done: 
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   if (entries.length === 0) {
-    if (done) return <div className="px-4 py-8 text-sm text-slate-500 text-center">No data found</div>;
-    return <div className="px-4 py-8 text-sm text-slate-500 text-center">Scanning...</div>;
+    if (done) return <div className="px-4 py-8 text-sm text-muted text-center">No data found</div>;
+    return <div className="px-4 py-8 text-sm text-muted text-center">Scanning...</div>;
   }
 
   const toggle = (cmd: string) =>
@@ -150,20 +150,20 @@ function EscalationTable({ entries, done }: { entries: EscalationEntry[]; done: 
         return (
           <div
             key={entry.command}
-            className="cursor-pointer hover:bg-slate-700/30 rounded px-1 -mx-1"
+            className="cursor-pointer hover:bg-surface-alt/30 rounded px-1 -mx-1"
             onClick={() => toggle(entry.command)}
           >
             <div className="flex items-center gap-2 py-0.5">
-              <span className={`flex-1 text-[11px] text-slate-200 ${isExpanded ? 'whitespace-pre-wrap break-all' : 'truncate'}`}>
+              <span className={`flex-1 text-[11px] text-primary ${isExpanded ? 'whitespace-pre-wrap break-all' : 'truncate'}`}>
                 {entry.command}
               </span>
-              <span className="text-xs text-slate-400 tabular-nums shrink-0 w-20 text-right">
+              <span className="text-xs text-secondary tabular-nums shrink-0 w-20 text-right">
                 {entry.clusters} cluster{entry.clusters !== 1 ? 's' : ''}
               </span>
               <span className="text-xs text-amber-400 tabular-nums shrink-0 w-20 text-right font-medium">
                 {entry.wastedRuns} wasted
               </span>
-              <span className="text-xs text-slate-500 tabular-nums shrink-0 w-16 text-right">
+              <span className="text-xs text-muted tabular-nums shrink-0 w-16 text-right">
                 worst: {entry.worstCluster}
               </span>
             </div>
@@ -235,19 +235,19 @@ export default function StatsOverlay() {
       tabIndex={-1}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[560px] flex flex-col shadow-xl max-h-[80vh]"
+        className="bg-surface rounded-lg border border-border-input w-[560px] flex flex-col shadow-xl max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
           <div className="flex items-center gap-1">
             {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
                 className={`text-sm px-2 py-0.5 rounded flex items-center gap-1 ${
                   activeTab === tab.id
-                    ? 'bg-slate-700 text-slate-200'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-surface-alt text-primary'
+                    : 'text-secondary hover:text-primary'
                 }`}
                 onClick={() => setActiveTab(tab.id)}
               >
@@ -264,14 +264,14 @@ export default function StatsOverlay() {
               <Spinner size="sm" className="ml-2" />
             )}
           </div>
-          <div className="flex items-center gap-0.5 bg-slate-700/50 rounded px-0.5 py-0.5">
+          <div className="flex items-center gap-0.5 bg-surface-alt/50 rounded px-0.5 py-0.5">
             {TIME_RANGES.map((r) => (
               <button
                 key={r.id}
                 className={`text-xs px-1.5 py-0.5 rounded ${
                   timeRange === r.id
-                    ? 'bg-slate-600 text-slate-200'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-surface-hover text-primary'
+                    : 'text-secondary hover:text-primary'
                 }`}
                 onClick={() => setTimeRange(r.id)}
               >
@@ -282,7 +282,7 @@ export default function StatsOverlay() {
           <button
             onClick={close}
             tabIndex={-1}
-            className="text-slate-400 hover:text-slate-200 text-lg leading-none ml-2"
+            className="text-secondary hover:text-primary text-lg leading-none ml-2"
           >
             &times;
           </button>
