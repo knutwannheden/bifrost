@@ -43,6 +43,14 @@ export default function NotificationPopover() {
 
   const handleAction = (notificationId: string, handler: string) => {
     dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' });
+    if (handler.startsWith('slack-create-task:')) {
+      const url = handler.slice('slack-create-task:'.length);
+      // Copy URL to clipboard so TaskCreateDialog picks it up
+      navigator.clipboard.writeText(url).catch(() => {});
+      dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
+      dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true });
+      return;
+    }
     if (handler === 'install-plugin') {
       dispatch({ type: 'SHOW_TOAST', message: 'Installing plugin update...' });
       window.bifrost.installIntegration().then(() => {

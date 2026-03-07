@@ -141,6 +141,38 @@ export default function App() {
     return unsub;
   }, [state.activeTaskId, dispatch]);
 
+  // Listen for Slack reactions
+  useEffect(() => {
+    const unsub = window.bifrost.onSlackReaction((channelId, messageTs, messageUrl, messagePreview) => {
+      // Show toast with Create Task action
+      dispatch({
+        type: 'SHOW_TOAST',
+        message: `Slack: ${messagePreview}`,
+        duration: 8000,
+        action: {
+          label: 'Create Task',
+          callback: () => dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true }),
+        },
+      });
+
+      // Push persistent notification
+      dispatch({
+        type: 'PUSH_NOTIFICATION',
+        notification: {
+          id: `slack-${channelId}-${messageTs}`,
+          type: 'slack-reaction',
+          title: 'Slack Reaction',
+          message: messagePreview,
+          action: { label: 'Create Task', handler: `slack-create-task:${messageUrl}` },
+          persistent: true,
+          read: false,
+          timestamp: Date.now(),
+        },
+      });
+    });
+    return unsub;
+  }, [dispatch]);
+
   // Listen for permission prompts from main process
   useEffect(() => {
     const unsub = window.bifrost.onPermissionPrompt((request) => {
