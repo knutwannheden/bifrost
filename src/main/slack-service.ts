@@ -220,15 +220,75 @@ function exchangeCodeForToken(
 
 let oauthServer: https.Server | null = null;
 
-function generateSelfSignedCert(): { key: string; cert: string } {
-  const result = execSync(
-    'openssl req -x509 -newkey rsa:2048 -keyout /dev/stdout -out /dev/stdout -days 1 -nodes -subj "/CN=localhost"',
-    { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] },
+const CERT_DIR = path.join(os.homedir(), '.bifrost', 'certs');
+const CA_KEY_PATH = path.join(CERT_DIR, 'ca-key.pem');
+const CA_CERT_PATH = path.join(CERT_DIR, 'ca.pem');
+const SERVER_KEY_PATH = path.join(CERT_DIR, 'server-key.pem');
+const SERVER_CERT_PATH = path.join(CERT_DIR, 'server.pem');
+
+/**
+ * Get or create a locally-trusted TLS cert for localhost.
+ * On first run: generates a CA, adds it to the macOS login keychain (prompts
+ * for password), and signs a localhost cert. Certs persist in ~/.bifrost/certs/.
+ */
+function getOrCreateCert(): { key: string; cert: string } {
+  if (fs.existsSync(SERVER_KEY_PATH) && fs.existsSync(SERVER_CERT_PATH)) {
+    // Check if the server cert is still valid (not expired)
+    try {
+      execSync(`openssl x509 -checkend 86400 -noout -in "${SERVER_CERT_PATH}"`, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      return {
+        key: fs.readFileSync(SERVER_KEY_PATH, 'utf-8'),
+        cert: fs.readFileSync(SERVER_CERT_PATH, 'utf-8'),
+      };
+    } catch {
+      // Cert expired or invalid — regenerate
+    }
+  }
+
+  if (!fs.existsSync(CERT_DIR)) {
+    fs.mkdirSync(CERT_DIR, { recursive: true });
+  }
+
+  // Generate CA key + cert (valid 10 years)
+  if (!fs.existsSync(CA_KEY_PATH) || !fs.existsSync(CA_CERT_PATH)) {
+    execSync(
+      `openssl req -x509 -newkey rsa:2048 -keyout "${CA_KEY_PATH}" -out "${CA_CERT_PATH}" -days 3650 -nodes -subj "/CN=Bifrost Local CA"`,
+      { stdio: ['pipe', 'pipe', 'pipe'] },
+    );
+
+    // Trust the CA in the macOS login keychain (shows native password dialog)
+    execSync(
+      `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "${CA_CERT_PATH}"`,
+      { stdio: 'inherit' },
+    );
+  }
+
+  // Generate server key + CSR, sign with CA (valid 1 year)
+  execSync(
+    `openssl req -newkey rsa:2048 -keyout "${SERVER_KEY_PATH}" -out "${CERT_DIR}/server.csr" -nodes -subj "/CN=localhost"`,
+    { stdio: ['pipe', 'pipe', 'pipe'] },
   );
-  const keyMatch = result.match(/-----BEGIN PRIVATE KEY-----[\s\S]+?-----END PRIVATE KEY-----/);
-  const certMatch = result.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/);
-  if (!keyMatch || !certMatch) throw new Error('Failed to generate self-signed certificate');
-  return { key: keyMatch[0], cert: certMatch[0] };
+
+  // Create extensions file for SAN (required by modern browsers)
+  const extPath = path.join(CERT_DIR, 'ext.cnf');
+  fs.writeFileSync(extPath, 'subjectAltName=DNS:localhost,IP:127.0.0.1\n');
+
+  execSync(
+    `openssl x509 -req -in "${CERT_DIR}/server.csr" -CA "${CA_CERT_PATH}" -CAkey "${CA_KEY_PATH}" -CAcreateserial -out "${SERVER_CERT_PATH}" -days 365 -extfile "${extPath}"`,
+    { stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+
+  // Clean up temp files
+  try { fs.unlinkSync(path.join(CERT_DIR, 'server.csr')); } catch { /* ignore */ }
+  try { fs.unlinkSync(extPath); } catch { /* ignore */ }
+  try { fs.unlinkSync(path.join(CERT_DIR, 'ca.srl')); } catch { /* ignore */ }
+
+  return {
+    key: fs.readFileSync(SERVER_KEY_PATH, 'utf-8'),
+    cert: fs.readFileSync(SERVER_CERT_PATH, 'utf-8'),
+  };
 }
 
 export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
@@ -248,7 +308,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const oauthState = crypto.randomBytes(16).toString('hex');
-    const { key, cert } = generateSelfSignedCert();
+    const { key, cert } = getOrCreateCert();
 
     const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
     const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read';
@@ -259,19 +319,10 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
     authorizeUrl.searchParams.set('redirect_uri', redirectUri);
     authorizeUrl.searchParams.set('state', oauthState);
 
-    // HTTPS server with self-signed cert. Browser opens /start first — user
-    // accepts the cert warning there, then gets redirected to Slack. When Slack
-    // redirects back to /callback, the cert is already accepted — no delay.
+    // HTTPS server with a locally-trusted cert (CA in login keychain).
     const server = https.createServer({ key, cert }, async (req, res) => {
       try {
         const url = new URL(req.url ?? '', `https://localhost`);
-
-        // Landing page — cert warning happens here, then redirect to Slack
-        if (url.pathname === '/start') {
-          res.writeHead(302, { Location: authorizeUrl.toString() });
-          res.end();
-          return;
-        }
 
         if (url.pathname !== '/callback') {
           res.writeHead(404);
@@ -355,9 +406,8 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
       }
     });
 
-    // Open /start in system browser — cert warning happens here, then redirects to Slack
     server.listen(OAUTH_PORT, () => {
-      shell.openExternal(`https://localhost:${OAUTH_PORT}/start`);
+      shell.openExternal(authorizeUrl.toString());
     });
   });
 }
