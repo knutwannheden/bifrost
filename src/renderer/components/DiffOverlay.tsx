@@ -76,8 +76,8 @@ function LineNumber({ num }: { num: number | null }) {
 }
 
 const lineStyles: Record<DiffLine['type'], { bg: string; signColor: string; sign: string }> = {
-  add: { bg: 'bg-[#1a3a1a]', signColor: 'text-green-500', sign: '+' },
-  remove: { bg: 'bg-[#3a1a1a]', signColor: 'text-red-500', sign: '-' },
+  add: { bg: 'bg-[#1a3a1a]', signColor: 'text-success', sign: '+' },
+  remove: { bg: 'bg-[#3a1a1a]', signColor: 'text-danger', sign: '-' },
   context: { bg: '', signColor: 'text-faint', sign: ' ' },
 };
 
@@ -300,17 +300,17 @@ function entryToText(entry: ActivityEntry): string {
 }
 
 const statusConfig: Record<DiffFileStatus, { letter: string; color: string }> = {
-  added: { letter: 'A', color: 'text-green-400' },
-  modified: { letter: 'M', color: 'text-yellow-400' },
-  deleted: { letter: 'D', color: 'text-red-400' },
+  added: { letter: 'A', color: 'text-success' },
+  modified: { letter: 'M', color: 'text-warning' },
+  deleted: { letter: 'D', color: 'text-danger' },
   renamed: { letter: 'R', color: 'text-accent-hover' },
 };
 
 type GitFileStage = 'unstaged' | 'staged' | 'committed' | 'untracked';
 
 const stageIndicator: Record<GitFileStage, { label: string; color: string; title: string }> = {
-  staged: { label: 'S', color: 'text-green-400', title: 'Staged' },
-  unstaged: { label: 'U', color: 'text-yellow-400', title: 'Unstaged' },
+  staged: { label: 'S', color: 'text-success', title: 'Staged' },
+  unstaged: { label: 'U', color: 'text-warning', title: 'Unstaged' },
   committed: { label: 'C', color: 'text-accent-hover', title: 'Committed' },
   untracked: { label: '?', color: 'text-muted', title: 'Untracked' },
 };
@@ -798,7 +798,7 @@ function GitLogEntryView({ entry, focused }: { entry: GitLogEntry; focused: bool
         focused ? 'ring-1 ring-accent-muted bg-accent/10' : ''
       }`}
     >
-      <span className="text-yellow-400 font-mono flex-shrink-0">{entry.shortSha}</span>
+      <span className="text-warning font-mono flex-shrink-0">{entry.shortSha}</span>
       <span className="text-primary flex-1 min-w-0 break-words">{entry.subject}</span>
       <span className="text-muted flex-shrink-0">{entry.author}</span>
       <span className="text-faint flex-shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
@@ -1147,7 +1147,7 @@ export default function DiffOverlay() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Tab/&#8679;Tab cycle
+            &uarr;&darr; navigate &middot; Tab/&#8679;Tab cycle &middot; type to search &middot; Esc close
           </span>
           <button
             tabIndex={-1}

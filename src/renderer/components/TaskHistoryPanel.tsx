@@ -564,7 +564,7 @@ export default function TaskHistoryPanel() {
             size="md"
           />
           <span className="ml-auto text-xs text-faint self-center">
-            Tab/&larr;&rarr; tabs &uarr;&darr; {isSessionsMode ? 'sessions' : 'tasks'}
+            Tab/&larr;&rarr; tabs &middot; &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'} &middot; {!isSessionsMode && <>F2 rename &middot; {altSymbol}O/{altSymbol}A/{altSymbol}D actions &middot; </>}type to search &middot; Esc close
           </span>
         </div>
 
@@ -573,8 +573,8 @@ export default function TaskHistoryPanel() {
         )}
 
         {branchConfirm && (
-          <div className="mx-4 mt-3 px-3 py-2 bg-yellow-900/30 border border-yellow-600/50 rounded flex items-center gap-3">
-            <span className="text-xs text-yellow-300 flex-1">
+          <div className="mx-4 mt-3 px-3 py-2 bg-warning/10 border border-warning/30 rounded flex items-center gap-3">
+            <span className="text-xs text-warning flex-1">
               Branch changed from <span className="font-mono font-medium">{branchConfirm.task.branch}</span> to <span className="font-mono font-medium">{branchConfirm.currentBranch}</span>
             </span>
             <button
