@@ -4,13 +4,14 @@ import type { SupervisorState, SupervisorItem } from '../../shared/types';
 import Spinner from './Spinner';
 import { formatTime } from '../utils/format-time';
 
-function ItemRow({ item, repoName, onAction }: {
+function ItemRow({ item, repoName, onAction, focused }: {
   item: SupervisorItem;
   repoName: string;
   onAction: (action: string, itemId: string) => void;
+  focused?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-2 px-3 py-2 rounded hover:bg-surface-alt/50 group">
+    <div className={`flex items-start gap-2 px-3 py-2 rounded group ${focused ? 'bg-surface-alt/50' : 'hover:bg-surface-alt/50'}`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted">{item.name}</span>
@@ -21,7 +22,7 @@ function ItemRow({ item, repoName, onAction }: {
           <div className="text-xs text-danger truncate mt-0.5">{item.errorMessage}</div>
         )}
       </div>
-      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={`flex items-center gap-1 shrink-0 transition-opacity ${focused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
         {item.status === 'running' && (
           <button
             onClick={() => onAction('pause', item.id)}
@@ -79,14 +80,6 @@ export default function SupervisorOverlay() {
     return unsub;
   }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      close();
-    }
-  };
-
   const handleToggle = async () => {
     if (!svState) return;
     if (svState.running) {
@@ -129,6 +122,59 @@ export default function SupervisorOverlay() {
   const done = svState?.items.filter((i) =>
     i.status === 'done' || i.status === 'error' || i.status === 'paused',
   ) ?? [];
+
+  const allItems = [...running, ...queued, ...done];
+  const [focusedIdx, setFocusedIdx] = useState(-1);
+  const focusedItem = focusedIdx >= 0 && focusedIdx < allItems.length ? allItems[focusedIdx] : null;
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      return;
+    }
+
+    // Arrow Up/Down: navigate items
+    if (e.key === 'ArrowDown' && allItems.length > 0) {
+      e.preventDefault();
+      setFocusedIdx((i) => (i < allItems.length - 1 ? i + 1 : 0));
+      return;
+    }
+    if (e.key === 'ArrowUp' && allItems.length > 0) {
+      e.preventDefault();
+      setFocusedIdx((i) => (i > 0 ? i - 1 : allItems.length - 1));
+      return;
+    }
+
+    // Enter: open focused item (if done/error/paused)
+    if (e.key === 'Enter' && focusedItem) {
+      const s = focusedItem.status;
+      if (s === 'done' || s === 'error' || s === 'paused') {
+        e.preventDefault();
+        handleAction('open', focusedItem.id);
+      }
+      return;
+    }
+
+    // Alt shortcuts
+    if (e.altKey) {
+      switch (e.code) {
+        case 'KeyS':
+          e.preventDefault();
+          handleToggle();
+          break;
+        case 'Minus':
+          e.preventDefault();
+          handleConcurrency(-1);
+          break;
+        case 'Equal':
+          e.preventDefault();
+          handleConcurrency(1);
+          break;
+      }
+    }
+  };
 
   return (
     <div
@@ -180,7 +226,7 @@ export default function SupervisorOverlay() {
                 : 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
             }`}
           >
-            {svState?.running ? 'Stop' : 'Start'}
+            {svState?.running ? <><u>S</u>top</> : <><u>S</u>tart</>}
           </button>
 
           <button
@@ -203,21 +249,21 @@ export default function SupervisorOverlay() {
               {running.length > 0 && (
                 <Section title="Running" count={running.length}>
                   {running.map((item) => (
-                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} />
+                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} focused={focusedItem?.id === item.id} />
                   ))}
                 </Section>
               )}
               {queued.length > 0 && (
                 <Section title="Queued" count={queued.length}>
                   {queued.map((item) => (
-                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} />
+                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} focused={focusedItem?.id === item.id} />
                   ))}
                 </Section>
               )}
               {done.length > 0 && (
                 <Section title="Done" count={done.length}>
                   {done.map((item) => (
-                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} />
+                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} focused={focusedItem?.id === item.id} />
                   ))}
                 </Section>
               )}
@@ -226,10 +272,13 @@ export default function SupervisorOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
-          <p className="text-xs text-muted">
+        <div className="px-4 pb-3 pt-2 border-t border-border-default flex items-center justify-between">
+          <span className="text-xs text-muted">
             Start scans all repos for notes and queues them for processing
-          </p>
+          </span>
+          <span className="text-xs text-faint">
+            &uarr;&darr; navigate &middot; Enter open &middot; Alt+S start/stop
+          </span>
         </div>
       </div>
     </div>

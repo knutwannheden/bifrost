@@ -226,6 +226,25 @@ export default function StatsOverlay() {
       e.preventDefault();
       e.stopPropagation();
       close();
+      return;
+    }
+
+    // Tab/Shift+Tab: cycle through tabs
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const curIdx = visibleTabs.findIndex((t) => t.id === activeTab);
+      const step = e.shiftKey ? visibleTabs.length - 1 : 1;
+      setActiveTab(visibleTabs[(curIdx + step) % visibleTabs.length].id);
+      return;
+    }
+
+    // Arrow Left/Right: cycle time ranges
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const curIdx = TIME_RANGES.findIndex((r) => r.id === timeRange);
+      const step = e.key === 'ArrowLeft' ? TIME_RANGES.length - 1 : 1;
+      setTimeRange(TIME_RANGES[(curIdx + step) % TIME_RANGES.length].id);
+      return;
     }
   };
 
@@ -287,6 +306,13 @@ export default function StatsOverlay() {
           {barEntries !== null && <BarChart entries={barEntries} done={done} />}
           {activeTab === 'context-rot' && <OutputChart entries={data.contextRot.filter((e) => e.totalBytes >= 1000)} done={done} />}
           {activeTab === 'tail-escalation' && <EscalationTable entries={data.tailEscalation.filter((e) => e.wastedRuns >= 2)} done={done} />}
+        </div>
+
+        {/* Footer */}
+        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+          <span className="text-xs text-faint">
+            Tab/&#8679;Tab tabs &middot; &larr;&rarr; time range
+          </span>
         </div>
       </div>
     </div>
