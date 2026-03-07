@@ -241,17 +241,17 @@ export default function RepoManager() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[500px] max-h-[80vh] overflow-hidden shadow-xl"
+        className="bg-surface rounded-lg border border-border-input w-[500px] max-h-[80vh] overflow-hidden shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <h2 className="text-sm font-semibold text-slate-200">Manage Repositories</h2>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+          <h2 className="text-sm font-semibold text-primary">Manage Repositories</h2>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-slate-600">&uarr;&darr; navigate &middot; Alt+B browse &middot; Alt+A add</span>
+            <span className="text-xs text-faint">&uarr;&darr; navigate &middot; Alt+B browse &middot; Alt+A add</span>
             <button
               onClick={close}
               tabIndex={-1}
-              className="text-slate-400 hover:text-slate-200 text-lg leading-none"
+              className="text-secondary hover:text-primary text-lg leading-none"
             >
               &times;
             </button>
@@ -264,7 +264,7 @@ export default function RepoManager() {
           {/* Recent from Claude */}
           {suggestions.length > 0 && (
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Recent from Claude</label>
+              <label className="block text-xs text-muted mb-1">Recent from Claude</label>
               <div className="space-y-1">
                 {suggestions.map((repo, idx) => {
                   const isFocused = focusedSection === 'suggestions' && idx === focusedSuggestionIdx;
@@ -275,18 +275,18 @@ export default function RepoManager() {
                       onMouseEnter={() => { setFocusedSection('suggestions'); setFocusedSuggestionIdx(idx); }}
                       className={`flex items-center justify-between rounded px-3 py-1.5 cursor-default transition-colors ${
                         isFocused
-                          ? 'bg-slate-700 border border-blue-500/70 ring-1 ring-blue-500/40'
-                          : 'bg-slate-700/30 border border-slate-700'
+                          ? 'bg-surface-alt border border-accent-muted ring-1 ring-accent-muted'
+                          : 'bg-surface-alt/30 border border-border-default'
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-slate-300">{repo.githubPath ?? repo.name}</p>
-                        <p className="text-xs text-slate-500 truncate">{shortPath(repo.path)}</p>
+                        <p className="text-sm text-secondary">{repo.githubPath ?? repo.name}</p>
+                        <p className="text-xs text-muted truncate">{shortPath(repo.path)}</p>
                       </div>
                       <button
                         onClick={() => handleAddSuggestion(repo.path)}
                         tabIndex={-1}
-                        className="ml-3 px-2 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+                        className="ml-3 px-2 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
                       >
                         <ActionLabel text="+ Add" showHint={isFocused} />
                       </button>
@@ -300,10 +300,10 @@ export default function RepoManager() {
           {/* Repo list */}
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             {state.repos.length === 0 && !search && (
-              <p className="text-sm text-slate-500 text-center py-4">No repositories added yet.</p>
+              <p className="text-sm text-muted text-center py-4">No repositories added yet.</p>
             )}
             {filteredRepos.length === 0 && search && (
-              <p className="text-sm text-slate-500 text-center py-4">No matching repositories.</p>
+              <p className="text-sm text-muted text-center py-4">No matching repositories.</p>
             )}
             {filteredRepos.map((repo, idx) => {
               const isFocused = focusedSection === 'repos' && idx === focusedRepoIdx;
@@ -314,20 +314,20 @@ export default function RepoManager() {
                   onMouseEnter={() => { setFocusedSection('repos'); setFocusedRepoIdx(idx); }}
                   className={`flex items-center justify-between rounded px-3 py-2 cursor-default transition-colors ${
                     isFocused
-                      ? 'bg-slate-700 border border-blue-500/70 ring-1 ring-blue-500/40'
-                      : 'bg-slate-700/50 border border-transparent'
+                      ? 'bg-surface-alt border border-accent-muted ring-1 ring-accent-muted'
+                      : 'bg-surface-alt/50 border border-transparent'
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-slate-200 truncate">{repoDisplayName(repo)}</p>
-                    <p className="text-xs text-slate-400 truncate">{shortPath(repo.path)}</p>
+                    <p className="text-sm text-primary truncate">{repoDisplayName(repo)}</p>
+                    <p className="text-xs text-secondary truncate">{shortPath(repo.path)}</p>
                   </div>
                   <div className="flex items-center gap-1 ml-3">
                     <button
                       onClick={() => { close(); dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id }); }}
                       tabIndex={-1}
                       title="Create task (Alt+T)"
-                      className="px-1.5 py-0.5 text-xs text-blue-400 hover:text-blue-300 hover:bg-slate-600 rounded"
+                      className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
                     >
                       <ActionLabel text="Task" showHint={isFocused} />
                     </button>
@@ -347,7 +347,7 @@ export default function RepoManager() {
 
           {/* Add local repo */}
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Add Local Repository</label>
+            <label className="block text-xs text-secondary mb-1">Add Local Repository</label>
             <div className="flex gap-2">
               <input
                 ref={inputRef}
@@ -363,12 +363,12 @@ export default function RepoManager() {
                   }
                 }}
                 placeholder="/path/to/repo"
-                className="flex-1 px-3 py-1.5 bg-slate-700 border border-slate-600 rounded text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="flex-1 px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
               <button
                 onClick={handleBrowse}
                 tabIndex={-1}
-                className="px-3 py-1.5 bg-slate-600 hover:bg-slate-500 text-slate-200 text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="px-3 py-1.5 bg-surface-hover hover:brightness-110 text-primary text-sm rounded focus:outline-none focus:ring-1 focus:ring-accent"
               >
                 <ActionLabel text="Browse" showHint={true} />
               </button>
@@ -376,7 +376,7 @@ export default function RepoManager() {
                 onClick={handleAddLocal}
                 disabled={!localPath.trim()}
                 tabIndex={-1}
-                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 <ActionLabel text="Add" showHint={!!localPath.trim()} />
               </button>
