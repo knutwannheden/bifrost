@@ -192,7 +192,7 @@ export default function SupervisorOverlay() {
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-border-default">
-          <span className="text-sm font-medium text-primary">Supervisor</span>
+          <span className="text-sm font-semibold text-primary">Supervisor</span>
           {svState?.running && <Spinner />}
           {svState && svState.items.length > 0 && (
             <span className="text-xs text-muted">
@@ -203,7 +203,7 @@ export default function SupervisorOverlay() {
 
           {/* Concurrency */}
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted">Concurrency</span>
+            <span className="text-xs text-secondary">Concurrency</span>
             <button
               onClick={() => handleConcurrency(-1)}
               className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm"

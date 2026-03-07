@@ -293,7 +293,7 @@ export default function NotesOverlay() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default gap-3">
-          <span className="text-sm font-medium text-primary flex-shrink-0">Notes</span>
+          <span className="text-sm font-semibold text-primary flex-shrink-0">Notes</span>
           <div className="flex items-center gap-1.5 flex-1 max-w-[280px]">
           <label className="text-xs text-secondary flex-shrink-0"><ActionLabel text="Repo" showHint={true} /></label>
           <div className="flex-1">
