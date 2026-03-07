@@ -412,7 +412,6 @@ export default function SettingsOverlay() {
       onKeyDown={handleKeyDown}
     >
       <div
-        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
         className="bg-slate-800 rounded-lg border border-slate-600 w-[720px] flex flex-col shadow-xl max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >

@@ -356,7 +356,7 @@ export default function NotesOverlay() {
         ref={panelRef}
         tabIndex={-1}
         onKeyDown={handleOverlayKeyDown}
-        className="bg-slate-800 rounded-lg border border-slate-600 w-[720px] flex flex-col shadow-xl min-h-[80vh] max-h-[90vh] font-sans outline-none"
+        className="bg-slate-800 rounded-lg border border-slate-600 w-[720px] flex flex-col shadow-xl min-h-[80vh] max-h-[90vh] outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

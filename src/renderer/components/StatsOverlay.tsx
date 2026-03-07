@@ -234,7 +234,6 @@ export default function StatsOverlay() {
       tabIndex={-1}
     >
       <div
-        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
         className="bg-slate-800 rounded-lg border border-slate-600 w-[560px] flex flex-col shadow-xl max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >

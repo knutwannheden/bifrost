@@ -108,7 +108,6 @@ export default function PermissionPanel() {
       onKeyDown={handleKeyDown}
       data-permission-panel
       className="fixed bottom-14 right-4 z-40 w-96 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl focus:outline-none focus:ring-1 focus:ring-blue-500/50"
-      style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">

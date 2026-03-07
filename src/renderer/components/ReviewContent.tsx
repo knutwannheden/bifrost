@@ -524,7 +524,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
           </button>
         </div>
         {content && (
-          <div className="flex-1 overflow-auto p-4 font-sans">
+          <div className="flex-1 overflow-auto p-4">
             {lines.map((line, i) => renderMarkdownLine(line, i, new Set(), () => { /* read-only during streaming */ }))}
           </div>
         )}
@@ -562,7 +562,7 @@ export default function ReviewContent({ taskId, activeReviewId, onNewReviewCreat
 
       {/* Markdown review view — hidden (not unmounted) when discussion is active */}
       <div className="flex-1 flex flex-col min-h-0" style={{ display: showDiscussion ? 'none' : undefined }}>
-        <div className="flex-1 overflow-auto p-4 font-sans">
+        <div className="flex-1 overflow-auto p-4">
           {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
         </div>
         <div className="flex items-center gap-3 px-4 py-3 border-t border-slate-700 flex-shrink-0">
