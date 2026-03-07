@@ -11,6 +11,7 @@ import SearchIndicator from './SearchIndicator';
 import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
 import { formatDate, formatRelative } from '../utils/format-time';
+import { altSymbol } from '../utils/platform';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -159,7 +160,7 @@ function TaskRow({
           {canReopen(task) && (
             <button
               onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
-              title="Reopen task (Alt+O)"
+              title={`Reopen task (${altSymbol}O)`}
               tabIndex={-1}
               className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
             >
@@ -169,7 +170,7 @@ function TaskRow({
           {canArchive(task) && (
             <button
               onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
-              title="Archive task (Alt+A)"
+              title={`Archive task (${altSymbol}A)`}
               tabIndex={-1}
               className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
             >
@@ -178,7 +179,7 @@ function TaskRow({
           )}
           <button
             onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
-            title={task.inPlace || task.isExternal ? 'Delete task (Alt+D)' : 'Delete task and worktree (Alt+D)'}
+            title={task.inPlace || task.isExternal ? `Delete task (${altSymbol}D)` : `Delete task and worktree (${altSymbol}D)`}
             tabIndex={-1}
             className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded"
           >

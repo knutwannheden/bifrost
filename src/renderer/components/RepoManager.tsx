@@ -5,6 +5,7 @@ import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
 import SearchIndicator from './SearchIndicator';
+import { altSymbol } from '../utils/platform';
 
 export default function RepoManager() {
   const { state, dispatch } = useApp();
@@ -247,7 +248,7 @@ export default function RepoManager() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
           <h2 className="text-sm font-semibold text-primary">Manage Repositories</h2>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-faint">&uarr;&darr; navigate &middot; Alt+B browse &middot; Alt+A add</span>
+            <span className="text-xs text-faint">&uarr;&darr; navigate &middot; {altSymbol}B browse &middot; {altSymbol}A add</span>
             <button
               onClick={close}
               tabIndex={-1}
@@ -326,7 +327,7 @@ export default function RepoManager() {
                     <button
                       onClick={() => { close(); dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id }); }}
                       tabIndex={-1}
-                      title="Create task (Alt+T)"
+                      title={`Create task (${altSymbol}T)`}
                       className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded"
                     >
                       <ActionLabel text="Task" showHint={isFocused} />
@@ -334,7 +335,7 @@ export default function RepoManager() {
                     <button
                       onClick={() => handleRemove(repo.id)}
                       tabIndex={-1}
-                      title="Remove (Alt+R)"
+                      title={`Remove (${altSymbol}R)`}
                       className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded"
                     >
                       <ActionLabel text="Remove" showHint={isFocused} />

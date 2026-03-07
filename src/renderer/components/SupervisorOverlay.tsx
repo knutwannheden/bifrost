@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { SupervisorState, SupervisorItem } from '../../shared/types';
+import { altSymbol } from '../utils/platform';
 import Spinner from './Spinner';
 import { formatTime } from '../utils/format-time';
 
@@ -277,7 +278,7 @@ export default function SupervisorOverlay() {
             Start scans all repos for notes and queues them for processing
           </span>
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Enter open &middot; Alt+S start/stop
+            &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop
           </span>
         </div>
       </div>

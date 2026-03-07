@@ -6,6 +6,7 @@ import { shortPath, repoDisplayName } from '../utils/paths';
 import { matchesRepoSearch } from '../utils/search';
 import ActionLabel from './ActionLabel';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
+import { altSymbol } from '../utils/platform';
 import Spinner from './Spinner';
 
 // Cache branches per repo so subsequent opens are instant
@@ -541,7 +542,7 @@ export default function TaskCreateDialog() {
               />
               <button
                 onClick={regenerateName}
-                title="Generate new name (Alt+N)"
+                title={`Generate new name (${altSymbol}N)`}
                 tabIndex={-1}
                 className="px-2 py-1.5 bg-surface-alt border border-border-input rounded text-secondary hover:text-primary hover:border-border-input text-sm"
               >
@@ -703,7 +704,7 @@ export default function TaskCreateDialog() {
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-faint flex-1">
-              Enter create &middot; Alt+N new name &middot; Esc cancel
+              Enter create &middot; {altSymbol}N new name &middot; Esc cancel
             </span>
             <button
               onClick={close}
