@@ -84,7 +84,7 @@ export default function TokenUsageChart({
     let outputSum = 0;
     return data.map((p) => {
       outputSum += p.outputTokens;
-      return { ...p, cumulativeOutput: outputSum };
+      return { ...p, cumulativeOutput: outputSum, contextSize: totalInput(p) };
     });
   }, [data]);
 
@@ -177,17 +177,31 @@ export default function TokenUsageChart({
       <div className="flex items-center gap-4 px-4 py-2 flex-shrink-0">
         <PillToggle options={modeOptions} value={mode} onChange={(v) => setMode(v)} size="sm" />
         <div className="flex items-center gap-4 text-xs text-secondary ml-auto">
-          {(Object.keys(TURN_COLORS) as TokenTurnType[])
-            .filter((tt) => data.some((d) => d.turnType === tt))
-            .map((tt) => (
-              <span key={tt} className="flex items-center gap-1.5">
-                <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS[tt].input }} />
-                {tt[0].toUpperCase() + tt.slice(1)}
-              </span>
-            ))}
+          {mode === 'per-turn'
+            ? (Object.keys(TURN_COLORS) as TokenTurnType[])
+                .filter((tt) => data.some((d) => d.turnType === tt))
+                .map((tt) => (
+                  <span key={tt} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block w-3 h-2 rounded-sm"
+                      style={{ backgroundColor: TURN_COLORS[tt].input }}
+                    />
+                    {tt[0].toUpperCase() + tt.slice(1)}
+                  </span>
+                ))
+            : [
+                <span key="ctx" className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-0.5" style={{ backgroundColor: TURN_COLORS.user.input }} />
+                  Context size
+                </span>,
+                <span key="out" className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-0.5" style={{ backgroundColor: TURN_COLORS.tool.input }} />
+                  Cumulative output
+                </span>,
+              ]}
           {data.some((d) => d.compacted) && (
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-0.5 border-t-2 border-dashed border-danger" />
+              <span className="inline-block w-3 h-2 rounded-sm bg-danger opacity-40" />
               Compaction
             </span>
           )}
@@ -467,26 +481,24 @@ function BarChart({
         </text>
       ))}
 
-      {/* Compaction markers */}
-      {data.map((d, i) =>
-        d.compacted ? (
-          <g key={`compact-${i}`}>
-            <line
-              x1={i * barGroupWidth}
-              y1={0}
-              x2={i * barGroupWidth}
-              y2={chartH}
-              stroke="var(--color-danger)"
-              strokeWidth={1.5}
-              strokeDasharray="4,3"
-              opacity={0.6}
-            />
-            <text x={i * barGroupWidth + 3} y={12} fontSize={9} fill="var(--color-danger)" opacity={0.8}>
-              C
-            </text>
-          </g>
-        ) : null,
-      )}
+      {/* Compaction areas */}
+      {data.map((d, i) => {
+        if (!d.compacted) return null;
+        const x0 = Math.max(0, (i - 1) * barGroupWidth);
+        const x1 = i * barGroupWidth + barGroupWidth;
+        return (
+          <rect
+            key={`compact-${i}`}
+            x={x0}
+            y={0}
+            width={x1 - x0}
+            height={chartH}
+            fill="var(--color-danger)"
+            opacity={0.07}
+            rx={2}
+          />
+        );
+      })}
 
       {/* Highlight band for active turn */}
       {activeIndex !== null && (
@@ -551,7 +563,7 @@ function LineChart({
   hoveredIndex,
   selectedIndex,
 }: {
-  data: (TokenDataPoint & { cumulativeOutput: number })[];
+  data: (TokenDataPoint & { cumulativeOutput: number; contextSize: number })[];
   chartW: number;
   chartH: number;
   padding: { top: number; right: number; bottom: number; left: number };
@@ -561,11 +573,14 @@ function LineChart({
 }) {
   const endTime = data[data.length - 1].timestamp;
   const timeSpan = Math.max(endTime - startTime, 1);
-  const maxTokens = Math.max(...data.map((d) => d.cumulativeOutput), 1);
+  const maxTokens = Math.max(...data.map((d) => Math.max(d.contextSize, d.cumulativeOutput)), 1);
 
   const xOf = (d: TokenDataPoint) => ((d.timestamp - startTime) / timeSpan) * chartW;
+  const yOfContext = (d: (typeof data)[0]) => chartH - (d.contextSize / maxTokens) * chartH;
   const yOfOutput = (d: (typeof data)[0]) => chartH - (d.cumulativeOutput / maxTokens) * chartH;
 
+  const contextPath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xOf(d)},${yOfContext(d)}`).join(' ');
+  const contextFill = `${contextPath} L${xOf(data[data.length - 1])},${chartH} L${xOf(data[0])},${chartH} Z`;
   const outputPath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xOf(d)},${yOfOutput(d)}`).join(' ');
   const outputFill = `${outputPath} L${xOf(data[data.length - 1])},${chartH} L${xOf(data[0])},${chartH} Z`;
 
@@ -609,30 +624,34 @@ function LineChart({
         </text>
       ))}
 
-      {/* Compaction markers */}
-      {data.map((d, i) =>
-        d.compacted ? (
-          <line
+      {/* Compaction areas */}
+      {data.map((d, i) => {
+        if (!d.compacted) return null;
+        const x0 = i > 0 ? xOf(data[i - 1]) : 0;
+        const x1 = xOf(d);
+        return (
+          <rect
             key={`compact-${i}`}
-            x1={xOf(d)}
-            y1={0}
-            x2={xOf(d)}
-            y2={chartH}
-            stroke="var(--color-danger)"
-            strokeWidth={1.5}
-            strokeDasharray="4,3"
-            opacity={0.6}
+            x={x0}
+            y={0}
+            width={Math.max(x1 - x0, 4)}
+            height={chartH}
+            fill="var(--color-danger)"
+            opacity={0.07}
+            rx={2}
           />
-        ) : null,
-      )}
+        );
+      })}
 
-      {/* Filled area */}
+      {/* Filled areas */}
+      <path d={contextFill} fill={TURN_COLORS.user.input} opacity={0.08} />
       <path d={outputFill} fill={TURN_COLORS.tool.input} opacity={0.1} />
 
-      {/* Line */}
+      {/* Lines */}
+      <path d={contextPath} fill="none" stroke={TURN_COLORS.user.input} strokeWidth={2} />
       <path d={outputPath} fill="none" stroke={TURN_COLORS.tool.input} strokeWidth={2} />
 
-      {/* Active data point indicator */}
+      {/* Active data point indicators */}
       {activeIndex !== null && data[activeIndex] && (
         <>
           <line
@@ -647,9 +666,17 @@ function LineChart({
           />
           <circle
             cx={xOf(data[activeIndex])}
+            cy={yOfContext(data[activeIndex])}
+            r={selectedIndex !== null ? 5 : 4}
+            fill={TURN_COLORS.user.input}
+            stroke="var(--color-bg-surface)"
+            strokeWidth={selectedIndex !== null ? 2 : 0}
+          />
+          <circle
+            cx={xOf(data[activeIndex])}
             cy={yOfOutput(data[activeIndex])}
             r={selectedIndex !== null ? 5 : 4}
-            fill={TURN_COLORS[data[activeIndex].turnType].input}
+            fill={TURN_COLORS.tool.input}
             stroke="var(--color-bg-surface)"
             strokeWidth={selectedIndex !== null ? 2 : 0}
           />
