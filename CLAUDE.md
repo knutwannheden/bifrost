@@ -48,6 +48,7 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `session-manager.ts` | Spawns/kills PTY sessions via node-pty |
 | `ipc-handlers.ts` | Registers all IPC handlers, manages in-memory task list |
 | `activity-watcher.ts` | Watches worktrees for file changes, commits, Claude JSONL events |
+| `claude-watcher.ts` | Parses Claude JSONL session files for token usage, turn boundaries, and tool attribution |
 | `context-store.ts` | Structured context capture with JSONL persistence |
 | `worktree-manager.ts` | Creates/removes git worktrees for tasks |
 | `bifrost-api.ts` | HTTP API for MCP server integration |
@@ -60,6 +61,8 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `hooks/useTerminal.ts` | xterm.js lifecycle, configurable terminal themes, custom key handler |
 | `hooks/useKeyboard.ts` | Global Cmd+key shortcuts, context capture flow |
 | `components/DiffOverlay.tsx` | Git diff + activity log viewer with syntax highlighting (Shiki) |
+| `components/TokenUsageChart.tsx` | Per-turn token usage bar/line chart with turn detail panel |
+| `hooks/useTokenUsage.ts` | Fetches parsed token data from main process via IPC |
 | `components/TaskHistoryPanel.tsx` | Task management + external session resumption |
 | `components/TerminalPane.tsx` | Terminal container with split pane support |
 

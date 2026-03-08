@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TokenDataPoint, TokenTurnType } from '../../shared/types';
 import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
@@ -55,15 +55,22 @@ export default function TokenUsageChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const [svgSize, setSvgSize] = useState({ w: 800, h: 256 });
 
+  // Synchronous measurement after every render to catch layout changes
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+    if (width > 0 && height > 0)
+      setSvgSize((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
+  });
+
+  // ResizeObserver for external resizes (window resize, panel toggle)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    // Measure immediately (covers cases where ResizeObserver callback is deferred)
-    const rect = el.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) setSvgSize({ w: rect.width, h: rect.height });
     const ro = new ResizeObserver(() => {
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) setSvgSize({ w: r.width, h: r.height });
+      const { width, height } = el.getBoundingClientRect();
+      if (width > 0 && height > 0) setSvgSize({ w: width, h: height });
     });
     ro.observe(el);
     return () => ro.disconnect();
