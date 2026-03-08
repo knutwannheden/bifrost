@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { BifrostConfig } from '../../shared/types';
+import { useApp } from '../context/AppContext';
 import { modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import Highlight from './Highlight';
@@ -61,7 +61,9 @@ function buildSettings(): SettingDef[] {
             { label: 'Menlo', value: 'Menlo' },
             { label: 'Monaco', value: 'Monaco' },
           ].map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
           ))}
         </select>
       ),
@@ -91,26 +93,25 @@ function buildSettings(): SettingDef[] {
       category: 'Appearance',
       label: 'Notifications',
       description: 'Sound, toast, and OS alerts when a task needs input',
-      tooltip: 'When enabled, background tasks that stop or need input trigger a system bell sound and a toast popup. Disable if you prefer to check task status manually.',
+      tooltip:
+        'When enabled, background tasks that stop or need input trigger a system bell sound and a toast popup. Disable if you prefer to check task status manually.',
       render: (config, update) => (
-        <ToggleSwitch
-          checked={config.notifications !== false}
-          onChange={(v) => update({ notifications: v })}
-        />
+        <ToggleSwitch checked={config.notifications !== false} onChange={(v) => update({ notifications: v })} />
       ),
     },
     {
       key: 'permissionMode',
       category: 'Claude Code',
       label: 'Permission Mode',
-      tooltip: 'Controls how Claude Code handles tool permissions.\n\nDefault: Claude asks before running tools that could modify files or execute commands.\n\nSandbox: Restricts file system and network access to a safe subset, reducing the need for manual approvals.\n\nSkip Permissions: Auto-approves all tool use without asking. Use with caution — Claude can run any command.',
+      tooltip:
+        'Controls how Claude Code handles tool permissions.\n\nDefault: Claude asks before running tools that could modify files or execute commands.\n\nSandbox: Restricts file system and network access to a safe subset, reducing the need for manual approvals.\n\nSkip Permissions: Auto-approves all tool use without asking. Use with caution — Claude can run any command.',
       render: (config, update) => (
         <div className="flex flex-col gap-1.5 mt-1">
-          {([
+          {[
             { value: 'default' as const, label: 'Default' },
             { value: 'sandbox' as const, label: 'Sandbox', desc: 'restricts file and network access' },
             { value: 'skip-permissions' as const, label: 'Skip Permissions', desc: 'auto-approve all tool use' },
-          ]).map((opt) => (
+          ].map((opt) => (
             <label key={opt.value} className="flex items-start gap-2 cursor-pointer group">
               <input
                 type="radio"
@@ -133,12 +134,10 @@ function buildSettings(): SettingDef[] {
       category: 'Claude Code',
       label: 'Manage permissions',
       description: 'Handle tool permission prompts in Bifrost instead of Claude Code',
-      tooltip: 'When enabled, tool permission prompts appear as a floating panel in Bifrost rather than in the terminal. You can allow/deny with keyboard shortcuts and persist rules across sessions.\n\nWhen disabled, Claude Code handles permissions natively in its own TUI.',
+      tooltip:
+        'When enabled, tool permission prompts appear as a floating panel in Bifrost rather than in the terminal. You can allow/deny with keyboard shortcuts and persist rules across sessions.\n\nWhen disabled, Claude Code handles permissions natively in its own TUI.',
       render: (config, update) => (
-        <ToggleSwitch
-          checked={config.managePermissions}
-          onChange={(v) => update({ managePermissions: v })}
-        />
+        <ToggleSwitch checked={config.managePermissions} onChange={(v) => update({ managePermissions: v })} />
       ),
     },
     {
@@ -148,10 +147,7 @@ function buildSettings(): SettingDef[] {
       description: `${modSymbol}/ hides dev terminal when switching to Claude`,
       tooltip: `When you press ${modSymbol}/ to switch focus from the dev terminal to the Claude pane, this setting also hides the dev terminal to give Claude the full screen. Press ${modSymbol}/ again to bring it back.`,
       render: (config, update) => (
-        <ToggleSwitch
-          checked={config.hideTerminalOnSwitch}
-          onChange={(v) => update({ hideTerminalOnSwitch: v })}
-        />
+        <ToggleSwitch checked={config.hideTerminalOnSwitch} onChange={(v) => update({ hideTerminalOnSwitch: v })} />
       ),
     },
     {
@@ -159,12 +155,10 @@ function buildSettings(): SettingDef[] {
       category: 'Claude Code',
       label: 'Agent Teams',
       description: 'Enable experimental agent teams feature',
-      tooltip: 'Sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 for new sessions. This enables Claude Code\u2019s built-in multi-agent coordination where subagents can run in parallel.',
+      tooltip:
+        'Sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 for new sessions. This enables Claude Code\u2019s built-in multi-agent coordination where subagents can run in parallel.',
       render: (config, update) => (
-        <ToggleSwitch
-          checked={config.agentTeams}
-          onChange={(v) => update({ agentTeams: v })}
-        />
+        <ToggleSwitch checked={config.agentTeams} onChange={(v) => update({ agentTeams: v })} />
       ),
     },
     {
@@ -190,12 +184,10 @@ function buildSettings(): SettingDef[] {
       category: 'General',
       label: 'Show tips on welcome screen',
       description: 'Display a rotating tip on the welcome screen',
-      tooltip: 'Shows a random keyboard shortcut or workflow tip on the welcome screen when no tasks are open. Click the tip to cycle through them.',
+      tooltip:
+        'Shows a random keyboard shortcut or workflow tip on the welcome screen when no tasks are open. Click the tip to cycle through them.',
       render: (config, update) => (
-        <ToggleSwitch
-          checked={config.showTips !== false}
-          onChange={(v) => update({ showTips: v })}
-        />
+        <ToggleSwitch checked={config.showTips !== false} onChange={(v) => update({ showTips: v })} />
       ),
     },
     {
@@ -203,12 +195,10 @@ function buildSettings(): SettingDef[] {
       category: 'General',
       label: 'Experimental features',
       description: 'Enable experimental features like Supervisor',
-      tooltip: 'When enabled, experimental features like the Supervisor (for headless note processing) become available.',
+      tooltip:
+        'When enabled, experimental features like the Supervisor (for headless note processing) become available.',
       render: (config, update) => (
-        <ToggleSwitch
-          checked={config.experimentalFeatures}
-          onChange={(v) => update({ experimentalFeatures: v })}
-        />
+        <ToggleSwitch checked={config.experimentalFeatures} onChange={(v) => update({ experimentalFeatures: v })} />
       ),
     },
     {
@@ -216,12 +206,20 @@ function buildSettings(): SettingDef[] {
       category: 'General',
       label: 'Ollama models',
       description: 'Models to try for task summarization, in priority order',
-      tooltip: 'Comma-separated list of ollama model names. Bifrost tries each in order for task summarization, falling back to Claude Haiku if none are available.',
+      tooltip:
+        'Comma-separated list of ollama model names. Bifrost tries each in order for task summarization, falling back to Claude Haiku if none are available.',
       render: (config, update) => (
         <input
           type="text"
           value={(config.ollamaModels ?? []).join(', ')}
-          onChange={(e) => update({ ollamaModels: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+          onChange={(e) =>
+            update({
+              ollamaModels: e.target.value
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+            })
+          }
           className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           placeholder="phi4-mini, gemma3:1b"
         />
@@ -262,7 +260,9 @@ function buildSettings(): SettingDef[] {
         <input
           type="password"
           value={config.slack?.clientSecret ?? ''}
-          onChange={(e) => update({ slack: { ...config.slack, clientSecret: e.target.value } } as Partial<BifrostConfig>)}
+          onChange={(e) =>
+            update({ slack: { ...config.slack, clientSecret: e.target.value } } as Partial<BifrostConfig>)
+          }
           className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       ),
@@ -317,7 +317,17 @@ function buildSettings(): SettingDef[] {
         <input
           type="text"
           value={(config.slack?.reactions ?? []).join(', ')}
-          onChange={(e) => update({ slack: { ...config.slack, reactions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) } } as Partial<BifrostConfig>)}
+          onChange={(e) =>
+            update({
+              slack: {
+                ...config.slack,
+                reactions: e.target.value
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              },
+            } as Partial<BifrostConfig>)
+          }
           className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
           placeholder="bifrost, robot_face"
         />
@@ -395,9 +405,7 @@ export default function SettingsOverlay() {
 
   const filteredSettings = useMemo(() => {
     if (!search.trim()) return settings;
-    return settings.filter(
-      (s) => matchesAllTerms(`${s.label} ${s.description ?? ''} ${s.category}`, search),
-    );
+    return settings.filter((s) => matchesAllTerms(`${s.label} ${s.description ?? ''} ${s.category}`, search));
   }, [settings, search]);
 
   const visibleCategories = useMemo(() => {
@@ -475,10 +483,13 @@ export default function SettingsOverlay() {
               const catSettings = filteredSettings.filter((s) => s.category === cat);
               if (catSettings.length === 0) return null;
               return (
-                <div key={cat} ref={(el) => { categoryRefs.current[cat] = el; }}>
-                  <h3 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-3">
-                    {cat}
-                  </h3>
+                <div
+                  key={cat}
+                  ref={(el) => {
+                    categoryRefs.current[cat] = el;
+                  }}
+                >
+                  <h3 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-3">{cat}</h3>
                   <div className="space-y-4">
                     {catSettings.map((setting) => (
                       <div key={setting.key} className="flex items-start justify-between gap-4">
@@ -490,7 +501,9 @@ export default function SettingsOverlay() {
                             )}
                           </label>
                           {setting.description && (
-                            <p className="text-xs text-muted"><Highlight text={setting.description} search={search} /></p>
+                            <p className="text-xs text-muted">
+                              <Highlight text={setting.description} search={search} />
+                            </p>
                           )}
                           {setting.tooltip && (
                             <div className="hidden group-hover/tip:block absolute left-0 top-full mt-1 z-50 bg-app border border-border-input rounded px-3 py-2 shadow-lg w-96 whitespace-pre-line text-xs text-secondary leading-relaxed">

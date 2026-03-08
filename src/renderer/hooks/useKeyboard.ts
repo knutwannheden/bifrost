@@ -1,11 +1,11 @@
-import { useEffect, useRef } from 'react';
 import type { Terminal } from '@xterm/xterm';
-import type { AppState, AppAction, PaneTarget } from '../context/AppContext';
+import { useEffect, useRef } from 'react';
 import type { CaptureContextParams } from '../../shared/types';
+import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
 import { defaultPaneState, getActiveDiffState } from '../context/AppContext';
-import { terminalRegistry } from './useTerminal';
 import { requestArchive } from '../utils/archive';
-import { isModKey, isMac, modSymbol, shiftSymbol } from '../utils/platform';
+import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
+import { terminalRegistry } from './useTerminal';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
 const DOUBLE_PRESS_MS = 500;
@@ -24,10 +24,12 @@ function extractFilePath(text: string): { path: string; line?: number } | null {
   if (!trimmed || trimmed.includes('\n')) return null;
 
   // Strip matching quotes/parens/brackets
-  if ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-      (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
-      (trimmed.startsWith('`') && trimmed.endsWith('`')) ||
-      (trimmed.startsWith('(') && trimmed.endsWith(')'))) {
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
+    (trimmed.startsWith('`') && trimmed.endsWith('`')) ||
+    (trimmed.startsWith('(') && trimmed.endsWith(')'))
+  ) {
     trimmed = trimmed.slice(1, -1);
   }
 
@@ -166,7 +168,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             // Use DOM text selection if available (works in any diff/review mode)
             const domSelection = window.getSelection()?.toString()?.trim();
             if (domSelection) {
-              params = { type: diffMode === 'review' ? 'activity' : diffMode as 'diff' | 'activity', content: domSelection, ...taskMeta };
+              params = {
+                type: diffMode === 'review' ? 'activity' : (diffMode as 'diff' | 'activity'),
+                content: domSelection,
+                ...taskMeta,
+              };
             } else if (diffMode === 'git') {
               const diff = await window.bifrost.getDiff(activeTask.id);
               const content = diff.diff;
@@ -178,20 +184,21 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
               params = { type: 'activity', content, ...taskMeta };
             } else {
               const entries = await window.bifrost.getActivityLog(activeTask.id);
-              const content = entries.map((e) => {
-                if (e.type === 'commit') return `[commit] ${e.commitMessage}`;
-                if (e.type === 'file_change') return `[file] ${e.filePath}\n${e.diff || ''}`;
-                if (e.type === 'claude_event') return `[${e.claudeEventKind}] ${e.claudeText || ''}`;
-                return `[${e.type}]`;
-              }).join('\n\n');
+              const content = entries
+                .map((e) => {
+                  if (e.type === 'commit') return `[commit] ${e.commitMessage}`;
+                  if (e.type === 'file_change') return `[file] ${e.filePath}\n${e.diff || ''}`;
+                  if (e.type === 'claude_event') return `[${e.claudeEventKind}] ${e.claudeText || ''}`;
+                  return `[${e.type}]`;
+                })
+                .join('\n\n');
               if (!content.trim()) return;
               params = { type: 'activity', content, ...taskMeta };
             }
           } else {
             const ps = state.paneStates[activeTask.id] ?? defaultPaneState;
-            const targetSessionId = ps.focusedPane === 'dev' && ps.devSessionId
-              ? ps.devSessionId
-              : activeTask.sessionId;
+            const targetSessionId =
+              ps.focusedPane === 'dev' && ps.devSessionId ? ps.devSessionId : activeTask.sessionId;
             const capture = getTerminalCapture(targetSessionId);
             if (!capture) return;
 
@@ -293,7 +300,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
       if (key === '=' && !e.shiftKey) {
         e.preventDefault();
         const notifId = state.lastNotifiedTaskId;
-        if (notifId && notifId !== state.activeTaskId && state.tasks.some((t) => t.id === notifId && t.status === 'running')) {
+        if (
+          notifId &&
+          notifId !== state.activeTaskId &&
+          state.tasks.some((t) => t.id === notifId && t.status === 'running')
+        ) {
           dispatch({ type: 'SET_ACTIVE_TASK', taskId: notifId });
         }
         return;
@@ -340,9 +351,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
             }
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
-              const remaining = state.tasks.filter(
-                (t) => t.id !== taskId && t.status === 'running',
-              );
+              const remaining = state.tasks.filter((t) => t.id !== taskId && t.status === 'running');
               dispatch({
                 type: 'SET_ACTIVE_TASK',
                 taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
@@ -468,9 +477,8 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
 
             // 2. Try terminal selection
             const ps = state.paneStates[activeTask.id] ?? defaultPaneState;
-            const targetSessionId = ps.focusedPane === 'dev' && ps.devSessionId
-              ? ps.devSessionId
-              : activeTask.sessionId;
+            const targetSessionId =
+              ps.focusedPane === 'dev' && ps.devSessionId ? ps.devSessionId : activeTask.sessionId;
             const terminal = terminalRegistry.get(targetSessionId);
             const selection = terminal?.getSelection()?.trim();
             if (selection) {

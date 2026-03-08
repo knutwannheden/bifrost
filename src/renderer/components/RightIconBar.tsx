@@ -1,13 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { useApp, getActiveDiffState } from '../context/AppContext';
-import type { DiffMode } from '../context/AppContext';
 import type { SupervisorState } from '../../shared/types';
-import Kbd from './Kbd';
+import type { DiffMode } from '../context/AppContext';
+import { getActiveDiffState, useApp } from '../context/AppContext';
 import FlaskIcon from './FlaskIcon';
+import Kbd from './Kbd';
 
 function BellIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M10 11.5a2 2 0 0 1-4 0" />
       <path d="M4.5 6a3.5 3.5 0 0 1 7 0c0 3.5 1.5 4.5 1.5 4.5H3S4.5 9.5 4.5 6z" />
     </svg>
@@ -16,7 +25,16 @@ function BellIcon() {
 
 function DiffIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1z" />
       <path d="M8 6v4M6 8h4" />
     </svg>
@@ -25,7 +43,16 @@ function DiffIcon() {
 
 function ActivityIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M2 8h2.5l2-4 3 8 2-4H14" />
     </svg>
   );
@@ -33,7 +60,16 @@ function ActivityIcon() {
 
 function ReviewIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
       <path d="M6 5h4M6 8h4M6 11h2" />
     </svg>
@@ -42,7 +78,16 @@ function ReviewIcon() {
 
 function SupervisorIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <circle cx="8" cy="4" r="2" />
       <path d="M8 6v2" />
       <path d="M4.5 10.5L8 8l3.5 2.5" />
@@ -54,7 +99,16 @@ function SupervisorIcon() {
 
 function StatsIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 13V8M6.5 13V5M10 13V7M13.5 13V3" />
     </svg>
   );
@@ -62,7 +116,16 @@ function StatsIcon() {
 
 function GearIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <circle cx="12" cy="12" r="3" />
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
     </svg>
@@ -96,9 +159,7 @@ function IconButton({ active, badge, label, shortcut, onClick, children, ...rest
       }`}
     >
       {children}
-      {badge && (
-        <span className={`absolute top-1 right-1.5 w-2 h-2 rounded-full ${badgeClasses[badge]}`} />
-      )}
+      {badge && <span className={`absolute top-1 right-1.5 w-2 h-2 rounded-full ${badgeClasses[badge]}`} />}
       <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded bg-app border border-border-default shadow-lg whitespace-nowrap z-50">
         <span className="text-xs text-primary">{label}</span>
         {shortcut && <Kbd>{shortcut}</Kbd>}
@@ -196,11 +257,7 @@ export default function RightIconBar() {
 
       <div className="mx-2 my-1 border-t border-border-default" />
 
-      <IconButton
-        label="Statistics"
-        active={state.showStats}
-        onClick={() => dispatch({ type: 'TOGGLE_STATS' })}
-      >
+      <IconButton label="Statistics" active={state.showStats} onClick={() => dispatch({ type: 'TOGGLE_STATS' })}>
         <StatsIcon />
       </IconButton>
 

@@ -1,11 +1,11 @@
-import https from 'node:https';
 import crypto from 'node:crypto';
-import path from 'node:path';
-import os from 'node:os';
 import fs from 'node:fs';
+import https from 'node:https';
+import os from 'node:os';
+import path from 'node:path';
 import { BrowserWindow } from 'electron';
-import { loadConfig, saveConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { loadConfig, saveConfig } from './config';
 
 // --- State persistence ---
 
@@ -43,7 +43,7 @@ interface SlackResponse {
   ok: boolean;
   error?: string;
   retryAfter?: number;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // biome-ignore lint/suspicious/noExplicitAny: Slack API responses have dynamic fields
   [key: string]: any;
 }
 
@@ -52,22 +52,27 @@ function slackGet(endpoint: string, token: string, params: Record<string, string
     const url = new URL(`https://slack.com/api/${endpoint}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-    const req = https.request(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk: string) => body += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(body) as SlackResponse;
-          if (res.headers['retry-after']) {
-            json.retryAfter = parseInt(res.headers['retry-after'] as string, 10);
+    const req = https.request(
+      url,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk: string) => (body += chunk));
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(body) as SlackResponse;
+            if (res.headers['retry-after']) {
+              json.retryAfter = parseInt(res.headers['retry-after'] as string, 10);
+            }
+            resolve(json);
+          } catch (e) {
+            reject(e);
           }
-          resolve(json);
-        }
-        catch (e) { reject(e); }
-      });
-    });
+        });
+      },
+    );
     req.on('error', reject);
     req.end();
   });
@@ -79,7 +84,10 @@ async function getTeamDomain(token: string): Promise<string> {
   if (cachedTeamDomain) return cachedTeamDomain;
   const result = await slackGet('auth.test', token);
   if (!result.ok) throw new Error(`auth.test failed: ${result.error}`);
-  cachedTeamDomain = result.url.replace(/^https?:\/\//, '').replace(/\/$/, '').split('.')[0];
+  cachedTeamDomain = result.url
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '')
+    .split('.')[0];
   return cachedTeamDomain;
 }
 
@@ -218,25 +226,29 @@ function exchangeCodeForToken(
       redirect_uri: redirectUri,
     }).toString();
 
-    const req = https.request('https://slack.com/api/oauth.v2.access', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(data),
+    const req = https.request(
+      'https://slack.com/api/oauth.v2.access',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(data),
+        },
       },
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk: string) => body += chunk);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(body);
-          if (!json.ok) reject(new Error(`Slack OAuth failed: ${json.error}`));
-          else resolve(json.authed_user.access_token);
-        } catch (err) {
-          reject(new Error(`Failed to parse Slack OAuth response: ${err}`));
-        }
-      });
-    });
+      (res) => {
+        let body = '';
+        res.on('data', (chunk: string) => (body += chunk));
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(body);
+            if (!json.ok) reject(new Error(`Slack OAuth failed: ${json.error}`));
+            else resolve(json.authed_user.access_token);
+          } catch (err) {
+            reject(new Error(`Failed to parse Slack OAuth response: ${err}`));
+          }
+        });
+      },
+    );
     req.on('error', reject);
     req.write(data);
     req.end();
@@ -253,7 +265,8 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
 
   const redirectUri = `https://localhost:${OAUTH_PORT}/callback`;
   const oauthState = crypto.randomBytes(16).toString('hex');
-  const userScope = 'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read,search:read';
+  const userScope =
+    'channels:history,groups:history,reactions:read,users:read,emoji:read,files:read,links:read,search:read';
 
   const authorizeUrl = new URL('https://slack.com/oauth/v2/authorize');
   authorizeUrl.searchParams.set('client_id', clientId);
@@ -291,9 +304,18 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
       const returnedState = parsed.searchParams.get('state');
       const code = parsed.searchParams.get('code');
 
-      if (error) { finish(new Error(`Slack OAuth denied: ${error}`)); return; }
-      if (returnedState !== oauthState) { finish(new Error('OAuth state mismatch')); return; }
-      if (!code) { finish(new Error('OAuth callback missing code')); return; }
+      if (error) {
+        finish(new Error(`Slack OAuth denied: ${error}`));
+        return;
+      }
+      if (returnedState !== oauthState) {
+        finish(new Error('OAuth state mismatch'));
+        return;
+      }
+      if (!code) {
+        finish(new Error('OAuth callback missing code'));
+        return;
+      }
 
       try {
         const token = await exchangeCodeForToken(clientId, clientSecret, code, redirectUri);
@@ -309,8 +331,12 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
     }
 
     // Intercept the redirect to localhost before the browser tries to load it
-    authWindow.webContents.on('will-redirect', (_event, url) => { handleRedirect(url); });
-    authWindow.webContents.on('will-navigate', (_event, url) => { handleRedirect(url); });
+    authWindow.webContents.on('will-redirect', (_event, url) => {
+      handleRedirect(url);
+    });
+    authWindow.webContents.on('will-navigate', (_event, url) => {
+      handleRedirect(url);
+    });
 
     // Allow Esc to close the OAuth window
     authWindow.webContents.on('before-input-event', (_event, input) => {

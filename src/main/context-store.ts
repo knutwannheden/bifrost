@@ -1,7 +1,7 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
-import type { ContextEntry, CaptureContextParams, TranscriptContext } from '../shared/types';
+import path from 'node:path';
+import type { CaptureContextParams, ContextEntry, TranscriptContext } from '../shared/types';
 
 const MAX_ENTRIES = 200;
 const TTL_MS = 60 * 60 * 1000; // 1 hour
@@ -24,13 +24,11 @@ function ensureDir(filePath: string): void {
 function appendToJsonl(entry: ContextEntry): void {
   const filePath = contextsPath(entry.taskId);
   ensureDir(filePath);
-  fs.appendFileSync(filePath, JSON.stringify(entry) + '\n');
+  fs.appendFileSync(filePath, `${JSON.stringify(entry)}\n`);
 }
 
 function truncateContent(content: string): string {
-  return content.length > MAX_CONTENT_SIZE
-    ? content.slice(0, MAX_CONTENT_SIZE) + '\n... (truncated)'
-    : content;
+  return content.length > MAX_CONTENT_SIZE ? `${content.slice(0, MAX_CONTENT_SIZE)}\n... (truncated)` : content;
 }
 
 export function store(params: CaptureContextParams): number {
@@ -48,7 +46,12 @@ export function store(params: CaptureContextParams): number {
 
   switch (params.type) {
     case 'terminal':
-      entry = { ...base, type: 'terminal', content: truncateContent(params.content), hasSelection: params.hasSelection };
+      entry = {
+        ...base,
+        type: 'terminal',
+        content: truncateContent(params.content),
+        hasSelection: params.hasSelection,
+      };
       break;
     case 'diff':
       entry = { ...base, type: 'diff', content: truncateContent(params.content) };
@@ -153,7 +156,8 @@ export function getClaudeJsonlPath(worktreePath: string): string | null {
 
   // Find the most recently modified .jsonl file
   try {
-    const files = fs.readdirSync(projectDir)
+    const files = fs
+      .readdirSync(projectDir)
       .filter((f) => f.endsWith('.jsonl'))
       .map((f) => ({
         name: f,
@@ -192,9 +196,7 @@ export function findTranscriptMatch(
         if (stripped.includes(searchText) || fuzzyContains(stripped, searchText)) {
           return { lineNumber: i, uuid: parsed.uuid };
         }
-      } catch {
-        continue;
-      }
+      } catch {}
     }
     return null;
   } catch {
@@ -205,15 +207,15 @@ export function findTranscriptMatch(
 /** Strip basic markdown formatting to approximate terminal-rendered text */
 function stripMarkdown(text: string): string {
   return text
-    .replace(/\*\*(.+?)\*\*/g, '$1')     // **bold**
-    .replace(/\*(.+?)\*/g, '$1')           // *italic*
-    .replace(/__(.+?)__/g, '$1')           // __bold__
-    .replace(/_(.+?)_/g, '$1')             // _italic_
-    .replace(/`([^`]+)`/g, '$1')           // `code`
-    .replace(/```[\s\S]*?```/g, '')        // code blocks
-    .replace(/^#{1,6}\s+/gm, '')           // headers
-    .replace(/^\s*[-*+]\s+/gm, '')         // list markers
-    .replace(/^\s*\d+\.\s+/gm, '')         // numbered lists
+    .replace(/\*\*(.+?)\*\*/g, '$1') // **bold**
+    .replace(/\*(.+?)\*/g, '$1') // *italic*
+    .replace(/__(.+?)__/g, '$1') // __bold__
+    .replace(/_(.+?)_/g, '$1') // _italic_
+    .replace(/`([^`]+)`/g, '$1') // `code`
+    .replace(/```[\s\S]*?```/g, '') // code blocks
+    .replace(/^#{1,6}\s+/gm, '') // headers
+    .replace(/^\s*[-*+]\s+/gm, '') // list markers
+    .replace(/^\s*\d+\.\s+/gm, '') // numbered lists
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // links
 }
 
@@ -248,9 +250,7 @@ export function loadPersistedContexts(): void {
             entries.set(entry.id, entry);
             if (entry.id >= nextId) nextId = entry.id + 1;
           }
-        } catch {
-          continue;
-        }
+        } catch {}
       }
     }
   } catch {

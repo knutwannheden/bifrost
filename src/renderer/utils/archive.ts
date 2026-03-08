@@ -4,11 +4,7 @@ import type { AppAction, AppState } from '../context/AppContext';
  * Archive a task immediately: switch active tab then remove worktree.
  * Used both for clean worktrees (direct) and after force-archive confirmation.
  */
-export function performArchive(
-  taskId: string,
-  state: AppState,
-  dispatch: React.Dispatch<AppAction>,
-): void {
+export function performArchive(taskId: string, state: AppState, dispatch: React.Dispatch<AppAction>): void {
   const running = state.tasks.filter((t) => t.status === 'running');
   const idx = running.findIndex((t) => t.id === taskId);
   const remaining = running.filter((t) => t.id !== taskId);

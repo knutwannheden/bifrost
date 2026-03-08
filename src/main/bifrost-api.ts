@@ -1,21 +1,20 @@
-import http from 'node:http';
 import fs from 'node:fs';
-import path from 'node:path';
+import http from 'node:http';
 import os from 'node:os';
+import path from 'node:path';
 import { BrowserWindow } from 'electron';
-import { resolve as resolveContext } from './context-store';
-import { getTasks, getTask, updateTask, createTaskCore } from './ipc-handlers';
-import { setReviewSessionId, startReviewActivityWatch, loadReview } from './review-service';
-import { getDiff } from './diff-service';
-import { getActivityLog } from './activity-watcher';
-import { isDebounced, markNotified, handleBellNotification, getActiveTaskId } from './notification-service';
-import { listNotes, deleteNote } from './note-store';
-import { createRequest, checkExistingRules } from './permission-manager';
-import { loadConfig } from './config';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { getActivityLog } from './activity-watcher';
+import { loadConfig } from './config';
+import { resolve as resolveContext } from './context-store';
+import { getDiff } from './diff-service';
+import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
+import { deleteNote, listNotes } from './note-store';
+import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
+import { checkExistingRules, createRequest } from './permission-manager';
+import { loadReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
 
 let mainWindow: BrowserWindow | null = null;
-
 
 /**
  * Check if a Claude session is still valid.
@@ -69,7 +68,8 @@ export function getSessionMtime(worktreePath: string, sessionId?: string): numbe
 
   // No sessionId — find the most recently modified .jsonl
   try {
-    const files = fs.readdirSync(projectPath)
+    const files = fs
+      .readdirSync(projectPath)
       .filter((f) => f.endsWith('.jsonl'))
       .map((f) => {
         const fp = path.join(projectPath, f);
@@ -147,13 +147,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
     case '/list-repos': {
       const config = loadConfig();
-      const repos = config.repos.map((r: { id: string; name: string; path: string; defaultBranch: string; githubPath?: string }) => ({
-        id: r.id,
-        name: r.name,
-        path: r.path,
-        defaultBranch: r.defaultBranch,
-        githubPath: r.githubPath,
-      }));
+      const repos = config.repos.map(
+        (r: { id: string; name: string; path: string; defaultBranch: string; githubPath?: string }) => ({
+          id: r.id,
+          name: r.name,
+          path: r.path,
+          defaultBranch: r.defaultBranch,
+          githubPath: r.githubPath,
+        }),
+      );
       jsonResponse(res, { repos });
       return;
     }
@@ -174,7 +176,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
     case '/create-task': {
       const { repoId, repoPath, name, branch, branchName, prompt } = body as {
-        repoId?: string; repoPath?: string; name?: string; branch?: string; branchName?: string; prompt?: string;
+        repoId?: string;
+        repoPath?: string;
+        name?: string;
+        branch?: string;
+        branchName?: string;
+        prompt?: string;
       };
       if (!repoId && !repoPath) {
         errorResponse(res, 'either repoId or repoPath is required');
@@ -310,9 +317,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const title = (body.title as string) || '';
       const notificationType = (body.notification_type as string) || '';
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(
-          IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType,
-        );
+        mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType);
       }
       jsonResponse(res, { ok: true });
       return;
@@ -374,7 +379,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       // Look up task by ID first (most reliable), then fall back to CWD matching
       const task = taskId
-        ? (() => { try { return getTask(taskId); } catch { return undefined; } })()
+        ? (() => {
+            try {
+              return getTask(taskId);
+            } catch {
+              return undefined;
+            }
+          })()
         : getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
       if (!task) {
         jsonResponse(res, { ok: false, reason: 'no matching task' });

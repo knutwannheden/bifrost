@@ -1,26 +1,27 @@
 import React, { useEffect, useRef } from 'react';
-import { useApp, defaultPaneState, getActiveDiffState } from './context/AppContext';
-import type { PaneTarget } from './context/AppContext';
 import type { BifrostAPI } from '../shared/ipc-channels';
-import { useKeyboard } from './hooks/useKeyboard';
-import TaskBar from './components/TaskBar';
-import TaskView from './components/TaskView';
-import StatusBar from './components/StatusBar';
-import RepoManager from './components/RepoManager';
-import TaskCreateDialog from './components/TaskCreateDialog';
-import { modSymbol } from './utils/platform';
+import type { BifrostConfig } from '../shared/types';
 import DiffOverlay from './components/DiffOverlay';
-import TaskHistoryPanel from './components/TaskHistoryPanel';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
-import SettingsOverlay from './components/SettingsOverlay';
-import PermissionPanel from './components/PermissionPanel';
-import RightIconBar from './components/RightIconBar';
-import NotificationPopover from './components/NotificationPopover';
 import NotesOverlay from './components/NotesOverlay';
+import NotificationPopover from './components/NotificationPopover';
+import PermissionPanel from './components/PermissionPanel';
+import RepoManager from './components/RepoManager';
+import RightIconBar from './components/RightIconBar';
+import SettingsOverlay from './components/SettingsOverlay';
 import StatsOverlay from './components/StatsOverlay';
+import StatusBar from './components/StatusBar';
 import SupervisorOverlay from './components/SupervisorOverlay';
-import { requestArchive, performArchive } from './utils/archive';
+import TaskBar from './components/TaskBar';
+import TaskCreateDialog from './components/TaskCreateDialog';
+import TaskHistoryPanel from './components/TaskHistoryPanel';
+import TaskView from './components/TaskView';
+import type { PaneTarget } from './context/AppContext';
+import { defaultPaneState, getActiveDiffState, useApp } from './context/AppContext';
+import { useKeyboard } from './hooks/useKeyboard';
+import { performArchive, requestArchive } from './utils/archive';
 import { parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
+import { modSymbol } from './utils/platform';
 import { slackToPlainText } from './utils/slack-markup';
 
 declare global {
@@ -49,13 +50,19 @@ function renderInline(text: string): React.ReactNode[] {
   // Match **bold**, *italic*, `code`
   const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
   let last = 0;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
+  let match: RegExpExecArray | null = re.exec(text);
+  while (match !== null) {
     if (match.index > last) parts.push(text.slice(last, match.index));
     if (match[2]) parts.push(<strong key={match.index}>{match[2]}</strong>);
     else if (match[3]) parts.push(<em key={match.index}>{match[3]}</em>);
-    else if (match[4]) parts.push(<code key={match.index} className="bg-surface-alt px-1 rounded text-xs">{match[4]}</code>);
+    else if (match[4])
+      parts.push(
+        <code key={match.index} className="bg-surface-alt px-1 rounded text-xs">
+          {match[4]}
+        </code>,
+      );
     last = match.index + match[0].length;
+    match = re.exec(text);
   }
   if (last < text.length) parts.push(text.slice(last));
   return parts;
@@ -89,7 +96,8 @@ export default function App() {
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task && task.status !== 'archived') {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
-        if (code !== 0 && code !== 143) { // 143 = SIGTERM (intentional kill)
+        if (code !== 0 && code !== 143) {
+          // 143 = SIGTERM (intentional kill)
           dispatch({ type: 'SHOW_TOAST', message: `${task.name} exited with code ${code}` });
         }
       }
@@ -119,26 +127,34 @@ export default function App() {
 
   // Listen for hook-based notifications (from Claude Code plugin)
   useEffect(() => {
-    const unsub = window.bifrost.onHookNotification(
-      (taskId, taskName, message) => {
-        if (taskId === state.activeTaskId) return;
-        dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
-        if (message) {
-          // Notification hook provides message directly
-          const lines = message.split('\n').slice(0, 3).join('\n');
-          const truncated = lines.length < message.length ? lines + '...' : lines;
-          dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: `${modSymbol}= to switch` });
-        } else {
-          // Stop hook — delay briefly so the activity watcher streams the final entry
-          setTimeout(() => {
-            const text = lastAssistantText.current.get(taskId) || 'Waiting for input';
-            const lines = text.split('\n').slice(0, 3).join('\n');
-            const truncated = lines.length < text.length ? lines + '...' : lines;
-            dispatch({ type: 'SHOW_TOAST', message: `**${taskName}**\n${truncated}`, duration: 5000, hint: `${modSymbol}= to switch` });
-          }, 500);
-        }
-      },
-    );
+    const unsub = window.bifrost.onHookNotification((taskId, taskName, message) => {
+      if (taskId === state.activeTaskId) return;
+      dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
+      if (message) {
+        // Notification hook provides message directly
+        const lines = message.split('\n').slice(0, 3).join('\n');
+        const truncated = lines.length < message.length ? `${lines}...` : lines;
+        dispatch({
+          type: 'SHOW_TOAST',
+          message: `**${taskName}**\n${truncated}`,
+          duration: 5000,
+          hint: `${modSymbol}= to switch`,
+        });
+      } else {
+        // Stop hook — delay briefly so the activity watcher streams the final entry
+        setTimeout(() => {
+          const text = lastAssistantText.current.get(taskId) || 'Waiting for input';
+          const lines = text.split('\n').slice(0, 3).join('\n');
+          const truncated = lines.length < text.length ? `${lines}...` : lines;
+          dispatch({
+            type: 'SHOW_TOAST',
+            message: `**${taskName}**\n${truncated}`,
+            duration: 5000,
+            hint: `${modSymbol}= to switch`,
+          });
+        }, 500);
+      }
+    });
     return unsub;
   }, [state.activeTaskId, dispatch]);
 
@@ -189,22 +205,25 @@ export default function App() {
 
   // Check for plugin updates on startup
   useEffect(() => {
-    window.bifrost.checkIntegration().then(({ updateAvailable }) => {
-      if (updateAvailable) {
-        dispatch({
-          type: 'PUSH_NOTIFICATION',
-          notification: {
-            id: 'plugin-update',
-            type: 'plugin-update',
-            title: 'Plugin Update Available',
-            message: 'A new version of the Bifrost plugin is available.',
-            action: { label: 'Install', handler: 'install-plugin' },
-            read: false,
-            timestamp: Date.now(),
-          },
-        });
-      }
-    }).catch(() => {});
+    window.bifrost
+      .checkIntegration()
+      .then(({ updateAvailable }) => {
+        if (updateAvailable) {
+          dispatch({
+            type: 'PUSH_NOTIFICATION',
+            notification: {
+              id: 'plugin-update',
+              type: 'plugin-update',
+              title: 'Plugin Update Available',
+              message: 'A new version of the Bifrost plugin is available.',
+              action: { label: 'Install', handler: 'install-plugin' },
+              read: false,
+              timestamp: Date.now(),
+            },
+          });
+        }
+      })
+      .catch(() => {});
   }, [dispatch]);
 
   // Detect PR / Slack links on clipboard when window gains focus
@@ -308,9 +327,7 @@ export default function App() {
             }
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
-              const remaining = state.tasks.filter(
-                (t) => t.id !== taskId && t.status === 'running',
-              );
+              const remaining = state.tasks.filter((t) => t.id !== taskId && t.status === 'running');
               dispatch({
                 type: 'SET_ACTIVE_TASK',
                 taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
@@ -334,7 +351,8 @@ export default function App() {
           const task = state.tasks.find((t) => t.id === state.activeTaskId);
           if (task) {
             // From menu, try last changed file as fallback
-            window.bifrost.getLastChangedFile(task.id)
+            window.bifrost
+              .getLastChangedFile(task.id)
               .then((lastFile) => window.bifrost.openInIde(task.worktreePath, lastFile ?? undefined))
               .catch(() => window.bifrost.openInIde(task.worktreePath));
           }
@@ -363,8 +381,10 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen bg-app text-primary">
       {/* Title bar drag area */}
-      <div className="h-8 bg-surface border-b border-border-default flex items-center justify-center"
-           style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}>
+      <div
+        className="h-8 bg-surface border-b border-border-default flex items-center justify-center"
+        style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}
+      >
         <span className="text-xs font-semibold tracking-wide text-faint">BIFROST</span>
       </div>
 
@@ -433,7 +453,8 @@ export default function App() {
           >
             <h3 className="text-sm font-semibold text-primary mb-3">Uncommitted Changes</h3>
             <p className="text-sm text-secondary mb-5">
-              <span className="font-medium text-primary">{state.archiveConfirm.taskName}</span> has uncommitted changes that will be lost when the worktree is removed.
+              <span className="font-medium text-primary">{state.archiveConfirm.taskName}</span> has uncommitted changes
+              that will be lost when the worktree is removed.
             </p>
             <div className="flex items-center gap-3">
               <span className="text-xs text-faint flex-1">Esc cancel</span>
@@ -476,9 +497,7 @@ export default function App() {
               </button>
             )}
           </div>
-          {state.toastHint && (
-            <div className="text-right text-xs text-faint mt-1">{state.toastHint}</div>
-          )}
+          {state.toastHint && <div className="text-right text-xs text-faint mt-1">{state.toastHint}</div>}
         </div>
       )}
     </div>

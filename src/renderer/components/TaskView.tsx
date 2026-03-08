@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useApp, defaultPaneState } from '../context/AppContext';
 import type { PaneTarget } from '../context/AppContext';
-import TerminalPane from './TerminalPane';
+import { defaultPaneState, useApp } from '../context/AppContext';
+import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
 import Kbd from './Kbd';
-import { modSymbol, shiftSymbol, altSymbol } from '../utils/platform';
+import TerminalPane from './TerminalPane';
 
 const shortcuts = [
   { keys: 'Cmd+R', label: 'Add a repository' },
@@ -45,15 +45,21 @@ export default function TaskView() {
   const openTasks = state.tasks.filter((t) => t.status === 'running');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
 
-  const handlePaneFocus = useCallback((taskId: string, pane: PaneTarget) => {
-    dispatch({ type: 'SET_PANE_FOCUS', taskId, pane });
-  }, [dispatch]);
+  const handlePaneFocus = useCallback(
+    (taskId: string, pane: PaneTarget) => {
+      dispatch({ type: 'SET_PANE_FOCUS', taskId, pane });
+    },
+    [dispatch],
+  );
 
-  const handleTitleChange = useCallback((taskId: string, title: string) => {
-    if (taskId === state.activeTaskId) {
-      window.bifrost.setTerminalTitle(taskId, title);
-    }
-  }, [state.activeTaskId]);
+  const handleTitleChange = useCallback(
+    (taskId: string, title: string) => {
+      if (taskId === state.activeTaskId) {
+        window.bifrost.setTerminalTitle(taskId, title);
+      }
+    },
+    [state.activeTaskId],
+  );
 
   const handleDividerMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -99,7 +105,10 @@ export default function TaskView() {
       setIntegrationNeeded(false);
       setUpdateAvailable(false);
       setJustInstalled(true);
-      dispatch({ type: 'SHOW_TOAST', message: updateAvailable ? 'Claude integration updated' : 'Claude integration installed' });
+      dispatch({
+        type: 'SHOW_TOAST',
+        message: updateAvailable ? 'Claude integration updated' : 'Claude integration installed',
+      });
       setTimeout(() => setJustInstalled(false), 2000);
     } catch (err) {
       dispatch({ type: 'SHOW_TOAST', message: `Install failed: ${err instanceof Error ? err.message : String(err)}` });
@@ -126,9 +135,8 @@ export default function TaskView() {
         <div className="text-center text-muted max-w-md">
           <p className="text-2xl font-semibold text-primary mb-2">BIFROST</p>
           <p className="text-sm text-secondary mb-6 leading-relaxed">
-            A keyboard-centric command center for orchestrating parallel Claude Code sessions.
-            Each task runs in its own isolated git worktree, so agents work independently without
-            stepping on each other.
+            A keyboard-centric command center for orchestrating parallel Claude Code sessions. Each task runs in its own
+            isolated git worktree, so agents work independently without stepping on each other.
           </p>
           {(integrationNeeded || updateAvailable || justInstalled) && (
             <div className="mb-6 flex flex-col items-center gap-2">
@@ -140,7 +148,13 @@ export default function TaskView() {
                   disabled={installing}
                   className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors"
                 >
-                  {installing ? (updateAvailable ? 'Updating...' : 'Installing...') : (updateAvailable ? 'Update Claude Integration' : 'Install Claude Integration')}
+                  {installing
+                    ? updateAvailable
+                      ? 'Updating...'
+                      : 'Installing...'
+                    : updateAvailable
+                      ? 'Update Claude Integration'
+                      : 'Install Claude Integration'}
                 </button>
               )}
               <p className="text-xs text-muted max-w-sm text-center">
@@ -154,7 +168,18 @@ export default function TaskView() {
             <div className="mb-6">
               <div className="inline-flex items-center gap-2 bg-warning/10 border border-warning/30 rounded-full px-4 py-2">
                 <span className="text-xs text-warning">
-                  Install <a href="https://cli.github.com" onClick={(e) => { e.preventDefault(); window.bifrost.openUrl('https://cli.github.com'); }} className="underline hover:text-warning/70">GitHub CLI</a> to enable PR-based task creation
+                  Install{' '}
+                  <a
+                    href="https://cli.github.com"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.bifrost.openUrl('https://cli.github.com');
+                    }}
+                    className="underline hover:text-warning/70"
+                  >
+                    GitHub CLI
+                  </a>{' '}
+                  to enable PR-based task creation
                 </span>
               </div>
             </div>
@@ -171,9 +196,7 @@ export default function TaskView() {
             <div className="mt-6 flex flex-col items-center gap-1.5">
               <div className="bg-surface-alt/50 border border-border-input/50 rounded-full px-4 py-2 flex items-center gap-2 max-w-sm">
                 <span className="text-warning text-sm flex-shrink-0">&#x1F4A1;</span>
-                <p className="text-xs text-secondary leading-relaxed">
-                  {tips[tipIndex]}
-                </p>
+                <p className="text-xs text-secondary leading-relaxed">{tips[tipIndex]}</p>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -212,11 +235,7 @@ export default function TaskView() {
         const showDev = !!ps.devSessionId && !ps.devHidden;
 
         return (
-          <div
-            key={task.id}
-            className="absolute inset-0 flex flex-col"
-            style={{ display: isActive ? 'flex' : 'none' }}
-          >
+          <div key={task.id} className="absolute inset-0 flex flex-col" style={{ display: isActive ? 'flex' : 'none' }}>
             {/* Claude pane — always rendered, hidden via CSS to preserve xterm state */}
             <div
               style={{

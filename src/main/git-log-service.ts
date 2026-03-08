@@ -1,5 +1,5 @@
-import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { GitLogEntry } from '../shared/types';
 
 const execFile = promisify(execFileCb);
@@ -21,18 +21,18 @@ export async function getGitLog(worktreePath: string, baseBranch?: string): Prom
         ));
       } catch {
         // Base branch not available — fall back to full log
-        ({ stdout } = await execFile(
-          'git',
-          ['log', `--format=${FORMAT}`, `--max-count=${MAX_ENTRIES}`],
-          { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024, timeout: GIT_TIMEOUT_MS },
-        ));
+        ({ stdout } = await execFile('git', ['log', `--format=${FORMAT}`, `--max-count=${MAX_ENTRIES}`], {
+          cwd: worktreePath,
+          maxBuffer: 5 * 1024 * 1024,
+          timeout: GIT_TIMEOUT_MS,
+        }));
       }
     } else {
-      ({ stdout } = await execFile(
-        'git',
-        ['log', `--format=${FORMAT}`, `--max-count=${MAX_ENTRIES}`],
-        { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024, timeout: GIT_TIMEOUT_MS },
-      ));
+      ({ stdout } = await execFile('git', ['log', `--format=${FORMAT}`, `--max-count=${MAX_ENTRIES}`], {
+        cwd: worktreePath,
+        maxBuffer: 5 * 1024 * 1024,
+        timeout: GIT_TIMEOUT_MS,
+      }));
     }
 
     if (!stdout.trim()) return [];

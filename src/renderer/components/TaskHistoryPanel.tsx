@@ -1,18 +1,18 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type { ClaudeSession, DiffStats, Task } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useInstantSearch } from '../hooks/useInstantSearch';
+import { requestArchive } from '../utils/archive';
+import { formatDate, formatRelative } from '../utils/format-time';
+import { shortPath } from '../utils/paths';
+import { altSymbol } from '../utils/platform';
+import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
-import { shortPath } from '../utils/paths';
-import type { Task, ClaudeSession, DiffStats } from '../../shared/types';
-import { requestArchive } from '../utils/archive';
-import { matchesAllTerms } from '../utils/search';
-import { useInstantSearch } from '../hooks/useInstantSearch';
 import Highlight from './Highlight';
-import SearchIndicator from './SearchIndicator';
 import PillToggle, { type PillOption } from './PillToggle';
+import SearchIndicator from './SearchIndicator';
 import Spinner from './Spinner';
-import { formatDate, formatRelative } from '../utils/format-time';
-import { altSymbol } from '../utils/platform';
 
 const statusLabel: Record<string, string> = {
   running: 'Running',
@@ -97,14 +97,33 @@ interface TaskRowProps {
 }
 
 function TaskRow({
-  task, idx, focusedIdx, editingId, editName, diffStats, search, setEditName,
-  setFocusedIdx, itemRefs, handleActivate, startRename, submitRename,
-  setEditingId, handleReopen, handleArchive, handleDelete,
-  canReopen, canArchive, repoName, shortPath,
+  task,
+  idx,
+  focusedIdx,
+  editingId,
+  editName,
+  diffStats,
+  search,
+  setEditName,
+  setFocusedIdx,
+  itemRefs,
+  handleActivate,
+  startRename,
+  submitRename,
+  setEditingId,
+  handleReopen,
+  handleArchive,
+  handleDelete,
+  canReopen,
+  canArchive,
+  repoName,
+  shortPath,
 }: TaskRowProps) {
   return (
     <div
-      ref={(el) => { itemRefs.current[idx] = el; }}
+      ref={(el) => {
+        itemRefs.current[idx] = el;
+      }}
       onMouseEnter={() => setFocusedIdx(idx)}
       onClick={() => handleActivate(task)}
       className={`rounded border p-3 cursor-default transition-colors ${
@@ -122,7 +141,10 @@ function TaskRow({
               onChange={(e) => setEditName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submitRename(task.id);
-                if (e.key === 'Escape') { e.stopPropagation(); setEditingId(null); }
+                if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  setEditingId(null);
+                }
               }}
               onBlur={() => submitRename(task.id)}
               className="px-2 py-0.5 bg-surface-hover border border-border-input rounded text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent w-48"
@@ -136,22 +158,17 @@ function TaskRow({
               <Highlight text={task.name} search={search} />
             </span>
           )}
-          <span className={`text-xs ${statusColor[task.status]}`}>
-            {statusLabel[task.status]}
-          </span>
-          {diffStats && (
-            <DiffStatsBadge additions={diffStats.additions} deletions={diffStats.deletions} />
-          )}
-          {task.isExternal && (
-            <span className="text-xs text-faint">external</span>
-          )}
-          {task.inPlace && (
-            <span className="text-xs text-faint">in-place</span>
-          )}
+          <span className={`text-xs ${statusColor[task.status]}`}>{statusLabel[task.status]}</span>
+          {diffStats && <DiffStatsBadge additions={diffStats.additions} deletions={diffStats.deletions} />}
+          {task.isExternal && <span className="text-xs text-faint">external</span>}
+          {task.inPlace && <span className="text-xs text-faint">in-place</span>}
         </div>
         <div className="flex items-center gap-1 ml-2 flex-shrink-0">
           <button
-            onClick={(e) => { e.stopPropagation(); startRename(task); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              startRename(task);
+            }}
             title="Rename (F2)"
             tabIndex={-1}
             className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded transition-colors"
@@ -160,7 +177,10 @@ function TaskRow({
           </button>
           {canReopen(task) && (
             <button
-              onClick={(e) => { e.stopPropagation(); handleReopen(task); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleReopen(task);
+              }}
               title={`Reopen task (${altSymbol}O)`}
               tabIndex={-1}
               className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
@@ -170,7 +190,10 @@ function TaskRow({
           )}
           {canArchive(task) && (
             <button
-              onClick={(e) => { e.stopPropagation(); handleArchive(task); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleArchive(task);
+              }}
               title={`Archive task (${altSymbol}A)`}
               tabIndex={-1}
               className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded transition-colors"
@@ -179,8 +202,15 @@ function TaskRow({
             </button>
           )}
           <button
-            onClick={(e) => { e.stopPropagation(); handleDelete(task); }}
-            title={task.inPlace || task.isExternal ? `Delete task (${altSymbol}D)` : `Delete task and worktree (${altSymbol}D)`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(task);
+            }}
+            title={
+              task.inPlace || task.isExternal
+                ? `Delete task (${altSymbol}D)`
+                : `Delete task and worktree (${altSymbol}D)`
+            }
             tabIndex={-1}
             className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
           >
@@ -189,15 +219,21 @@ function TaskRow({
         </div>
       </div>
       {task.summary && (
-        <div className="mt-1 text-xs text-muted"><Highlight text={task.summary} search={search} /></div>
+        <div className="mt-1 text-xs text-muted">
+          <Highlight text={task.summary} search={search} />
+        </div>
       )}
       <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
         {task.isExternal ? (
           <span>{shortPath(task.worktreePath)}</span>
         ) : (
           <>
-            <span><Highlight text={repoName(task.repoId)} search={search} /></span>
-            <span><Highlight text={task.branch} search={search} /></span>
+            <span>
+              <Highlight text={repoName(task.repoId)} search={search} />
+            </span>
+            <span>
+              <Highlight text={task.branch} search={search} />
+            </span>
           </>
         )}
         <span>{formatDate(task.createdAt)}</span>
@@ -233,57 +269,67 @@ export default function TaskHistoryPanel() {
     if (tasksToFetch.length === 0) return;
 
     for (const task of tasksToFetch) {
-      window.bifrost.getDiffStats(task.id).then((stats) => {
-        if (stats) {
-          setDiffStatsMap((prev) => {
-            const next = new Map(prev);
-            next.set(task.id, stats);
-            return next;
-          });
-        }
-      }).catch(() => {
-        // ignore errors
-      });
+      window.bifrost
+        .getDiffStats(task.id)
+        .then((stats) => {
+          if (stats) {
+            setDiffStatsMap((prev) => {
+              const next = new Map(prev);
+              next.set(task.id, stats);
+              return next;
+            });
+          }
+        })
+        .catch(() => {
+          // ignore errors
+        });
     }
   }, [state.tasks, isSessionsMode]);
 
   // Fetch session JSONL mtimes for chronological ordering
   useEffect(() => {
     if (isSessionsMode) return;
-    window.bifrost.getSessionMtimes().then(setSessionMtimes).catch(() => {});
+    window.bifrost
+      .getSessionMtimes()
+      .then(setSessionMtimes)
+      .catch(() => {});
   }, [isSessionsMode]);
 
   // Load sessions when switching to sessions tab
   useEffect(() => {
     if (isSessionsMode && sessions.length === 0) {
       setSessionsLoading(true);
-      window.bifrost.listClaudeSessions().then((result) => {
-        setSessions(result);
-        setSessionsLoading(false);
-      }).catch(() => {
-        setSessionsLoading(false);
-      });
+      window.bifrost
+        .listClaudeSessions()
+        .then((result) => {
+          setSessions(result);
+          setSessionsLoading(false);
+        })
+        .catch(() => {
+          setSessionsLoading(false);
+        });
     }
   }, [isSessionsMode]);
 
-  const filteredTasks = isSessionsMode ? [] : state.tasks
-    .filter((t) => {
-      if (filter === 'active' && t.status === 'archived') return false;
-      if (filter === 'archived' && t.status !== 'archived') return false;
-      if (search) {
-        const repo = state.repos.find((r) => r.id === t.repoId);
-        return matchesAllTerms(`${t.name} ${t.branch} ${repo?.name ?? ''} ${t.summary ?? ''}`, search);
-      }
-      return true;
-    })
-    .sort((a, b) => (sessionMtimes[b.id] ?? b.createdAt) - (sessionMtimes[a.id] ?? a.createdAt));
+  const filteredTasks = isSessionsMode
+    ? []
+    : state.tasks
+        .filter((t) => {
+          if (filter === 'active' && t.status === 'archived') return false;
+          if (filter === 'archived' && t.status !== 'archived') return false;
+          if (search) {
+            const repo = state.repos.find((r) => r.id === t.repoId);
+            return matchesAllTerms(`${t.name} ${t.branch} ${repo?.name ?? ''} ${t.summary ?? ''}`, search);
+          }
+          return true;
+        })
+        .sort((a, b) => (sessionMtimes[b.id] ?? b.createdAt) - (sessionMtimes[a.id] ?? a.createdAt));
 
   const filteredSessions = isSessionsMode
     ? sessions.filter((s) => matchesAllTerms(`${s.cwd} ${s.slug ?? ''}`, search))
     : [];
 
-  const repoName = (repoId: string) =>
-    state.repos.find((r) => r.id === repoId)?.name ?? '';
+  const repoName = (repoId: string) => state.repos.find((r) => r.id === repoId)?.name ?? '';
 
   const taskGroups = !isSessionsMode
     ? (() => {
@@ -297,9 +343,7 @@ export default function TaskHistoryPanel() {
           }
           group.push(task);
         }
-        return TIME_BUCKETS
-          .filter((b) => map.has(b))
-          .map((b) => ({ name: b, tasks: map.get(b)! }));
+        return TIME_BUCKETS.filter((b) => map.has(b)).map((b) => ({ name: b, tasks: map.get(b)! }));
       })()
     : [];
 
@@ -450,9 +494,7 @@ export default function TaskHistoryPanel() {
         e.preventDefault();
         const forward = e.key === 'ArrowRight' || (e.key === 'Tab' && !e.shiftKey);
         const idx = filters.indexOf(filter);
-        setFilter(filters[forward
-          ? (idx < filters.length - 1 ? idx + 1 : 0)
-          : (idx > 0 ? idx - 1 : filters.length - 1)]);
+        setFilter(filters[forward ? (idx < filters.length - 1 ? idx + 1 : 0) : idx > 0 ? idx - 1 : filters.length - 1]);
         break;
       }
 
@@ -528,9 +570,7 @@ export default function TaskHistoryPanel() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-          <h2 className="text-sm font-semibold text-primary">
-            {isSessionsMode ? 'Claude Sessions' : 'Task History'}
-          </h2>
+          <h2 className="text-sm font-semibold text-primary">{isSessionsMode ? 'Claude Sessions' : 'Task History'}</h2>
           <button
             onClick={close}
             tabIndex={-1}
@@ -542,22 +582,16 @@ export default function TaskHistoryPanel() {
 
         {/* Filter tabs */}
         <div className="flex gap-1 px-4 pt-3">
-          <PillToggle
-            options={filterOptions}
-            value={filter}
-            onChange={(v) => setFilter(v)}
-            size="md"
-          />
+          <PillToggle options={filterOptions} value={filter} onChange={(v) => setFilter(v)} size="md" />
         </div>
 
-        {error && (
-          <p className="text-xs text-danger px-4 pt-2">{error}</p>
-        )}
+        {error && <p className="text-xs text-danger px-4 pt-2">{error}</p>}
 
         {branchConfirm && (
           <div className="mx-4 mt-3 px-3 py-2 bg-warning/10 border border-warning/30 rounded flex items-center gap-3">
             <span className="text-xs text-warning flex-1">
-              Branch changed from <span className="font-medium">{branchConfirm.task.branch}</span> to <span className="font-medium">{branchConfirm.currentBranch}</span>
+              Branch changed from <span className="font-medium">{branchConfirm.task.branch}</span> to{' '}
+              <span className="font-medium">{branchConfirm.currentBranch}</span>
             </span>
             <button
               onClick={() => doReopen(branchConfirm.task)}
@@ -592,7 +626,9 @@ export default function TaskHistoryPanel() {
               {filteredSessions.map((session, idx) => (
                 <div
                   key={session.sessionId}
-                  ref={(el) => { itemRefs.current[idx] = el; }}
+                  ref={(el) => {
+                    itemRefs.current[idx] = el;
+                  }}
                   onMouseEnter={() => setFocusedIdx(idx)}
                   onClick={() => handleResumeSession(session)}
                   className={`rounded border p-3 cursor-default transition-colors ${
@@ -602,12 +638,8 @@ export default function TaskHistoryPanel() {
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-primary truncate">
-                      {shortPath(session.cwd)}
-                    </span>
-                    <span className="text-xs text-accent-hover flex-shrink-0 ml-2">
-                      Resume
-                    </span>
+                    <span className="text-sm font-medium text-primary truncate">{shortPath(session.cwd)}</span>
+                    <span className="text-xs text-accent-hover flex-shrink-0 ml-2">Resume</span>
                   </div>
                   <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
                     {session.slug && <span className="text-secondary">{session.slug}</span>}
@@ -619,48 +651,46 @@ export default function TaskHistoryPanel() {
             </>
           ) : (
             <>
-              {flatTaskList.length === 0 && (
-                <p className="text-sm text-muted text-center py-4">No tasks found.</p>
-              )}
+              {flatTaskList.length === 0 && <p className="text-sm text-muted text-center py-4">No tasks found.</p>}
               {(() => {
-                  let flatIdx = 0;
-                  return taskGroups.map((group) => (
-                    <div key={group.name} className="space-y-2">
-                      <div className="text-xs font-semibold text-secondary uppercase tracking-wider px-1 pt-2 pb-1">
-                        {group.name}
-                      </div>
-                      {group.tasks.map((task) => {
-                        const idx = flatIdx++;
-                        return (
-                          <TaskRow
-                            key={task.id}
-                            task={task}
-                            idx={idx}
-                            focusedIdx={focusedIdx}
-                            editingId={editingId}
-                            editName={editName}
-                            diffStats={diffStatsMap.get(task.id)}
-                            search={search}
-                            setEditName={setEditName}
-                            setFocusedIdx={setFocusedIdx}
-                            itemRefs={itemRefs}
-                            handleActivate={handleActivate}
-                            startRename={startRename}
-                            submitRename={submitRename}
-                            setEditingId={setEditingId}
-                            handleReopen={handleReopen}
-                            handleArchive={handleArchive}
-                            handleDelete={handleDelete}
-                            canReopen={canReopen}
-                            canArchive={canArchive}
-                            repoName={repoName}
-                            shortPath={shortPath}
-                          />
-                        );
-                      })}
+                let flatIdx = 0;
+                return taskGroups.map((group) => (
+                  <div key={group.name} className="space-y-2">
+                    <div className="text-xs font-semibold text-secondary uppercase tracking-wider px-1 pt-2 pb-1">
+                      {group.name}
                     </div>
-                  ));
-                })()}
+                    {group.tasks.map((task) => {
+                      const idx = flatIdx++;
+                      return (
+                        <TaskRow
+                          key={task.id}
+                          task={task}
+                          idx={idx}
+                          focusedIdx={focusedIdx}
+                          editingId={editingId}
+                          editName={editName}
+                          diffStats={diffStatsMap.get(task.id)}
+                          search={search}
+                          setEditName={setEditName}
+                          setFocusedIdx={setFocusedIdx}
+                          itemRefs={itemRefs}
+                          handleActivate={handleActivate}
+                          startRename={startRename}
+                          submitRename={submitRename}
+                          setEditingId={setEditingId}
+                          handleReopen={handleReopen}
+                          handleArchive={handleArchive}
+                          handleDelete={handleDelete}
+                          canReopen={canReopen}
+                          canArchive={canArchive}
+                          repoName={repoName}
+                          shortPath={shortPath}
+                        />
+                      );
+                    })}
+                  </div>
+                ));
+              })()}
             </>
           )}
         </div>
@@ -668,7 +698,14 @@ export default function TaskHistoryPanel() {
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
           <span className="text-xs text-faint">
-            Tab/&larr;&rarr; tabs &middot; &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'} &middot; {!isSessionsMode && <>F2 rename &middot; {altSymbol}O/{altSymbol}A/{altSymbol}D actions &middot; </>}type to search &middot; Esc close
+            Tab/&larr;&rarr; tabs &middot; &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'}{' '}
+            &middot;{' '}
+            {!isSessionsMode && (
+              <>
+                F2 rename &middot; {altSymbol}O/{altSymbol}A/{altSymbol}D actions &middot;{' '}
+              </>
+            )}
+            type to search &middot; Esc close
           </span>
         </div>
       </div>

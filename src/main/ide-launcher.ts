@@ -71,11 +71,7 @@ export function openInIde(
   return new Promise((resolve, reject) => {
     execFile(command, args, (error) => {
       if (error) {
-        reject(
-          new Error(
-            `Failed to open ${worktreePath} in ${command}: ${error.message}`,
-          ),
-        );
+        reject(new Error(`Failed to open ${worktreePath} in ${command}: ${error.message}`));
         return;
       }
       resolve();

@@ -1,5 +1,3 @@
-import React from 'react';
-
 interface ActionLabelProps {
   text: string;
   hintIndex?: number;
@@ -11,5 +9,11 @@ export default function ActionLabel({ text, hintIndex = 0, showHint }: ActionLab
   const before = text.slice(0, hintIndex);
   const char = text[hintIndex];
   const after = text.slice(hintIndex + 1);
-  return <span>{before}<span className="underline underline-offset-2">{char}</span>{after}</span>;
+  return (
+    <span>
+      {before}
+      <span className="underline underline-offset-2">{char}</span>
+      {after}
+    </span>
+  );
 }

@@ -1,16 +1,16 @@
-import { spawn, ChildProcess } from 'node:child_process';
+import { ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 
 import { IPC_STREAM } from '../shared/ipc-channels';
-import type { SupervisorItem, SupervisorState, Task } from '../shared/types';
-import { loadSupervisorState, saveSupervisorState } from './supervisor-store';
 import { generateTaskName } from '../shared/name-generator';
-import { listNotes, updateNote } from './note-store';
+import type { SupervisorItem, SupervisorState, Task } from '../shared/types';
 import { loadConfig } from './config';
+import { listNotes, updateNote } from './note-store';
+import { loadSupervisorState, saveSupervisorState } from './supervisor-store';
 import { createWorktree, removeWorktree } from './worktree-manager';
 
 type TaskCreator = (item: SupervisorItem) => Promise<Task>;
@@ -30,9 +30,7 @@ function broadcastState(): void {
 function updateItem(itemId: string, updates: Partial<SupervisorItem>): void {
   state = {
     ...state,
-    items: state.items.map((item) =>
-      item.id === itemId ? { ...item, ...updates } : item,
-    ),
+    items: state.items.map((item) => (item.id === itemId ? { ...item, ...updates } : item)),
   };
 }
 
@@ -203,7 +201,6 @@ export function removeItem(itemId: string): SupervisorState {
   return state;
 }
 
-
 // --- Internal ---
 
 function processQueue(): void {
@@ -252,7 +249,11 @@ async function spawnProcess(item: SupervisorItem): Promise<void> {
   env.BIFROST_CONTEXT = 'supervisor';
   env.BIFROST_SUPERVISOR_ITEM_ID = item.id;
   const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
-  try { env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
+  try {
+    env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim();
+  } catch {
+    /* port file may not exist */
+  }
 
   const args: string[] = ['-p'];
   if (config.permissionMode === 'skip-permissions') {
@@ -284,7 +285,11 @@ async function spawnProcess(item: SupervisorItem): Promise<void> {
 
     if (code === 0) {
       updateItem(item.id, { status: 'done', completedAt: Date.now() });
-      try { updateNote(item.repoId, item.noteId, { addressed: true }); } catch { /* note may have been deleted */ }
+      try {
+        updateNote(item.repoId, item.noteId, { addressed: true });
+      } catch {
+        /* note may have been deleted */
+      }
     } else {
       updateItem(item.id, {
         status: 'error',

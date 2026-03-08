@@ -1,9 +1,9 @@
-import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
 import type { AddRepoParams, BifrostConfig, Repo } from '../shared/types';
 
 const execFile = promisify(execFileCb);
@@ -81,7 +81,8 @@ export async function detectBaseBranch(repoPath: string): Promise<string | undef
   // Try gh CLI (most reliable for GitHub repos)
   try {
     const { stdout } = await execFile(
-      'gh', ['repo', 'view', '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name'],
+      'gh',
+      ['repo', 'view', '--json', 'defaultBranchRef', '--jq', '.defaultBranchRef.name'],
       { cwd: repoPath, timeout: 5000, killSignal: 'SIGKILL' },
     );
     const branch = stdout.trim();
@@ -122,10 +123,7 @@ async function getDefaultBranch(repoPath: string): Promise<string> {
   return (await detectBaseBranch(repoPath)) ?? 'main';
 }
 
-export function removeRepo(
-  repoId: string,
-  config: BifrostConfig,
-): BifrostConfig {
+export function removeRepo(repoId: string, config: BifrostConfig): BifrostConfig {
   return {
     ...config,
     repos: config.repos.filter((r) => r.id !== repoId),
@@ -145,9 +143,14 @@ export async function getRemotes(repoPath: string): Promise<Array<{ name: string
       seen.add(name);
       const url = parts[1];
       const sshMatch = url.match(/github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
-      if (sshMatch) { remotes.push({ name, githubPath: sshMatch[1] }); continue; }
+      if (sshMatch) {
+        remotes.push({ name, githubPath: sshMatch[1] });
+        continue;
+      }
       const httpsMatch = url.match(/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
-      if (httpsMatch) { remotes.push({ name, githubPath: httpsMatch[1] }); continue; }
+      if (httpsMatch) {
+        remotes.push({ name, githubPath: httpsMatch[1] });
+      }
     }
     return remotes;
   } catch {
@@ -159,6 +162,11 @@ export async function getRepoBranches(repoPath: string): Promise<string[]> {
   const { stdout } = await execFile('git', ['branch', '-a'], { cwd: repoPath, timeout: 10000 });
   return stdout
     .split('\n')
-    .map((line) => line.replace(/^\s*[*+]?\s+/, '').replace(/^remotes\//, '').trim())
+    .map((line) =>
+      line
+        .replace(/^\s*[*+]?\s+/, '')
+        .replace(/^remotes\//, '')
+        .trim(),
+    )
     .filter((line) => line.length > 0 && !line.includes('->'));
 }

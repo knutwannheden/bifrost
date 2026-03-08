@@ -220,7 +220,10 @@ export interface BifrostAPI {
 
   // Context capture
   captureContext(params: CaptureContextParams): Promise<number>;
-  findTranscriptMatch(worktreePath: string, searchText: string): Promise<{ jsonlPath: string; lineNumber: number; uuid: string } | null>;
+  findTranscriptMatch(
+    worktreePath: string,
+    searchText: string,
+  ): Promise<{ jsonlPath: string; lineNumber: number; uuid: string } | null>;
   getApiPort(): Promise<number | null>;
 
   // Claude sessions
@@ -228,7 +231,11 @@ export interface BifrostAPI {
   resumeClaudeSession(externalSessionId: string, cwd: string): Promise<Task>;
 
   // Review
-  runReview(taskId: string, scope?: 'working' | 'all', instructions?: string): Promise<{ reviewId: string; markdown: string; sessionId?: string }>;
+  runReview(
+    taskId: string,
+    scope?: 'working' | 'all',
+    instructions?: string,
+  ): Promise<{ reviewId: string; markdown: string; sessionId?: string }>;
   cancelReview(taskId: string): Promise<void>;
   saveReview(taskId: string, reviewId: string, content: string): Promise<void>;
   loadReview(taskId: string, reviewId: string): Promise<string | null>;
@@ -266,8 +273,9 @@ export interface BifrostAPI {
   getLastAssistantMessage(taskId: string): Promise<string | null>;
 
   // Hook notifications
-  onHookNotification(callback: (taskId: string, taskName: string, message: string,
-    title: string, notificationType: string) => void): () => void;
+  onHookNotification(
+    callback: (taskId: string, taskName: string, message: string, title: string, notificationType: string) => void,
+  ): () => void;
 
   // Permission prompts
   onPermissionPrompt(callback: (request: PermissionPromptData) => void): () => void;
@@ -297,7 +305,9 @@ export interface BifrostAPI {
   // Slack
   startSlackOAuth(): Promise<void>;
   disconnectSlack(): Promise<void>;
-  onSlackReaction(callback: (channelId: string, messageTs: string, messageUrl: string, messagePreview: string) => void): () => void;
+  onSlackReaction(
+    callback: (channelId: string, messageTs: string, messageUrl: string, messagePreview: string) => void,
+  ): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

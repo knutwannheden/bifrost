@@ -1,11 +1,17 @@
-import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ActivityEntry, CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
 import type { DiffMode } from '../context/AppContext';
-import { getActiveDiffState } from '../context/AppContext';
-import { useDiff } from '../hooks/useDiff';
+import { getActiveDiffState, useApp } from '../context/AppContext';
 import { useActivityLog } from '../hooks/useActivityLog';
+import { useDiff } from '../hooks/useDiff';
 import { useGitLog } from '../hooks/useGitLog';
-import { parseDiff, extFromPath, diffFileStats } from '../utils/diff-parser';
+import { useInstantSearch } from '../hooks/useInstantSearch';
+import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
+import { diffFileStats, extFromPath, parseDiff } from '../utils/diff-parser';
+import { formatRelative, formatTimestamp } from '../utils/format-time';
+import { isModKey } from '../utils/platform';
+import { matchesAllTerms } from '../utils/search';
+import type { HighlightedToken } from '../utils/syntax-highlight';
 import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
@@ -15,13 +21,6 @@ import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
 import SearchIndicator from './SearchIndicator';
 import Spinner from './Spinner';
-import { formatTimestamp, formatRelative } from '../utils/format-time';
-import type { DiffFile, DiffLine, DiffFileStatus } from '../utils/diff-parser';
-import type { HighlightedToken } from '../utils/syntax-highlight';
-import { isModKey } from '../utils/platform';
-import { matchesAllTerms } from '../utils/search';
-import { useInstantSearch } from '../hooks/useInstantSearch';
-import type { ActivityEntry, CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
 
 interface HighlightedFile {
   file: DiffFile;
@@ -72,7 +71,9 @@ const lineNumWidth = 'w-12';
 
 function LineNumber({ num }: { num: number | null }) {
   return (
-    <span className={`${lineNumWidth} inline-block text-right pr-2 select-none text-faint text-xs leading-5 flex-shrink-0`}>
+    <span
+      className={`${lineNumWidth} inline-block text-right pr-2 select-none text-faint text-xs leading-5 flex-shrink-0`}
+    >
       {num ?? ''}
     </span>
   );
@@ -84,22 +85,14 @@ const lineStyles: Record<DiffLine['type'], { bg: string; signColor: string; sign
   context: { bg: '', signColor: 'text-faint', sign: ' ' },
 };
 
-function DiffLineRow({
-  line,
-  tokens,
-}: {
-  line: DiffLine;
-  tokens: HighlightedToken[];
-}) {
+function DiffLineRow({ line, tokens }: { line: DiffLine; tokens: HighlightedToken[] }) {
   const { bg: bgClass, signColor, sign } = lineStyles[line.type];
 
   return (
     <div className={`flex leading-5 ${bgClass}`}>
       <LineNumber num={line.oldLineNo} />
       <LineNumber num={line.newLineNo} />
-      <span className={`${signColor} w-4 inline-block text-center flex-shrink-0 text-xs leading-5`}>
-        {sign}
-      </span>
+      <span className={`${signColor} w-4 inline-block text-center flex-shrink-0 text-xs leading-5`}>{sign}</span>
       <span className="flex-1 text-xs leading-5 whitespace-pre">
         {tokens.map((token, i) => (
           <span key={i} style={{ color: token.color }}>
@@ -163,20 +156,29 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
 
     let cancelled = false;
 
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        observer.disconnect();
-        setVisible(true);
-        const ext = extFromPath(file.newPath || file.oldPath);
-        const allLines = file.hunks.flatMap((h) => h.lines);
-        highlightLines(allLines.map((l) => l.content), ext).then((result) => {
-          if (!cancelled) setTokens(result);
-        });
-      }
-    }, { rootMargin: '300px' });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          observer.disconnect();
+          setVisible(true);
+          const ext = extFromPath(file.newPath || file.oldPath);
+          const allLines = file.hunks.flatMap((h) => h.lines);
+          highlightLines(
+            allLines.map((l) => l.content),
+            ext,
+          ).then((result) => {
+            if (!cancelled) setTokens(result);
+          });
+        }
+      },
+      { rootMargin: '300px' },
+    );
 
     observer.observe(el);
-    return () => { cancelled = true; observer.disconnect(); };
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
   }, [file]);
 
   if (!visible) {
@@ -186,7 +188,13 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
     const estimatedHeight = file.binary ? 32 : totalLines * 20 + hunkHeaders;
 
     return (
-      <div ref={(el) => { observerRef.current = el; sectionRef?.(el); }} className="mb-6">
+      <div
+        ref={(el) => {
+          observerRef.current = el;
+          sectionRef?.(el);
+        }}
+        className="mb-6"
+      >
         <div className="sticky top-0 z-10 bg-surface border border-border-input rounded-t px-3 py-1.5 text-xs font-semibold text-primary">
           {file.newPath || file.oldPath}
         </div>
@@ -199,7 +207,12 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
   const displayTokens = tokens ?? plainTokens(allLines);
 
   return (
-    <div ref={(el) => { observerRef.current = el; sectionRef?.(el); }}>
+    <div
+      ref={(el) => {
+        observerRef.current = el;
+        sectionRef?.(el);
+      }}
+    >
       <FileSection data={{ file, tokensByLine: displayTokens }} />
     </div>
   );
@@ -220,9 +233,7 @@ function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
       <div className={`flex items-start gap-2 px-3 py-1.5 ${config.bg} border ${config.border} rounded text-xs`}>
         <span className="text-muted flex-shrink-0">{formatTimestamp(entry.timestamp)}</span>
         <span className={`${config.color} font-semibold flex-shrink-0`}>{entry.claudeToolName}</span>
-        {entry.claudeText && (
-          <span className="text-secondary font-mono truncate">{entry.claudeText}</span>
-        )}
+        {entry.claudeText && <span className="text-secondary font-mono truncate">{entry.claudeText}</span>}
       </div>
     );
   }
@@ -251,7 +262,9 @@ function ActivityEntryView({ entry, search }: { entry: ActivityEntry; search: st
         <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
         <span className="text-accent-hover font-semibold">Commit</span>
         <span className="text-secondary font-mono">{entry.commitSha?.slice(0, 8)}</span>
-        <span className="text-primary"><Highlight text={entry.commitMessage ?? ''} search={search} /></span>
+        <span className="text-primary">
+          <Highlight text={entry.commitMessage ?? ''} search={search} />
+        </span>
       </div>
     );
   }
@@ -260,9 +273,11 @@ function ActivityEntryView({ entry, search }: { entry: ActivityEntry; search: st
     <div>
       <div className="flex items-center gap-2 mb-1 text-xs">
         <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
-        <span className="text-primary font-mono"><Highlight text={entry.filePath ?? ''} search={search} /></span>
+        <span className="text-primary font-mono">
+          <Highlight text={entry.filePath ?? ''} search={search} />
+        </span>
       </div>
-      {highlighted && highlighted.map((data, i) => (
+      {highlighted?.map((data, i) => (
         <FileSection key={i} data={data} />
       ))}
       {!highlighted && entry.diff && (
@@ -450,15 +465,20 @@ function FileRowItem({
         {stages.map((stage) => {
           const si = stageIndicator[stage];
           return si ? (
-            <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>{si.label}</span>
+            <span key={stage} className={`${si.color} font-mono font-bold`} title={si.title}>
+              {si.label}
+            </span>
           ) : null;
         })}
       </span>
-      <span className="text-primary truncate"><Highlight text={displayName} search={search} /></span>
-      {file.binary
-        ? <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
-        : <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
-      }
+      <span className="text-primary truncate">
+        <Highlight text={displayName} search={search} />
+      </span>
+      {file.binary ? (
+        <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
+      ) : (
+        <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
+      )}
     </div>
   );
 }
@@ -495,10 +515,10 @@ function FileTreeItem({
         style={{ paddingLeft: depth * 16 + 8 }}
         onClick={() => onToggle(node.path)}
       >
-        <span className="text-muted w-3 text-center flex-shrink-0">
-          {isCollapsed ? '▸' : '▾'}
+        <span className="text-muted w-3 text-center flex-shrink-0">{isCollapsed ? '▸' : '▾'}</span>
+        <span className="text-secondary truncate">
+          <Highlight text={node.label} search={search} />
         </span>
-        <span className="text-secondary truncate"><Highlight text={node.label} search={search} /></span>
         <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
       </div>
       {/* Children (dirs then files) when expanded */}
@@ -529,7 +549,9 @@ function FileTreeItem({
                 isSelected={flatIndex === selectedIndex}
                 stages={fileStatuses[path] ?? []}
                 onSelect={onSelectFile}
-                itemRef={(el) => { fileRefs.current[flatIndex] = el; }}
+                itemRef={(el) => {
+                  fileRefs.current[flatIndex] = el;
+                }}
                 style={{ paddingLeft: (depth + 1) * 16 + 8 }}
                 search={search}
               />
@@ -603,7 +625,9 @@ function FileListSidebar({
   return (
     <div className="w-72 flex-shrink-0 border-r border-border-default overflow-y-auto">
       <div className="px-3 py-2 border-b border-border-default text-xs text-secondary flex items-center gap-2">
-        <span>{files.length} file{files.length !== 1 ? 's' : ''}</span>
+        <span>
+          {files.length} file{files.length !== 1 ? 's' : ''}
+        </span>
         <DiffStatsBadge additions={totalStats.additions} deletions={totalStats.deletions} />
       </div>
       {hasTree ? (
@@ -635,7 +659,9 @@ function FileListSidebar({
                 isSelected={flatIndex === selectedIndex}
                 stages={fileStatuses[path] ?? []}
                 onSelect={onSelectFile}
-                itemRef={(el) => { itemRefs.current[flatIndex] = el; }}
+                itemRef={(el) => {
+                  itemRefs.current[flatIndex] = el;
+                }}
                 style={{ paddingLeft: 12 }}
                 search={search}
               />
@@ -655,7 +681,9 @@ function FileListSidebar({
               isSelected={flatIndex === selectedIndex}
               stages={fileStatuses[path] ?? []}
               onSelect={onSelectFile}
-              itemRef={(el) => { itemRefs.current[flatIndex] = el; }}
+              itemRef={(el) => {
+                itemRefs.current[flatIndex] = el;
+              }}
               style={{ paddingLeft: 12 }}
               search={search}
             />
@@ -686,19 +714,38 @@ function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: Diff
   );
 }
 
-function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCount, filesRef, scope, onSetScope }: { taskId: string; search: string; gitFileIdx: number; onSetGitFileIdx: (idx: number) => void; onFileCount: (count: number) => void; filesRef: React.MutableRefObject<DiffFile[]>; scope: DiffScope; onSetScope: (s: DiffScope) => void }) {
+function GitDiffContent({
+  taskId,
+  search,
+  gitFileIdx,
+  onSetGitFileIdx,
+  onFileCount,
+  filesRef,
+  scope,
+  onSetScope,
+}: {
+  taskId: string;
+  search: string;
+  gitFileIdx: number;
+  onSetGitFileIdx: (idx: number) => void;
+  onFileCount: (count: number) => void;
+  filesRef: React.MutableRefObject<DiffFile[]>;
+  scope: DiffScope;
+  onSetScope: (s: DiffScope) => void;
+}) {
   const { diff, loading, error } = useDiff(taskId, scope);
   const [fileStatuses, setFileStatuses] = useState<Record<string, GitFileStage[]>>({});
 
   const fileSectionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const files = useMemo(() => diff ? parseDiff(diff) : null, [diff]);
+  const files = useMemo(() => (diff ? parseDiff(diff) : null), [diff]);
 
   // Fetch file statuses alongside the diff
   useEffect(() => {
-    window.bifrost.getFileStatuses(taskId, scope).then(
-      (statuses) => setFileStatuses(statuses as Record<string, GitFileStage[]>),
-    ).catch(() => setFileStatuses({}));
+    window.bifrost
+      .getFileStatuses(taskId, scope)
+      .then((statuses) => setFileStatuses(statuses as Record<string, GitFileStage[]>))
+      .catch(() => setFileStatuses({}));
   }, [taskId, diff, scope]);
 
   const filtered = useMemo(() => {
@@ -707,9 +754,7 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
     return files.filter((file) => {
       const path = (file.newPath || file.oldPath).toLowerCase();
       if (path.includes(s)) return true;
-      return file.hunks.some((h) =>
-        h.lines.some((l) => l.content.toLowerCase().includes(s)),
-      );
+      return file.hunks.some((h) => h.lines.some((l) => l.content.toLowerCase().includes(s)));
     });
   }, [files, search]);
 
@@ -777,9 +822,12 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
           files={filtered}
           selectedIndex={gitFileIdx}
           onSelectFile={onSetGitFileIdx}
-          fileStatuses={scope === 'working'
-            ? Object.fromEntries(Object.entries(fileStatuses).map(([k, v]) => [k, v.filter((s) => s !== 'committed')]))
-            : fileStatuses
+          fileStatuses={
+            scope === 'working'
+              ? Object.fromEntries(
+                  Object.entries(fileStatuses).map(([k, v]) => [k, v.filter((s) => s !== 'committed')]),
+                )
+              : fileStatuses
           }
           search={search}
         />
@@ -788,7 +836,9 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
             <LazyFileSection
               key={`${file.newPath || file.oldPath}-${i}`}
               file={file}
-              sectionRef={(el) => { fileSectionRefs.current[i] = el; }}
+              sectionRef={(el) => {
+                fileSectionRefs.current[i] = el;
+              }}
             />
           ))}
         </div>
@@ -797,7 +847,6 @@ function GitDiffContent({ taskId, search, gitFileIdx, onSetGitFileIdx, onFileCou
   );
 }
 
-
 function GitLogEntryView({ entry, focused, search }: { entry: GitLogEntry; focused: boolean; search: string }) {
   return (
     <div
@@ -805,9 +854,15 @@ function GitLogEntryView({ entry, focused, search }: { entry: GitLogEntry; focus
         focused ? 'ring-1 ring-accent-muted bg-accent/10' : ''
       }`}
     >
-      <span className="text-warning font-mono flex-shrink-0"><Highlight text={entry.shortSha} search={search} /></span>
-      <span className="text-primary flex-1 min-w-0 break-words"><Highlight text={entry.subject} search={search} /></span>
-      <span className="text-muted flex-shrink-0"><Highlight text={entry.author} search={search} /></span>
+      <span className="text-warning font-mono flex-shrink-0">
+        <Highlight text={entry.shortSha} search={search} />
+      </span>
+      <span className="text-primary flex-1 min-w-0 break-words">
+        <Highlight text={entry.subject} search={search} />
+      </span>
+      <span className="text-muted flex-shrink-0">
+        <Highlight text={entry.author} search={search} />
+      </span>
       <span className="text-faint flex-shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
     </div>
   );
@@ -827,30 +882,39 @@ function ReviewPanel({ taskId }: { taskId: string }) {
     window.bifrost.listReviews(taskId).then((entries) => {
       dispatch({ type: 'SET_REVIEWS', taskId, reviews: entries });
       // Auto-select the most recent review if none selected
-      if (entries.length > 0 && !state.activeReviewId[taskId] && state.reviewStatus['__pending__'] !== 'running') {
-        const newest = entries.reduce((a, b) => a.timestamp > b.timestamp ? a : b);
+      if (entries.length > 0 && !state.activeReviewId[taskId] && state.reviewStatus.__pending__ !== 'running') {
+        const newest = entries.reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
         dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: newest.id });
       }
     });
   }, [taskId]);
 
-  const handleSelectReview = useCallback((reviewId: string | null) => {
-    dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId });
-  }, [taskId, dispatch]);
+  const handleSelectReview = useCallback(
+    (reviewId: string | null) => {
+      dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId });
+    },
+    [taskId, dispatch],
+  );
 
   const handleNewReview = useCallback(() => {
     dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: null });
   }, [taskId, dispatch]);
 
-  const handleNewReviewCreated = useCallback((review: ReviewEntry) => {
-    dispatch({ type: 'ADD_REVIEW', taskId, review });
-    dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: review.id });
-  }, [taskId, dispatch]);
+  const handleNewReviewCreated = useCallback(
+    (review: ReviewEntry) => {
+      dispatch({ type: 'ADD_REVIEW', taskId, review });
+      dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: review.id });
+    },
+    [taskId, dispatch],
+  );
 
-  const handleDeleteReview = useCallback(async (reviewId: string) => {
-    await window.bifrost.deleteReview(taskId, reviewId);
-    dispatch({ type: 'DELETE_REVIEW', taskId, reviewId });
-  }, [taskId, dispatch]);
+  const handleDeleteReview = useCallback(
+    async (reviewId: string) => {
+      await window.bifrost.deleteReview(taskId, reviewId);
+      dispatch({ type: 'DELETE_REVIEW', taskId, reviewId });
+    },
+    [taskId, dispatch],
+  );
 
   return (
     <div className="flex-1 flex min-h-0">
@@ -892,9 +956,7 @@ export default function DiffOverlay() {
   const isReview = diffMode === 'review';
 
   // Fetch activity data at DiffOverlay level for search/navigation
-  const activityLog = useActivityLog(
-    showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null,
-  );
+  const activityLog = useActivityLog(showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null);
 
   const filteredEntries = useMemo(() => {
     if (!search) return activityLog.entries;
@@ -902,9 +964,7 @@ export default function DiffOverlay() {
   }, [activityLog.entries, search]);
 
   // Fetch git log data at DiffOverlay level for search/navigation
-  const gitLog = useGitLog(
-    showDiff && isLog && state.activeTaskId ? state.activeTaskId : null,
-  );
+  const gitLog = useGitLog(showDiff && isLog && state.activeTaskId ? state.activeTaskId : null);
 
   const filteredLogEntries = useMemo(() => {
     if (!search) return gitLog.entries;
@@ -1158,10 +1218,13 @@ export default function DiffOverlay() {
         search={search}
         className="mx-4 mt-3 flex-shrink-0"
         matchInfo={
-          isActivity ? `${filteredEntries.length} match${filteredEntries.length !== 1 ? 'es' : ''}` :
-          isLog ? `${filteredLogEntries.length} commit${filteredLogEntries.length !== 1 ? 's' : ''}` :
-          diffMode === 'git' ? `${gitFileCount} file${gitFileCount !== 1 ? 's' : ''}` :
-          undefined
+          isActivity
+            ? `${filteredEntries.length} match${filteredEntries.length !== 1 ? 'es' : ''}`
+            : isLog
+              ? `${filteredLogEntries.length} commit${filteredLogEntries.length !== 1 ? 's' : ''}`
+              : diffMode === 'git'
+                ? `${gitFileCount} file${gitFileCount !== 1 ? 's' : ''}`
+                : undefined
         }
       />
 
@@ -1187,14 +1250,10 @@ export default function DiffOverlay() {
             </div>
           )}
 
-          {gitLog.error && (
-            <div className="text-sm text-danger">Error: {gitLog.error}</div>
-          )}
+          {gitLog.error && <div className="text-sm text-danger">Error: {gitLog.error}</div>}
 
           {!gitLog.loading && !gitLog.error && filteredLogEntries.length === 0 && (
-            <div className="text-sm text-muted text-center py-4">
-              {search ? 'No matching commits' : 'No commits'}
-            </div>
+            <div className="text-sm text-muted text-center py-4">{search ? 'No matching commits' : 'No commits'}</div>
           )}
 
           {!gitLog.loading && !gitLog.error && filteredLogEntries.length > 0 && (
@@ -1202,7 +1261,9 @@ export default function DiffOverlay() {
               {filteredLogEntries.map((entry, idx) => (
                 <div
                   key={entry.sha}
-                  ref={(el) => { itemRefs.current[idx] = el; }}
+                  ref={(el) => {
+                    itemRefs.current[idx] = el;
+                  }}
                   onMouseEnter={() => setFocusedIdx(idx)}
                 >
                   <GitLogEntryView entry={entry} focused={idx === focusedIdx} search={search} />
@@ -1223,9 +1284,7 @@ export default function DiffOverlay() {
               </div>
             )}
 
-            {activityLog.error && (
-              <div className="text-sm text-danger">Error: {activityLog.error}</div>
-            )}
+            {activityLog.error && <div className="text-sm text-danger">Error: {activityLog.error}</div>}
 
             {!activityLog.loading && !activityLog.error && filteredEntries.length === 0 && (
               <div className="text-sm text-muted text-center py-4">
@@ -1238,12 +1297,12 @@ export default function DiffOverlay() {
                 {filteredEntries.map((entry, idx) => (
                   <div
                     key={entry.id}
-                    ref={(el) => { itemRefs.current[idx] = el; }}
+                    ref={(el) => {
+                      itemRefs.current[idx] = el;
+                    }}
                     onMouseEnter={() => setFocusedIdx(idx)}
                     className={`rounded transition-colors ${
-                      idx === focusedIdx
-                        ? 'ring-1 ring-accent-muted bg-accent/10'
-                        : ''
+                      idx === focusedIdx ? 'ring-1 ring-accent-muted bg-accent/10' : ''
                     }`}
                   >
                     <ActivityEntryView entry={entry} search={search} />
@@ -1254,13 +1313,9 @@ export default function DiffOverlay() {
           </>
         )}
       </div>
-      {state.activeTaskId && isReview && (
-        <ReviewPanel taskId={state.activeTaskId} />
-      )}
+      {state.activeTaskId && isReview && <ReviewPanel taskId={state.activeTaskId} />}
 
-      {!state.activeTaskId && (
-        <div className="flex-1 p-4 text-muted">No active task</div>
-      )}
+      {!state.activeTaskId && <div className="flex-1 p-4 text-muted">No active task</div>}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { ContextRotEntry, EscalationEntry, StatsData } from '../../shared/types';
 import { useApp } from '../context/AppContext';
-import type { StatsData, ContextRotEntry, EscalationEntry } from '../../shared/types';
+import FlaskIcon from './FlaskIcon';
 import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
-import FlaskIcon from './FlaskIcon';
 
 type TabId = 'tool-usage' | 'skill-usage' | 'bash-commands' | 'context-rot' | 'tail-escalation';
 type TimeRange = '24h' | 'week' | 'all';
@@ -34,10 +34,10 @@ function sinceForRange(range: TimeRange): number | undefined {
 }
 
 function formatBytes(bytes: number): string {
-  if (bytes >= 1_000_000_000) return (bytes / 1_000_000_000).toFixed(1) + ' GB';
-  if (bytes >= 1_000_000) return (bytes / 1_000_000).toFixed(1) + ' MB';
-  if (bytes >= 1_000) return (bytes / 1_000).toFixed(1) + ' KB';
-  return bytes + ' B';
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)} KB`;
+  return `${bytes} B`;
 }
 
 function BarChart({ entries, done }: { entries: { name: string; count: number }[]; done: boolean }) {
@@ -56,10 +56,7 @@ function BarChart({ entries, done }: { entries: { name: string; count: number }[
         return (
           <div key={entry.name} className="flex items-center gap-2">
             <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
-              <div
-                className="h-full bg-accent rounded"
-                style={{ width: `${pct}%` }}
-              />
+              <div className="h-full bg-accent rounded" style={{ width: `${pct}%` }} />
               <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">
                 {entry.name}
               </span>
@@ -86,7 +83,8 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
   const toggle = (name: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(name)) next.delete(name); else next.add(name);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
       return next;
     });
 
@@ -105,10 +103,7 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
           >
             <div className="flex items-center gap-2">
               <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
-                <div
-                  className="h-full bg-accent-hover rounded"
-                  style={{ width: `${pct}%` }}
-                />
+                <div className="h-full bg-accent-hover rounded" style={{ width: `${pct}%` }} />
                 <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">
                   {entry.name}
                 </span>
@@ -124,9 +119,7 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
               </span>
             </div>
             {isExpanded && (
-              <div className="text-[11px] text-secondary whitespace-pre-wrap break-all py-1 px-1.5">
-                {entry.name}
-              </div>
+              <div className="text-[11px] text-secondary whitespace-pre-wrap break-all py-1 px-1.5">{entry.name}</div>
             )}
           </div>
         );
@@ -146,7 +139,8 @@ function EscalationTable({ entries, done }: { entries: EscalationEntry[]; done: 
   const toggle = (cmd: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(cmd)) next.delete(cmd); else next.add(cmd);
+      if (next.has(cmd)) next.delete(cmd);
+      else next.add(cmd);
       return next;
     });
 
@@ -161,7 +155,9 @@ function EscalationTable({ entries, done }: { entries: EscalationEntry[]; done: 
             onClick={() => toggle(entry.command)}
           >
             <div className="flex items-center gap-2 py-0.5">
-              <span className={`flex-1 text-[11px] text-primary ${isExpanded ? 'whitespace-pre-wrap break-all' : 'truncate'}`}>
+              <span
+                className={`flex-1 text-[11px] text-primary ${isExpanded ? 'whitespace-pre-wrap break-all' : 'truncate'}`}
+              >
                 {entry.command}
               </span>
               <span className="text-xs text-secondary tabular-nums shrink-0 w-20 text-right">
@@ -195,8 +191,11 @@ function getTabEntries(data: StatsData, tab: TabId): { name: string; count: numb
 }
 
 const emptyStats: StatsData = {
-  skillUsage: [], toolUsage: [], bashCommands: [],
-  contextRot: [], tailEscalation: [],
+  skillUsage: [],
+  toolUsage: [],
+  bashCommands: [],
+  contextRot: [],
+  tailEscalation: [],
 };
 
 export default function StatsOverlay() {
@@ -273,18 +272,14 @@ export default function StatsOverlay() {
                 label: (
                   <>
                     {tab.label}
-                    {tab.experimental && (
-                      <FlaskIcon />
-                    )}
+                    {tab.experimental && <FlaskIcon />}
                   </>
                 ),
               }))}
               value={activeTab}
               onChange={(v) => setActiveTab(v)}
             />
-            {!done && (
-              <Spinner size="sm" className="ml-2" />
-            )}
+            {!done && <Spinner size="sm" className="ml-2" />}
           </div>
           <div className="bg-surface-alt/50 rounded px-0.5 py-0.5">
             <PillToggle options={timeRangeOptions} value={timeRange} onChange={(v) => setTimeRange(v)} />
@@ -301,8 +296,12 @@ export default function StatsOverlay() {
         {/* Content */}
         <div className="overflow-y-auto flex-1 min-h-0">
           {barEntries !== null && <BarChart entries={barEntries} done={done} />}
-          {activeTab === 'context-rot' && <OutputChart entries={data.contextRot.filter((e) => e.totalBytes >= 1000)} done={done} />}
-          {activeTab === 'tail-escalation' && <EscalationTable entries={data.tailEscalation.filter((e) => e.wastedRuns >= 2)} done={done} />}
+          {activeTab === 'context-rot' && (
+            <OutputChart entries={data.contextRot.filter((e) => e.totalBytes >= 1000)} done={done} />
+          )}
+          {activeTab === 'tail-escalation' && (
+            <EscalationTable entries={data.tailEscalation.filter((e) => e.wastedRuns >= 2)} done={done} />
+          )}
         </div>
 
         {/* Footer */}

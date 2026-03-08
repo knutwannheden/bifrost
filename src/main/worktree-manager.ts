@@ -1,7 +1,7 @@
-import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { getRemotes } from './repo-manager';
 
 const execFile = promisify(execFileCb);
@@ -17,12 +17,18 @@ async function ensureExcludeEntry(repoPath: string): Promise<void> {
   try {
     await fs.promises.mkdir(path.dirname(excludePath), { recursive: true });
     let content = '';
-    try { content = await fs.promises.readFile(excludePath, 'utf-8'); } catch { /* file may not exist */ }
+    try {
+      content = await fs.promises.readFile(excludePath, 'utf-8');
+    } catch {
+      /* file may not exist */
+    }
     if (!content.split('\n').some((line) => line.trim() === entry)) {
       const separator = content.length > 0 && !content.endsWith('\n') ? '\n' : '';
       await fs.promises.appendFile(excludePath, `${separator}${entry}\n`);
     }
-  } catch { /* best effort */ }
+  } catch {
+    /* best effort */
+  }
 }
 
 async function resolveAvailableBranchName(repoPath: string, desired: string): Promise<string> {
@@ -55,9 +61,12 @@ export async function createWorktree(
   if (remoteMatch) {
     try {
       await execFile('git', ['fetch', remoteMatch[1], remoteMatch[2]], {
-        cwd: repoPath, timeout: 15000,
+        cwd: repoPath,
+        timeout: 15000,
       });
-    } catch { /* fetch failed/timed out — use local ref */ }
+    } catch {
+      /* fetch failed/timed out — use local ref */
+    }
   }
 
   const newBranchName = await resolveAvailableBranchName(repoPath, branchName ?? taskName);
@@ -69,11 +78,10 @@ export async function createWorktree(
 
   // Set upstream tracking when branching from a remote tracking branch
   if (remoteMatch) {
-    await execFile(
-      'git',
-      ['branch', '--set-upstream-to', branch, newBranchName],
-      { cwd: worktreePath, timeout: 10000 },
-    );
+    await execFile('git', ['branch', '--set-upstream-to', branch, newBranchName], {
+      cwd: worktreePath,
+      timeout: 10000,
+    });
   }
 
   return worktreePath;
@@ -90,16 +98,13 @@ export async function createWorktreeFromPr(
   await ensureExcludeEntry(repoPath);
 
   // Find which remote hosts the PR head branch
-  const headGhPath = prInfo.headRepoOwner && prInfo.headRepoName
-    ? `${prInfo.headRepoOwner}/${prInfo.headRepoName}`
-    : '';
+  const headGhPath =
+    prInfo.headRepoOwner && prInfo.headRepoName ? `${prInfo.headRepoOwner}/${prInfo.headRepoName}` : '';
   let remoteName = 'origin';
 
   if (headGhPath) {
     const remotes = await getRemotes(repoPath);
-    const match = remotes.find(
-      (r) => r.githubPath.toLowerCase() === headGhPath.toLowerCase(),
-    );
+    const match = remotes.find((r) => r.githubPath.toLowerCase() === headGhPath.toLowerCase());
     if (match) {
       remoteName = match.name;
     } else {
@@ -121,24 +126,19 @@ export async function createWorktreeFromPr(
   }
 
   await execFile('git', ['fetch', remoteName, prInfo.headBranch], { cwd: repoPath, timeout: 30000 });
-  await execFile(
-    'git',
-    ['worktree', 'add', worktreePath, '-b', taskName, `${remoteName}/${prInfo.headBranch}`],
-    { cwd: repoPath, timeout: 30000 },
-  );
-  await execFile(
-    'git',
-    ['branch', '--set-upstream-to', `${remoteName}/${prInfo.headBranch}`, taskName],
-    { cwd: worktreePath, timeout: 10000 },
-  );
+  await execFile('git', ['worktree', 'add', worktreePath, '-b', taskName, `${remoteName}/${prInfo.headBranch}`], {
+    cwd: repoPath,
+    timeout: 30000,
+  });
+  await execFile('git', ['branch', '--set-upstream-to', `${remoteName}/${prInfo.headBranch}`, taskName], {
+    cwd: worktreePath,
+    timeout: 10000,
+  });
 
   return worktreePath;
 }
 
-export async function restoreWorktree(
-  repoPath: string,
-  taskName: string,
-): Promise<string> {
+export async function restoreWorktree(repoPath: string, taskName: string): Promise<string> {
   const worktreePath = resolveWorktreePath(repoPath, taskName);
 
   await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
@@ -151,10 +151,7 @@ export async function restoreWorktree(
   return worktreePath;
 }
 
-export async function removeWorktree(
-  repoPath: string,
-  worktreePath: string,
-): Promise<void> {
+export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {
   await execFile('git', ['worktree', 'remove', worktreePath, '--force'], {
     cwd: repoPath,
     timeout: 30000,

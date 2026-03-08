@@ -1,12 +1,12 @@
-import { BrowserWindow } from 'electron';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { randomUUID } from 'node:crypto';
-import type { ActivityEntry } from '../shared/types';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import { summarizeTask } from './task-summarizer';
+import type { ActivityEntry } from '../shared/types';
 import { loadConfig } from './config';
+import { summarizeTask } from './task-summarizer';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
@@ -33,10 +33,7 @@ function projectDirName(worktreePath: string): string {
   return worktreePath.replace(/[/.]/g, '-');
 }
 
-function parseJsonlLine(
-  line: string,
-  taskId: string,
-): ActivityEntry | null {
+function parseJsonlLine(line: string, taskId: string): ActivityEntry | null {
   let obj: Record<string, unknown>;
   try {
     obj = JSON.parse(line);
@@ -45,9 +42,7 @@ function parseJsonlLine(
   }
 
   const type = obj.type as string;
-  const timestamp = obj.timestamp
-    ? new Date(obj.timestamp as string).getTime()
-    : Date.now();
+  const timestamp = obj.timestamp ? new Date(obj.timestamp as string).getTime() : Date.now();
 
   if (type === 'user') {
     const message = obj.message as { content?: unknown } | undefined;
@@ -85,7 +80,7 @@ function parseJsonlLine(
 
     for (const block of msg.content as Record<string, unknown>[]) {
       if (block.type === 'text') {
-        const text = (block.text as string || '').trim();
+        const text = ((block.text as string) || '').trim();
         if (text) {
           entries.push({
             id: randomUUID(),
@@ -93,7 +88,7 @@ function parseJsonlLine(
             timestamp,
             type: 'claude_event',
             claudeEventKind: 'assistant_text',
-            claudeText: text.length > 200 ? text.slice(0, 200) + '...' : text,
+            claudeText: text.length > 200 ? `${text.slice(0, 200)}...` : text,
           });
         }
       } else if (block.type === 'tool_use') {
@@ -112,9 +107,11 @@ function parseJsonlLine(
     // Return the first entry; we'll handle multiple blocks by returning all
     // For simplicity, return only the most interesting one per assistant message:
     // prefer text if present, otherwise first tool_use
-    return entries.find((e) => e.claudeEventKind === 'assistant_text')
-      ?? entries.find((e) => e.claudeEventKind === 'tool_use')
-      ?? null;
+    return (
+      entries.find((e) => e.claudeEventKind === 'assistant_text') ??
+      entries.find((e) => e.claudeEventKind === 'tool_use') ??
+      null
+    );
   }
 
   return null;
@@ -126,15 +123,15 @@ function summarizeToolInput(toolName: string, input: Record<string, unknown>): s
     case 'Edit':
     case 'Write':
     case 'Read':
-      return input.file_path as string || '';
+      return (input.file_path as string) || '';
     case 'Bash':
-      return (input.command as string || '').slice(0, 120);
+      return ((input.command as string) || '').slice(0, 120);
     case 'Glob':
-      return input.pattern as string || '';
+      return (input.pattern as string) || '';
     case 'Grep':
-      return `/${input.pattern as string || ''}/ ${input.path || ''}`;
+      return `/${(input.pattern as string) || ''}/ ${input.path || ''}`;
     case 'Task':
-      return input.description as string || '';
+      return (input.description as string) || '';
     case 'AskUserQuestion': {
       const qs = input.questions as Array<{ question: string }> | undefined;
       return qs?.map((q) => q.question).join('\n') ?? '';
@@ -216,7 +213,8 @@ export function startClaudeWatching(
     }
     // Watch all JSONL files
     try {
-      return fs.readdirSync(projectDir)
+      return fs
+        .readdirSync(projectDir)
         .filter((f) => f.endsWith('.jsonl'))
         .map((f) => path.join(projectDir, f));
     } catch {
@@ -229,7 +227,9 @@ export function startClaudeWatching(
     try {
       const stat = fs.statSync(filePath);
       fileOffsets.set(filePath, stat.size);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   const pollTimer = setInterval(() => {
@@ -241,7 +241,9 @@ export function startClaudeWatching(
         try {
           const stat = fs.statSync(filePath);
           fileOffsets.set(filePath, stat.size);
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         continue;
       }
 
@@ -264,9 +266,13 @@ export function startClaudeWatching(
           if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
             w.lastSummaryAt = w.lineCount;
             const config = loadConfig();
-            summarizeTask(worktreePath, { sessionId: w.sessionId, ollamaModels: config.ollamaModels }).then((summary) => {
-              if (summary) onSummary(taskId, summary);
-            }).catch(() => { /* ignore */ });
+            summarizeTask(worktreePath, { sessionId: w.sessionId, ollamaModels: config.ollamaModels })
+              .then((summary) => {
+                if (summary) onSummary(taskId, summary);
+              })
+              .catch(() => {
+                /* ignore */
+              });
           }
         }
       }
@@ -296,7 +302,9 @@ export function getRecentClaudeEntries(taskId: string, worktreePath: string): Ac
       if (stat.size < 500) continue; // skip empty/failed sessions
       const entries = readRecentEntries(filePath, taskId, 50);
       allEntries.push(...entries);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   if (allEntries.length === 0) return [];
@@ -311,4 +319,3 @@ export function stopClaudeWatching(taskId: string): void {
     watchers.delete(taskId);
   }
 }
-

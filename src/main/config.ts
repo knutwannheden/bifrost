@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import { BifrostConfig, DEFAULT_CONFIG } from '../shared/types';
 
 const CONFIG_DIR = path.join(os.homedir(), '.bifrost');

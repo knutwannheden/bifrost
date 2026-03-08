@@ -1,8 +1,8 @@
-import type { BrowserWindow } from 'electron';
-import type { IPty } from 'node-pty';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { BrowserWindow } from 'electron';
+import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels';
 
 // Use require for node-pty because it's externalized from Vite bundling
@@ -17,7 +17,7 @@ const sessionBuffers = new Map<string, string>();
 const MAX_BUFFER = 256 * 1024; // 256 KB per session
 
 function shellEscape(arg: string): string {
-  return "'" + arg.replace(/'/g, "'\\''") + "'";
+  return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
 export function spawnSession(
@@ -26,7 +26,14 @@ export function spawnSession(
   args: string[],
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { cols?: number; rows?: number; extraEnv?: Record<string, string>; autoTrust?: boolean; prompt?: string; onBeforeExit?: (buffer: string, exitCode: number) => boolean },
+  options?: {
+    cols?: number;
+    rows?: number;
+    extraEnv?: Record<string, string>;
+    autoTrust?: boolean;
+    prompt?: string;
+    onBeforeExit?: (buffer: string, exitCode: number) => boolean;
+  },
 ): void {
   const env = { ...process.env } as Record<string, string>;
   // Remove CLAUDECODE so claude CLI doesn't refuse to start
@@ -45,7 +52,7 @@ export function spawnSession(
     // This avoids terminal paste-detection issues that occur when writing
     // multi-line text to the PTY after the welcome banner.
     const tmpFile = path.join(os.tmpdir(), `bifrost-prompt-${sessionId}`);
-    fs.writeFileSync(tmpFile, options.prompt + '\n');
+    fs.writeFileSync(tmpFile, `${options.prompt}\n`);
     const cmdParts = [command, ...args.map(shellEscape)].join(' ');
     spawnCommand = 'sh';
     spawnArgs = ['-c', `cat ${shellEscape(tmpFile)} | ${cmdParts}; rm -f ${shellEscape(tmpFile)}`];
@@ -108,7 +115,16 @@ export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: { resumeSessionId?: string; taskId?: string; apiPort?: number; permissionMode?: string; agentTeams?: boolean; context?: string; prompt?: string; onResumeFailed?: () => void },
+  options?: {
+    resumeSessionId?: string;
+    taskId?: string;
+    apiPort?: number;
+    permissionMode?: string;
+    agentTeams?: boolean;
+    context?: string;
+    prompt?: string;
+    onResumeFailed?: () => void;
+  },
 ): void {
   const buildArgs = (resume: boolean): string[] => {
     const a: string[] = [];
@@ -132,7 +148,10 @@ export function createSession(
     ? (buffer: string): boolean => {
         if (buffer.includes('No conversation found')) {
           console.log(`[session] Resume failed for ${sessionId}, restarting without --resume`);
-          spawnSession(sessionId, 'claude', buildArgs(false), cwd, mainWindow, { extraEnv: buildEnv(), autoTrust: true });
+          spawnSession(sessionId, 'claude', buildArgs(false), cwd, mainWindow, {
+            extraEnv: buildEnv(),
+            autoTrust: true,
+          });
           options?.onResumeFailed?.();
           return true;
         }
@@ -141,7 +160,12 @@ export function createSession(
     : undefined;
 
   const prompt = options?.prompt && !options.resumeSessionId ? options.prompt : undefined;
-  spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, { extraEnv: buildEnv(), autoTrust: true, prompt, onBeforeExit });
+  spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, {
+    extraEnv: buildEnv(),
+    autoTrust: true,
+    prompt,
+    onBeforeExit,
+  });
 }
 
 export function createShellSession(

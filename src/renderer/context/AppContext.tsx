@@ -1,5 +1,13 @@
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { Repo, Task, BifrostConfig, TaskStatus, PermissionPromptData, AppNotification, ReviewEntry } from '../../shared/types';
+import React, { createContext, useContext, useEffect, useReducer } from 'react';
+import type {
+  AppNotification,
+  BifrostConfig,
+  PermissionPromptData,
+  Repo,
+  ReviewEntry,
+  Task,
+  TaskStatus,
+} from '../../shared/types';
 
 export type DiffMode = 'git' | 'activity' | 'log' | 'review';
 export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
@@ -81,7 +89,13 @@ export type AppAction =
   | { type: 'SET_PANE_FOCUS'; taskId: string; pane: PaneTarget }
   | { type: 'HIDE_PANE'; taskId: string; pane: PaneTarget }
   | { type: 'SHOW_PANE'; taskId: string; pane: PaneTarget }
-  | { type: 'SHOW_TOAST'; message: string; duration?: number; hint?: string; action?: { label: string; callback: () => void } }
+  | {
+      type: 'SHOW_TOAST';
+      message: string;
+      duration?: number;
+      hint?: string;
+      action?: { label: string; callback: () => void };
+    }
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
   | { type: 'PUSH_PERMISSION'; request: PermissionPromptData }
@@ -197,11 +211,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
       // Restore persisted active task, or auto-select first running task
       const persisted = localStorage.getItem('bifrost:activeTaskId');
       const autoSelect = !state.activeTaskId
-        ? (persisted && action.tasks.some((t) => t.id === persisted && t.status !== 'archived')
-           ? persisted
-           : action.tasks.find((t) => t.status === 'running')?.id
-             ?? action.tasks.find((t) => t.status !== 'archived')?.id
-             ?? null)
+        ? persisted && action.tasks.some((t) => t.id === persisted && t.status !== 'archived')
+          ? persisted
+          : (action.tasks.find((t) => t.status === 'running')?.id ??
+            action.tasks.find((t) => t.status !== 'archived')?.id ??
+            null)
         : state.activeTaskId;
       return { ...state, tasks: action.tasks, tasksLoaded: true, activeTaskId: autoSelect };
     }
@@ -212,7 +226,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const activeTasks = newTasks.filter((t) => t.status !== 'archived');
       const newActiveId =
         state.activeTaskId === action.taskId
-          ? (activeTasks.length > 0 ? activeTasks[activeTasks.length - 1].id : null)
+          ? activeTasks.length > 0
+            ? activeTasks[activeTasks.length - 1].id
+            : null
           : state.activeTaskId;
       return { ...state, tasks: newTasks, activeTaskId: newActiveId };
     }
@@ -235,23 +251,25 @@ function appReducer(state: AppState, action: AppAction): AppState {
       if (target?.hasUnread === action.hasUnread) return state;
       return {
         ...state,
-        tasks: state.tasks.map((t) =>
-          t.id === action.taskId ? { ...t, hasUnread: action.hasUnread } : t,
-        ),
+        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, hasUnread: action.hasUnread } : t)),
         ...(action.hasUnread && { lastNotifiedTaskId: action.taskId }),
       };
     }
     case 'SET_TASK_STATUS':
       return {
         ...state,
-        tasks: state.tasks.map((t) =>
-          t.id === action.taskId ? { ...t, status: action.status } : t,
-        ),
+        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, status: action.status } : t)),
       };
     case 'TOGGLE_REPO_MANAGER':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showRepoManager: !state.showRepoManager });
     case 'SHOW_CREATE_TASK_DIALOG':
-      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showCreateDialog: action.show, createDialogRepoId: action.repoId ?? null, createDialogSlackUrl: action.slackUrl ?? null });
+      return closeActiveTaskDiff({
+        ...state,
+        ...allOverlaysClosed,
+        showCreateDialog: action.show,
+        createDialogRepoId: action.repoId ?? null,
+        createDialogSlackUrl: action.slackUrl ?? null,
+      });
     case 'TOGGLE_DIFF': {
       if (!state.activeTaskId) return state;
       const ps = getPaneState(state, state.activeTaskId);
@@ -262,7 +280,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'TOGGLE_TASK_HISTORY':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showTaskHistory: !state.showTaskHistory });
     case 'TOGGLE_KEYBOARD_SHORTCUTS':
-      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showKeyboardShortcuts: !state.showKeyboardShortcuts });
+      return closeActiveTaskDiff({
+        ...state,
+        ...allOverlaysClosed,
+        showKeyboardShortcuts: !state.showKeyboardShortcuts,
+      });
     case 'TOGGLE_SETTINGS':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showSettings: !state.showSettings });
     case 'TOGGLE_NOTES':
@@ -278,7 +300,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'SET_DEV_SESSION': {
       const ps = getPaneState(state, action.taskId);
-      return setPaneState(state, action.taskId, { ...ps, devSessionId: action.devSessionId, devHidden: false, focusedPane: 'dev' });
+      return setPaneState(state, action.taskId, {
+        ...ps,
+        devSessionId: action.devSessionId,
+        devHidden: false,
+        focusedPane: 'dev',
+      });
     }
     case 'CLOSE_DEV_SESSION': {
       const ps = getPaneState(state, action.taskId);
@@ -299,7 +326,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return setPaneState(state, action.taskId, { ...ps, [key]: false });
     }
     case 'SHOW_TOAST':
-      return { ...state, toast: action.message, toastHint: action.hint ?? null, toastDuration: action.duration ?? 2000, toastAction: action.action ?? null };
+      return {
+        ...state,
+        toast: action.message,
+        toastHint: action.hint ?? null,
+        toastDuration: action.duration ?? 2000,
+        toastAction: action.action ?? null,
+      };
     case 'HIDE_TOAST':
       return { ...state, toast: null, toastHint: null, toastAction: null };
     case 'SET_API_PORT':
@@ -307,15 +340,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_TASK_SUMMARY':
       return {
         ...state,
-        tasks: state.tasks.map((t) =>
-          t.id === action.taskId ? { ...t, summary: action.summary } : t,
-        ),
+        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, summary: action.summary } : t)),
       };
     case 'SET_REVIEW_STATUS':
       return {
         ...state,
         reviewStatus: { ...state.reviewStatus, [action.reviewId]: action.status },
-        reviewStartedAt: action.status === 'running' ? (state.reviewStartedAt ?? Date.now()) : action.status === 'done' || action.status === 'idle' ? null : state.reviewStartedAt,
+        reviewStartedAt:
+          action.status === 'running'
+            ? (state.reviewStartedAt ?? Date.now())
+            : action.status === 'done' || action.status === 'idle'
+              ? null
+              : state.reviewStartedAt,
       };
     case 'SET_REVIEW_CONTENT':
       return { ...state, reviewContent: { ...state.reviewContent, [action.reviewId]: action.content } };
@@ -335,9 +371,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         reviews: { ...state.reviews, [action.taskId]: reviews },
-        activeReviewId: activeId === action.reviewId
-          ? { ...state.activeReviewId, [action.taskId]: reviews.length > 0 ? reviews[reviews.length - 1].id : null }
-          : state.activeReviewId,
+        activeReviewId:
+          activeId === action.reviewId
+            ? { ...state.activeReviewId, [action.taskId]: reviews.length > 0 ? reviews[reviews.length - 1].id : null }
+            : state.activeReviewId,
       };
     }
     case 'SET_ACTIVE_REVIEW':
@@ -349,7 +386,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, reviews: { ...state.reviews, [action.taskId]: taskReviews } };
     }
     case 'SET_REVIEW_DISCUSSION':
-      return { ...state, reviewDiscussion: { ...state.reviewDiscussion, [action.taskId]: { ptySessionId: action.ptySessionId, reviewId: action.reviewId } } };
+      return {
+        ...state,
+        reviewDiscussion: {
+          ...state.reviewDiscussion,
+          [action.taskId]: { ptySessionId: action.ptySessionId, reviewId: action.reviewId },
+        },
+      };
     case 'CLEAR_REVIEW_DISCUSSION': {
       const { [action.taskId]: _removed, ...rest } = state.reviewDiscussion;
       void _removed;
@@ -359,7 +402,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const idSet = new Set(action.taskIds);
       const reordered = action.taskIds.map((id) => state.tasks.find((t) => t.id === id)!).filter(Boolean);
       let ri = 0;
-      return { ...state, tasks: state.tasks.map((t) => idSet.has(t.id) ? reordered[ri++] : t) };
+      return { ...state, tasks: state.tasks.map((t) => (idSet.has(t.id) ? reordered[ri++] : t)) };
     }
     case 'PUSH_PERMISSION':
       return { ...state, permissionQueue: [...state.permissionQueue, action.request] };
@@ -392,7 +435,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
 const AppContext = createContext<{
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
-}>({ state: initialState, dispatch: () => { /* default no-op */ } });
+}>({
+  state: initialState,
+  dispatch: () => {
+    /* default no-op */
+  },
+});
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
@@ -411,7 +459,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubSummary = window.bifrost.onTaskSummary((taskId, summary) => {
       dispatch({ type: 'SET_TASK_SUMMARY', taskId, summary });
     });
-    return () => { unsubSummary(); };
+    return () => {
+      unsubSummary();
+    };
   }, []);
 
   // Persist active task selection across restarts
@@ -424,11 +474,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.activeTaskId, state.tasksLoaded]);
 
-  return (
-    <AppContext.Provider value={{ state, dispatch }}>
-      {children}
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={{ state, dispatch }}>{children}</AppContext.Provider>;
 }
 
 export function useApp() {

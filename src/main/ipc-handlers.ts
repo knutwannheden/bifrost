@@ -1,40 +1,73 @@
-import { ipcMain, BrowserWindow, clipboard, dialog, shell } from 'electron';
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 
 const execFile = promisify(execFileCb);
+
 import { IPC, IPC_STREAM } from '../shared/ipc-channels';
-import type { Task, Repo, CreateTaskParams, AddRepoParams, BifrostConfig, CaptureContextParams, ActivityEntry, PermissionDecision } from '../shared/types';
+import { generateTaskName } from '../shared/name-generator';
+import type {
+  ActivityEntry,
+  AddRepoParams,
+  BifrostConfig,
+  CaptureContextParams,
+  CreateTaskParams,
+  PermissionDecision,
+  Repo,
+  Task,
+} from '../shared/types';
+import { clearActivityLog, getActivityLog, getLastChangedFile, startWatching, stopWatching } from './activity-watcher';
+import { getApiPort, getSessionMtime, isSessionStale } from './bifrost-api';
+import { scanClaudeSessions } from './claude-session-scanner';
+import { getRecentClaudeEntries } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
-import { addRepo, removeRepo, getRepoBranches, getRemotes } from './repo-manager';
-import { createWorktree, createWorktreeFromPr, restoreWorktree, removeWorktree } from './worktree-manager';
-import { createSession, createShellSession, writeToSession, resizeSession, killSession, drainSessionBuffer } from './session-manager';
+import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
 import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
 import { getGitLog } from './git-log-service';
-import { openFileInIde, openInIde } from './ide-launcher';
-import { loadTasks, saveTasks } from './task-store';
-import { startWatching, stopWatching, getActivityLog, clearActivityLog, getLastChangedFile } from './activity-watcher';
-import { getApiPort, getSessionMtime, isSessionStale } from './bifrost-api';
-import { generateTaskName } from '../shared/name-generator';
-import { store as storeContext, loadPersistedContexts, getClaudeJsonlPath, findTranscriptMatch } from './context-store';
-import { scanClaudeSessions } from './claude-session-scanner';
-import { runReview, cancelReview, saveReview, loadReview, watchReviewFile, listReviews, deleteReview, getReviewSessionId } from './review-service';
-import { checkIntegration, installIntegration } from './integration-installer';
-import { getRecentClaudeEntries } from './claude-watcher';
 import { scanRecentRepos } from './history-scanner';
-import { resolveRequest, cancelTaskRequests, setWorktreePathResolver } from './permission-manager';
+import { openFileInIde, openInIde } from './ide-launcher';
+import { checkIntegration, installIntegration } from './integration-installer';
+import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { setActiveTaskId } from './notification-service';
-import { listNotes, createNote, updateNote, deleteNote } from './note-store';
+import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
+import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
+import {
+  cancelReview,
+  deleteReview,
+  getReviewSessionId,
+  listReviews,
+  loadReview,
+  runReview,
+  saveReview,
+  watchReviewFile,
+} from './review-service';
+import {
+  createSession,
+  createShellSession,
+  drainSessionBuffer,
+  killSession,
+  resizeSession,
+  writeToSession,
+} from './session-manager';
+import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
 import {
-  initSupervisor, getSupervisorState, startSupervisor, stopSupervisor,
-  setSupervisorConcurrency, pauseItem, resumeItem, openItem, removeItem,
+  getSupervisorState,
+  initSupervisor,
+  openItem,
+  pauseItem,
+  removeItem,
+  resumeItem,
+  setSupervisorConcurrency,
+  startSupervisor,
+  stopSupervisor,
 } from './supervisor-service';
-import { startOAuth, disconnectSlack, restartPolling } from './slack-service';
+import { loadTasks, saveTasks } from './task-store';
+import { createWorktree, createWorktreeFromPr, removeWorktree, restoreWorktree } from './worktree-manager';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -44,7 +77,6 @@ let _claudeCallbacks: { onSummary: (taskId: string, summary: string) => void } |
 
 // Tasks whose sessions are deferred until their tab is activated
 const pendingRestore = new Set<string>();
-
 
 export function getTasks(): Task[] {
   return tasks;
@@ -87,26 +119,35 @@ async function resolveBaseBranchInner(task: Task): Promise<string | undefined> {
       try {
         await execFile('git', ['rev-parse', '--verify', candidate], { cwd: task.worktreePath, timeout: 5000 });
         return candidate;
-      } catch { /* ref doesn't exist */ }
+      } catch {
+        /* ref doesn't exist */
+      }
     }
   }
 
   // Fallback: origin/HEAD
   try {
-    const { stdout } = await execFile(
-      'git', ['symbolic-ref', 'refs/remotes/origin/HEAD'],
-      { cwd: task.worktreePath, timeout: 5000 },
-    );
+    const { stdout } = await execFile('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
+      cwd: task.worktreePath,
+      timeout: 5000,
+    });
     const branch = stdout.trim().replace(/^refs\/remotes\/origin\//, '');
     if (branch) return `origin/${branch}`;
-  } catch { /* origin/HEAD not set */ }
+  } catch {
+    /* origin/HEAD not set */
+  }
 
   // Last resort: origin/main or origin/master
   for (const candidate of ['main', 'master']) {
     try {
-      await execFile('git', ['rev-parse', '--verify', `origin/${candidate}`], { cwd: task.worktreePath, timeout: 5000 });
+      await execFile('git', ['rev-parse', '--verify', `origin/${candidate}`], {
+        cwd: task.worktreePath,
+        timeout: 5000,
+      });
       return `origin/${candidate}`;
-    } catch { /* doesn't exist */ }
+    } catch {
+      /* doesn't exist */
+    }
   }
 
   return undefined;
@@ -144,7 +185,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     repo = config.repos.find((r: Repo) => r.githubPath === input);
     if (!repo) {
       // Resolve as filesystem path — find existing or auto-add
-      const resolved = path.resolve(input.replace(/^~(\/|$)/, os.homedir() + '$1'));
+      const resolved = path.resolve(input.replace(/^~(\/|$)/, `${os.homedir()}$1`));
       repo = config.repos.find((r: Repo) => r.path === resolved);
       if (!repo) {
         repo = await addRepo({ type: 'local', path: resolved });
@@ -164,9 +205,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   let inPlace = false;
 
   if (params.inPlace) {
-    const conflict = tasks.find(
-      (t) => t.status !== 'archived' && t.worktreePath === repo.path,
-    );
+    const conflict = tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path);
     if (conflict) {
       throw new Error(`An active task "${conflict.name}" already uses the main worktree for this repo`);
     }
@@ -182,7 +221,11 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
 
   const taskId = randomUUID();
   createSession(taskId, worktreePath, mainWindow, {
-    taskId, apiPort: getApiPort() ?? undefined, permissionMode: config.permissionMode, agentTeams: config.agentTeams, prompt: params.prompt,
+    taskId,
+    apiPort: getApiPort() ?? undefined,
+    permissionMode: config.permissionMode,
+    agentTeams: config.agentTeams,
+    prompt: params.prompt,
   });
 
   const task: Task = {
@@ -233,9 +276,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   const persisted = loadTasks();
   const tasksToRestore = persisted.filter((t) => t.status === 'running');
 
-  tasks = persisted.map((t) =>
-    t.status === 'running' ? { ...t, status: 'stopped' as const } : t,
-  );
+  tasks = persisted.map((t) => (t.status === 'running' ? { ...t, status: 'stopped' as const } : t));
 
   // Permission manager: provide worktree path resolver
   setWorktreePathResolver((taskId) => getTask(taskId).worktreePath);
@@ -246,7 +287,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       try {
         updateTask(taskId, { summary });
         mainWindow.webContents.send(IPC_STREAM.TASK_SUMMARY, taskId, summary);
-      } catch { /* task may have been deleted */ }
+      } catch {
+        /* task may have been deleted */
+      }
     },
   };
   _claudeCallbacks = claudeCallbacks;
@@ -339,9 +382,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
     killSession(taskId);
     const devSessionId = devSessions.get(taskId);
-    if (devSessionId) { killSession(devSessionId); devSessions.delete(taskId); }
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
     const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
+    if (reviewPtyId) {
+      killSession(reviewPtyId);
+      reviewSessions.delete(taskId);
+    }
     await destroyTask(taskId);
   });
 
@@ -362,9 +411,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Kill dev terminal if any
     const devSessionId = devSessions.get(taskId);
-    if (devSessionId) { killSession(devSessionId); devSessions.delete(taskId); }
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
     const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
+    if (reviewPtyId) {
+      killSession(reviewPtyId);
+      reviewSessions.delete(taskId);
+    }
 
     // Kill session if still running
     if (task.status === 'running') {
@@ -397,7 +452,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (!fs.existsSync(task.worktreePath)) return false;
     try {
       const { stdout } = await execFile('git', ['status', '--porcelain'], {
-        cwd: task.worktreePath, timeout: 5000,
+        cwd: task.worktreePath,
+        timeout: 5000,
       });
       return stdout.trim().length > 0;
     } catch {
@@ -467,9 +523,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {
     const devSessionId = devSessions.get(taskId);
-    if (devSessionId) { killSession(devSessionId); devSessions.delete(taskId); }
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
     const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
+    if (reviewPtyId) {
+      killSession(reviewPtyId);
+      reviewSessions.delete(taskId);
+    }
     await destroyTask(taskId);
   });
 
@@ -481,7 +543,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const idSet = new Set(taskIds);
     const reordered = taskIds.map((id) => tasks.find((t) => t.id === id)!).filter(Boolean);
     let ri = 0;
-    tasks = tasks.map((t) => idSet.has(t.id) ? reordered[ri++] : t);
+    tasks = tasks.map((t) => (idSet.has(t.id) ? reordered[ri++] : t));
     saveTasks(tasks);
   });
 
@@ -561,7 +623,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     try {
       const { stdout } = await execFile('gh', ['pr', 'view', '--json', 'url', '-q', '.url'], {
-        cwd: task.worktreePath, timeout: 10000, killSignal: 'SIGKILL',
+        cwd: task.worktreePath,
+        timeout: 10000,
+        killSignal: 'SIGKILL',
       });
       const url = stdout.trim();
       return url || null;
@@ -577,11 +641,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       try {
         const parsed = new URL(url);
         const filePath = decodeURIComponent(parsed.pathname);
-        const line = parseInt(parsed.hash.replace(/^#L?/, ''), 10)
-          || parseInt(parsed.searchParams.get('line') ?? '', 10)
-          || undefined;
+        const line =
+          parseInt(parsed.hash.replace(/^#L?/, ''), 10) ||
+          parseInt(parsed.searchParams.get('line') ?? '', 10) ||
+          undefined;
         // Match file path to a task worktree so the IDE opens in the right window
-        const worktree = getTasks().find(t => t.worktreePath && filePath.startsWith(t.worktreePath + '/'))?.worktreePath;
+        const worktree = getTasks().find(
+          (t) => t.worktreePath && filePath.startsWith(`${t.worktreePath}/`),
+        )?.worktreePath;
         return openFileInIde(filePath, line, worktree);
       } catch {
         return;
@@ -651,7 +718,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Try to match cwd to a managed repo
     const config = loadConfig();
-    const matchedRepo = config.repos.find((r: Repo) => cwd === r.path || cwd.startsWith(r.path + '/'));
+    const matchedRepo = config.repos.find((r: Repo) => cwd === r.path || cwd.startsWith(`${r.path}/`));
     let branch = '';
     if (matchedRepo) {
       try {
@@ -669,7 +736,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       permissionMode: config.permissionMode,
       agentTeams: config.agentTeams,
     });
-
 
     const task: Task = {
       id: taskId,
@@ -696,7 +762,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string, scope?: 'working' | 'all', instructions?: string) => {
     const task = getTask(taskId);
     const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
-    const { reviewId, markdown } = await runReview(task.worktreePath, taskId, mainWindow, scope, instructions, baseBranch);
+    const { reviewId, markdown } = await runReview(
+      task.worktreePath,
+      taskId,
+      mainWindow,
+      scope,
+      instructions,
+      baseBranch,
+    );
     const sessionId = getReviewSessionId(taskId, reviewId);
     return { reviewId, markdown, sessionId };
   });
@@ -749,7 +822,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.CLOSE_REVIEW_SESSION, (_event, taskId: string) => {
     const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) { killSession(reviewPtyId); reviewSessions.delete(taskId); }
+    if (reviewPtyId) {
+      killSession(reviewPtyId);
+      reviewSessions.delete(taskId);
+    }
   });
 
   // Integration
@@ -806,13 +882,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Try gh CLI first
     try {
-      const ghArgs = ['pr', 'view', String(prNumber), '--json', 'headRefName,headRepositoryOwner,headRepository,title,number'];
+      const ghArgs = [
+        'pr',
+        'view',
+        String(prNumber),
+        '--json',
+        'headRefName,headRepositoryOwner,headRepository,title,number',
+      ];
       if (ghRepo) ghArgs.push('--repo', ghRepo);
-      const { stdout } = await execFile(
-        'gh',
-        ghArgs,
-        { cwd: repo.path, timeout: 10000, killSignal: 'SIGKILL' },
-      );
+      const { stdout } = await execFile('gh', ghArgs, { cwd: repo.path, timeout: 10000, killSignal: 'SIGKILL' });
       const data = JSON.parse(stdout);
       const headRepoOwner = data.headRepositoryOwner?.login ?? '';
       const headRepoName = data.headRepository?.name ?? '';
@@ -831,22 +909,22 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // Fallback: git ls-remote
     const lsRemoteTarget = ghRepo ? `https://github.com/${ghRepo}.git` : 'origin';
-    const { stdout: prRef } = await execFile(
-      'git',
-      ['ls-remote', lsRemoteTarget, `refs/pull/${prNumber}/head`],
-      { cwd: repo.path, timeout: 10000, killSignal: 'SIGKILL' },
-    );
+    const { stdout: prRef } = await execFile('git', ['ls-remote', lsRemoteTarget, `refs/pull/${prNumber}/head`], {
+      cwd: repo.path,
+      timeout: 10000,
+      killSignal: 'SIGKILL',
+    });
     const prSha = prRef.split('\t')[0];
     if (!prSha) throw new Error(`PR #${prNumber} not found`);
 
     // Try to find the branch name by matching SHA against remote refs
     let headBranch = `pull/${prNumber}/head`;
     try {
-      const { stdout: refs } = await execFile(
-        'git',
-        ['ls-remote', '--heads', lsRemoteTarget],
-        { cwd: repo.path, timeout: 10000, killSignal: 'SIGKILL' },
-      );
+      const { stdout: refs } = await execFile('git', ['ls-remote', '--heads', lsRemoteTarget], {
+        cwd: repo.path,
+        timeout: 10000,
+        killSignal: 'SIGKILL',
+      });
       for (const line of refs.split('\n')) {
         const [sha, ref] = line.split('\t');
         if (sha === prSha && ref) {
@@ -889,9 +967,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return createNote(repoId, text);
   });
 
-  ipcMain.handle(IPC.NOTE_UPDATE, (_event, repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }) => {
-    return updateNote(repoId, noteId, updates);
-  });
+  ipcMain.handle(
+    IPC.NOTE_UPDATE,
+    (_event, repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }) => {
+      return updateNote(repoId, noteId, updates);
+    },
+  );
 
   ipcMain.handle(IPC.NOTE_DELETE, (_event, repoId: string, noteId: string) => {
     deleteNote(repoId, noteId);

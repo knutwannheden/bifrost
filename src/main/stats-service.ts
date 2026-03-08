@@ -1,8 +1,15 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
-import os from 'node:os';
-import type { StatsData, SkillUsageEntry, ToolUsageEntry, BashCommandEntry, ContextRotEntry, EscalationEntry } from '../shared/types';
+import type {
+  BashCommandEntry,
+  ContextRotEntry,
+  EscalationEntry,
+  SkillUsageEntry,
+  StatsData,
+  ToolUsageEntry,
+} from '../shared/types';
 
 function sortedEntries<T extends { count: number }>(counts: Map<string, number>, keyName: string): T[] {
   const entries: T[] = [];
@@ -13,8 +20,15 @@ function sortedEntries<T extends { count: number }>(counts: Map<string, number>,
   return entries;
 }
 
-interface RotAccum { count: number; totalBytes: number }
-interface EscalationAccum { clusters: number; wastedRuns: number; worstCluster: number }
+interface RotAccum {
+  count: number;
+  totalBytes: number;
+}
+interface EscalationAccum {
+  clusters: number;
+  wastedRuns: number;
+  worstCluster: number;
+}
 
 function buildStatsData(
   skillCounts: Map<string, number>,
@@ -67,7 +81,8 @@ export async function getStats(onUpdate: (data: StatsData) => void, since = 0): 
 
   let dirs: string[];
   try {
-    dirs = fs.readdirSync(projectsDir, { withFileTypes: true })
+    dirs = fs
+      .readdirSync(projectsDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
       .map((d) => path.join(projectsDir, d.name));
   } catch {
@@ -94,7 +109,9 @@ export async function getStats(onUpdate: (data: StatsData) => void, since = 0): 
         try {
           const stat = fs.statSync(filePath);
           if (stat.mtimeMs < since) continue;
-        } catch { continue; }
+        } catch {
+          continue;
+        }
       }
       await scanJsonlFile(filePath, skillCounts, toolCounts, bashCounts, rotByKey, escalationByCmd, since);
     }
@@ -122,7 +139,7 @@ function totalCount(counts: Map<string, number>): number {
 /** Normalize a bash command for aggregation: first line, trimmed to 80 chars. */
 function normalizeBashCommand(command: string): string {
   const firstLine = command.split('\n')[0].trim();
-  return firstLine.length > 80 ? firstLine.slice(0, 80) + '...' : firstLine;
+  return firstLine.length > 80 ? `${firstLine.slice(0, 80)}...` : firstLine;
 }
 
 /** Strip trailing observation-only suffixes to get the base command for clustering. */
@@ -288,7 +305,7 @@ async function scanJsonlFile(
             const home = os.homedir();
             let fullCmd = input.command.trim();
             if (home) fullCmd = fullCmd.replaceAll(home, '~');
-            bashKey = 'Bash: ' + fullCmd;
+            bashKey = `Bash: ${fullCmd}`;
             baseCommand = extractBaseCommand(input.command);
           }
         }

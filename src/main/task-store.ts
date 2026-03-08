@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import type { Task } from '../shared/types';
 
 const TASKS_PATH = path.join(os.homedir(), '.bifrost', 'tasks.json');
@@ -20,7 +20,7 @@ export function saveTasks(tasks: Task[]): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  const tmp = TASKS_PATH + '.tmp';
+  const tmp = `${TASKS_PATH}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(tasks, null, 2), 'utf-8');
   fs.renameSync(tmp, TASKS_PATH);
 }

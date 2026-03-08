@@ -38,7 +38,7 @@ export interface ReviewEntry {
 }
 
 export interface Note {
-  id: string;       // UUID
+  id: string; // UUID
   text: string;
   createdAt: number; // Unix timestamp
   addressed: boolean;
@@ -169,7 +169,18 @@ export type CaptureContextParams =
   | { type: 'terminal'; content: string; hasSelection: boolean; taskId: string; taskName: string }
   | { type: 'diff'; content: string; taskId: string; taskName: string }
   | { type: 'activity'; content: string; taskId: string; taskName: string }
-  | { type: 'transcript'; content: string; jsonlPath: string; lineNumber: number; uuid: string; selectedText?: string; selectionStart?: number; selectionEnd?: number; taskId: string; taskName: string };
+  | {
+      type: 'transcript';
+      content: string;
+      jsonlPath: string;
+      lineNumber: number;
+      uuid: string;
+      selectedText?: string;
+      selectionStart?: number;
+      selectionEnd?: number;
+      taskId: string;
+      taskName: string;
+    };
 
 export interface GitLogEntry {
   sha: string;
@@ -208,17 +219,17 @@ export interface BashCommandEntry {
 }
 
 export interface ContextRotEntry {
-  name: string;       // Tool name, or "Bash: <normalized cmd>" for bash detail
+  name: string; // Tool name, or "Bash: <normalized cmd>" for bash detail
   count: number;
   totalBytes: number;
-  avgBytes: number;   // computed: totalBytes / count
+  avgBytes: number; // computed: totalBytes / count
 }
 
 export interface EscalationEntry {
-  command: string;     // Base command (stripped of tail/head/grep)
-  clusters: number;    // Number of back-to-back clusters found
-  wastedRuns: number;  // Total re-runs without intervening edits
-  worstCluster: number;// Largest single cluster
+  command: string; // Base command (stripped of tail/head/grep)
+  clusters: number; // Number of back-to-back clusters found
+  wastedRuns: number; // Total re-runs without intervening edits
+  worstCluster: number; // Largest single cluster
 }
 
 export interface StatsData {

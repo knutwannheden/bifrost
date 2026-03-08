@@ -1,30 +1,37 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { SupervisorItem, SupervisorState } from '../../shared/types';
 import { useApp } from '../context/AppContext';
-import type { SupervisorState, SupervisorItem } from '../../shared/types';
+import { formatTime } from '../utils/format-time';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import Spinner from './Spinner';
-import { formatTime } from '../utils/format-time';
 
-function ItemRow({ item, repoName, onAction, focused }: {
+function ItemRow({
+  item,
+  repoName,
+  onAction,
+  focused,
+}: {
   item: SupervisorItem;
   repoName: string;
   onAction: (action: string, itemId: string) => void;
   focused?: boolean;
 }) {
   return (
-    <div className={`flex items-start gap-2 px-3 py-2 rounded group ${focused ? 'bg-surface-alt/50' : 'hover:bg-surface-alt/50'}`}>
+    <div
+      className={`flex items-start gap-2 px-3 py-2 rounded group ${focused ? 'bg-surface-alt/50' : 'hover:bg-surface-alt/50'}`}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted">{item.name}</span>
           <span className="text-xs text-faint">{repoName}</span>
         </div>
         <div className="text-sm text-secondary truncate">{item.noteText}</div>
-        {item.errorMessage && (
-          <div className="text-xs text-danger truncate mt-0.5">{item.errorMessage}</div>
-        )}
+        {item.errorMessage && <div className="text-xs text-danger truncate mt-0.5">{item.errorMessage}</div>}
       </div>
-      <div className={`flex items-center gap-1 shrink-0 transition-opacity ${focused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+      <div
+        className={`flex items-center gap-1 shrink-0 transition-opacity ${focused ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+      >
         {item.status === 'running' && (
           <button
             onClick={() => onAction('pause', item.id)}
@@ -121,9 +128,7 @@ export default function SupervisorOverlay() {
 
   const queued = svState?.items.filter((i) => i.status === 'queued') ?? [];
   const running = svState?.items.filter((i) => i.status === 'running') ?? [];
-  const done = svState?.items.filter((i) =>
-    i.status === 'done' || i.status === 'error' || i.status === 'paused',
-  ) ?? [];
+  const done = svState?.items.filter((i) => i.status === 'done' || i.status === 'error' || i.status === 'paused') ?? [];
 
   const allItems = [...running, ...queued, ...done];
   const [focusedIdx, setFocusedIdx] = useState(-1);
@@ -251,21 +256,39 @@ export default function SupervisorOverlay() {
               {running.length > 0 && (
                 <Section title="Running" count={running.length}>
                   {running.map((item) => (
-                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} focused={focusedItem?.id === item.id} />
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      repoName={repoMap.get(item.repoId) ?? '?'}
+                      onAction={handleAction}
+                      focused={focusedItem?.id === item.id}
+                    />
                   ))}
                 </Section>
               )}
               {queued.length > 0 && (
                 <Section title="Queued" count={queued.length}>
                   {queued.map((item) => (
-                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} focused={focusedItem?.id === item.id} />
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      repoName={repoMap.get(item.repoId) ?? '?'}
+                      onAction={handleAction}
+                      focused={focusedItem?.id === item.id}
+                    />
                   ))}
                 </Section>
               )}
               {done.length > 0 && (
                 <Section title="Done" count={done.length}>
                   {done.map((item) => (
-                    <ItemRow key={item.id} item={item} repoName={repoMap.get(item.repoId) ?? '?'} onAction={handleAction} focused={focusedItem?.id === item.id} />
+                    <ItemRow
+                      key={item.id}
+                      item={item}
+                      repoName={repoMap.get(item.repoId) ?? '?'}
+                      onAction={handleAction}
+                      focused={focusedItem?.id === item.id}
+                    />
                   ))}
                 </Section>
               )}
@@ -275,9 +298,7 @@ export default function SupervisorOverlay() {
 
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-border-default flex items-center justify-between">
-          <span className="text-xs text-muted">
-            Start scans all repos for notes and queues them for processing
-          </span>
+          <span className="text-xs text-muted">Start scans all repos for notes and queues them for processing</span>
           <span className="text-xs text-faint">
             &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop &middot; Esc close
           </span>

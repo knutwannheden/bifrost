@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { PermissionDecision } from '../../shared/types';
+import { useApp } from '../context/AppContext';
 import PillToggle from './PillToggle';
 
 type Scope = 'local' | 'project' | 'user';
@@ -21,19 +21,22 @@ export default function PermissionPanel() {
     setPersist(true);
   }, [request?.requestId]);
 
-  const handleDecision = useCallback((action: 'allow' | 'deny') => {
-    if (!request) return;
+  const handleDecision = useCallback(
+    (action: 'allow' | 'deny') => {
+      if (!request) return;
 
-    const decision: PermissionDecision = {
-      action,
-      persist,
-      scope: persist ? scope : undefined,
-      rulePattern: persist ? request.ruleOptions[selectedRule]?.pattern : undefined,
-    };
+      const decision: PermissionDecision = {
+        action,
+        persist,
+        scope: persist ? scope : undefined,
+        rulePattern: persist ? request.ruleOptions[selectedRule]?.pattern : undefined,
+      };
 
-    window.bifrost.resolvePermission(request.requestId, decision);
-    dispatch({ type: 'SHIFT_PERMISSION' });
-  }, [request, persist, scope, selectedRule, dispatch]);
+      window.bifrost.resolvePermission(request.requestId, decision);
+      dispatch({ type: 'SHIFT_PERMISSION' });
+    },
+    [request, persist, scope, selectedRule, dispatch],
+  );
 
   const handleDenyOnce = useCallback(() => {
     if (!request) return;
@@ -43,48 +46,51 @@ export default function PermissionPanel() {
 
   // Keyboard shortcuts — only active when the panel has focus.
   // The user clicks the panel (or any button in it) to engage.
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!request) return;
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!request) return;
 
-    switch (e.key) {
-      case 'Escape':
-        e.preventDefault();
-        e.stopPropagation();
-        handleDenyOnce();
-        break;
-      case 'a':
-      case 'A':
-        e.preventDefault();
-        handleDecision('allow');
-        break;
-      case 'd':
-      case 'D':
-        e.preventDefault();
-        handleDecision('deny');
-        break;
-      case '1':
-        e.preventDefault();
-        setScope('local');
-        break;
-      case '2':
-        e.preventDefault();
-        setScope('project');
-        break;
-      case '3':
-        e.preventDefault();
-        setScope('user');
-        break;
-      case 'Tab':
-        e.preventDefault();
-        setSelectedRule((prev) => (prev + 1) % request.ruleOptions.length);
-        break;
-      case 'p':
-      case 'P':
-        e.preventDefault();
-        setPersist((prev) => !prev);
-        break;
-    }
-  }, [request, handleDecision, handleDenyOnce]);
+      switch (e.key) {
+        case 'Escape':
+          e.preventDefault();
+          e.stopPropagation();
+          handleDenyOnce();
+          break;
+        case 'a':
+        case 'A':
+          e.preventDefault();
+          handleDecision('allow');
+          break;
+        case 'd':
+        case 'D':
+          e.preventDefault();
+          handleDecision('deny');
+          break;
+        case '1':
+          e.preventDefault();
+          setScope('local');
+          break;
+        case '2':
+          e.preventDefault();
+          setScope('project');
+          break;
+        case '3':
+          e.preventDefault();
+          setScope('user');
+          break;
+        case 'Tab':
+          e.preventDefault();
+          setSelectedRule((prev) => (prev + 1) % request.ruleOptions.length);
+          break;
+        case 'p':
+        case 'P':
+          e.preventDefault();
+          setPersist((prev) => !prev);
+          break;
+      }
+    },
+    [request, handleDecision, handleDenyOnce],
+  );
 
   // Focus the panel container when the user clicks anywhere inside it,
   // so keyboard shortcuts activate without needing to click a specific spot.
@@ -97,9 +103,10 @@ export default function PermissionPanel() {
   const queueCount = state.permissionQueue.length;
 
   // Format tool input for display
-  const inputSummary = request.toolName === 'Bash'
-    ? (request.toolInput.command as string) || ''
-    : JSON.stringify(request.toolInput, null, 2).slice(0, 200);
+  const inputSummary =
+    request.toolName === 'Bash'
+      ? (request.toolInput.command as string) || ''
+      : JSON.stringify(request.toolInput, null, 2).slice(0, 200);
 
   return (
     <div
@@ -114,15 +121,11 @@ export default function PermissionPanel() {
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-default">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-warning animate-pulse" />
-          <span className="text-xs font-semibold text-secondary">
-            Permission Request
-          </span>
+          <span className="text-xs font-semibold text-secondary">Permission Request</span>
           <span className="text-xs text-faint">Tab to focus</span>
         </div>
         <div className="flex items-center gap-2">
-          {queueCount > 1 && (
-            <span className="text-xs text-muted">+{queueCount - 1} more</span>
-          )}
+          {queueCount > 1 && <span className="text-xs text-muted">+{queueCount - 1} more</span>}
           <span className="text-xs text-muted">{request.taskName}</span>
         </div>
       </div>
@@ -169,16 +172,39 @@ export default function PermissionPanel() {
             onChange={(e) => setPersist(e.target.checked)}
             className="rounded border-border-input bg-surface-alt text-accent"
           />
-          <span>Remember <span className="text-faint">(P)</span></span>
+          <span>
+            Remember <span className="text-faint">(P)</span>
+          </span>
         </label>
 
         {persist && (
           <div className="ml-auto">
             <PillToggle
               options={[
-                { value: 'local' as Scope, label: <>local <span className="text-faint">1</span></> },
-                { value: 'project' as Scope, label: <>project <span className="text-faint">2</span></> },
-                { value: 'user' as Scope, label: <>user <span className="text-faint">3</span></> },
+                {
+                  value: 'local' as Scope,
+                  label: (
+                    <>
+                      local <span className="text-faint">1</span>
+                    </>
+                  ),
+                },
+                {
+                  value: 'project' as Scope,
+                  label: (
+                    <>
+                      project <span className="text-faint">2</span>
+                    </>
+                  ),
+                },
+                {
+                  value: 'user' as Scope,
+                  label: (
+                    <>
+                      user <span className="text-faint">3</span>
+                    </>
+                  ),
+                },
               ]}
               value={scope}
               onChange={(v) => setScope(v)}

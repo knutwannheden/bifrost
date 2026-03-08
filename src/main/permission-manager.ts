@@ -1,8 +1,8 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { randomUUID } from 'node:crypto';
-import type { PermissionPromptData, PermissionDecision, RuleOption } from '../shared/types';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { PermissionDecision, PermissionPromptData, RuleOption } from '../shared/types';
 
 const REQUEST_TIMEOUT_MS = 120_000;
 
@@ -154,7 +154,7 @@ export function computeRuleOptions(toolName: string, toolInput: Record<string, u
       options.push({ label: `Allow for this file`, pattern: `${toolName}(${filePath})` });
       const dir = path.dirname(filePath);
       if (dir && dir !== '.') {
-        const dirWithSlash = dir.endsWith('/') ? dir : dir + '/';
+        const dirWithSlash = dir.endsWith('/') ? dir : `${dir}/`;
         options.push({ label: `Allow in ${dirWithSlash}`, pattern: `${toolName}(${dirWithSlash}:*)` });
       }
     }
@@ -312,5 +312,5 @@ function writeRule(
     fs.mkdirSync(dir, { recursive: true });
   }
 
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 }

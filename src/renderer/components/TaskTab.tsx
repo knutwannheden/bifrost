@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task } from '../../shared/types';
 
@@ -13,7 +13,16 @@ interface TaskTabProps {
   onDragEnd: () => void;
 }
 
-export default function TaskTab({ task, repoName, isActive, onClick, onClose, onRename, onDragStart, onDragEnd }: TaskTabProps) {
+export default function TaskTab({
+  task,
+  repoName,
+  isActive,
+  onClick,
+  onClose,
+  onRename,
+  onDragStart,
+  onDragEnd,
+}: TaskTabProps) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(task.name);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -108,9 +117,7 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
       >
         <span className="flex flex-col items-center min-w-0 max-w-[200px]">
           <span className="flex items-center gap-1.5">
-            {task.hasUnread && !isActive ? (
-              <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" />
-            ) : null}
+            {task.hasUnread && !isActive ? <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" /> : null}
             <span className="text-xs leading-tight truncate">{task.name}</span>
           </span>
           <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
@@ -126,17 +133,21 @@ export default function TaskTab({ task, repoName, isActive, onClick, onClose, on
           &times;
         </button>
       </button>
-      {showTooltip && tooltipPos && createPortal(
-        <div
-          className="fixed z-50 pointer-events-none bg-app border border-border-input rounded px-2 py-1.5 shadow-lg max-w-xl"
-          style={{ left: tooltipPos.x, top: tooltipPos.y }}
-        >
-          {tooltipLines.map((line, i) => (
-            <div key={i} className={`text-xs ${i === 0 ? 'text-primary font-semibold' : 'text-secondary'}`}>{line}</div>
-          ))}
-        </div>,
-        document.body,
-      )}
+      {showTooltip &&
+        tooltipPos &&
+        createPortal(
+          <div
+            className="fixed z-50 pointer-events-none bg-app border border-border-input rounded px-2 py-1.5 shadow-lg max-w-xl"
+            style={{ left: tooltipPos.x, top: tooltipPos.y }}
+          >
+            {tooltipLines.map((line, i) => (
+              <div key={i} className={`text-xs ${i === 0 ? 'text-primary font-semibold' : 'text-secondary'}`}>
+                {line}
+              </div>
+            ))}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

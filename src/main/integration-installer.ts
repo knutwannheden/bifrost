@@ -1,7 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { execFile as execFileCb } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
@@ -40,7 +40,7 @@ const OLD_PLUGIN_DIR = path.join(os.homedir(), '.bifrost', 'plugin');
 const OLD_PLUGIN_ID = 'bifrost@local';
 
 function atomicWriteFileSync(filePath: string, data: string): void {
-  const tmp = filePath + '.tmp';
+  const tmp = `${filePath}.tmp`;
   fs.writeFileSync(tmp, data, 'utf-8');
   fs.renameSync(tmp, filePath);
 }
@@ -142,7 +142,7 @@ export async function installIntegration(): Promise<void> {
   };
   fs.writeFileSync(
     path.join(marketplaceManifestDir, 'marketplace.json'),
-    JSON.stringify(marketplaceManifest, null, 2) + '\n',
+    `${JSON.stringify(marketplaceManifest, null, 2)}\n`,
     'utf-8',
   );
 
@@ -184,7 +184,7 @@ function registerMarketplace(): void {
   };
 
   if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-  atomicWriteFileSync(KNOWN_MARKETPLACES_FILE, JSON.stringify(marketplaces, null, 2) + '\n');
+  atomicWriteFileSync(KNOWN_MARKETPLACES_FILE, `${JSON.stringify(marketplaces, null, 2)}\n`);
 }
 
 function registerPlugin(pluginVersion: string): void {
@@ -218,7 +218,7 @@ function registerPlugin(pluginVersion: string): void {
 
   const pluginsDir = path.dirname(PLUGINS_FILE);
   if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-  atomicWriteFileSync(PLUGINS_FILE, JSON.stringify(pluginsData, null, 2) + '\n');
+  atomicWriteFileSync(PLUGINS_FILE, `${JSON.stringify(pluginsData, null, 2)}\n`);
 }
 
 function enablePlugin(): void {
@@ -234,7 +234,7 @@ function enablePlugin(): void {
     enabled[PLUGIN_ID] = true;
     // Remove old plugin ID if present
     delete enabled[OLD_PLUGIN_ID];
-    atomicWriteFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n');
+    atomicWriteFileSync(SETTINGS_FILE, `${JSON.stringify(settings, null, 2)}\n`);
   } catch {
     // Best-effort — settings may be read-only
   }
@@ -256,7 +256,7 @@ function cleanupOldIntegration(): void {
       const config = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
       if (config.mcpServers?.bifrost) {
         delete config.mcpServers.bifrost;
-        atomicWriteFileSync(MCP_CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+        atomicWriteFileSync(MCP_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
       }
     }
   } catch {
@@ -296,7 +296,7 @@ function cleanupOldIntegration(): void {
       const pluginsData = JSON.parse(fs.readFileSync(PLUGINS_FILE, 'utf-8')) as PluginsFile;
       if (pluginsData.plugins?.[OLD_PLUGIN_ID]) {
         delete pluginsData.plugins[OLD_PLUGIN_ID];
-        atomicWriteFileSync(PLUGINS_FILE, JSON.stringify(pluginsData, null, 2) + '\n');
+        atomicWriteFileSync(PLUGINS_FILE, `${JSON.stringify(pluginsData, null, 2)}\n`);
       }
     }
   } catch {

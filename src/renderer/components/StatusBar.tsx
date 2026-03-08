@@ -1,4 +1,4 @@
-import type { Task, BifrostConfig, Repo } from '../../shared/types';
+import type { BifrostConfig, Repo, Task } from '../../shared/types';
 import { shortPath } from '../utils/paths';
 
 interface StatusBarProps {
@@ -9,13 +9,7 @@ interface StatusBarProps {
   onToggleIde: () => void;
 }
 
-export default function StatusBar({
-  activeTask,
-  config,
-  repos,
-  apiPort,
-  onToggleIde,
-}: StatusBarProps) {
+export default function StatusBar({ activeTask, config, repos, apiPort, onToggleIde }: StatusBarProps) {
   return (
     <div className="h-6 bg-surface border-t border-border-default flex items-center px-4 text-xs text-muted">
       <div className="flex items-center gap-3 min-w-0 flex-1">

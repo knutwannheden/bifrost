@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, IPC_STREAM, BifrostAPI } from '../shared/ipc-channels';
+import { BifrostAPI, IPC, IPC_STREAM } from '../shared/ipc-channels';
 
 const api: BifrostAPI = {
   // Config
@@ -31,21 +31,16 @@ const api: BifrostAPI = {
   // Terminal
   createDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CREATE_DEV_TERMINAL, taskId),
   closeDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CLOSE_DEV_TERMINAL, taskId),
-  writeToSession: (sessionId, data) =>
-    ipcRenderer.invoke(IPC.WRITE_TO_SESSION, sessionId, data),
-  resizeSession: (sessionId, cols, rows) =>
-    ipcRenderer.invoke(IPC.RESIZE_SESSION, sessionId, cols, rows),
-  drainSessionBuffer: (sessionId) =>
-    ipcRenderer.invoke(IPC.DRAIN_SESSION_BUFFER, sessionId),
+  writeToSession: (sessionId, data) => ipcRenderer.invoke(IPC.WRITE_TO_SESSION, sessionId, data),
+  resizeSession: (sessionId, cols, rows) => ipcRenderer.invoke(IPC.RESIZE_SESSION, sessionId, cols, rows),
+  drainSessionBuffer: (sessionId) => ipcRenderer.invoke(IPC.DRAIN_SESSION_BUFFER, sessionId),
   onSessionData: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, data: string) =>
-      callback(sessionId, data);
+    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, data: string) => callback(sessionId, data);
     ipcRenderer.on(IPC_STREAM.SESSION_DATA, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.SESSION_DATA, handler);
   },
   onSessionExit: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, code: number) =>
-      callback(sessionId, code);
+    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, code: number) => callback(sessionId, code);
     ipcRenderer.on(IPC_STREAM.SESSION_EXIT, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.SESSION_EXIT, handler);
   },
@@ -78,8 +73,7 @@ const api: BifrostAPI = {
   getLastChangedFile: (taskId) => ipcRenderer.invoke(IPC.GET_LAST_CHANGED_FILE, taskId),
 
   // Context capture
-  captureContext: (params) =>
-    ipcRenderer.invoke(IPC.CAPTURE_CONTEXT, params),
+  captureContext: (params) => ipcRenderer.invoke(IPC.CAPTURE_CONTEXT, params),
   findTranscriptMatch: (worktreePath, searchText) =>
     ipcRenderer.invoke(IPC.FIND_TRANSCRIPT_MATCH, worktreePath, searchText),
   getApiPort: () => ipcRenderer.invoke(IPC.GET_API_PORT),
@@ -134,14 +128,12 @@ const api: BifrostAPI = {
 
   // Task events
   onTaskSummary: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, summary: string) =>
-      callback(taskId, summary);
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, summary: string) => callback(taskId, summary);
     ipcRenderer.on(IPC_STREAM.TASK_SUMMARY, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.TASK_SUMMARY, handler);
   },
   onTaskCreated: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, task: import('../shared/types').Task) =>
-      callback(task);
+    const handler = (_event: Electron.IpcRendererEvent, task: import('../shared/types').Task) => callback(task);
     ipcRenderer.on(IPC_STREAM.TASK_CREATED, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.TASK_CREATED, handler);
   },
@@ -152,8 +144,14 @@ const api: BifrostAPI = {
 
   // Hook notifications
   onHookNotification: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, taskName: string, message: string, title: string, notificationType: string) =>
-      callback(taskId, taskName, message, title, notificationType);
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      taskId: string,
+      taskName: string,
+      message: string,
+      title: string,
+      notificationType: string,
+    ) => callback(taskId, taskName, message, title, notificationType);
     ipcRenderer.on(IPC_STREAM.HOOK_NOTIFICATION, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.HOOK_NOTIFICATION, handler);
   },
@@ -165,8 +163,7 @@ const api: BifrostAPI = {
     ipcRenderer.on(IPC_STREAM.PERMISSION_PROMPT, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.PERMISSION_PROMPT, handler);
   },
-  resolvePermission: (requestId, decision) =>
-    ipcRenderer.invoke(IPC.RESOLVE_PERMISSION, requestId, decision),
+  resolvePermission: (requestId, decision) => ipcRenderer.invoke(IPC.RESOLVE_PERMISSION, requestId, decision),
 
   // Notes
   listNotes: (repoId) => ipcRenderer.invoke(IPC.NOTE_LIST, repoId),
@@ -177,8 +174,7 @@ const api: BifrostAPI = {
   // Stats
   getStats: (since?: number) => ipcRenderer.invoke(IPC.GET_STATS, since),
   onStatsUpdate: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, data: import('../shared/types').StatsData) =>
-      callback(data);
+    const handler = (_event: Electron.IpcRendererEvent, data: import('../shared/types').StatsData) => callback(data);
     ipcRenderer.on(IPC_STREAM.STATS_UPDATE, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.STATS_UPDATE, handler);
   },
@@ -203,16 +199,20 @@ const api: BifrostAPI = {
   startSlackOAuth: () => ipcRenderer.invoke(IPC.SLACK_START_OAUTH),
   disconnectSlack: () => ipcRenderer.invoke(IPC.SLACK_DISCONNECT),
   onSlackReaction: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, channelId: string, messageTs: string, messageUrl: string, messagePreview: string) =>
-      callback(channelId, messageTs, messageUrl, messagePreview);
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      channelId: string,
+      messageTs: string,
+      messageUrl: string,
+      messagePreview: string,
+    ) => callback(channelId, messageTs, messageUrl, messagePreview);
     ipcRenderer.on(IPC_STREAM.SLACK_REACTION, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.SLACK_REACTION, handler);
   },
 
   // Menu actions
   onMenuAction: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, action: string) =>
-      callback(action);
+    const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action);
     ipcRenderer.on(IPC_STREAM.MENU_ACTION, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.MENU_ACTION, handler);
   },

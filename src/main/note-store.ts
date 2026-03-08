@@ -1,7 +1,7 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type { Note } from '../shared/types';
 
 const NOTES_DIR = path.join(os.homedir(), '.bifrost', 'notes');
@@ -37,7 +37,7 @@ function save(repoId: string, notes: Note[]): void {
     fs.mkdirSync(NOTES_DIR, { recursive: true });
   }
   const filePath = notesPath(repoId);
-  const tmp = filePath + '.tmp';
+  const tmp = `${filePath}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(notes, null, 2), 'utf-8');
   fs.renameSync(tmp, filePath);
   cache.set(repoId, notes);

@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Repo } from '../../shared/types';
-import { shortPath, repoDisplayName } from '../utils/paths';
+import { repoDisplayName, shortPath } from '../utils/paths';
 import { matchesRepoSearch } from '../utils/search';
 
 type Size = 'sm' | 'md';
@@ -10,7 +10,7 @@ interface RepoDropdownProps {
   selectedId: string;
   onSelect: (id: string) => void;
   /** Extra keydown handler called before the dropdown's own — return true to consume the event. */
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => boolean | void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => boolean | undefined;
   placeholder?: string;
   size?: Size;
   inputRef?: React.RefObject<HTMLInputElement | null>;
@@ -164,9 +164,7 @@ export default function RepoDropdown({
               onMouseDown={() => selectItem(repo.id)}
               onMouseEnter={() => setFocusedIdx(idx)}
               className={`${styles.item} cursor-pointer ${
-                idx === focusedIdx
-                  ? 'bg-accent text-white'
-                  : 'text-primary hover:bg-surface-hover'
+                idx === focusedIdx ? 'bg-accent text-white' : 'text-primary hover:bg-surface-hover'
               }`}
             >
               <div className={styles.name}>{repoDisplayName(repo)}</div>

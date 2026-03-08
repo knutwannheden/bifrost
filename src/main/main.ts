@@ -1,14 +1,14 @@
-import { app, BrowserWindow, globalShortcut, Menu, nativeImage, shell } from 'electron';
 import path from 'node:path';
+import { app, BrowserWindow, globalShortcut, Menu, nativeImage, shell } from 'electron';
 import started from 'electron-squirrel-startup';
-import { registerIpcHandlers } from './ipc-handlers';
-import { killAllSessions } from './session-manager';
-import { initNotificationService } from './notification-service';
-import { startApi, stopApi, initApi } from './bifrost-api';
-import { ensureHooks } from './integration-installer';
-import { stopAllWatching } from './activity-watcher';
-import { startPolling } from './slack-service';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { stopAllWatching } from './activity-watcher';
+import { initApi, startApi, stopApi } from './bifrost-api';
+import { ensureHooks } from './integration-installer';
+import { registerIpcHandlers } from './ipc-handlers';
+import { initNotificationService } from './notification-service';
+import { killAllSessions } from './session-manager';
+import { startPolling } from './slack-service';
 
 if (started) {
   app.quit();
@@ -25,9 +25,7 @@ const createWindow = () => {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#282a36',
-    ...(process.platform === 'darwin'
-      ? { titleBarStyle: 'hiddenInset' as const }
-      : { autoHideMenuBar: true }),
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : { autoHideMenuBar: true }),
     icon: path.join(__dirname, '../../assets/icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -38,19 +36,18 @@ const createWindow = () => {
 
   // Open external links in the system browser instead of Electron windows
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url).catch(() => { /* ignore */ });
+    shell.openExternal(url).catch(() => {
+      /* ignore */
+    });
     return { action: 'deny' };
   });
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
+    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
 };
-
 
 let lastQuitAttempt = 0;
 const DOUBLE_TAP_MS = 500;
@@ -63,37 +60,56 @@ function buildMenu() {
   const isMac = process.platform === 'darwin';
   const template: Electron.MenuItemConstructorOptions[] = [
     // App menu (macOS only)
-    ...(isMac ? [{
-      label: app.name,
-      submenu: [
-        { role: 'about' as const },
-        { type: 'separator' as const },
-        { role: 'hide' as const },
-        { role: 'hideOthers' as const },
-        { role: 'unhide' as const },
-        { type: 'separator' as const },
-        {
-          label: 'Quit Bifrost',
-          accelerator: 'CommandOrControl+Q',
-          click: () => {
-            const now = Date.now();
-            if (now - lastQuitAttempt < DOUBLE_TAP_MS) {
-              app.quit();
-            } else {
-              lastQuitAttempt = now;
-              mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, 'quit-confirm');
-            }
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: 'about' as const },
+              { type: 'separator' as const },
+              { role: 'hide' as const },
+              { role: 'hideOthers' as const },
+              { role: 'unhide' as const },
+              { type: 'separator' as const },
+              {
+                label: 'Quit Bifrost',
+                accelerator: 'CommandOrControl+Q',
+                click: () => {
+                  const now = Date.now();
+                  if (now - lastQuitAttempt < DOUBLE_TAP_MS) {
+                    app.quit();
+                  } else {
+                    lastQuitAttempt = now;
+                    mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, 'quit-confirm');
+                  }
+                },
+              },
+            ],
           },
-        },
-      ],
-    }] : []),
+        ]
+      : []),
     // File
     {
       label: 'File',
       submenu: [
-        { label: 'New Task', accelerator: 'CommandOrControl+T', registerAccelerator: false, click: () => sendAction('new-task') },
-        { label: 'Close Pane', accelerator: 'CommandOrControl+W', registerAccelerator: false, click: () => sendAction('close-pane') },
-        { label: 'Archive Task', accelerator: 'CommandOrControl+Shift+W', registerAccelerator: false, click: () => sendAction('archive-task') },
+        {
+          label: 'New Task',
+          accelerator: 'CommandOrControl+T',
+          registerAccelerator: false,
+          click: () => sendAction('new-task'),
+        },
+        {
+          label: 'Close Pane',
+          accelerator: 'CommandOrControl+W',
+          registerAccelerator: false,
+          click: () => sendAction('close-pane'),
+        },
+        {
+          label: 'Archive Task',
+          accelerator: 'CommandOrControl+Shift+W',
+          registerAccelerator: false,
+          click: () => sendAction('archive-task'),
+        },
       ],
     },
     // Edit
@@ -113,14 +129,44 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
-        { label: 'Toggle Dev Terminal', accelerator: 'CommandOrControl+/', registerAccelerator: false, click: () => sendAction('toggle-dev-terminal') },
+        {
+          label: 'Toggle Dev Terminal',
+          accelerator: 'CommandOrControl+/',
+          registerAccelerator: false,
+          click: () => sendAction('toggle-dev-terminal'),
+        },
         { type: 'separator' },
-        { label: 'Diff', accelerator: 'CommandOrControl+D', registerAccelerator: false, click: () => sendAction('diff') },
-        { label: 'Task History', accelerator: 'CommandOrControl+H', registerAccelerator: false, click: () => sendAction('task-history') },
-        { label: 'Repositories', accelerator: 'CommandOrControl+R', registerAccelerator: false, click: () => sendAction('repositories') },
-        { label: 'Review', accelerator: 'CommandOrControl+U', registerAccelerator: false, click: () => sendAction('review') },
+        {
+          label: 'Diff',
+          accelerator: 'CommandOrControl+D',
+          registerAccelerator: false,
+          click: () => sendAction('diff'),
+        },
+        {
+          label: 'Task History',
+          accelerator: 'CommandOrControl+H',
+          registerAccelerator: false,
+          click: () => sendAction('task-history'),
+        },
+        {
+          label: 'Repositories',
+          accelerator: 'CommandOrControl+R',
+          registerAccelerator: false,
+          click: () => sendAction('repositories'),
+        },
+        {
+          label: 'Review',
+          accelerator: 'CommandOrControl+U',
+          registerAccelerator: false,
+          click: () => sendAction('review'),
+        },
         { type: 'separator' },
-        { label: 'Open in IDE', accelerator: 'CommandOrControl+O', registerAccelerator: false, click: () => sendAction('open-in-ide') },
+        {
+          label: 'Open in IDE',
+          accelerator: 'CommandOrControl+O',
+          registerAccelerator: false,
+          click: () => sendAction('open-in-ide'),
+        },
         { type: 'separator' },
         { role: 'toggleDevTools' },
       ],
@@ -131,12 +177,7 @@ function buildMenu() {
       submenu: [
         { role: 'minimize' },
         { role: 'zoom' },
-        ...(isMac ? [
-          { type: 'separator' as const },
-          { role: 'front' as const },
-        ] : [
-          { role: 'close' as const },
-        ]),
+        ...(isMac ? [{ type: 'separator' as const }, { role: 'front' as const }] : [{ role: 'close' as const }]),
       ],
     },
   ];

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 // import { LigaturesAddon } from '@xterm/addon-ligatures';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import { isModKey, isMac } from '../utils/platform';
+import { Terminal } from '@xterm/xterm';
+import { useEffect, useRef, useState } from 'react';
+import { isMac, isModKey } from '../utils/platform';
 
 // Global registry so keyboard shortcuts can access terminal instances
 export const terminalRegistry = new Map<string, Terminal>();
@@ -41,7 +41,11 @@ export function useTerminal(
     const bg = '#282a36';
     const cursorConfig = hideCursor
       ? { cursorBlink: false, cursorStyle: 'bar' as const, cursorWidth: 1, cursorInactiveStyle: 'none' as const }
-      : { cursorBlink: options?.cursorBlink ?? true, cursorStyle: 'block' as const, cursorInactiveStyle: 'outline' as const };
+      : {
+          cursorBlink: options?.cursorBlink ?? true,
+          cursorStyle: 'block' as const,
+          cursorInactiveStyle: 'outline' as const,
+        };
 
     const terminal = new Terminal({
       ...cursorConfig,
@@ -138,9 +142,12 @@ export function useTerminal(
       if (e.metaKey && !e.shiftKey && !e.altKey && !e.ctrlKey) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'Backspace') {
           if (e.type === 'keydown') {
-            const seq = e.key === 'ArrowLeft' ? '\x1bOH'  // Home
-              : e.key === 'ArrowRight' ? '\x1bOF'         // End
-              : '\x15';                                     // Ctrl+U (kill line)
+            const seq =
+              e.key === 'ArrowLeft'
+                ? '\x1bOH' // Home
+                : e.key === 'ArrowRight'
+                  ? '\x1bOF' // End
+                  : '\x15'; // Ctrl+U (kill line)
             window.bifrost.writeToSession(sessionId!, seq);
           }
           return false;
@@ -191,7 +198,9 @@ export function useTerminal(
           try {
             fitAddon.fit();
             window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
-          } catch { /* container may not be visible */ }
+          } catch {
+            /* container may not be visible */
+          }
         });
       }
     });
@@ -213,30 +222,26 @@ export function useTerminal(
       }
     });
 
-    const removeDataListener = window.bifrost.onSessionData(
-      (sid: string, data: string) => {
-        if (sid === sessionId) {
-          if (!hasReceivedData) {
-            hasReceivedData = true;
-            setLoading(false);
-          }
-          terminal.write(data, () => {
-            if (userScrolledUp) {
-              terminal.scrollToLine(savedViewportY);
-            }
-          });
+    const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
+      if (sid === sessionId) {
+        if (!hasReceivedData) {
+          hasReceivedData = true;
+          setLoading(false);
         }
-      },
-    );
+        terminal.write(data, () => {
+          if (userScrolledUp) {
+            terminal.scrollToLine(savedViewportY);
+          }
+        });
+      }
+    });
 
     // Handle session exit
-    const removeExitListener = window.bifrost.onSessionExit(
-      (sid: string) => {
-        if (sid === sessionId) {
-          terminal.write('\r\n[Session ended]\r\n');
-        }
-      },
-    );
+    const removeExitListener = window.bifrost.onSessionExit((sid: string) => {
+      if (sid === sessionId) {
+        terminal.write('\r\n[Session ended]\r\n');
+      }
+    });
 
     // ResizeObserver for auto-fit
     // Skip when container has zero dimensions (pane hidden via display:none)

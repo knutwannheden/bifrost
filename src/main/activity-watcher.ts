@@ -1,13 +1,18 @@
-import { BrowserWindow } from 'electron';
-import { promisify } from 'node:util';
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
-import type { ActivityEntry } from '../shared/types';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import { startClaudeWatching, stopClaudeWatching, getRecentClaudeEntries, type ClaudeWatcherCallbacks } from './claude-watcher';
+import type { ActivityEntry } from '../shared/types';
+import {
+  type ClaudeWatcherCallbacks,
+  getRecentClaudeEntries,
+  startClaudeWatching,
+  stopClaudeWatching,
+} from './claude-watcher';
 
 const execFile = promisify(execFileCb);
 
@@ -66,11 +71,11 @@ async function getHeadSha(worktreePath: string): Promise<string | null> {
 async function getFileDiff(worktreePath: string, filePath: string): Promise<string> {
   try {
     // Try tracked file diff first
-    const { stdout } = await execFile(
-      'git',
-      ['diff', 'HEAD', '--', filePath],
-      { cwd: worktreePath, maxBuffer: 5 * 1024 * 1024, timeout: GIT_TIMEOUT_MS },
-    );
+    const { stdout } = await execFile('git', ['diff', 'HEAD', '--', filePath], {
+      cwd: worktreePath,
+      maxBuffer: 5 * 1024 * 1024,
+      timeout: GIT_TIMEOUT_MS,
+    });
     if (stdout) return stdout;
 
     // Check if untracked (new file)
@@ -88,7 +93,7 @@ async function getFileDiff(worktreePath: string, filePath: string): Promise<stri
       const content = fs.readFileSync(fullPath, 'utf-8');
       const lines = content.split('\n');
       const header = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
-      return header + lines.map((l) => `+${l}`).join('\n') + '\n';
+      return `${header + lines.map((l) => `+${l}`).join('\n')}\n`;
     }
   } catch {
     return '';
@@ -97,11 +102,10 @@ async function getFileDiff(worktreePath: string, filePath: string): Promise<stri
 
 async function getCommitMessage(worktreePath: string, sha: string): Promise<string> {
   try {
-    const { stdout } = await execFile(
-      'git',
-      ['log', '-1', '--format=%s', sha],
-      { cwd: worktreePath, timeout: GIT_TIMEOUT_MS },
-    );
+    const { stdout } = await execFile('git', ['log', '-1', '--format=%s', sha], {
+      cwd: worktreePath,
+      timeout: GIT_TIMEOUT_MS,
+    });
     return stdout.trim();
   } catch {
     return '';
@@ -146,10 +150,7 @@ export function startWatching(
   };
 
   // Get initial HEAD SHA and file state before starting the poll loop
-  Promise.all([
-    getHeadSha(worktreePath),
-    getChangedFiles(worktreePath),
-  ]).then(([sha, files]) => {
+  Promise.all([getHeadSha(worktreePath), getChangedFiles(worktreePath)]).then(([sha, files]) => {
     tw.headSha = sha;
     for (const f of files) {
       tw.knownFiles.add(f);

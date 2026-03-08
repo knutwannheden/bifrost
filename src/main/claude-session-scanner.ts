@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import type { ClaudeSession } from '../shared/types';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -25,7 +25,7 @@ function decodeProjectPath(dirName: string): string {
     let bestLen = 1;
     for (let j = i + 1; j < parts.length; j++) {
       const candidate = parts.slice(i, j + 1).join('-');
-      const testPath = resolved + '/' + candidate;
+      const testPath = `${resolved}/${candidate}`;
       try {
         fs.statSync(testPath);
         best = candidate;
@@ -34,7 +34,7 @@ function decodeProjectPath(dirName: string): string {
         // keep trying longer segments
       }
     }
-    resolved += '/' + best;
+    resolved += `/${best}`;
     i += bestLen;
   }
   return resolved;
@@ -88,7 +88,7 @@ export function scanClaudeSessions(excludePaths: Set<string>): ClaudeSession[] {
       if (!fs.existsSync(projectPath)) continue;
 
       const dirPath = path.join(CLAUDE_PROJECTS_DIR, dirName);
-      let stat;
+      let stat: fs.Stats;
       try {
         stat = fs.statSync(dirPath);
       } catch {
@@ -97,7 +97,7 @@ export function scanClaudeSessions(excludePaths: Set<string>): ClaudeSession[] {
       if (!stat.isDirectory()) continue;
 
       // Find JSONL files in this project dir
-      let files;
+      let files: string[];
       try {
         files = fs.readdirSync(dirPath).filter((f) => f.endsWith('.jsonl'));
       } catch {
@@ -106,7 +106,7 @@ export function scanClaudeSessions(excludePaths: Set<string>): ClaudeSession[] {
 
       for (const file of files) {
         const filePath = path.join(dirPath, file);
-        let fileStat;
+        let fileStat: fs.Stats;
         try {
           fileStat = fs.statSync(filePath);
         } catch {

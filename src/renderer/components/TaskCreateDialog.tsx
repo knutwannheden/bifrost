@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useApp } from '../context/AppContext';
-import type { PrInfo, Repo } from '../../shared/types';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { generateTaskName } from '../../shared/name-generator';
-import ActionLabel from './ActionLabel';
-import RepoDropdown from './RepoDropdown';
+import type { PrInfo, Repo } from '../../shared/types';
+import { useApp } from '../context/AppContext';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 import { altSymbol } from '../utils/platform';
+import ActionLabel from './ActionLabel';
+import RepoDropdown from './RepoDropdown';
 import Spinner from './Spinner';
 
 // Cache branches per repo so subsequent opens are instant
@@ -32,7 +32,13 @@ export default function TaskCreateDialog() {
   const [branchesLoading, setBranchesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [prBanner, setPrBanner] = useState<{ number: number; title?: string; repoId?: string; headBranch?: string; message?: string } | null>(null);
+  const [prBanner, setPrBanner] = useState<{
+    number: number;
+    title?: string;
+    repoId?: string;
+    headBranch?: string;
+    message?: string;
+  } | null>(null);
   const [prInfo, setPrInfo] = useState<PrInfo | null>(null);
   const [slackUrl, setSlackUrl] = useState<string | null>(state.createDialogSlackUrl ?? null);
   const [prompt, setPrompt] = useState(
@@ -56,7 +62,6 @@ export default function TaskCreateDialog() {
 
   const overlayRef = useRef<HTMLDivElement>(null);
 
-
   const branchInputFullySelected =
     branchRef.current &&
     branchRef.current.selectionStart === 0 &&
@@ -68,14 +73,14 @@ export default function TaskCreateDialog() {
     return b.toLowerCase().includes(branchSearch.toLowerCase());
   });
 
-  const existingTask = repoId && branch && !inPlace
-    ? state.tasks.find((t) => t.repoId === repoId && t.branch === branch && t.status !== 'archived')
-    : undefined;
+  const existingTask =
+    repoId && branch && !inPlace
+      ? state.tasks.find((t) => t.repoId === repoId && t.branch === branch && t.status !== 'archived')
+      : undefined;
 
   const repo = state.repos.find((r) => r.id === repoId);
-  const existingInPlaceTask = inPlace && repo
-    ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path)
-    : undefined;
+  const existingInPlaceTask =
+    inPlace && repo ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path) : undefined;
 
   useEffect(() => {
     setBranchFocusedIdx(0);
@@ -103,7 +108,9 @@ export default function TaskCreateDialog() {
         const slack = parseSlackUrl(text);
         if (slack) {
           setSlackUrl(slack);
-          setPrompt(`Read the following Slack message and its thread to understand what is being requested, then create a plan and implement it: ${slack}`);
+          setPrompt(
+            `Read the following Slack message and its thread to understand what is being requested, then create a plan and implement it: ${slack}`,
+          );
           return;
         }
 
@@ -122,7 +129,10 @@ export default function TaskCreateDialog() {
         }
 
         if (!matchedRepo) {
-          setPrBanner({ number: parsed.number, message: `PR #${parsed.number} detected but ${parsed.owner}/${parsed.repo} is not managed in Bifrost` });
+          setPrBanner({
+            number: parsed.number,
+            message: `PR #${parsed.number} detected but ${parsed.owner}/${parsed.repo} is not managed in Bifrost`,
+          });
           return;
         }
 
@@ -148,7 +158,10 @@ export default function TaskCreateDialog() {
   // Fetch current branch when in-place mode is enabled
   useEffect(() => {
     if (inPlace && repoId) {
-      window.bifrost.getCurrentBranch(repoId).then(setCurrentBranch).catch(() => setCurrentBranch(null));
+      window.bifrost
+        .getCurrentBranch(repoId)
+        .then(setCurrentBranch)
+        .catch(() => setCurrentBranch(null));
     } else {
       setCurrentBranch(null);
     }
@@ -189,15 +202,20 @@ export default function TaskCreateDialog() {
     }
 
     // Refresh in background
-    window.bifrost.getRepoBranches(repoId).then((b) => {
-      if (!cancelled) {
-        branchCache.set(repoId, b);
-        setBranches(b);
-      }
-    }).finally(() => {
-      if (!cancelled) setBranchesLoading(false);
-    });
-    return () => { cancelled = true; };
+    window.bifrost
+      .getRepoBranches(repoId)
+      .then((b) => {
+        if (!cancelled) {
+          branchCache.set(repoId, b);
+          setBranches(b);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBranchesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [repoId]);
 
   // Select branch when branches load or PR is detected
@@ -368,9 +386,7 @@ export default function TaskCreateDialog() {
           {/* Slack link banner */}
           {slackUrl && (
             <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded px-3 py-2">
-              <p className="text-xs text-accent-hover truncate">
-                Slack message detected
-              </p>
+              <p className="text-xs text-accent-hover truncate">Slack message detected</p>
               <button
                 onClick={() => setSlackUrl(null)}
                 className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap"
@@ -383,9 +399,7 @@ export default function TaskCreateDialog() {
           {/* Existing task banner */}
           {existingTask && (
             <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded px-3 py-2">
-              <p className="text-xs text-warning">
-                Task &ldquo;{existingTask.name}&rdquo; already uses this branch
-              </p>
+              <p className="text-xs text-warning">Task &ldquo;{existingTask.name}&rdquo; already uses this branch</p>
               <button
                 onClick={() => openExistingTask(existingTask.id, existingTask.status)}
                 className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap"
@@ -414,219 +428,223 @@ export default function TaskCreateDialog() {
 
           {/* Repo select */}
           {state.repos.length > 0 && (
-          <div>
-            <label className="block text-xs text-secondary mb-1">Repository</label>
-            <RepoDropdown
-              repos={state.repos}
-              selectedId={repoId}
-              onSelect={handleRepoSelect}
-              inputRef={repoRef}
-              autoFocus
-            />
-          </div>
+            <div>
+              <label className="block text-xs text-secondary mb-1">Repository</label>
+              <RepoDropdown
+                repos={state.repos}
+                selectedId={repoId}
+                onSelect={handleRepoSelect}
+                inputRef={repoRef}
+                autoFocus
+              />
+            </div>
           )}
 
           {state.repos.length > 0 && (
-          <>
-          {/* Task name */}
-          <div>
-            <label className="block text-xs text-secondary mb-1">Task <ActionLabel text="Name" showHint={true} /></label>
-            <div className="flex gap-2">
-              <input
-                ref={nameRef}
-                type="text"
-                value={taskName}
-                onChange={(e) => setTaskName(e.target.value)}
-                placeholder="select a repo to generate..."
-                className="flex-1 px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-              />
-              <button
-                onClick={regenerateName}
-                title={`Generate new name (${altSymbol}N)`}
-                tabIndex={-1}
-                className="px-2 py-1.5 bg-surface-alt border border-border-input rounded text-secondary hover:text-primary hover:border-border-input text-sm transition-colors"
-              >
-                &#x21bb;
-              </button>
-            </div>
-          </div>
-
-          {/* In-place checkbox */}
-          <label
-            className="flex items-center gap-2 cursor-pointer"
-            title="Run the task directly in the repository's main worktree instead of creating a separate git worktree. Useful for tasks that don't need branch isolation."
-          >
-            <input
-              type="checkbox"
-              checked={inPlace}
-              onChange={(e) => {
-                setInPlace(e.target.checked);
-                if (e.target.checked) {
-                  setPrBanner(null);
-                  setPrInfo(null);
-                }
-              }}
-              className="rounded border-border-input bg-surface-alt text-accent focus:ring-accent focus:ring-offset-0"
-            />
-            <span className="text-xs text-secondary">Use main worktree (no separate checkout)</span>
-          </label>
-
-          {/* In-place conflict banner */}
-          {existingInPlaceTask && (
-            <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded px-3 py-2">
-              <p className="text-xs text-warning">
-                Task &ldquo;{existingInPlaceTask.name}&rdquo; already uses the main worktree
-              </p>
-              <button
-                onClick={() => openExistingTask(existingInPlaceTask.id, existingInPlaceTask.status)}
-                className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap"
-              >
-                <ActionLabel text="Open" showHint={true} />
-              </button>
-            </div>
-          )}
-
-          {/* Branch select */}
-          <div className="relative">
-            <label className="block text-xs text-secondary mb-1">Branch</label>
-            {inPlace ? (
-              <div className="w-full px-3 py-1.5 bg-surface-alt/50 border border-border-input rounded text-sm text-secondary">
-                {currentBranch ?? 'Detecting...'}
-              </div>
-            ) : (
             <>
-            <div className="relative">
-            <input
-              ref={branchRef}
-              type="text"
-              value={branchesLoading ? '' : branchSearch}
-              onChange={(e) => {
-                setBranchSearch(e.target.value);
-                setBranchDropdownOpen(true);
-                if (branch && !branch.toLowerCase().includes(e.target.value.toLowerCase())) {
-                  setBranch('');
-                }
-              }}
-              onFocus={() => {
-                branchRef.current?.select();
-              }}
-              onBlur={() => {
-                setTimeout(() => setBranchDropdownOpen(false), 150);
-              }}
-              onKeyDown={(e) => {
-                if (filteredBranches.length === 0) return;
-                switch (e.key) {
-                  case 'ArrowDown':
-                    e.preventDefault();
-                    if (!branchDropdownOpen) {
-                      setBranchDropdownOpen(true);
-                    } else {
-                      setBranchFocusedIdx((i) => i < filteredBranches.length - 1 ? i + 1 : 0);
-                    }
-                    break;
-                  case 'ArrowUp':
-                    e.preventDefault();
-                    if (!branchDropdownOpen) {
-                      setBranchDropdownOpen(true);
-                    } else {
-                      setBranchFocusedIdx((i) => i > 0 ? i - 1 : filteredBranches.length - 1);
-                    }
-                    break;
-                  case 'Enter':
-                    if (branchDropdownOpen) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (filteredBranches[branchFocusedIdx]) {
-                        selectBranch(filteredBranches[branchFocusedIdx]);
-                      }
-                    }
-                    break;
-                  case 'Tab':
-                    if (branchDropdownOpen && filteredBranches[branchFocusedIdx]) {
-                      selectBranch(filteredBranches[branchFocusedIdx]);
-                    }
-                    break;
-                }
-              }}
-              placeholder={branchesLoading ? '' : branches.length === 0 ? 'Select a repo first' : 'Type to search...'}
-              disabled={branchesLoading || branches.length === 0}
-              className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
-            />
-            {branchesLoading && (
-              <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
-                <Spinner size="sm" className="mr-2" />
-                <span className="text-sm text-secondary">Fetching branches...</span>
-              </div>
-            )}
-            </div>
-            {branchDropdownOpen && filteredBranches.length > 0 && (
-              <div
-                ref={branchListRef}
-                className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
-              >
-                {filteredBranches.map((b, idx) => (
-                  <div
-                    key={b}
-                    onMouseDown={() => selectBranch(b)}
-                    onMouseEnter={() => setBranchFocusedIdx(idx)}
-                    className={`px-3 py-1.5 cursor-pointer text-sm ${
-                      idx === branchFocusedIdx
-                        ? 'bg-accent text-white'
-                        : 'text-primary hover:bg-surface-hover'
-                    }`}
+              {/* Task name */}
+              <div>
+                <label className="block text-xs text-secondary mb-1">
+                  Task <ActionLabel text="Name" showHint={true} />
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    ref={nameRef}
+                    type="text"
+                    value={taskName}
+                    onChange={(e) => setTaskName(e.target.value)}
+                    placeholder="select a repo to generate..."
+                    className="flex-1 px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  />
+                  <button
+                    onClick={regenerateName}
+                    title={`Generate new name (${altSymbol}N)`}
+                    tabIndex={-1}
+                    className="px-2 py-1.5 bg-surface-alt border border-border-input rounded text-secondary hover:text-primary hover:border-border-input text-sm transition-colors"
                   >
-                    {b}
-                  </div>
-                ))}
+                    &#x21bb;
+                  </button>
+                </div>
               </div>
-            )}
+
+              {/* In-place checkbox */}
+              <label
+                className="flex items-center gap-2 cursor-pointer"
+                title="Run the task directly in the repository's main worktree instead of creating a separate git worktree. Useful for tasks that don't need branch isolation."
+              >
+                <input
+                  type="checkbox"
+                  checked={inPlace}
+                  onChange={(e) => {
+                    setInPlace(e.target.checked);
+                    if (e.target.checked) {
+                      setPrBanner(null);
+                      setPrInfo(null);
+                    }
+                  }}
+                  className="rounded border-border-input bg-surface-alt text-accent focus:ring-accent focus:ring-offset-0"
+                />
+                <span className="text-xs text-secondary">Use main worktree (no separate checkout)</span>
+              </label>
+
+              {/* In-place conflict banner */}
+              {existingInPlaceTask && (
+                <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded px-3 py-2">
+                  <p className="text-xs text-warning">
+                    Task &ldquo;{existingInPlaceTask.name}&rdquo; already uses the main worktree
+                  </p>
+                  <button
+                    onClick={() => openExistingTask(existingInPlaceTask.id, existingInPlaceTask.status)}
+                    className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap"
+                  >
+                    <ActionLabel text="Open" showHint={true} />
+                  </button>
+                </div>
+              )}
+
+              {/* Branch select */}
+              <div className="relative">
+                <label className="block text-xs text-secondary mb-1">Branch</label>
+                {inPlace ? (
+                  <div className="w-full px-3 py-1.5 bg-surface-alt/50 border border-border-input rounded text-sm text-secondary">
+                    {currentBranch ?? 'Detecting...'}
+                  </div>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <input
+                        ref={branchRef}
+                        type="text"
+                        value={branchesLoading ? '' : branchSearch}
+                        onChange={(e) => {
+                          setBranchSearch(e.target.value);
+                          setBranchDropdownOpen(true);
+                          if (branch && !branch.toLowerCase().includes(e.target.value.toLowerCase())) {
+                            setBranch('');
+                          }
+                        }}
+                        onFocus={() => {
+                          branchRef.current?.select();
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setBranchDropdownOpen(false), 150);
+                        }}
+                        onKeyDown={(e) => {
+                          if (filteredBranches.length === 0) return;
+                          switch (e.key) {
+                            case 'ArrowDown':
+                              e.preventDefault();
+                              if (!branchDropdownOpen) {
+                                setBranchDropdownOpen(true);
+                              } else {
+                                setBranchFocusedIdx((i) => (i < filteredBranches.length - 1 ? i + 1 : 0));
+                              }
+                              break;
+                            case 'ArrowUp':
+                              e.preventDefault();
+                              if (!branchDropdownOpen) {
+                                setBranchDropdownOpen(true);
+                              } else {
+                                setBranchFocusedIdx((i) => (i > 0 ? i - 1 : filteredBranches.length - 1));
+                              }
+                              break;
+                            case 'Enter':
+                              if (branchDropdownOpen) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (filteredBranches[branchFocusedIdx]) {
+                                  selectBranch(filteredBranches[branchFocusedIdx]);
+                                }
+                              }
+                              break;
+                            case 'Tab':
+                              if (branchDropdownOpen && filteredBranches[branchFocusedIdx]) {
+                                selectBranch(filteredBranches[branchFocusedIdx]);
+                              }
+                              break;
+                          }
+                        }}
+                        placeholder={
+                          branchesLoading ? '' : branches.length === 0 ? 'Select a repo first' : 'Type to search...'
+                        }
+                        disabled={branchesLoading || branches.length === 0}
+                        className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
+                      />
+                      {branchesLoading && (
+                        <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
+                          <Spinner size="sm" className="mr-2" />
+                          <span className="text-sm text-secondary">Fetching branches...</span>
+                        </div>
+                      )}
+                    </div>
+                    {branchDropdownOpen && filteredBranches.length > 0 && (
+                      <div
+                        ref={branchListRef}
+                        className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
+                      >
+                        {filteredBranches.map((b, idx) => (
+                          <div
+                            key={b}
+                            onMouseDown={() => selectBranch(b)}
+                            onMouseEnter={() => setBranchFocusedIdx(idx)}
+                            className={`px-3 py-1.5 cursor-pointer text-sm ${
+                              idx === branchFocusedIdx ? 'bg-accent text-white' : 'text-primary hover:bg-surface-hover'
+                            }`}
+                          >
+                            {b}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Prompt */}
+              <div>
+                <label className="block text-xs text-secondary mb-1">
+                  <ActionLabel text="Prompt" showHint={true} />
+                </label>
+                <textarea
+                  ref={promptRef}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Allow Enter in textarea without triggering form submit
+                    if (e.key === 'Enter') e.stopPropagation();
+                  }}
+                  placeholder="Initial prompt sent to Claude (optional)"
+                  rows={3}
+                  className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
+                />
+              </div>
+
+              {error && <p className="text-xs text-danger">{error}</p>}
             </>
-            )}
-          </div>
-
-          {/* Prompt */}
-          <div>
-            <label className="block text-xs text-secondary mb-1"><ActionLabel text="Prompt" showHint={true} /></label>
-            <textarea
-              ref={promptRef}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                // Allow Enter in textarea without triggering form submit
-                if (e.key === 'Enter') e.stopPropagation();
-              }}
-              placeholder="Initial prompt sent to Claude (optional)"
-              rows={3}
-              className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
-            />
-          </div>
-
-          {error && <p className="text-xs text-danger">{error}</p>}
-          </>
           )}
         </div>
 
         {/* Footer */}
         {state.repos.length > 0 && (
-        <div className="flex items-center gap-2 px-4 pb-3 pt-2 border-t border-border-default">
-          <span className="text-xs text-faint flex-1">
-            Enter create &middot; {altSymbol}N name &middot; {altSymbol}P prompt &middot; Esc cancel
-          </span>
-          <button
-            onClick={close}
-            className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            ref={createRef}
-            onClick={handleSubmit}
-            disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
-            className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
-          >
-            {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
-          </button>
-        </div>
+          <div className="flex items-center gap-2 px-4 pb-3 pt-2 border-t border-border-default">
+            <span className="text-xs text-faint flex-1">
+              Enter create &middot; {altSymbol}N name &middot; {altSymbol}P prompt &middot; Esc cancel
+            </span>
+            <button
+              onClick={close}
+              className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              ref={createRef}
+              onClick={handleSubmit}
+              disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
+              className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
+            >
+              {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { modSymbol, altSymbol, shiftSymbol } from '../utils/platform';
+import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
 
 type KbdSize = 'sm' | 'xs';
 

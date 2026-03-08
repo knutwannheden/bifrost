@@ -1,9 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReviewEntry } from '../../shared/types';
 import type { ReviewStatus } from '../context/AppContext';
+import { formatRelative } from '../utils/format-time';
 import ActionLabel from './ActionLabel';
 import Spinner from './Spinner';
-import { formatRelative } from '../utils/format-time';
 
 interface ReviewSidebarProps {
   reviews: ReviewEntry[];
@@ -92,9 +92,7 @@ export default function ReviewSidebar({
       <button
         onClick={onNewReview}
         className={`mx-2 mt-2 mb-1 px-3 py-1.5 text-xs rounded transition-colors ${
-          activeReviewId === null
-            ? 'bg-accent text-white'
-            : 'bg-surface-alt hover:bg-surface-hover text-secondary'
+          activeReviewId === null ? 'bg-accent text-white' : 'bg-surface-alt hover:bg-surface-hover text-secondary'
         }`}
       >
         + <ActionLabel text="New Review" showHint={true} />
@@ -110,34 +108,32 @@ export default function ReviewSidebar({
           return (
             <div
               key={review.id}
-              ref={(el) => { itemRefs.current[idx] = el; }}
+              ref={(el) => {
+                itemRefs.current[idx] = el;
+              }}
               onClick={() => onSelect(review.id)}
               className={`px-3 py-2 cursor-pointer border-l-2 transition-colors ${
-                isActive
-                  ? 'bg-surface-alt/50 border-accent-hover'
-                  : 'border-transparent hover:bg-surface'
+                isActive ? 'bg-surface-alt/50 border-accent-hover' : 'border-transparent hover:bg-surface'
               }`}
             >
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-muted">#{number}</span>
-                <span className={`px-1.5 py-0.5 text-[10px] rounded ${
-                  review.scope === 'working'
-                    ? 'bg-success/15 text-success'
-                    : 'bg-accent/10 text-accent-hover'
-                }`}>
+                <span
+                  className={`px-1.5 py-0.5 text-[10px] rounded ${
+                    review.scope === 'working' ? 'bg-success/15 text-success' : 'bg-accent/10 text-accent-hover'
+                  }`}
+                >
                   {review.scope === 'working' ? 'Working' : 'All'}
                 </span>
-                {status === 'running' && (
-                  <Spinner size="sm" />
+                {status === 'running' && <Spinner size="sm" />}
+                {isDiscussing && (
+                  <span className="text-xs" title="Discussion active">
+                    💬
+                  </span>
                 )}
-                {isDiscussing && <span className="text-xs" title="Discussion active">💬</span>}
               </div>
-              <div className="text-[11px] text-muted mt-0.5 truncate">
-                {review.instructions || 'No instructions'}
-              </div>
-              <div className="text-[10px] text-faint mt-0.5">
-                {formatRelative(review.timestamp)}
-              </div>
+              <div className="text-[11px] text-muted mt-0.5 truncate">{review.instructions || 'No instructions'}</div>
+              <div className="text-[10px] text-faint mt-0.5">{formatRelative(review.timestamp)}</div>
             </div>
           );
         })}

@@ -1,5 +1,5 @@
-import { app, BrowserWindow, Notification } from 'electron';
 import { execFile } from 'node:child_process';
+import { app, BrowserWindow, Notification } from 'electron';
 
 let mainWindow: BrowserWindow | null = null;
 let activeTaskId: string | null = null;
@@ -30,7 +30,7 @@ export function markNotified(taskId: string): void {
 }
 
 /** Bell-triggered notification (instant, from xterm.js BEL/OSC). */
-export function handleBellNotification(taskId: string, taskName: string, isActiveTask: boolean): void {
+export function handleBellNotification(_taskId: string, taskName: string, isActiveTask: boolean): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
 
   const focused = mainWindow.isFocused();

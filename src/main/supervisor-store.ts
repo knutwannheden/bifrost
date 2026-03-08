@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 import type { SupervisorState } from '../shared/types';
 
 const SUPERVISOR_PATH = path.join(os.homedir(), '.bifrost', 'supervisor.json');
@@ -26,7 +26,7 @@ export function saveSupervisorState(state: SupervisorState): void {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  const tmp = SUPERVISOR_PATH + '.tmp';
+  const tmp = `${SUPERVISOR_PATH}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2), 'utf-8');
   fs.renameSync(tmp, SUPERVISOR_PATH);
 }

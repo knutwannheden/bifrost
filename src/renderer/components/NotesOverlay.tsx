@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useApp } from '../context/AppContext';
 import type { Note } from '../../shared/types';
+import { useApp } from '../context/AppContext';
+import { formatTime } from '../utils/format-time';
+import { altSymbol, deleteSymbol, isModKey, modSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import RepoDropdown from './RepoDropdown';
-import { isModKey, modSymbol, altSymbol, deleteSymbol } from '../utils/platform';
-import { formatTime } from '../utils/format-time';
 
 export default function NotesOverlay() {
   const { state, dispatch } = useApp();
@@ -83,20 +83,26 @@ export default function NotesOverlay() {
     dispatch({ type: 'TOGGLE_NOTES' });
   };
 
-  const saveNote = useCallback((noteId: string, text: string) => {
-    if (!repoId) return;
-    window.bifrost.updateNote(repoId, noteId, { text }).then((updated) => {
-      setNotes((prev) => prev.map((n) => n.id === updated.id ? updated : n));
-    });
-  }, [repoId]);
+  const saveNote = useCallback(
+    (noteId: string, text: string) => {
+      if (!repoId) return;
+      window.bifrost.updateNote(repoId, noteId, { text }).then((updated) => {
+        setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+      });
+    },
+    [repoId],
+  );
 
-  const scheduleSave = useCallback((noteId: string, text: string) => {
-    flushSave();
-    saveTimerRef.current = setTimeout(() => {
-      saveNote(noteId, text);
-      saveTimerRef.current = null;
-    }, 500);
-  }, [flushSave, saveNote]);
+  const scheduleSave = useCallback(
+    (noteId: string, text: string) => {
+      flushSave();
+      saveTimerRef.current = setTimeout(() => {
+        saveNote(noteId, text);
+        saveTimerRef.current = null;
+      }, 500);
+    },
+    [flushSave, saveNote],
+  );
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -157,7 +163,7 @@ export default function NotesOverlay() {
   const toggleAddressed = async (note: Note) => {
     if (!repoId) return;
     const updated = await window.bifrost.updateNote(repoId, note.id, { addressed: !note.addressed });
-    setNotes((prev) => prev.map((n) => n.id === updated.id ? updated : n));
+    setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
   };
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -242,9 +248,7 @@ export default function NotesOverlay() {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         if (displayNotes.length === 0) return;
-        const currentIdx = selectedNoteId
-          ? displayNotes.findIndex((n) => n.id === selectedNoteId)
-          : -1;
+        const currentIdx = selectedNoteId ? displayNotes.findIndex((n) => n.id === selectedNoteId) : -1;
         let nextIdx: number;
         if (e.key === 'ArrowDown') {
           nextIdx = currentIdx < displayNotes.length - 1 ? currentIdx + 1 : 0;
@@ -295,18 +299,20 @@ export default function NotesOverlay() {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default gap-3">
           <span className="text-sm font-semibold text-primary flex-shrink-0">Notes</span>
           <div className="flex items-center gap-1.5 flex-1 max-w-[280px]">
-          <label className="text-xs text-secondary flex-shrink-0"><ActionLabel text="Repo" showHint={true} /></label>
-          <div className="flex-1">
-            <RepoDropdown
-              repos={state.repos}
-              selectedId={repoId}
-              onSelect={setRepoId}
-              onKeyDown={handleRepoInputKeyDown}
-              inputRef={repoInputRef}
-              placeholder="Select repository..."
-              size="sm"
-            />
-          </div>
+            <label className="text-xs text-secondary flex-shrink-0">
+              <ActionLabel text="Repo" showHint={true} />
+            </label>
+            <div className="flex-1">
+              <RepoDropdown
+                repos={state.repos}
+                selectedId={repoId}
+                onSelect={setRepoId}
+                onKeyDown={handleRepoInputKeyDown}
+                inputRef={repoInputRef}
+                placeholder="Select repository..."
+                size="sm"
+              />
+            </div>
           </div>
           <button
             onClick={close}
@@ -320,14 +326,15 @@ export default function NotesOverlay() {
         {/* Body: sidebar + content */}
         <div className="flex-1 flex min-h-0">
           {/* Sidebar */}
-          <div ref={sidebarRef} className="w-44 flex-shrink-0 border-r border-border-default flex flex-col overflow-hidden">
+          <div
+            ref={sidebarRef}
+            className="w-44 flex-shrink-0 border-r border-border-default flex flex-col overflow-hidden"
+          >
             {/* New Note button */}
             <button
               onClick={startNewNote}
               className={`mx-2 mt-2 mb-1 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-                isNewNote
-                  ? 'bg-accent text-white'
-                  : 'bg-surface-alt text-secondary hover:bg-surface-hover'
+                isNewNote ? 'bg-accent text-white' : 'bg-surface-alt text-secondary hover:bg-surface-hover'
               }`}
             >
               + <ActionLabel text="New Note" showHint={true} />
@@ -336,13 +343,9 @@ export default function NotesOverlay() {
             {/* Note list */}
             <div className="flex-1 overflow-y-auto">
               {!repoId ? (
-                <div className="px-3 py-4 text-xs text-muted text-center">
-                  Select a repository
-                </div>
+                <div className="px-3 py-4 text-xs text-muted text-center">Select a repository</div>
               ) : displayNotes.length === 0 ? (
-                <div className="px-3 py-4 text-xs text-muted text-center">
-                  No notes yet
-                </div>
+                <div className="px-3 py-4 text-xs text-muted text-center">No notes yet</div>
               ) : (
                 displayNotes.map((note) => {
                   const firstLine = note.text.split('\n')[0] || 'Empty note';
@@ -352,35 +355,46 @@ export default function NotesOverlay() {
                       key={note.id}
                       onClick={() => selectNote(note.id)}
                       className={`group px-3 py-2 cursor-pointer border-l-2 transition-colors ${
-                        isActive
-                          ? 'bg-surface-alt/50 border-accent-hover'
-                          : 'border-transparent hover:bg-surface'
+                        isActive ? 'bg-surface-alt/50 border-accent-hover' : 'border-transparent hover:bg-surface'
                       }`}
                     >
                       <div className="flex items-center gap-1.5">
                         <input
                           type="checkbox"
                           checked={note.addressed}
-                          onChange={(e) => { e.stopPropagation(); toggleAddressed(note); }}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleAddressed(note);
+                          }}
                           onClick={(e) => e.stopPropagation()}
                           className="accent-accent flex-shrink-0"
                         />
                         <span className="text-xs text-secondary truncate flex-1">
-                          {firstLine.length > 30 ? firstLine.slice(0, 30) + '\u2026' : firstLine}
+                          {firstLine.length > 30 ? `${firstLine.slice(0, 30)}\u2026` : firstLine}
                         </span>
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteNoteById(note.id); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteNoteById(note.id);
+                          }}
                           className="opacity-0 group-hover:opacity-100 text-danger hover:brightness-125 flex-shrink-0 transition-opacity"
                           title="Delete note"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-                            <path fillRule="evenodd" d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5A.75.75 0 0 1 9.95 6Z" clipRule="evenodd" />
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 16 16"
+                            fill="currentColor"
+                            className="w-3.5 h-3.5"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M5 3.25V4H2.75a.75.75 0 0 0 0 1.5h.3l.815 8.15A1.5 1.5 0 0 0 5.357 15h5.285a1.5 1.5 0 0 0 1.493-1.35l.815-8.15h.3a.75.75 0 0 0 0-1.5H11v-.75A2.25 2.25 0 0 0 8.75 1h-1.5A2.25 2.25 0 0 0 5 3.25Zm2.25-.75a.75.75 0 0 0-.75.75V4h3v-.75a.75.75 0 0 0-.75-.75h-1.5ZM6.05 6a.75.75 0 0 1 .787.713l.275 5.5a.75.75 0 0 1-1.498.075l-.275-5.5A.75.75 0 0 1 6.05 6Zm3.9 0a.75.75 0 0 1 .712.787l-.275 5.5a.75.75 0 0 1-1.498-.075l.275-5.5A.75.75 0 0 1 9.95 6Z"
+                              clipRule="evenodd"
+                            />
                           </svg>
                         </button>
                       </div>
-                      <span className="text-[10px] text-muted ml-5 block">
-                        {formatTime(note.createdAt)}
-                      </span>
+                      <span className="text-[10px] text-muted ml-5 block">{formatTime(note.createdAt)}</span>
                     </div>
                   );
                 })
@@ -391,21 +405,17 @@ export default function NotesOverlay() {
           {/* Content area */}
           <div className="flex-1 flex flex-col min-w-0">
             {!repoId ? (
-              <div className="flex-1 flex items-center justify-center text-sm text-muted">
-                Select a repository
-              </div>
+              <div className="flex-1 flex items-center justify-center text-sm text-muted">Select a repository</div>
             ) : (
-              <>
-                <textarea
-                  ref={textareaRef}
-                  value={draftText}
-                  onChange={handleTextareaChange}
-                  onBlur={handleTextareaBlur}
-                  onKeyDown={handleTextareaKeyDown}
-                  placeholder={isNewNote ? 'Type a new note...' : 'Note text...'}
-                  className="flex-1 bg-transparent text-sm text-primary placeholder-muted p-4 resize-none outline-none min-h-0"
-                />
-              </>
+              <textarea
+                ref={textareaRef}
+                value={draftText}
+                onChange={handleTextareaChange}
+                onBlur={handleTextareaBlur}
+                onKeyDown={handleTextareaKeyDown}
+                placeholder={isNewNote ? 'Type a new note...' : 'Note text...'}
+                className="flex-1 bg-transparent text-sm text-primary placeholder-muted p-4 resize-none outline-none min-h-0"
+              />
             )}
           </div>
         </div>
@@ -413,7 +423,9 @@ export default function NotesOverlay() {
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
           <span className="text-xs text-faint">
-            Esc close &middot; {altSymbol}N new note &middot; {altSymbol}R repo &middot; &uarr;&darr; navigate &middot; {modSymbol}{deleteSymbol} delete
+            Esc close &middot; {altSymbol}N new note &middot; {altSymbol}R repo &middot; &uarr;&darr; navigate &middot;{' '}
+            {modSymbol}
+            {deleteSymbol} delete
           </span>
         </div>
       </div>

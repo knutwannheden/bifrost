@@ -1,7 +1,7 @@
 import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
@@ -75,9 +75,13 @@ function findLargestJsonl(projectDir: string): string | null {
         if (!best || stat.size > best.size) {
           best = { path: filePath, size: stat.size };
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return best?.path ?? null;
 }
 
@@ -183,7 +187,7 @@ function tryOllama(model: string, input: string): Promise<string | null> {
       resolve(null);
     });
 
-    proc.stdin.write(SUMMARY_PROMPT + '\n\n' + input);
+    proc.stdin.write(`${SUMMARY_PROMPT}\n\n${input}`);
     proc.stdin.end();
   });
 }
@@ -201,16 +205,14 @@ function tryClaude(input: string): Promise<string | null> {
       required: ['summary'],
     });
 
-    const proc = spawn('claude', [
-      '-p',
-      '--model', 'haiku',
-      '--output-format', 'json',
-      '--json-schema', jsonSchema,
-      SUMMARY_PROMPT,
-    ], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env },
-    });
+    const proc = spawn(
+      'claude',
+      ['-p', '--model', 'haiku', '--output-format', 'json', '--json-schema', jsonSchema, SUMMARY_PROMPT],
+      {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env },
+      },
+    );
 
     let stdout = '';
     let settled = false;
@@ -296,8 +298,8 @@ async function runSummarize(worktreePath: string, options?: SummarizeOptions): P
   if (!input) return null;
 
   const installed = getInstalledOllamaModels();
-  const model = (options?.ollamaModels ?? []).find((m) =>
-    installed.has(m) || installed.has(m.includes(':') ? m : `${m}:latest`),
+  const model = (options?.ollamaModels ?? []).find(
+    (m) => installed.has(m) || installed.has(m.includes(':') ? m : `${m}:latest`),
   );
   if (model) {
     const result = await tryOllama(model, input);

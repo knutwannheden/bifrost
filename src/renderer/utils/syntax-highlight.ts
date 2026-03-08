@@ -3,14 +3,40 @@ import type { Highlighter } from 'shiki';
 let highlighterPromise: Promise<Highlighter> | null = null;
 
 const extToLang: Record<string, string> = {
-  ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
-  java: 'java', py: 'python', rb: 'ruby', rs: 'rust', go: 'go',
-  c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp', cs: 'csharp',
-  json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml',
-  xml: 'xml', html: 'html', css: 'css', scss: 'scss',
-  md: 'markdown', sh: 'bash', bash: 'bash', zsh: 'bash',
-  sql: 'sql', graphql: 'graphql', kt: 'kotlin', swift: 'swift',
-  vue: 'vue', svelte: 'svelte', php: 'php', tf: 'hcl',
+  ts: 'typescript',
+  tsx: 'tsx',
+  js: 'javascript',
+  jsx: 'jsx',
+  java: 'java',
+  py: 'python',
+  rb: 'ruby',
+  rs: 'rust',
+  go: 'go',
+  c: 'c',
+  cpp: 'cpp',
+  h: 'c',
+  hpp: 'cpp',
+  cs: 'csharp',
+  json: 'json',
+  yaml: 'yaml',
+  yml: 'yaml',
+  toml: 'toml',
+  xml: 'xml',
+  html: 'html',
+  css: 'css',
+  scss: 'scss',
+  md: 'markdown',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  sql: 'sql',
+  graphql: 'graphql',
+  kt: 'kotlin',
+  swift: 'swift',
+  vue: 'vue',
+  svelte: 'svelte',
+  php: 'php',
+  tf: 'hcl',
 };
 
 async function getHighlighter(): Promise<Highlighter> {
@@ -30,10 +56,7 @@ export interface HighlightedToken {
   color: string;
 }
 
-export async function highlightLines(
-  lines: string[],
-  ext: string,
-): Promise<HighlightedToken[][]> {
+export async function highlightLines(lines: string[], ext: string): Promise<HighlightedToken[][]> {
   const lang = extToLang[ext];
   if (!lang) {
     return lines.map((line) => [{ content: line, color: '#e2e8f0' }]);
@@ -42,7 +65,10 @@ export async function highlightLines(
   try {
     const highlighter = await getHighlighter();
     const code = lines.join('\n');
-    const result = highlighter.codeToTokens(code, { lang: lang as import('shiki').BundledLanguage, theme: 'github-dark' });
+    const result = highlighter.codeToTokens(code, {
+      lang: lang as import('shiki').BundledLanguage,
+      theme: 'github-dark',
+    });
 
     return result.tokens.map((lineTokens) =>
       lineTokens.map((token) => ({

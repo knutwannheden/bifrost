@@ -1,9 +1,9 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
-import { useApp, getActiveDiffState } from '../context/AppContext';
+import { getActiveDiffState, useApp } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
-import TerminalSearchBar from './TerminalSearchBar';
 import { isModKey } from '../utils/platform';
+import TerminalSearchBar from './TerminalSearchBar';
 
 interface TerminalPaneProps {
   sessionId: string;
@@ -24,14 +24,20 @@ function LoadingOverlay() {
   }, []);
   return (
     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-      <span className="text-muted text-sm">
-        Loading{'.'.repeat(dots)}
-      </span>
+      <span className="text-muted text-sm">Loading{'.'.repeat(dots)}</span>
     </div>
   );
 }
 
-export default function TerminalPane({ sessionId, active, focused, hideCursor = false, paneType, onFocusRequest, onTitleChange }: TerminalPaneProps) {
+export default function TerminalPane({
+  sessionId,
+  active,
+  focused,
+  hideCursor = false,
+  paneType,
+  onFocusRequest,
+  onTitleChange,
+}: TerminalPaneProps) {
   const { state } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -40,13 +46,29 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
   const fontFamily = state.config?.fontFamily;
   const fontWeight = state.config?.fontWeight;
 
-  const { terminal, loading } = useTerminal(sessionId, containerRef, onTitleChange, { hideCursor, fontSize, fontFamily, fontWeight, visible: active, paneType });
+  const { terminal, loading } = useTerminal(sessionId, containerRef, onTitleChange, {
+    hideCursor,
+    fontSize,
+    fontFamily,
+    fontWeight,
+    visible: active,
+    paneType,
+  });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing.
   // When `focused` transitions to true, the caller explicitly wants focus (e.g. discussion
   // terminal inside the diff overlay), so skip the overlay guard in that case.
   const { showDiff } = getActiveDiffState(state);
-  const anyOverlay = state.showRepoManager || state.showCreateDialog || showDiff || state.showTaskHistory || state.showKeyboardShortcuts || state.showSettings || state.showNotes || state.showStats || state.showSupervisor;
+  const anyOverlay =
+    state.showRepoManager ||
+    state.showCreateDialog ||
+    showDiff ||
+    state.showTaskHistory ||
+    state.showKeyboardShortcuts ||
+    state.showSettings ||
+    state.showNotes ||
+    state.showStats ||
+    state.showSupervisor;
   const prevFocused = useRef(false);
   useEffect(() => {
     const becameFocused = focused && !prevFocused.current;
@@ -83,9 +105,7 @@ export default function TerminalPane({ sessionId, active, focused, hideCursor = 
       }}
       onMouseDown={onFocusRequest}
     >
-      {showSearch && (
-        <TerminalSearchBar sessionId={sessionId} onClose={handleSearchClose} />
-      )}
+      {showSearch && <TerminalSearchBar sessionId={sessionId} onClose={handleSearchClose} />}
       {loading && <LoadingOverlay />}
       <div ref={containerRef} className="w-full h-full" />
     </div>

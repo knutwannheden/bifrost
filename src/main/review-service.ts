@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import type { BrowserWindow } from 'electron';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
+import path from 'node:path';
+import type { BrowserWindow } from 'electron';
 
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ReviewEntry } from '../shared/types';
-import { spawnSession, killSession } from './session-manager';
+import { killSession, spawnSession } from './session-manager';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -101,7 +101,11 @@ export function migrateIfNeeded(taskId: string, legacySessionId?: string): Revie
   writeManifest(taskId, [entry]);
 
   // Remove legacy file
-  try { fs.unlinkSync(legacyPath); } catch { /* ignore */ }
+  try {
+    fs.unlinkSync(legacyPath);
+  } catch {
+    /* ignore */
+  }
 
   return [entry];
 }
@@ -154,7 +158,11 @@ export async function runReview(
     BIFROST_REVIEW_ID: reviewId,
   };
   const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
-  try { extraEnv.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim(); } catch { /* port file may not exist */ }
+  try {
+    extraEnv.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim();
+  } catch {
+    /* port file may not exist */
+  }
 
   // Ensure review dir exists for file watcher
   fs.mkdirSync(path.dirname(reviewFilePath), { recursive: true });
@@ -226,7 +234,6 @@ export function cancelReview(taskId: string): void {
 // Track content we last wrote, so we can skip our own saves in the watcher
 const lastWrittenContent = new Map<string, string>();
 
-
 export function saveReview(taskId: string, reviewId: string, content: string): void {
   const reviewPath = getReviewFilePath(taskId, reviewId);
   fs.mkdirSync(path.dirname(reviewPath), { recursive: true });
@@ -249,7 +256,11 @@ export function deleteReview(taskId: string, reviewId: string): void {
   writeManifest(taskId, updated);
 
   const reviewPath = getReviewFilePath(taskId, reviewId);
-  try { fs.unlinkSync(reviewPath); } catch { /* ignore */ }
+  try {
+    fs.unlinkSync(reviewPath);
+  } catch {
+    /* ignore */
+  }
 
   unwatchReviewFile(reviewId);
 }
@@ -322,20 +333,32 @@ function findSessionJsonl(worktreePath: string, sessionId: string): string | nul
 
 function formatToolUse(name: string, input: Record<string, unknown>): string {
   switch (name) {
-    case 'Read': return `Reading ${input.file_path || ''}`;
-    case 'Edit': return `Editing ${input.file_path || ''}`;
-    case 'Write': return `Writing ${input.file_path || ''}`;
-    case 'Bash': return `$ ${(input.command as string || '').slice(0, 80)}`;
-    case 'Glob': return `Searching ${input.pattern || ''}`;
-    case 'Grep': return `Searching for /${input.pattern || ''}/`;
-    case 'Task': return `Agent: ${input.description || ''}`;
-    default: return name;
+    case 'Read':
+      return `Reading ${input.file_path || ''}`;
+    case 'Edit':
+      return `Editing ${input.file_path || ''}`;
+    case 'Write':
+      return `Writing ${input.file_path || ''}`;
+    case 'Bash':
+      return `$ ${((input.command as string) || '').slice(0, 80)}`;
+    case 'Glob':
+      return `Searching ${input.pattern || ''}`;
+    case 'Grep':
+      return `Searching for /${input.pattern || ''}/`;
+    case 'Task':
+      return `Agent: ${input.description || ''}`;
+    default:
+      return name;
   }
 }
 
 function readLastActivity(filePath: string): string | null {
   let stat: fs.Stats;
-  try { stat = fs.statSync(filePath); } catch { return null; }
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return null;
+  }
   if (stat.size === 0) return null;
 
   const readSize = Math.min(stat.size, 32768);
@@ -344,7 +367,10 @@ function readLastActivity(filePath: string): string | null {
   fs.readSync(fd, buf, 0, readSize, stat.size - readSize);
   fs.closeSync(fd);
 
-  const lines = buf.toString('utf-8').split('\n').filter((l) => l.trim());
+  const lines = buf
+    .toString('utf-8')
+    .split('\n')
+    .filter((l) => l.trim());
   for (let i = lines.length - 1; i >= 0; i--) {
     try {
       const obj = JSON.parse(lines[i]);
@@ -357,11 +383,13 @@ function readLastActivity(filePath: string): string | null {
           return formatToolUse(content[j].name, content[j].input as Record<string, unknown>);
         }
         if (content[j].type === 'text') {
-          const text = (content[j].text as string || '').trim();
-          if (text) return text.length > 100 ? text.slice(0, 100) + '...' : text;
+          const text = ((content[j].text as string) || '').trim();
+          if (text) return text.length > 100 ? `${text.slice(0, 100)}...` : text;
         }
       }
-    } catch { /* skip malformed lines */ }
+    } catch {
+      /* skip malformed lines */
+    }
   }
   return null;
 }

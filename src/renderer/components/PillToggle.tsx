@@ -17,12 +17,7 @@ const sizeClasses = {
   md: 'px-3 py-1 text-xs',
 } as const;
 
-export default function PillToggle<T extends string>({
-  options,
-  value,
-  onChange,
-  size = 'sm',
-}: PillToggleProps<T>) {
+export default function PillToggle<T extends string>({ options, value, onChange, size = 'sm' }: PillToggleProps<T>) {
   const sizeClass = sizeClasses[size];
 
   return (

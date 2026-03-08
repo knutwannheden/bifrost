@@ -26,7 +26,14 @@ const shortcuts: Shortcut[] = [
   { key: 'Shift+W', label: 'Archive task', group: 'Tasks', action: 'archive-task' },
 
   // Navigation
-  { key: 'Shift+[', label: 'Previous tab', group: 'Navigation', execKey: '[', execShift: true, execCode: 'BracketLeft' },
+  {
+    key: 'Shift+[',
+    label: 'Previous tab',
+    group: 'Navigation',
+    execKey: '[',
+    execShift: true,
+    execCode: 'BracketLeft',
+  },
   { key: 'Shift+]', label: 'Next tab', group: 'Navigation', execKey: ']', execShift: true, execCode: 'BracketRight' },
   { key: '1-9', label: 'Switch to tab N', group: 'Navigation' },
   { key: '-', label: 'Switch to last active tab', group: 'Navigation', execKey: '-' },
@@ -231,7 +238,9 @@ export default function KeyboardShortcutsPanel() {
                   onClick={() => execute(item.shortcut)}
                   onMouseEnter={() => setSelectedIndex(navIdx)}
                 >
-                  <span className="text-sm text-secondary"><Highlight text={item.shortcut.label} search={query} /></span>
+                  <span className="text-sm text-secondary">
+                    <Highlight text={item.shortcut.label} search={query} />
+                  </span>
                   <Kbd size="sm">{`Cmd+${item.shortcut.key}`}</Kbd>
                 </div>
               );
@@ -239,7 +248,9 @@ export default function KeyboardShortcutsPanel() {
           )}
         </div>
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
-          <span className="text-xs text-faint">&uarr;&darr; navigate &middot; Enter execute &middot; type to search &middot; Esc close</span>
+          <span className="text-xs text-faint">
+            &uarr;&darr; navigate &middot; Enter execute &middot; type to search &middot; Esc close
+          </span>
         </div>
       </div>
     </div>

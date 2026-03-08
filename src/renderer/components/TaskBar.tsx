@@ -1,7 +1,7 @@
-import { useState, useRef } from 'react';
-import TaskTab from './TaskTab';
+import { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { repoDisplayName, shortPath } from '../utils/paths';
+import TaskTab from './TaskTab';
 
 export default function TaskBar() {
   const { state, dispatch } = useApp();
@@ -51,45 +51,48 @@ export default function TaskBar() {
         const repoName = repo ? repoDisplayName(repo) : shortPath(task.worktreePath);
         const isOver = dragOverId === task.id && draggingId.current !== task.id;
         return (
-        <div
-          key={task.id}
-          className="relative flex items-stretch"
-          onDragOver={(e) => handleDragOver(e, task.id)}
-          onDrop={handleDrop}
-          onDragLeave={() => { if (dragOverId === task.id) setDragOverId(null); }}
-        >
-          {isOver && dropSide === 'left' && (
-            <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-accent z-10" />
-          )}
-          <TaskTab
-            task={task}
-            repoName={repoName}
-            isActive={task.id === state.activeTaskId}
-            onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
-            onClose={() => {
-              window.bifrost.stopTask(task.id).then((updated) => {
-                dispatch({ type: 'UPDATE_TASK', task: updated });
-                if (state.activeTaskId === task.id) {
-                  const remaining = openTasks.filter((t) => t.id !== task.id);
-                  dispatch({
-                    type: 'SET_ACTIVE_TASK',
-                    taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-                  });
-                }
-              });
+          <div
+            key={task.id}
+            className="relative flex items-stretch"
+            onDragOver={(e) => handleDragOver(e, task.id)}
+            onDrop={handleDrop}
+            onDragLeave={() => {
+              if (dragOverId === task.id) setDragOverId(null);
             }}
-            onRename={(name) => {
-              window.bifrost.renameTask(task.id, name).then((updated) => {
-                dispatch({ type: 'UPDATE_TASK', task: updated });
-              });
-            }}
-            onDragStart={() => { draggingId.current = task.id; }}
-            onDragEnd={() => { draggingId.current = null; setDragOverId(null); }}
-          />
-          {isOver && dropSide === 'right' && (
-            <div className="absolute right-0 top-1 bottom-1 w-0.5 bg-accent z-10" />
-          )}
-        </div>
+          >
+            {isOver && dropSide === 'left' && <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-accent z-10" />}
+            <TaskTab
+              task={task}
+              repoName={repoName}
+              isActive={task.id === state.activeTaskId}
+              onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
+              onClose={() => {
+                window.bifrost.stopTask(task.id).then((updated) => {
+                  dispatch({ type: 'UPDATE_TASK', task: updated });
+                  if (state.activeTaskId === task.id) {
+                    const remaining = openTasks.filter((t) => t.id !== task.id);
+                    dispatch({
+                      type: 'SET_ACTIVE_TASK',
+                      taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
+                    });
+                  }
+                });
+              }}
+              onRename={(name) => {
+                window.bifrost.renameTask(task.id, name).then((updated) => {
+                  dispatch({ type: 'UPDATE_TASK', task: updated });
+                });
+              }}
+              onDragStart={() => {
+                draggingId.current = task.id;
+              }}
+              onDragEnd={() => {
+                draggingId.current = null;
+                setDragOverId(null);
+              }}
+            />
+            {isOver && dropSide === 'right' && <div className="absolute right-0 top-1 bottom-1 w-0.5 bg-accent z-10" />}
+          </div>
         );
       })}
     </div>

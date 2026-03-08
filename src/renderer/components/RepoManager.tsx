@@ -1,13 +1,13 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { RecentRepo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
-import { shortPath, repoDisplayName } from '../utils/paths';
+import { repoDisplayName, shortPath } from '../utils/paths';
+import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
 import Highlight from './Highlight';
 import SearchIndicator from './SearchIndicator';
-import { altSymbol } from '../utils/platform';
 
 export default function RepoManager() {
   const { state, dispatch } = useApp();
@@ -57,7 +57,12 @@ export default function RepoManager() {
 
   // Fetch recent repos from Claude history
   useEffect(() => {
-    window.bifrost.getRecentRepos().then(setRecentRepos).catch(() => { /* ignore */ });
+    window.bifrost
+      .getRecentRepos()
+      .then(setRecentRepos)
+      .catch(() => {
+        /* ignore */
+      });
   }, []);
 
   // Filter out repos already managed, and apply search filter
@@ -261,8 +266,13 @@ export default function RepoManager() {
                   return (
                     <div
                       key={repo.path}
-                      ref={(el) => { suggestionRefs.current[idx] = el; }}
-                      onMouseEnter={() => { setFocusedSection('suggestions'); setFocusedSuggestionIdx(idx); }}
+                      ref={(el) => {
+                        suggestionRefs.current[idx] = el;
+                      }}
+                      onMouseEnter={() => {
+                        setFocusedSection('suggestions');
+                        setFocusedSuggestionIdx(idx);
+                      }}
                       className={`flex items-center justify-between rounded px-3 py-1.5 cursor-default transition-colors ${
                         isFocused
                           ? 'bg-surface-alt border border-accent-muted ring-1 ring-accent-muted'
@@ -270,8 +280,12 @@ export default function RepoManager() {
                       }`}
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-secondary"><Highlight text={repo.githubPath ?? repo.name} search={search} /></p>
-                        <p className="text-xs text-muted truncate"><Highlight text={shortPath(repo.path)} search={search} /></p>
+                        <p className="text-sm text-secondary">
+                          <Highlight text={repo.githubPath ?? repo.name} search={search} />
+                        </p>
+                        <p className="text-xs text-muted truncate">
+                          <Highlight text={shortPath(repo.path)} search={search} />
+                        </p>
                       </div>
                       <button
                         onClick={() => handleAddSuggestion(repo.path)}
@@ -300,8 +314,13 @@ export default function RepoManager() {
               return (
                 <div
                   key={repo.id}
-                  ref={(el) => { repoRefs.current[idx] = el; }}
-                  onMouseEnter={() => { setFocusedSection('repos'); setFocusedRepoIdx(idx); }}
+                  ref={(el) => {
+                    repoRefs.current[idx] = el;
+                  }}
+                  onMouseEnter={() => {
+                    setFocusedSection('repos');
+                    setFocusedRepoIdx(idx);
+                  }}
                   className={`flex items-center justify-between rounded px-3 py-2 cursor-default transition-colors ${
                     isFocused
                       ? 'bg-surface-alt border border-accent-muted ring-1 ring-accent-muted'
@@ -309,12 +328,19 @@ export default function RepoManager() {
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-primary truncate"><Highlight text={repoDisplayName(repo)} search={search} /></p>
-                    <p className="text-xs text-secondary truncate"><Highlight text={shortPath(repo.path)} search={search} /></p>
+                    <p className="text-sm text-primary truncate">
+                      <Highlight text={repoDisplayName(repo)} search={search} />
+                    </p>
+                    <p className="text-xs text-secondary truncate">
+                      <Highlight text={shortPath(repo.path)} search={search} />
+                    </p>
                   </div>
                   <div className="flex items-center gap-1 ml-3">
                     <button
-                      onClick={() => { close(); dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id }); }}
+                      onClick={() => {
+                        close();
+                        dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, repoId: repo.id });
+                      }}
                       tabIndex={-1}
                       title={`Create task (${altSymbol}T)`}
                       className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
@@ -378,7 +404,8 @@ export default function RepoManager() {
         {/* Footer */}
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Tab cycle &middot; type to search &middot; {altSymbol}B browse &middot; {altSymbol}A add &middot; Esc close
+            &uarr;&darr; navigate &middot; Tab cycle &middot; type to search &middot; {altSymbol}B browse &middot;{' '}
+            {altSymbol}A add &middot; Esc close
           </span>
         </div>
       </div>

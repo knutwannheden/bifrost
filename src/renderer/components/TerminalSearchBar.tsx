@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { searchAddonRegistry } from '../hooks/useTerminal';
 import type { ISearchOptions } from '@xterm/addon-search';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { searchAddonRegistry } from '../hooks/useTerminal';
 
 interface TerminalSearchBarProps {
   sessionId: string;
@@ -91,11 +91,7 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
   };
 
   const matchLabel =
-    resultCount > 0
-      ? `${resultIndex >= 0 ? resultIndex + 1 : '?'} of ${resultCount}`
-      : query
-        ? 'No results'
-        : '';
+    resultCount > 0 ? `${resultIndex >= 0 ? resultIndex + 1 : '?'} of ${resultCount}` : query ? 'No results' : '';
 
   return (
     <div
@@ -111,9 +107,7 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
         placeholder="Find…"
         className="bg-transparent text-sm text-primary placeholder-muted outline-none w-40"
       />
-      {matchLabel && (
-        <span className="text-xs text-secondary whitespace-nowrap mr-1">{matchLabel}</span>
-      )}
+      {matchLabel && <span className="text-xs text-secondary whitespace-nowrap mr-1">{matchLabel}</span>}
       <button
         onClick={findPrevious}
         title="Previous match (Shift+Enter)"
