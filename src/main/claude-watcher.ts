@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import type { ActivityEntry } from '../shared/types';
+import type { ActivityEntry, TokenDataPoint, TokenTurnTool, TokenTurnType } from '../shared/types';
 import { loadConfig } from './config';
 import { summarizeTask } from './task-summarizer';
 
@@ -130,6 +130,35 @@ function summarizeToolInput(toolName: string, input: Record<string, unknown>): s
       return (input.pattern as string) || '';
     case 'Grep':
       return `/${(input.pattern as string) || ''}/ ${input.path || ''}`;
+    case 'Task':
+      return (input.description as string) || '';
+    case 'AskUserQuestion': {
+      const qs = input.questions as Array<{ question: string }> | undefined;
+      return qs?.map((q) => q.question).join('\n') ?? '';
+    }
+    default:
+      return '';
+  }
+}
+
+/** Fuller tool detail for token usage (not truncated like summarizeToolInput) */
+function fullToolDetail(toolName: string, input: Record<string, unknown>): string {
+  if (!input) return '';
+  switch (toolName) {
+    case 'Edit':
+    case 'Write':
+    case 'Read':
+      return (input.file_path as string) || '';
+    case 'Bash':
+      return (input.command as string) || '';
+    case 'Glob':
+      return (input.pattern as string) || '';
+    case 'Grep':
+      return `/${(input.pattern as string) || ''}/ ${input.path || ''}`;
+    case 'Agent':
+      return (input.prompt as string) || (input.description as string) || '';
+    case 'Skill':
+      return (input.skill as string) || '';
     case 'Task':
       return (input.description as string) || '';
     case 'AskUserQuestion': {
@@ -310,6 +339,301 @@ export function getRecentClaudeEntries(taskId: string, worktreePath: string): Ac
   if (allEntries.length === 0) return [];
   allEntries.sort((a, b) => a.timestamp - b.timestamp);
   return allEntries.slice(-50);
+}
+
+/** Parsed JSONL line */
+interface ParsedLine {
+  type: string;
+  timestamp: number;
+  // assistant fields
+  usage?: { input: number; output: number; cacheRead: number; cacheCreation: number };
+  contentType?: string; // 'text' | 'tool_use' | 'thinking'
+  toolName?: string;
+  toolDetail?: string;
+  text?: string;
+  // user fields
+  userText?: string;
+  isToolResult?: boolean;
+}
+
+function parseLine(line: string): ParsedLine | null {
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(line);
+  } catch {
+    return null;
+  }
+
+  const type = obj.type as string;
+  const timestamp = obj.timestamp ? new Date(obj.timestamp as string).getTime() : Date.now();
+
+  if (type === 'assistant') {
+    const msg = obj.message as { usage?: Record<string, unknown>; content?: unknown[] } | undefined;
+    const content = msg?.content;
+    const block = Array.isArray(content) ? (content[0] as Record<string, unknown>) : undefined;
+    const contentType = block?.type as string | undefined;
+
+    const usage = msg?.usage;
+    const parsed: ParsedLine = { type, timestamp, contentType };
+
+    if (usage) {
+      parsed.usage = {
+        input: (usage.input_tokens as number) || 0,
+        output: (usage.output_tokens as number) || 0,
+        cacheRead: (usage.cache_read_input_tokens as number) || 0,
+        cacheCreation: (usage.cache_creation_input_tokens as number) || 0,
+      };
+    }
+
+    if (contentType === 'tool_use' && block) {
+      parsed.toolName = block.name as string;
+      parsed.toolDetail = fullToolDetail(block.name as string, block.input as Record<string, unknown>) || undefined;
+    } else if (contentType === 'text' && block) {
+      const text = ((block.text as string) || '').trim();
+      if (text) parsed.text = text;
+    }
+
+    return parsed;
+  }
+
+  if (type === 'user') {
+    const msg = obj.message as { content?: unknown } | undefined;
+    const content = msg?.content;
+    const parsed: ParsedLine = { type, timestamp };
+
+    if (Array.isArray(content)) {
+      const blocks = content as Record<string, unknown>[];
+      // Check if this is a tool_result
+      if (blocks.some((b) => b.type === 'tool_result')) {
+        parsed.isToolResult = true;
+      } else {
+        const textParts = blocks.filter((b) => b.type === 'text').map((b) => (b.text as string) || '');
+        if (textParts.length > 0) parsed.userText = textParts.join('\n');
+      }
+    } else if (typeof content === 'string') {
+      parsed.userText = content;
+    }
+
+    return parsed;
+  }
+
+  if (type === 'system' && (obj.subtype as string) === 'compact_boundary') {
+    return { type: 'compact_boundary', timestamp };
+  }
+
+  return null;
+}
+
+/**
+ * Read all token usage data points from JSONL files for a task.
+ *
+ * Groups consecutive assistant JSONL lines into logical "turns" (one API call).
+ * A turn boundary is a user message that is NOT a tool_result.
+ * Within a turn, token usage is summed across blocks, and all tool calls / text
+ * are collected.
+ */
+export function getTokenUsageData(worktreePath: string, sessionId?: string): TokenDataPoint[] {
+  const dirName = projectDirName(worktreePath);
+  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+
+  if (!fs.existsSync(projectDir)) return [];
+
+  const files: string[] = [];
+  if (sessionId) {
+    const filePath = path.join(projectDir, `${sessionId}.jsonl`);
+    if (fs.existsSync(filePath)) files.push(filePath);
+  } else {
+    try {
+      for (const f of fs.readdirSync(projectDir)) {
+        if (f.endsWith('.jsonl')) files.push(path.join(projectDir, f));
+      }
+    } catch {
+      return [];
+    }
+  }
+
+  // Parse all lines first
+  const allLines: ParsedLine[] = [];
+  for (const filePath of files) {
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      const parsed = parseLine(line);
+      if (parsed) allLines.push(parsed);
+    }
+  }
+
+  // Group into turns: a turn starts with the first assistant line after a
+  // non-tool-result user message (the prompt), and ends when the next
+  // non-tool-result user message appears.
+  const points: TokenDataPoint[] = [];
+  let inPlanMode = false;
+  let currentPrompt: string | undefined;
+  let turnTimestamp = 0;
+  let turnTools: TokenTurnTool[] = [];
+  let turnTexts: string[] = [];
+  let turnUsage = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
+  let turnHasData = false;
+  let turnPlanMode = false;
+  let turnHasUserPrompt = false;
+  let turnCompacted = false;
+  let nextTurnCompacted = false;
+  let turnLastSubCallKey = '';
+  let turnSubCallMaxOutput = 0;
+  let turnSubCallToolStart = 0;
+  let turnPrevBlockOutput = 0;
+  let turnTextTokens = 0;
+
+  const classifyTurn = (): TokenTurnType => {
+    // user: turn triggered by user typing a prompt (text-only response)
+    // tool: user-triggered turn that involved tool calls
+    // plan: turn in plan mode
+    // agent: autonomous turn (no user prompt)
+    if (turnPlanMode) return 'plan';
+    if (!turnHasUserPrompt) return 'agent';
+    if (turnTools.length > 0) return 'tool';
+    return 'user';
+  };
+
+  const flushTurn = () => {
+    if (!turnHasData) return;
+    // Include the last sub-call's output
+    turnUsage.output += turnSubCallMaxOutput;
+    const totalInput = turnUsage.input + turnUsage.cacheRead + turnUsage.cacheCreation;
+    if (totalInput === 0 && turnUsage.output === 0) return;
+
+    const summary = turnTexts.join('\n').trim();
+    points.push({
+      timestamp: turnTimestamp,
+      inputTokens: turnUsage.input,
+      outputTokens: turnUsage.output,
+      cacheReadTokens: turnUsage.cacheRead,
+      cacheCreationTokens: turnUsage.cacheCreation,
+      turnType: classifyTurn(),
+      tools: turnTools.length > 0 ? turnTools : undefined,
+      summary: summary ? (summary.length > 1000 ? `${summary.slice(0, 1000)}...` : summary) : undefined,
+      summaryTokens: turnTextTokens || undefined,
+      prompt: currentPrompt
+        ? currentPrompt.length > 1000
+          ? `${currentPrompt.slice(0, 1000)}...`
+          : currentPrompt
+        : undefined,
+      compacted: turnCompacted || undefined,
+    });
+  };
+
+  const resetTurn = () => {
+    turnTimestamp = 0;
+    turnTools = [];
+    turnTexts = [];
+    turnUsage = { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 };
+    turnHasData = false;
+    turnPlanMode = inPlanMode;
+    turnHasUserPrompt = false;
+    turnCompacted = nextTurnCompacted;
+    nextTurnCompacted = false;
+    turnLastSubCallKey = '';
+    turnSubCallMaxOutput = 0;
+    turnSubCallToolStart = 0;
+    turnPrevBlockOutput = 0;
+    turnTextTokens = 0;
+  };
+
+  for (const line of allLines) {
+    if (line.type === 'user') {
+      if (!line.isToolResult) {
+        // Real user message = turn boundary
+        flushTurn();
+        resetTurn();
+        currentPrompt = line.userText;
+        turnHasUserPrompt = !!line.userText;
+      }
+      // tool_result lines are mid-turn (between tool_use and next assistant block)
+      continue;
+    }
+
+    if (line.type === 'compact_boundary') {
+      nextTurnCompacted = true;
+      continue;
+    }
+
+    if (line.type === 'assistant') {
+      if (!turnHasData) {
+        turnTimestamp = line.timestamp;
+        turnPlanMode = inPlanMode;
+      }
+      turnHasData = true;
+
+      // Track usage per sub-call within the turn.
+      // Input/cache: keep the max (= context size at end of turn, not summed).
+      // Output: sum across sub-calls (each sub-call's max output).
+      // Per-block output delta: for tool/text token attribution.
+      let blockOutputDelta = 0;
+      if (line.usage) {
+        const subCallKey = `${line.usage.input}:${line.usage.cacheRead}:${line.usage.cacheCreation}`;
+        if (subCallKey !== turnLastSubCallKey) {
+          // New sub-call — context grew from tool results of previous sub-call
+          const newSubCallInput = line.usage.input + line.usage.cacheRead + line.usage.cacheCreation;
+          const prevSubCallInput = turnUsage.input + turnUsage.cacheRead + turnUsage.cacheCreation;
+          const inputGrowth = Math.max(0, newSubCallInput - prevSubCallInput);
+
+          // Distribute input growth evenly across tools from previous sub-call
+          if (inputGrowth > 0 && turnSubCallToolStart < turnTools.length) {
+            const toolCount = turnTools.length - turnSubCallToolStart;
+            const perTool = Math.round(inputGrowth / toolCount);
+            for (let ti = turnSubCallToolStart; ti < turnTools.length; ti++) {
+              turnTools[ti].inputTokens = perTool;
+            }
+          }
+          turnSubCallToolStart = turnTools.length;
+
+          // Flush previous sub-call's output and reset
+          turnUsage.output += turnSubCallMaxOutput;
+          turnSubCallMaxOutput = 0;
+          turnPrevBlockOutput = 0;
+          turnLastSubCallKey = subCallKey;
+        }
+        // Context size: take max across sub-calls (grows as tool results are added)
+        const subCallInput = line.usage.input + line.usage.cacheRead + line.usage.cacheCreation;
+        if (subCallInput > turnUsage.input + turnUsage.cacheRead + turnUsage.cacheCreation) {
+          turnUsage.input = line.usage.input;
+          turnUsage.cacheRead = line.usage.cacheRead;
+          turnUsage.cacheCreation = line.usage.cacheCreation;
+        }
+        blockOutputDelta = Math.max(0, line.usage.output - turnPrevBlockOutput);
+        turnPrevBlockOutput = line.usage.output;
+        turnSubCallMaxOutput = Math.max(turnSubCallMaxOutput, line.usage.output);
+      }
+
+      if (line.toolName) {
+        // Track plan mode transitions
+        if (line.toolName === 'EnterPlanMode') inPlanMode = true;
+        else if (line.toolName === 'ExitPlanMode') inPlanMode = false;
+
+        turnTools.push({
+          name: line.toolName,
+          detail: line.toolDetail,
+          outputTokens: blockOutputDelta,
+        });
+      }
+
+      if (line.text) {
+        turnTexts.push(line.text);
+        turnTextTokens += blockOutputDelta;
+      }
+    }
+  }
+
+  // Flush the last turn
+  flushTurn();
+
+  points.sort((a, b) => a.timestamp - b.timestamp);
+  return points;
 }
 
 export function stopClaudeWatching(taskId: string): void {

@@ -223,7 +223,7 @@ export default function RightIconBar() {
       </IconButton>
 
       <IconButton
-        label="Activity"
+        label="Tokens"
         active={isDiffActive && diffMode === 'activity'}
         onClick={() => toggleDiffMode('activity')}
       >

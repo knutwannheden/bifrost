@@ -23,7 +23,7 @@ import type {
 import { clearActivityLog, getActivityLog, getLastChangedFile, startWatching, stopWatching } from './activity-watcher';
 import { getApiPort, getSessionMtime, isSessionStale } from './bifrost-api';
 import { scanClaudeSessions } from './claude-session-scanner';
-import { getRecentClaudeEntries } from './claude-watcher';
+import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
 import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
 import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
@@ -675,6 +675,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.CLEAR_ACTIVITY_LOG, (_event, taskId: string) => {
     clearActivityLog(taskId);
+  });
+
+  // Token Usage
+  ipcMain.handle(IPC.GET_TOKEN_USAGE, (_event, taskId: string) => {
+    const task = getTask(taskId);
+    return getTokenUsageData(task.worktreePath, task.sessionId);
   });
 
   // Terminal title

@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ActivityEntry, CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
+import type { CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
 import type { DiffMode } from '../context/AppContext';
 import { getActiveDiffState, useApp } from '../context/AppContext';
-import { useActivityLog } from '../hooks/useActivityLog';
 import { useDiff } from '../hooks/useDiff';
 import { useGitLog } from '../hooks/useGitLog';
 import { useInstantSearch } from '../hooks/useInstantSearch';
 import { isDarkTheme } from '../hooks/useTheme';
+import { useTokenUsage } from '../hooks/useTokenUsage';
 import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
 import { diffFileStats, extFromPath, parseDiff } from '../utils/diff-parser';
-import { formatRelative, formatTimestamp } from '../utils/format-time';
+import { formatRelative } from '../utils/format-time';
 import { isModKey } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import type { HighlightedToken } from '../utils/syntax-highlight';
@@ -22,6 +22,7 @@ import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
 import SearchIndicator from './SearchIndicator';
 import Spinner from './Spinner';
+import TokenUsageChart from './TokenUsageChart';
 
 interface HighlightedFile {
   file: DiffFile;
@@ -35,41 +36,6 @@ function plainTokens(lines: DiffLine[]): HighlightedToken[][] {
 }
 
 /** Used only for small inline diffs (activity log entries) */
-function useHighlightedFiles(diff: string | null): HighlightedFile[] | null {
-  const [highlighted, setHighlighted] = useState<HighlightedFile[] | null>(null);
-
-  useEffect(() => {
-    if (!diff) {
-      setHighlighted(null);
-      return;
-    }
-
-    const files = parseDiff(diff);
-    let cancelled = false;
-
-    Promise.all(
-      files.map(async (file) => {
-        const ext = extFromPath(file.newPath || file.oldPath);
-        const allLines = file.hunks.flatMap((h) => h.lines);
-        const tokens = await highlightLines(
-          allLines.map((l) => l.content),
-          ext,
-          isDarkTheme(),
-        );
-        return { file, tokensByLine: tokens };
-      }),
-    ).then((result) => {
-      if (!cancelled) setHighlighted(result);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [diff]);
-
-  return highlighted;
-}
-
 const lineNumWidth = 'w-12';
 
 function LineNumber({ num }: { num: number | null }) {
@@ -224,104 +190,12 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
   );
 }
 
-function ClaudeEventView({ entry }: { entry: ActivityEntry }) {
-  const kindConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
-    user_message: { label: 'User', color: 'text-success', bg: 'bg-success/10', border: 'border-success/30' },
-    assistant_text: { label: 'Claude', color: 'text-accent-hover', bg: 'bg-accent/10', border: 'border-accent-muted' },
-    tool_use: { label: '', color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30' },
-    tool_result: { label: 'Result', color: 'text-secondary', bg: 'bg-surface/50', border: 'border-border-default/30' },
-  };
-
-  const config = kindConfig[entry.claudeEventKind ?? ''] ?? kindConfig.assistant_text;
-
-  if (entry.claudeEventKind === 'tool_use') {
-    return (
-      <div className={`flex items-start gap-2 px-3 py-1.5 ${config.bg} border ${config.border} rounded text-xs`}>
-        <span className="text-muted flex-shrink-0">{formatTimestamp(entry.timestamp)}</span>
-        <span className={`${config.color} font-semibold flex-shrink-0`}>{entry.claudeToolName}</span>
-        {entry.claudeText && <span className="text-secondary font-mono truncate">{entry.claudeText}</span>}
-      </div>
-    );
-  }
-
-  return (
-    <div className={`px-3 py-2 ${config.bg} border ${config.border} rounded text-xs`}>
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
-        <span className={`${config.color} font-semibold`}>{config.label}</span>
-      </div>
-      <p className="text-primary whitespace-pre-wrap">{entry.claudeText}</p>
-    </div>
-  );
-}
-
-function ActivityEntryView({ entry, search }: { entry: ActivityEntry; search: string }) {
-  const highlighted = useHighlightedFiles(entry.diff ?? null);
-
-  if (entry.type === 'claude_event') {
-    return <ClaudeEventView entry={entry} />;
-  }
-
-  if (entry.type === 'commit') {
-    return (
-      <div className="flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent-muted rounded text-xs">
-        <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
-        <span className="text-accent-hover font-semibold">Commit</span>
-        <span className="text-secondary font-mono">{entry.commitSha?.slice(0, 8)}</span>
-        <span className="text-primary">
-          <Highlight text={entry.commitMessage ?? ''} search={search} />
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-1 text-xs">
-        <span className="text-muted">{formatTimestamp(entry.timestamp)}</span>
-        <span className="text-primary font-mono">
-          <Highlight text={entry.filePath ?? ''} search={search} />
-        </span>
-      </div>
-      {highlighted?.map((data, i) => (
-        <FileSection key={i} data={data} />
-      ))}
-      {!highlighted && entry.diff && (
-        <pre className="text-xs text-secondary font-mono overflow-x-auto p-2 bg-surface/50 rounded border border-border-default">
-          {entry.diff}
-        </pre>
-      )}
-    </div>
-  );
-}
-
 const modeOptions: PillOption<DiffMode>[] = [
   { value: 'git', label: <ActionLabel text="Git Diff" showHint={true} /> },
-  { value: 'activity', label: <ActionLabel text="Activity Log" showHint={true} /> },
+  { value: 'activity', label: <ActionLabel text="Tokens" showHint={true} /> },
   { value: 'log', label: <ActionLabel text="Git Log" hintIndex={4} showHint={true} /> },
   { value: 'review', label: <ActionLabel text="Review" showHint={true} /> },
 ];
-
-/** Get searchable text from an activity entry */
-function entrySearchText(entry: ActivityEntry): string {
-  return `${entry.claudeText ?? ''} ${entry.filePath ?? ''} ${entry.commitMessage ?? ''} ${entry.claudeToolName ?? ''} ${entry.diff ?? ''}`.toLowerCase();
-}
-
-/** Format an activity entry as plain text for context capture */
-function entryToText(entry: ActivityEntry): string {
-  if (entry.type === 'commit') {
-    return `[commit] ${entry.commitSha?.slice(0, 8)} ${entry.commitMessage ?? ''}`;
-  }
-  if (entry.type === 'claude_event') {
-    const kind = entry.claudeEventKind ?? 'unknown';
-    if (kind === 'tool_use') return `[tool_use] ${entry.claudeToolName ?? ''} ${entry.claudeText ?? ''}`;
-    return `[${kind}] ${entry.claudeText ?? ''}`;
-  }
-  if (entry.type === 'file_change') {
-    return `[file] ${entry.filePath ?? ''}\n${entry.diff ?? ''}`;
-  }
-  return `[${entry.type}]`;
-}
 
 const statusConfig: Record<DiffFileStatus, { letter: string; color: string }> = {
   added: { letter: 'A', color: 'text-success' },
@@ -946,7 +820,6 @@ function ReviewPanel({ taskId }: { taskId: string }) {
 export default function DiffOverlay() {
   const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const gitFilesRef = useRef<DiffFile[]>([]);
 
@@ -961,13 +834,8 @@ export default function DiffOverlay() {
   const isLog = diffMode === 'log';
   const isReview = diffMode === 'review';
 
-  // Fetch activity data at DiffOverlay level for search/navigation
-  const activityLog = useActivityLog(showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null);
-
-  const filteredEntries = useMemo(() => {
-    if (!search) return activityLog.entries;
-    return activityLog.entries.filter((e) => matchesAllTerms(entrySearchText(e), search));
-  }, [activityLog.entries, search]);
+  // Fetch token usage data for the Tokens tab
+  const tokenUsage = useTokenUsage(showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null);
 
   // Fetch git log data at DiffOverlay level for search/navigation
   const gitLog = useGitLog(showDiff && isLog && state.activeTaskId ? state.activeTaskId : null);
@@ -992,13 +860,10 @@ export default function DiffOverlay() {
 
   // Clamp focus when list shrinks
   useEffect(() => {
-    if (isActivity && focusedIdx >= filteredEntries.length && filteredEntries.length > 0) {
-      setFocusedIdx(filteredEntries.length - 1);
-    }
     if (isLog && focusedIdx >= filteredLogEntries.length && filteredLogEntries.length > 0) {
       setFocusedIdx(filteredLogEntries.length - 1);
     }
-  }, [filteredEntries.length, filteredLogEntries.length, focusedIdx, isActivity, isLog]);
+  }, [filteredLogEntries.length, focusedIdx, isLog]);
 
   // Clamp git file index when file list shrinks
   useEffect(() => {
@@ -1009,10 +874,10 @@ export default function DiffOverlay() {
 
   // Scroll focused entry into view
   useEffect(() => {
-    if (isActivity || isLog) {
+    if (isLog) {
       itemRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
     }
-  }, [focusedIdx, isActivity, isLog]);
+  }, [focusedIdx, isLog]);
 
   useEffect(() => {
     if (showDiff) {
@@ -1042,10 +907,7 @@ export default function DiffOverlay() {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
       if (activeTask) {
         let filePath: string | undefined;
-        if (isActivity && filteredEntries.length > 0) {
-          const entry = filteredEntries[focusedIdx];
-          filePath = entry?.filePath;
-        } else if (!isActivity && gitFilesRef.current.length > 0) {
+        if (!isActivity && gitFilesRef.current.length > 0) {
           const file = gitFilesRef.current[gitFileIdx];
           filePath = file?.newPath || file?.oldPath;
         }
@@ -1062,25 +924,6 @@ export default function DiffOverlay() {
     if (isModKey(e) && e.shiftKey && e.key.toLowerCase() === 'c') {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
       if (!activeTask) return;
-
-      if (isActivity && filteredEntries.length > 0) {
-        e.preventDefault();
-        e.stopPropagation();
-        const entry = filteredEntries[focusedIdx];
-        if (!entry) return;
-
-        const content = entryToText(entry);
-        const params: CaptureContextParams = {
-          type: 'activity',
-          content,
-          taskId: activeTask.id,
-          taskName: activeTask.name,
-        };
-        window.bifrost.captureContext(params).then((id) => {
-          dispatch({ type: 'SHOW_TOAST', message: `[Bifrost #${id}] copied` });
-        });
-        return;
-      }
 
       if (isLog && filteredLogEntries.length > 0) {
         e.preventDefault();
@@ -1123,9 +966,7 @@ export default function DiffOverlay() {
 
       case 'ArrowUp':
         e.preventDefault();
-        if (isActivity && filteredEntries.length > 0) {
-          setFocusedIdx((i) => (i > 0 ? i - 1 : filteredEntries.length - 1));
-        } else if (isLog && filteredLogEntries.length > 0) {
+        if (isLog && filteredLogEntries.length > 0) {
           setFocusedIdx((i) => (i > 0 ? i - 1 : filteredLogEntries.length - 1));
         } else if (diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i > 0 ? i - 1 : gitFileCount - 1));
@@ -1134,9 +975,7 @@ export default function DiffOverlay() {
 
       case 'ArrowDown':
         e.preventDefault();
-        if (isActivity && filteredEntries.length > 0) {
-          setFocusedIdx((i) => (i < filteredEntries.length - 1 ? i + 1 : 0));
-        } else if (isLog && filteredLogEntries.length > 0) {
+        if (isLog && filteredLogEntries.length > 0) {
           setFocusedIdx((i) => (i < filteredLogEntries.length - 1 ? i + 1 : 0));
         } else if (diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i < gitFileCount - 1 ? i + 1 : 0));
@@ -1224,13 +1063,11 @@ export default function DiffOverlay() {
         search={search}
         className="mx-4 mt-3 flex-shrink-0"
         matchInfo={
-          isActivity
-            ? `${filteredEntries.length} match${filteredEntries.length !== 1 ? 'es' : ''}`
-            : isLog
-              ? `${filteredLogEntries.length} commit${filteredLogEntries.length !== 1 ? 's' : ''}`
-              : diffMode === 'git'
-                ? `${gitFileCount} file${gitFileCount !== 1 ? 's' : ''}`
-                : undefined
+          isLog
+            ? `${filteredLogEntries.length} commit${filteredLogEntries.length !== 1 ? 's' : ''}`
+            : diffMode === 'git'
+              ? `${gitFileCount} file${gitFileCount !== 1 ? 's' : ''}`
+              : undefined
         }
       />
 
@@ -1280,45 +1117,11 @@ export default function DiffOverlay() {
         </div>
       )}
 
-      <div ref={scrollRef} className={`flex-1 overflow-auto p-4 ${!isActivity ? 'hidden' : ''}`}>
-        {state.activeTaskId && isActivity && (
-          <>
-            {activityLog.loading && (
-              <div className="flex items-center gap-2 text-secondary">
-                <Spinner />
-                <span>Loading activity log...</span>
-              </div>
-            )}
-
-            {activityLog.error && <div className="text-sm text-danger">Error: {activityLog.error}</div>}
-
-            {!activityLog.loading && !activityLog.error && filteredEntries.length === 0 && (
-              <div className="text-sm text-muted text-center py-4">
-                {search ? 'No matching entries' : 'No activity recorded yet'}
-              </div>
-            )}
-
-            {!activityLog.loading && !activityLog.error && (
-              <div className="space-y-1">
-                {filteredEntries.map((entry, idx) => (
-                  <div
-                    key={entry.id}
-                    ref={(el) => {
-                      itemRefs.current[idx] = el;
-                    }}
-                    onMouseEnter={() => setFocusedIdx(idx)}
-                    className={`rounded transition-colors ${
-                      idx === focusedIdx ? 'ring-1 ring-accent-muted bg-accent/10' : ''
-                    }`}
-                  >
-                    <ActivityEntryView entry={entry} search={search} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      {state.activeTaskId && isActivity && (
+        <div className="flex-1 min-h-0">
+          <TokenUsageChart data={tokenUsage.data} loading={tokenUsage.loading} error={tokenUsage.error} />
+        </div>
+      )}
       {state.activeTaskId && isReview && <ReviewPanel taskId={state.activeTaskId} />}
 
       {!state.activeTaskId && <div className="flex-1 p-4 text-muted">No active task</div>}

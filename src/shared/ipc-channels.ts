@@ -18,6 +18,7 @@ import type {
   StatsData,
   SupervisorState,
   Task,
+  TokenDataPoint,
 } from './types';
 
 // Request-response channels (invoke/handle)
@@ -68,6 +69,9 @@ export const IPC = {
   // Activity Log
   GET_ACTIVITY_LOG: 'activity:get-log',
   CLEAR_ACTIVITY_LOG: 'activity:clear',
+
+  // Token Usage
+  GET_TOKEN_USAGE: 'token:get-usage',
 
   // IDE
   OPEN_IN_IDE: 'ide:open',
@@ -210,6 +214,9 @@ export interface BifrostAPI {
   getActivityLog(taskId: string): Promise<ActivityEntry[]>;
   clearActivityLog(taskId: string): Promise<void>;
   onActivityEntry(callback: (entry: ActivityEntry) => void): () => void;
+
+  // Token Usage
+  getTokenUsage(taskId: string): Promise<TokenDataPoint[]>;
 
   // Terminal title
   setTerminalTitle(taskId: string, title: string): Promise<void>;

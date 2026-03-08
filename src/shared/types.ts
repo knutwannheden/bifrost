@@ -125,6 +125,37 @@ export interface ActivityEntry {
   claudeToolName?: string;
 }
 
+export interface TokenTurnTool {
+  name: string;
+  detail?: string;
+  /** Output tokens used to generate this tool call */
+  outputTokens?: number;
+  /** Input tokens added by this tool's result (context growth) */
+  inputTokens?: number;
+}
+
+export type TokenTurnType = 'user' | 'tool' | 'plan' | 'agent';
+
+export interface TokenDataPoint {
+  timestamp: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  /** Classified turn type for chart coloring */
+  turnType: TokenTurnType;
+  /** Tool calls made in this turn */
+  tools?: TokenTurnTool[];
+  /** Truncated assistant text from this turn */
+  summary?: string;
+  /** Output tokens for assistant text blocks */
+  summaryTokens?: number;
+  /** The user prompt that triggered this turn (truncated) */
+  prompt?: string;
+  /** True if a context compaction occurred just before this turn */
+  compacted?: boolean;
+}
+
 // Context capture types
 
 export interface ContextBase {
