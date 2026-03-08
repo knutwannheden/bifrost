@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef, useState } from 'react';
+import { resolveTerminalTheme } from '../terminal-themes';
 import { isMac, isModKey } from '../utils/platform';
 
 // Global registry so keyboard shortcuts can access terminal instances
@@ -17,6 +18,8 @@ interface TerminalOptions {
   fontSize?: number;
   fontFamily?: string;
   fontWeight?: number;
+  terminalTheme?: string;
+  isDark?: boolean;
   visible?: boolean;
   paneType?: 'claude' | 'dev';
 }
@@ -38,7 +41,7 @@ export function useTerminal(
 
     const paneType = options?.paneType;
     const hideCursor = options?.hideCursor ?? false;
-    const bg = '#282a36';
+    const selectedTheme = resolveTerminalTheme(options?.terminalTheme ?? 'Auto', options?.isDark ?? true);
     const cursorConfig = hideCursor
       ? { cursorBlink: false, cursorStyle: 'bar' as const, cursorWidth: 1, cursorInactiveStyle: 'none' as const }
       : {
@@ -59,27 +62,8 @@ export function useTerminal(
         allowNonHttpProtocols: true,
       },
       theme: {
-        background: bg,
-        foreground: '#f8f8f2',
-        cursor: hideCursor ? bg : '#f8f8f2',
-        selectionBackground: '#44475a',
-        selectionForeground: '#f8f8f2',
-        black: '#21222c',
-        red: '#ff5555',
-        green: '#50fa7b',
-        yellow: '#f1fa8c',
-        blue: '#bd93f9',
-        magenta: '#ff79c6',
-        cyan: '#8be9fd',
-        white: '#f8f8f2',
-        brightBlack: '#6272a4',
-        brightRed: '#ff6e6e',
-        brightGreen: '#69ff94',
-        brightYellow: '#ffffa5',
-        brightBlue: '#d6acff',
-        brightMagenta: '#ff92df',
-        brightCyan: '#a4ffff',
-        brightWhite: '#ffffff',
+        ...selectedTheme,
+        cursor: hideCursor ? selectedTheme.background : selectedTheme.cursor,
       },
     });
 
@@ -319,6 +303,20 @@ export function useTerminal(
       }
     }
   }, [sessionId, fontFamily]);
+
+  // Update terminal theme dynamically when config changes
+  const terminalTheme = options?.terminalTheme ?? 'Auto';
+  const isDark = options?.isDark ?? true;
+  const hideCursorOpt = options?.hideCursor ?? false;
+  useEffect(() => {
+    if (sessionId && terminalRef.current) {
+      const theme = resolveTerminalTheme(terminalTheme, isDark);
+      terminalRef.current.options.theme = {
+        ...theme,
+        cursor: hideCursorOpt ? theme.background : theme.cursor,
+      };
+    }
+  }, [sessionId, terminalTheme, isDark, hideCursorOpt]);
 
   // Re-fit when pane becomes visible (e.g. switching tabs) so the PTY
   // column count stays in sync with xterm after background data writes.

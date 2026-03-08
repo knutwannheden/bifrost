@@ -25,6 +25,8 @@ const config: Config = {
         danger:         'var(--color-danger)',
         warning:        'var(--color-warning)',
         highlight:      'var(--color-highlight)',
+        'diff-add':     'var(--color-diff-add)',
+        'diff-remove':  'var(--color-diff-remove)',
       },
       keyframes: {
         'fade-in': {

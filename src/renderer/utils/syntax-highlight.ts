@@ -43,7 +43,7 @@ async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
     highlighterPromise = import('shiki').then((shiki) =>
       shiki.createHighlighter({
-        themes: ['github-dark'],
+        themes: ['github-dark', 'github-light'],
         langs: [...new Set(Object.values(extToLang))],
       }),
     );
@@ -56,10 +56,16 @@ export interface HighlightedToken {
   color: string;
 }
 
-export async function highlightLines(lines: string[], ext: string): Promise<HighlightedToken[][]> {
+const FALLBACK_DARK = '#e2e8f0';
+const FALLBACK_LIGHT = '#24292e';
+
+export async function highlightLines(lines: string[], ext: string, dark = true): Promise<HighlightedToken[][]> {
   const lang = extToLang[ext];
+  const fallback = dark ? FALLBACK_DARK : FALLBACK_LIGHT;
+  const shikiTheme = dark ? 'github-dark' : 'github-light';
+
   if (!lang) {
-    return lines.map((line) => [{ content: line, color: '#e2e8f0' }]);
+    return lines.map((line) => [{ content: line, color: fallback }]);
   }
 
   try {
@@ -67,16 +73,16 @@ export async function highlightLines(lines: string[], ext: string): Promise<High
     const code = lines.join('\n');
     const result = highlighter.codeToTokens(code, {
       lang: lang as import('shiki').BundledLanguage,
-      theme: 'github-dark',
+      theme: shikiTheme,
     });
 
     return result.tokens.map((lineTokens) =>
       lineTokens.map((token) => ({
         content: token.content,
-        color: token.color ?? '#e2e8f0',
+        color: token.color ?? fallback,
       })),
     );
   } catch {
-    return lines.map((line) => [{ content: line, color: '#e2e8f0' }]);
+    return lines.map((line) => [{ content: line, color: fallback }]);
   }
 }

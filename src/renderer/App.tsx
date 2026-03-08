@@ -19,6 +19,7 @@ import TaskView from './components/TaskView';
 import type { PaneTarget } from './context/AppContext';
 import { defaultPaneState, getActiveDiffState, useApp } from './context/AppContext';
 import { useKeyboard } from './hooks/useKeyboard';
+import { useTheme } from './hooks/useTheme';
 import { performArchive, requestArchive } from './utils/archive';
 import { parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
 import { modSymbol } from './utils/platform';
@@ -72,6 +73,7 @@ export default function App() {
   const { state, dispatch } = useApp();
 
   useKeyboard(state, dispatch);
+  useTheme();
 
   const activeTask = state.tasks.find((t) => t.id === state.activeTaskId) ?? null;
 

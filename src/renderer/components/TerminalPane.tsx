@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { getActiveDiffState, useApp } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
+import { useResolvedDark } from '../hooks/useTheme';
 import { isModKey } from '../utils/platform';
 import TerminalSearchBar from './TerminalSearchBar';
 
@@ -45,12 +46,16 @@ export default function TerminalPane({
   const fontSize = state.config?.fontSize ?? 14;
   const fontFamily = state.config?.fontFamily;
   const fontWeight = state.config?.fontWeight;
+  const terminalTheme = state.config?.terminalTheme;
+  const dark = useResolvedDark();
 
   const { terminal, loading } = useTerminal(sessionId, containerRef, onTitleChange, {
     hideCursor,
     fontSize,
     fontFamily,
     fontWeight,
+    terminalTheme,
+    isDark: dark,
     visible: active,
     paneType,
   });

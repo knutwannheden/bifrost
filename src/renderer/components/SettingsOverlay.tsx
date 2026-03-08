@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { BifrostConfig } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { TERMINAL_THEME_NAMES } from '../terminal-themes';
 import { modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import Highlight from './Highlight';
@@ -19,6 +20,42 @@ const CATEGORIES = ['Appearance', 'Claude Code', 'General', 'Slack'] as const;
 
 function buildSettings(): SettingDef[] {
   return [
+    {
+      key: 'theme',
+      category: 'Appearance',
+      label: 'Theme',
+      tooltip: 'Choose between dark and light UI theme, or follow the system setting.',
+      render: (config, update) => (
+        <PillToggle
+          options={[
+            { label: 'System', value: 'system' },
+            { label: 'Dark', value: 'dark' },
+            { label: 'Light', value: 'light' },
+          ]}
+          value={config.theme}
+          onChange={(v) => update({ theme: v as BifrostConfig['theme'] })}
+        />
+      ),
+    },
+    {
+      key: 'terminalTheme',
+      category: 'Appearance',
+      label: 'Terminal Theme',
+      tooltip: 'Color scheme for xterm.js terminals. Independent of the UI theme.',
+      render: (config, update) => (
+        <select
+          value={config.terminalTheme}
+          onChange={(e) => update({ terminalTheme: e.target.value })}
+          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+        >
+          {TERMINAL_THEME_NAMES.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+      ),
+    },
     {
       key: 'fontSize',
       category: 'Appearance',

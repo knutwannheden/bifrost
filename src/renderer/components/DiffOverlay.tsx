@@ -6,6 +6,7 @@ import { useActivityLog } from '../hooks/useActivityLog';
 import { useDiff } from '../hooks/useDiff';
 import { useGitLog } from '../hooks/useGitLog';
 import { useInstantSearch } from '../hooks/useInstantSearch';
+import { isDarkTheme } from '../hooks/useTheme';
 import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
 import { diffFileStats, extFromPath, parseDiff } from '../utils/diff-parser';
 import { formatRelative, formatTimestamp } from '../utils/format-time';
@@ -29,7 +30,8 @@ interface HighlightedFile {
 }
 
 function plainTokens(lines: DiffLine[]): HighlightedToken[][] {
-  return lines.map((l) => [{ content: l.content, color: '#e2e8f0' }]);
+  const color = isDarkTheme() ? '#e2e8f0' : '#24292e';
+  return lines.map((l) => [{ content: l.content, color }]);
 }
 
 /** Used only for small inline diffs (activity log entries) */
@@ -52,6 +54,7 @@ function useHighlightedFiles(diff: string | null): HighlightedFile[] | null {
         const tokens = await highlightLines(
           allLines.map((l) => l.content),
           ext,
+          isDarkTheme(),
         );
         return { file, tokensByLine: tokens };
       }),
@@ -80,8 +83,8 @@ function LineNumber({ num }: { num: number | null }) {
 }
 
 const lineStyles: Record<DiffLine['type'], { bg: string; signColor: string; sign: string }> = {
-  add: { bg: 'bg-[#1a3a1a]', signColor: 'text-success', sign: '+' },
-  remove: { bg: 'bg-[#3a1a1a]', signColor: 'text-danger', sign: '-' },
+  add: { bg: 'bg-diff-add', signColor: 'text-success', sign: '+' },
+  remove: { bg: 'bg-diff-remove', signColor: 'text-danger', sign: '-' },
   context: { bg: '', signColor: 'text-faint', sign: ' ' },
 };
 
@@ -132,7 +135,9 @@ function FileSection({ data }: { data: HighlightedFile }) {
                   <DiffLineRow
                     key={`${hi}-${li}`}
                     line={line}
-                    tokens={tokensByLine[idx] ?? [{ content: line.content, color: '#e2e8f0' }]}
+                    tokens={
+                      tokensByLine[idx] ?? [{ content: line.content, color: isDarkTheme() ? '#e2e8f0' : '#24292e' }]
+                    }
                   />
                 );
               })}
@@ -166,6 +171,7 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
           highlightLines(
             allLines.map((l) => l.content),
             ext,
+            isDarkTheme(),
           ).then((result) => {
             if (!cancelled) setTokens(result);
           });

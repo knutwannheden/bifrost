@@ -9,7 +9,7 @@ Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Cod
 ## Commands
 
 - `npm start` — run in development mode (Electron Forge + Vite HMR)
-- `npm run lint` — ESLint check
+- `npm run lint` — Biome check (linting + formatting)
 - `npm run package` — build packaged app
 - `npm run make` — build distributable installers
 
@@ -57,15 +57,23 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 
 | Module | Purpose |
 |--------|---------|
-| `hooks/useTerminal.ts` | xterm.js lifecycle, Dracula theme, custom key handler |
+| `hooks/useTerminal.ts` | xterm.js lifecycle, configurable terminal themes, custom key handler |
 | `hooks/useKeyboard.ts` | Global Cmd+key shortcuts, context capture flow |
 | `components/DiffOverlay.tsx` | Git diff + activity log viewer with syntax highlighting (Shiki) |
 | `components/TaskHistoryPanel.tsx` | Task management + external session resumption |
 | `components/TerminalPane.tsx` | Terminal container with split pane support |
 
+### Theming
+
+UI theme (`system`/`dark`/`light`) is controlled by `BifrostConfig.theme`. The `useTheme` hook in `hooks/useTheme.ts` applies a `light` class on `<html>`, which swaps CSS custom properties defined in `index.css`. Terminal themes are independent — `terminal-themes.ts` defines named xterm `ITheme` objects; `'Auto'` selects based on UI dark/light mode. Shiki syntax highlighting in `utils/syntax-highlight.ts` accepts a `dark` flag to switch between `github-dark` and `github-light` themes.
+
 ### Shared Types
 
 `src/shared/types.ts` contains all types shared between processes: `Task`, `Repo`, `ActivityEntry`, `ContextEntry` variants, `BifrostConfig`, etc.
+
+## Linting
+
+Biome is used for linting and formatting (`biome.json`). A11y rules are disabled (Electron app, not web). Run `npm run lint` to check; `npx biome check --write src/` to auto-fix.
 
 ## Native Module Note
 

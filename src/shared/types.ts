@@ -66,6 +66,8 @@ export interface BifrostConfig {
   managePermissions: boolean;
   experimentalFeatures: boolean;
   ollamaModels: string[];
+  theme: 'system' | 'dark' | 'light';
+  terminalTheme: string;
   slack?: SlackConfig;
 }
 
@@ -280,6 +282,8 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   managePermissions: true,
   experimentalFeatures: false,
   ollamaModels: ['phi4-mini', 'gemma3:1b'],
+  theme: 'system',
+  terminalTheme: 'Auto',
 };
 
 // Permission approval types

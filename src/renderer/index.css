@@ -43,6 +43,40 @@
 
   /* ── Special ────────────────────────────────────────────────── */
   --color-highlight: rgba(234, 179, 8, 0.3); /* search match (≈ yellow-500/30) */
+
+  /* ── Diff ─────────────────────────────────────────────────── */
+  --color-diff-add: #1a3a1a;
+  --color-diff-remove: #3a1a1a;
+}
+
+/* ── Light theme ─────────────────────────────────────────────── */
+html.light {
+  --color-app: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-surface-alt: #e9ecef;
+  --color-surface-hover: #dee2e6;
+  --color-overlay: rgba(0, 0, 0, 0.15);
+
+  --color-text-primary: #1a1a2e;
+  --color-text-secondary: #495057;
+  --color-text-muted: #868e96;
+  --color-text-faint: #ced4da;
+
+  --color-border: #dee2e6;
+  --color-border-input: #ced4da;
+
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-muted: rgba(37, 99, 235, 0.3);
+
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+
+  --color-highlight: rgba(234, 179, 8, 0.2);
+
+  --color-diff-add: #d4edda;
+  --color-diff-remove: #f8d7da;
 }
 
 body {
