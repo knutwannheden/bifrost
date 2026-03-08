@@ -216,13 +216,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
           : state.activeTaskId;
       return { ...state, tasks: newTasks, activeTaskId: newActiveId };
     }
-    case 'UPDATE_TASK':
-      return {
-        ...state,
-        tasks: state.tasks.map((t) =>
-          t.id === action.task.id ? action.task : t,
-        ),
-      };
+    case 'UPDATE_TASK': {
+      const prev = state.tasks.find((t) => t.id === action.task.id);
+      const reopened = prev && prev.status !== 'running' && action.task.status === 'running';
+      const tasks = reopened
+        ? [...state.tasks.filter((t) => t.id !== action.task.id), action.task]
+        : state.tasks.map((t) => (t.id === action.task.id ? action.task : t));
+      return { ...state, tasks };
+    }
     case 'SET_ACTIVE_TASK':
       return {
         ...state,
