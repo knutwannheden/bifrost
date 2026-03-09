@@ -97,6 +97,24 @@ function SupervisorIcon() {
   );
 }
 
+function TriageIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 2v4M8 6L4 12h8L8 6z" />
+      <circle cx="8" cy="10" r="0.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 function StatsIcon() {
   return (
     <svg
@@ -191,6 +209,11 @@ export default function RightIconBar() {
   const reviewBadge = state.activeTaskId && state.unreadReview[state.activeTaskId] ? ('blue' as const) : undefined;
   const supervisorBadge = useSupervisorBadge();
 
+  const triageItems = Object.values(state.triages);
+  const hasTriageWaiting = triageItems.some((t) => t.waiting);
+  const hasTriageRunning = triageItems.some((t) => t.status === 'running');
+  const triageBadge = hasTriageWaiting ? ('amber' as const) : hasTriageRunning ? ('green' as const) : undefined;
+
   const toggleDiffMode = (mode: DiffMode) => {
     if (isDiffActive && diffMode === mode) {
       dispatch({ type: 'TOGGLE_DIFF' });
@@ -254,6 +277,15 @@ export default function RightIconBar() {
           </span>
         </IconButton>
       )}
+
+      <IconButton
+        label="Triage"
+        active={state.showTriage}
+        badge={triageBadge}
+        onClick={() => dispatch({ type: 'SHOW_TRIAGE' })}
+      >
+        <TriageIcon />
+      </IconButton>
 
       <div className="flex-1" />
 

@@ -7,11 +7,22 @@ import type {
   ReviewEntry,
   Task,
   TaskStatus,
+  TriageEntry,
 } from '../../shared/types';
 
 export type DiffMode = 'git' | 'activity' | 'log' | 'review';
 export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
 export type PaneTarget = 'claude' | 'dev';
+export type TriageTab = 'new' | 'history';
+
+export interface TriageItem {
+  prompt: string;
+  status: 'idle' | 'running' | 'done' | 'error';
+  ptySessionId: string | null;
+  activity: string[];
+  waiting: boolean;
+  expanded: boolean;
+}
 
 export interface TaskPaneState {
   devSessionId: string | null;
@@ -58,8 +69,13 @@ export interface AppState {
   toast: string | null;
   toastHint: string | null;
   toastDuration: number;
-  toastAction: { label: string; callback: () => void } | null;
+  toastAction: { label: string; callback: () => void }[] | null;
   permissionQueue: PermissionPromptData[];
+  showTriage: boolean;
+  triages: Record<string, TriageItem>;
+  triageDraftPrompt: string;
+  triageTab: TriageTab;
+  triageHistory: TriageEntry[];
   notifications: AppNotification[];
   showNotificationPopover: boolean;
   apiPort: number | null;
@@ -96,7 +112,7 @@ export type AppAction =
       message: string;
       duration?: number;
       hint?: string;
-      action?: { label: string; callback: () => void };
+      action?: { label: string; callback: () => void } | { label: string; callback: () => void }[];
     }
   | { type: 'HIDE_TOAST' }
   | { type: 'SET_API_PORT'; port: number | null }
@@ -119,7 +135,17 @@ export type AppAction =
   | { type: 'CLEAR_REVIEW_UNREAD'; taskId: string }
   | { type: 'REORDER_TASKS'; taskIds: string[] }
   | { type: 'SHOW_ARCHIVE_CONFIRM'; taskId: string; taskName: string }
-  | { type: 'HIDE_ARCHIVE_CONFIRM' };
+  | { type: 'HIDE_ARCHIVE_CONFIRM' }
+  | { type: 'SHOW_TRIAGE'; prompt?: string }
+  | { type: 'CLOSE_TRIAGE' }
+  | { type: 'SET_TRIAGE_TAB'; tab: TriageTab }
+  | { type: 'SET_TRIAGE_DRAFT_PROMPT'; prompt: string }
+  | { type: 'ADD_TRIAGE'; id: string; item: TriageItem }
+  | { type: 'UPDATE_TRIAGE'; id: string; updates: Partial<TriageItem> }
+  | { type: 'REMOVE_TRIAGE'; id: string }
+  | { type: 'SET_TRIAGE_ACTIVITY'; triageId: string; activity: string }
+  | { type: 'SET_TRIAGE_WAITING'; triageId: string }
+  | { type: 'SET_TRIAGE_HISTORY'; history: TriageEntry[] };
 
 const initialState: AppState = {
   repos: [],
@@ -151,6 +177,11 @@ const initialState: AppState = {
   toastHint: null,
   toastDuration: 2000,
   toastAction: null,
+  showTriage: false,
+  triages: {},
+  triageDraftPrompt: '',
+  triageTab: 'new' as TriageTab,
+  triageHistory: [],
   permissionQueue: [],
   notifications: [],
   showNotificationPopover: false,
@@ -189,6 +220,7 @@ const allOverlaysClosed = {
   showNotes: false,
   showStats: false,
   showSupervisor: false,
+  showTriage: false,
 };
 
 /** Close the active task's diff overlay */
@@ -342,14 +374,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const key = hiddenKey(action.pane);
       return setPaneState(state, action.taskId, { ...ps, [key]: false });
     }
-    case 'SHOW_TOAST':
+    case 'SHOW_TOAST': {
+      const ta = action.action ? (Array.isArray(action.action) ? action.action : [action.action]) : null;
       return {
         ...state,
         toast: action.message,
         toastHint: action.hint ?? null,
         toastDuration: action.duration ?? 2000,
-        toastAction: action.action ?? null,
+        toastAction: ta,
       };
+    }
     case 'HIDE_TOAST':
       return { ...state, toast: null, toastHint: null, toastAction: null };
     case 'SET_API_PORT':
@@ -451,6 +485,52 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, archiveConfirm: { taskId: action.taskId, taskName: action.taskName } };
     case 'HIDE_ARCHIVE_CONFIRM':
       return { ...state, archiveConfirm: null };
+    case 'SHOW_TRIAGE':
+      return closeActiveTaskDiff({
+        ...state,
+        ...allOverlaysClosed,
+        showTriage: true,
+        triageDraftPrompt: action.prompt ?? state.triageDraftPrompt,
+      });
+    case 'CLOSE_TRIAGE':
+      return { ...state, showTriage: false };
+    case 'SET_TRIAGE_TAB':
+      return { ...state, triageTab: action.tab };
+    case 'SET_TRIAGE_DRAFT_PROMPT':
+      return { ...state, triageDraftPrompt: action.prompt };
+    case 'ADD_TRIAGE':
+      return { ...state, triages: { ...state.triages, [action.id]: action.item } };
+    case 'UPDATE_TRIAGE': {
+      const existing = state.triages[action.id];
+      if (!existing) return state;
+      return { ...state, triages: { ...state.triages, [action.id]: { ...existing, ...action.updates } } };
+    }
+    case 'REMOVE_TRIAGE': {
+      const { [action.id]: _removed, ...rest } = state.triages;
+      void _removed;
+      return { ...state, triages: rest };
+    }
+    case 'SET_TRIAGE_ACTIVITY': {
+      const t = state.triages[action.triageId];
+      if (!t) return state;
+      return {
+        ...state,
+        triages: {
+          ...state.triages,
+          [action.triageId]: { ...t, activity: [...t.activity, action.activity] },
+        },
+      };
+    }
+    case 'SET_TRIAGE_WAITING': {
+      const tw = state.triages[action.triageId];
+      if (!tw) return state;
+      return {
+        ...state,
+        triages: { ...state.triages, [action.triageId]: { ...tw, waiting: true } },
+      };
+    }
+    case 'SET_TRIAGE_HISTORY':
+      return { ...state, triageHistory: action.history };
     default:
       return state;
   }

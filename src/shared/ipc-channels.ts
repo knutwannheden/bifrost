@@ -19,6 +19,7 @@ import type {
   SupervisorState,
   Task,
   TokenUsageResult,
+  TriageEntry,
 } from './types';
 
 // Request-response channels (invoke/handle)
@@ -145,6 +146,12 @@ export const IPC = {
   // Slack
   SLACK_START_OAUTH: 'slack:start-oauth',
   SLACK_DISCONNECT: 'slack:disconnect',
+
+  // Triage
+  START_TRIAGE: 'triage:start',
+  CANCEL_TRIAGE: 'triage:cancel',
+  LIST_TRIAGES: 'triage:list',
+  DELETE_TRIAGE: 'triage:delete',
 } as const;
 
 // Streaming channels (send/on)
@@ -163,6 +170,8 @@ export const IPC_STREAM = {
   SUPERVISOR_UPDATE: 'supervisor:update',
   TASK_CREATED: 'task:created',
   SLACK_REACTION: 'slack:reaction',
+  TRIAGE_ACTIVITY: 'triage:activity',
+  TRIAGE_WAITING: 'triage:waiting',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -319,6 +328,14 @@ export interface BifrostAPI {
   onSlackReaction(
     callback: (channelId: string, messageTs: string, messageUrl: string, messagePreview: string) => void,
   ): () => void;
+
+  // Triage
+  startTriage(prompt: string): Promise<{ triageId: string; ptySessionId: string }>;
+  cancelTriage(triageId: string): Promise<void>;
+  listTriages(): Promise<TriageEntry[]>;
+  deleteTriage(triageId: string): Promise<void>;
+  onTriageActivity(callback: (triageId: string, activity: string) => void): () => void;
+  onTriageWaiting(callback: (triageId: string) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

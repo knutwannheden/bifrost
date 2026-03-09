@@ -68,6 +68,8 @@ import {
 } from './supervisor-service';
 import { loadTasks, saveTasks } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
+import { cancelTriage, startTriage } from './triage-service';
+import { deleteTriage as deleteTriageEntry, listTriages } from './triage-store';
 import { createWorktree, createWorktreeFromPr, removeWorktree, restoreWorktree } from './worktree-manager';
 
 // In-memory task list, synced to disk
@@ -1094,4 +1096,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Slack
   ipcMain.handle(IPC.SLACK_START_OAUTH, () => startOAuth(mainWindow));
   ipcMain.handle(IPC.SLACK_DISCONNECT, () => disconnectSlack());
+
+  // Triage
+  ipcMain.handle(IPC.START_TRIAGE, (_event, prompt: string) => {
+    return startTriage(prompt, mainWindow);
+  });
+  ipcMain.handle(IPC.CANCEL_TRIAGE, (_event, triageId: string) => {
+    cancelTriage(triageId);
+  });
+  ipcMain.handle(IPC.LIST_TRIAGES, () => {
+    return listTriages();
+  });
+  ipcMain.handle(IPC.DELETE_TRIAGE, (_event, triageId: string) => {
+    deleteTriageEntry(triageId);
+  });
 }

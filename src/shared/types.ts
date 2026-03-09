@@ -353,6 +353,18 @@ export interface PermissionDecision {
   rulePattern?: string;
 }
 
+export interface TriageEntry {
+  id: string;
+  prompt: string;
+  createdAt: number;
+  status: 'running' | 'done' | 'error' | 'cancelled';
+  completedAt?: number;
+  /** Task IDs created by this triage */
+  taskIds?: string[];
+  /** Last activity text from the Claude session */
+  lastActivity?: string;
+}
+
 export interface SlackConfig {
   clientId: string;
   clientSecret: string;

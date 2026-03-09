@@ -13,6 +13,7 @@ import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { checkExistingRules, createRequest } from './permission-manager';
 import { loadReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
+import { addTriageTaskId, setTriageSessionId } from './triage-service';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -193,6 +194,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           mainWindow!,
         );
         mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
+
+        // Track task created by triage session
+        const callerTriageId = body.bifrost_triage_id as string;
+        if (callerTriageId) {
+          addTriageTaskId(callerTriageId, task.id);
+        }
+
         jsonResponse(res, task);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
@@ -292,6 +300,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
+      // Triage stop — notify renderer that triage is waiting for input
+      const hookTriageId = body.bifrost_triage_id as string;
+      if (hookContext === 'triage' && hookTriageId) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId);
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
       // Review stop — read the review file and send it to the renderer
       if (hookContext === 'review' && hookTaskId && hookReviewId) {
         const content = loadReview(hookTaskId, hookReviewId);
@@ -369,6 +387,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const supervisorItemId = body.bifrost_supervisor_item_id as string;
       if (!sessionId || !cwd) {
         errorResponse(res, 'Missing session_id or cwd');
+        return;
+      }
+      // Triage context — capture session ID for activity polling
+      const triageId = body.bifrost_triage_id as string;
+      if (context === 'triage' && triageId) {
+        setTriageSessionId(triageId, sessionId);
+        jsonResponse(res, { ok: true });
         return;
       }
       // Supervisor context — set session ID on the supervisor item

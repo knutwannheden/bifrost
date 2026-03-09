@@ -14,6 +14,7 @@ import StatusBar from './components/StatusBar';
 import SupervisorOverlay from './components/SupervisorOverlay';
 import TaskBar from './components/TaskBar';
 import TaskCreateDialog from './components/TaskCreateDialog';
+import TriageOverlay from './components/TriageOverlay';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import TaskView from './components/TaskView';
 import type { PaneTarget } from './context/AppContext';
@@ -21,7 +22,7 @@ import { defaultPaneState, getActiveDiffState, useApp } from './context/AppConte
 import { useKeyboard } from './hooks/useKeyboard';
 import { useTheme } from './hooks/useTheme';
 import { performArchive, requestArchive } from './utils/archive';
-import { parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
+import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
 import { modSymbol } from './utils/platform';
 import { slackToPlainText } from './utils/slack-markup';
 
@@ -123,6 +124,8 @@ export default function App() {
       dispatch({ type: 'ADD_TASK', task });
       dispatch({ type: 'SET_TASK_UNREAD', taskId: task.id, hasUnread: true });
       dispatch({ type: 'SHOW_TOAST', message: `New task: **${task.name}**` });
+      // Auto-close triage overlay when a task is created via triage
+      dispatch({ type: 'CLOSE_TRIAGE' });
     });
     return unsub;
   }, [dispatch]);
@@ -197,6 +200,23 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
+  // Listen for triage activity updates
+  useEffect(() => {
+    const unsub = window.bifrost.onTriageActivity((triageId, activity) => {
+      dispatch({ type: 'SET_TRIAGE_ACTIVITY', triageId, activity });
+    });
+    return unsub;
+  }, [dispatch]);
+
+  // Listen for triage waiting notifications
+  useEffect(() => {
+    const unsub = window.bifrost.onTriageWaiting((triageId) => {
+      dispatch({ type: 'SET_TRIAGE_WAITING', triageId });
+      dispatch({ type: 'SHOW_TOAST', message: 'Triage waiting for input', duration: 3000 });
+    });
+    return unsub;
+  }, [dispatch]);
+
   // Listen for permission prompts from main process
   useEffect(() => {
     const unsub = window.bifrost.onPermissionPrompt((request) => {
@@ -243,16 +263,25 @@ export default function App() {
         } else if (parsePrUrl(text)) {
           const pr = parsePrUrl(text)!;
           label = `PR #${pr.number} detected`;
+        } else if (parseIssueUrl(text)) {
+          const issue = parseIssueUrl(text)!;
+          label = `Issue #${issue.number} detected`;
         }
         if (label) {
           dispatch({
             type: 'SHOW_TOAST',
             message: label,
             duration: 5000,
-            action: {
-              label: 'Create Task',
-              callback: () => dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true }),
-            },
+            action: [
+              {
+                label: 'Create Task',
+                callback: () => dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true }),
+              },
+              {
+                label: 'Triage',
+                callback: () => dispatch({ type: 'SHOW_TRIAGE', prompt: text }),
+              },
+            ],
           });
         }
       } catch {
@@ -412,6 +441,7 @@ export default function App() {
             {state.showNotes && <NotesOverlay />}
             {state.showStats && <StatsOverlay />}
             {state.showSupervisor && <SupervisorOverlay />}
+            {state.showTriage && <TriageOverlay />}
           </div>
 
           {/* Status bar */}
@@ -487,17 +517,18 @@ export default function App() {
         <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-lg shadow-2xl border border-border-input animate-fade-in max-w-lg">
           <div className="flex items-center gap-3">
             <SimpleMarkdown text={state.toast} />
-            {state.toastAction && (
+            {state.toastAction?.map((a, i) => (
               <button
+                key={i}
                 onClick={() => {
-                  state.toastAction!.callback();
+                  a.callback();
                   dispatch({ type: 'HIDE_TOAST' });
                 }}
                 className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded transition-colors"
               >
-                {state.toastAction.label}
+                {a.label}
               </button>
-            )}
+            ))}
           </div>
           {state.toastHint && <div className="text-right text-xs text-faint mt-1">{state.toastHint}</div>}
         </div>

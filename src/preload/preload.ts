@@ -215,6 +215,23 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.SLACK_REACTION, handler);
   },
 
+  // Triage
+  startTriage: (prompt) => ipcRenderer.invoke(IPC.START_TRIAGE, prompt),
+  cancelTriage: (triageId) => ipcRenderer.invoke(IPC.CANCEL_TRIAGE, triageId),
+  listTriages: () => ipcRenderer.invoke(IPC.LIST_TRIAGES),
+  deleteTriage: (triageId) => ipcRenderer.invoke(IPC.DELETE_TRIAGE, triageId),
+  onTriageActivity: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, triageId: string, activity: string) =>
+      callback(triageId, activity);
+    ipcRenderer.on(IPC_STREAM.TRIAGE_ACTIVITY, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TRIAGE_ACTIVITY, handler);
+  },
+  onTriageWaiting: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, triageId: string) => callback(triageId);
+    ipcRenderer.on(IPC_STREAM.TRIAGE_WAITING, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TRIAGE_WAITING, handler);
+  },
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action);
