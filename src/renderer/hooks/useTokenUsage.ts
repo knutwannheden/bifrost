@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { TokenDataPoint } from '../../shared/types';
+import type { TokenUsageResult } from '../../shared/types';
+
+const EMPTY: TokenUsageResult = { points: [], subagents: [] };
 
 interface UseTokenUsageResult {
-  data: TokenDataPoint[];
+  data: TokenUsageResult;
   loading: boolean;
   error: string | null;
   refetch: () => void;
 }
 
 export function useTokenUsage(taskId: string | null): UseTokenUsageResult {
-  const [data, setData] = useState<TokenDataPoint[]>([]);
+  const [data, setData] = useState<TokenUsageResult>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!taskId) {
-      setData([]);
+      setData(EMPTY);
       return;
     }
     setLoading(true);

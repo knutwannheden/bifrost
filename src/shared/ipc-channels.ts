@@ -18,7 +18,7 @@ import type {
   StatsData,
   SupervisorState,
   Task,
-  TokenDataPoint,
+  TokenUsageResult,
 } from './types';
 
 // Request-response channels (invoke/handle)
@@ -216,7 +216,7 @@ export interface BifrostAPI {
   onActivityEntry(callback: (entry: ActivityEntry) => void): () => void;
 
   // Token Usage
-  getTokenUsage(taskId: string): Promise<TokenDataPoint[]>;
+  getTokenUsage(taskId: string): Promise<TokenUsageResult>;
 
   // Terminal title
   setTerminalTitle(taskId: string, title: string): Promise<void>;

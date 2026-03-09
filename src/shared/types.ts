@@ -156,6 +156,17 @@ export interface TokenDataPoint {
   compacted?: boolean;
 }
 
+export interface SubagentTokenData {
+  id: string;
+  slug: string;
+  points: TokenDataPoint[];
+}
+
+export interface TokenUsageResult {
+  points: TokenDataPoint[];
+  subagents: SubagentTokenData[];
+}
+
 // Context capture types
 
 export interface ContextBase {

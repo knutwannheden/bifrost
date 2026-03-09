@@ -1,5 +1,17 @@
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { TokenDataPoint, TokenTurnType } from '../../shared/types';
+import {
+  forwardRef,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type { TokenDataPoint, TokenTurnType, TokenUsageResult } from '../../shared/types';
+import { matchesAllTerms } from '../utils/search';
+import Highlight from './Highlight';
 import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
 
@@ -39,21 +51,74 @@ const TURN_COLORS: Record<TokenTurnType, { input: string; output: string }> = {
   agent: { input: '#34d399', output: '#6ee7b7' }, // emerald
 };
 
-export default function TokenUsageChart({
-  data,
-  loading,
-  error,
-}: {
-  data: TokenDataPoint[];
-  loading: boolean;
-  error: string | null;
-}) {
+export interface TokenUsageChartHandle {
+  handleKeyDown: (e: React.KeyboardEvent) => void;
+  matchCount: number | null;
+}
+
+const TokenUsageChart = forwardRef<
+  TokenUsageChartHandle,
+  { data: TokenUsageResult; loading: boolean; error: string | null; search: string }
+>(function TokenUsageChart({ data, loading, error, search }, ref) {
+  const points = data.points;
   const [mode, setMode] = useState<ChartMode>('per-turn');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [svgSize, setSvgSize] = useState({ w: 800, h: 256 });
+  const [focusedMessageIndex, setFocusedMessageIndex] = useState<number | null>(null);
+
+  /** Build flat list of message texts for a turn (for searching) */
+  const turnMessages = useCallback((d: TokenDataPoint): string[] => {
+    const msgs: string[] = [];
+    if (d.prompt) msgs.push(d.prompt);
+    if (d.tools) for (const t of d.tools) msgs.push(`${t.name} ${t.detail || ''}`);
+    if (d.summary) msgs.push(d.summary);
+    return msgs;
+  }, []);
+
+  /** Indices of turns that have at least one matching message */
+  const matchingIndices = useMemo(() => {
+    if (!search) return null;
+    const indices: number[] = [];
+    for (let i = 0; i < points.length; i++) {
+      if (turnMessages(points[i]).some((msg) => matchesAllTerms(msg, search))) indices.push(i);
+    }
+    return indices;
+  }, [search, points, turnMessages]);
+
+  /** Set of matching indices for O(1) lookup */
+  const matchingSet = useMemo(() => (matchingIndices ? new Set(matchingIndices) : null), [matchingIndices]);
+
+  /** Matching message indices within the selected turn */
+  const matchingMessageIndices = useMemo(() => {
+    if (!search || selectedIndex === null) return null;
+    const msgs = turnMessages(points[selectedIndex]);
+    const indices: number[] = [];
+    for (let i = 0; i < msgs.length; i++) {
+      if (matchesAllTerms(msgs[i], search)) indices.push(i);
+    }
+    return indices;
+  }, [search, selectedIndex, points, turnMessages]);
+
+  // Auto-select first matching turn when search changes
+  useEffect(() => {
+    if (matchingIndices && matchingIndices.length > 0) {
+      setSelectedIndex(matchingIndices[0]);
+    } else if (search) {
+      setSelectedIndex(null);
+    }
+  }, [matchingIndices, search]);
+
+  // Reset focused message when selected turn changes
+  useEffect(() => {
+    if (matchingMessageIndices && matchingMessageIndices.length > 0) {
+      setFocusedMessageIndex(matchingMessageIndices[0]);
+    } else {
+      setFocusedMessageIndex(null);
+    }
+  }, [selectedIndex, matchingMessageIndices]);
 
   // Synchronous measurement after every render to catch layout changes
   useLayoutEffect(() => {
@@ -82,17 +147,17 @@ export default function TokenUsageChart({
 
   const cumulativeData = useMemo(() => {
     let outputSum = 0;
-    return data.map((p) => {
+    return points.map((p) => {
       outputSum += p.outputTokens;
       return { ...p, cumulativeOutput: outputSum, contextSize: totalInput(p) };
     });
-  }, [data]);
+  }, [points]);
 
-  const startTime = data.length > 0 ? data[0].timestamp : 0;
+  const startTime = points.length > 0 ? points[0].timestamp : 0;
 
   const findClosestIndex = useCallback(
     (clientX: number): number | null => {
-      if (data.length === 0 || !svgRef.current) return null;
+      if (points.length === 0 || !svgRef.current) return null;
 
       const rect = svgRef.current.getBoundingClientRect();
       // viewBox matches pixel size so coordinate conversion is 1:1
@@ -102,12 +167,13 @@ export default function TokenUsageChart({
 
       let closestIdx = 0;
       let closestDist = Number.POSITIVE_INFINITY;
-      const barGroupWidth = chartW / data.length;
-      for (let i = 0; i < data.length; i++) {
+      const barGroupWidth = chartW / points.length;
+      for (let i = 0; i < points.length; i++) {
         const x =
           mode === 'per-turn'
             ? (i + 0.5) * barGroupWidth
-            : ((data[i].timestamp - startTime) / Math.max(data[data.length - 1].timestamp - startTime, 1)) * chartW;
+            : ((points[i].timestamp - startTime) / Math.max(points[points.length - 1].timestamp - startTime, 1)) *
+              chartW;
         const dist = Math.abs(mouseX - x);
         if (dist < closestDist) {
           closestDist = dist;
@@ -116,7 +182,7 @@ export default function TokenUsageChart({
       }
       return closestIdx;
     },
-    [data, mode, startTime, chartPadding.left, chartW],
+    [points, mode, startTime, chartPadding.left, chartW],
   );
 
   const handleMouseMove = useCallback(
@@ -136,21 +202,81 @@ export default function TokenUsageChart({
     [findClosestIndex],
   );
 
+  /** Total message count for the currently selected turn */
+  const selectedTurnMessageCount = useMemo(() => {
+    if (selectedIndex === null) return 0;
+    return turnMessages(points[selectedIndex]).length;
+  }, [selectedIndex, points, turnMessages]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if (data.length === 0) return;
+      if (points.length === 0) return;
+
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        setSelectedIndex((prev) => (prev === null ? data.length - 1 : Math.max(0, prev - 1)));
+        if (matchingIndices && matchingIndices.length > 0) {
+          setSelectedIndex((prev) => {
+            const cur = prev ?? matchingIndices[0] + 1;
+            const prevMatch = matchingIndices.filter((i) => i < cur);
+            return prevMatch.length > 0 ? prevMatch[prevMatch.length - 1] : matchingIndices[matchingIndices.length - 1];
+          });
+        } else if (!search) {
+          setSelectedIndex((prev) => (prev === null ? points.length - 1 : Math.max(0, prev - 1)));
+        }
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        setSelectedIndex((prev) => (prev === null ? 0 : Math.min(data.length - 1, prev + 1)));
+        if (matchingIndices && matchingIndices.length > 0) {
+          setSelectedIndex((prev) => {
+            const cur = prev ?? -1;
+            const nextMatch = matchingIndices.find((i) => i > cur);
+            return nextMatch !== undefined ? nextMatch : matchingIndices[0];
+          });
+        } else if (!search) {
+          setSelectedIndex((prev) => (prev === null ? 0 : Math.min(points.length - 1, prev + 1)));
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (selectedIndex === null) {
+          // No turn selected yet — select last turn
+          setSelectedIndex(points.length - 1);
+        } else if (matchingMessageIndices && matchingMessageIndices.length > 0) {
+          setFocusedMessageIndex((prev) => {
+            const cur = prev ?? matchingMessageIndices[0] + 1;
+            const prevMsg = matchingMessageIndices.filter((i) => i < cur);
+            return prevMsg.length > 0
+              ? prevMsg[prevMsg.length - 1]
+              : matchingMessageIndices[matchingMessageIndices.length - 1];
+          });
+        } else if (!search && selectedTurnMessageCount > 0) {
+          // Navigate messages within the current turn (wrap around)
+          setFocusedMessageIndex((prev) => (prev === null || prev === 0 ? selectedTurnMessageCount - 1 : prev - 1));
+        }
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (selectedIndex === null) {
+          // No turn selected yet — select first turn
+          setSelectedIndex(0);
+        } else if (matchingMessageIndices && matchingMessageIndices.length > 0) {
+          setFocusedMessageIndex((prev) => {
+            const cur = prev ?? -1;
+            const nextMsg = matchingMessageIndices.find((i) => i > cur);
+            return nextMsg !== undefined ? nextMsg : matchingMessageIndices[0];
+          });
+        } else if (!search && selectedTurnMessageCount > 0) {
+          // Navigate messages within the current turn (wrap around)
+          setFocusedMessageIndex((prev) => (prev === null || prev >= selectedTurnMessageCount - 1 ? 0 : prev + 1));
+        }
       } else if (e.key === 'Escape') {
         setSelectedIndex(null);
       }
     },
-    [data.length],
+    [points.length, matchingIndices, matchingMessageIndices, search, selectedIndex, selectedTurnMessageCount],
   );
+
+  useImperativeHandle(ref, () => ({ handleKeyDown, matchCount: matchingIndices ? matchingIndices.length : null }), [
+    handleKeyDown,
+    matchingIndices,
+  ]);
 
   if (loading) {
     return (
@@ -165,41 +291,27 @@ export default function TokenUsageChart({
     return <div className="text-sm text-danger p-4">Error: {error}</div>;
   }
 
-  if (data.length === 0) {
+  if (points.length === 0) {
     return <div className="text-sm text-muted text-center py-4">No token usage data yet</div>;
   }
 
-  const detailPoint = selectedIndex !== null ? data[selectedIndex] : null;
+  const detailPoint = selectedIndex !== null ? points[selectedIndex] : null;
   const detailCumulative = selectedIndex !== null ? cumulativeData[selectedIndex] : null;
 
   return (
-    <div className="flex flex-col h-full focus:outline-none" tabIndex={-1} onKeyDown={handleKeyDown}>
+    <div className="flex flex-col h-full">
       <div className="flex items-center gap-4 px-4 py-2 flex-shrink-0">
         <PillToggle options={modeOptions} value={mode} onChange={(v) => setMode(v)} size="sm" />
         <div className="flex items-center gap-4 text-xs text-secondary ml-auto">
-          {mode === 'per-turn'
-            ? (Object.keys(TURN_COLORS) as TokenTurnType[])
-                .filter((tt) => data.some((d) => d.turnType === tt))
-                .map((tt) => (
-                  <span key={tt} className="flex items-center gap-1.5">
-                    <span
-                      className="inline-block w-3 h-2 rounded-sm"
-                      style={{ backgroundColor: TURN_COLORS[tt].input }}
-                    />
-                    {tt[0].toUpperCase() + tt.slice(1)}
-                  </span>
-                ))
-            : [
-                <span key="ctx" className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-0.5" style={{ backgroundColor: TURN_COLORS.user.input }} />
-                  Context size
-                </span>,
-                <span key="out" className="flex items-center gap-1.5">
-                  <span className="inline-block w-3 h-0.5" style={{ backgroundColor: TURN_COLORS.tool.input }} />
-                  Cumulative output
-                </span>,
-              ]}
-          {data.some((d) => d.compacted) && (
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.user.input }} />
+            Context size
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.tool.input }} />
+            {mode === 'per-turn' ? 'Output' : 'Cumulative output'}
+          </span>
+          {points.some((d) => d.compacted) && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded-sm bg-danger opacity-40" />
               Compaction
@@ -220,12 +332,13 @@ export default function TokenUsageChart({
           >
             {mode === 'per-turn' ? (
               <BarChart
-                data={data}
+                data={points}
                 chartW={chartW}
                 chartH={chartH}
                 padding={chartPadding}
                 hoveredIndex={hoveredIndex}
                 selectedIndex={selectedIndex}
+                matchingSet={matchingSet}
               />
             ) : (
               <LineChart
@@ -236,6 +349,7 @@ export default function TokenUsageChart({
                 startTime={startTime}
                 hoveredIndex={hoveredIndex}
                 selectedIndex={selectedIndex}
+                matchingSet={matchingSet}
               />
             )}
           </svg>
@@ -246,15 +360,18 @@ export default function TokenUsageChart({
         <DetailPanel
           point={detailPoint}
           cumulativeOutput={detailCumulative.cumulativeOutput}
+          prevContextSize={selectedIndex > 0 ? totalInput(points[selectedIndex - 1]) : 0}
           index={selectedIndex}
-          total={data.length}
+          total={points.length}
           elapsed={formatDuration(detailPoint.timestamp - startTime)}
+          search={search}
+          focusedMessageIndex={focusedMessageIndex}
           onClose={() => setSelectedIndex(null)}
         />
       ) : (
         <div className="px-4 pb-3 pt-2 border-t border-border-default flex-shrink-0">
           <div className="flex justify-between text-xs text-muted">
-            <span>{data.length} turns</span>
+            <span>{points.length} turns</span>
             <span>
               Total output: {formatTokenCount(cumulativeData[cumulativeData.length - 1]?.cumulativeOutput ?? 0)}
             </span>
@@ -263,7 +380,9 @@ export default function TokenUsageChart({
       )}
     </div>
   );
-}
+});
+
+export default TokenUsageChart;
 
 /** Collapsible text block with a label badge */
 function CollapsibleBlock({
@@ -273,6 +392,9 @@ function CollapsibleBlock({
   borderColor,
   outputTokens,
   inputTokens,
+  search,
+  focused,
+  matches,
   children,
 }: {
   label: string;
@@ -281,15 +403,33 @@ function CollapsibleBlock({
   borderColor: string;
   outputTokens?: number;
   inputTokens?: number;
+  search?: string;
+  focused?: boolean;
+  /** Whether this block matches the active search (undefined = no search active) */
+  matches?: boolean;
   children: ReactNode;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const elRef = useRef<HTMLDivElement>(null);
   const hasOut = outputTokens != null && outputTokens > 0;
   const hasIn = inputTokens != null && inputTokens > 0;
+  const faded = matches === false;
+
+  // Auto-expand and scroll into view when focused
+  useEffect(() => {
+    if (focused && elRef.current) {
+      if (!expanded) setExpanded(true);
+      elRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [focused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Apply highlighting if search is active and children is a string
+  const content = search && typeof children === 'string' ? <Highlight text={children} search={search} /> : children;
 
   return (
     <div
-      className={`mb-1.5 text-[11px] ${bgColor} border ${borderColor} rounded px-2 py-1 cursor-pointer transition-colors`}
+      ref={elRef}
+      className={`mb-1.5 text-[11px] ${bgColor} border ${focused ? 'border-accent' : borderColor} rounded px-2 py-1 cursor-pointer transition-colors ${focused ? 'ring-1 ring-accent' : ''} ${faded ? 'opacity-30' : ''}`}
       onClick={() => setExpanded((v) => !v)}
     >
       <div className="flex items-start gap-1.5">
@@ -304,7 +444,7 @@ function CollapsibleBlock({
         <div
           className={`text-primary font-mono whitespace-pre-wrap break-all leading-snug ${expanded ? '' : 'line-clamp-2'}`}
         >
-          {children}
+          {content}
         </div>
       </div>
     </div>
@@ -314,19 +454,38 @@ function CollapsibleBlock({
 function DetailPanel({
   point,
   cumulativeOutput,
+  prevContextSize,
   index,
   total,
   elapsed,
+  search,
+  focusedMessageIndex,
   onClose,
 }: {
   point: TokenDataPoint;
   cumulativeOutput: number;
+  prevContextSize: number;
   index: number;
   total: number;
   elapsed: string;
+  search: string;
+  focusedMessageIndex: number | null;
   onClose: () => void;
 }) {
   const inputTotal = totalInput(point);
+  const contextGrowth = inputTotal - prevContextSize;
+
+  // Message index mapping: 0 = prompt (if present), then tools, then summary
+  let msgIdx = 0;
+  const promptIdx = point.prompt ? msgIdx++ : -1;
+  const toolStartIdx = msgIdx;
+  if (point.tools) msgIdx += point.tools.length;
+  const summaryIdx = point.summary ? msgIdx : -1;
+
+  // Per-message match status (undefined when no search active)
+  const isSearching = search.length > 0;
+  const promptMatches = isSearching && point.prompt ? matchesAllTerms(point.prompt, search) : undefined;
+  const summaryMatches = isSearching && point.summary ? matchesAllTerms(point.summary, search) : undefined;
 
   return (
     <>
@@ -356,6 +515,9 @@ function DetailPanel({
             labelColor="text-success"
             bgColor="bg-success/10"
             borderColor="border-success/30"
+            search={search}
+            focused={focusedMessageIndex === promptIdx}
+            matches={promptMatches}
           >
             {point.prompt}
           </CollapsibleBlock>
@@ -373,6 +535,9 @@ function DetailPanel({
                 borderColor="border-warning/30"
                 outputTokens={tool.outputTokens}
                 inputTokens={tool.inputTokens}
+                search={search}
+                focused={focusedMessageIndex === toolStartIdx + i}
+                matches={isSearching ? matchesAllTerms(`${tool.name} ${tool.detail || ''}`, search) : undefined}
               >
                 {tool.detail || ''}
               </CollapsibleBlock>
@@ -388,6 +553,9 @@ function DetailPanel({
             bgColor="bg-accent/10"
             borderColor="border-accent-muted"
             outputTokens={point.summaryTokens}
+            search={search}
+            focused={focusedMessageIndex === summaryIdx}
+            matches={summaryMatches}
           >
             {point.summary}
           </CollapsibleBlock>
@@ -398,6 +566,18 @@ function DetailPanel({
       <div className="border-t border-border-default shrink-0 px-4 py-2">
         <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
           <div className="flex justify-between">
+            <span className="text-muted">Context size</span>
+            <span className="text-primary font-mono">
+              {formatTokenCount(inputTotal)}
+              {contextGrowth !== 0 && (
+                <span className={contextGrowth > 0 ? 'text-warning ml-1' : 'text-success ml-1'}>
+                  {contextGrowth > 0 ? '+' : ''}
+                  {formatTokenCount(contextGrowth)}
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="flex justify-between">
             <span className="text-muted">Output</span>
             <span className="text-primary font-mono">{formatTokenCount(point.outputTokens)}</span>
           </div>
@@ -405,21 +585,11 @@ function DetailPanel({
             <span className="text-muted">Cumulative out</span>
             <span className="text-primary font-mono">{formatTokenCount(cumulativeOutput)}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted">Context size</span>
-            <span className="text-primary font-mono">{formatTokenCount(inputTotal)}</span>
-          </div>
           <div className="flex justify-between text-faint">
-            <span>↳ Input</span>
-            <span className="font-mono">{formatTokenCount(point.inputTokens)}</span>
-          </div>
-          <div className="flex justify-between text-faint">
-            <span>↳ Cache read</span>
-            <span className="font-mono">{formatTokenCount(point.cacheReadTokens)}</span>
-          </div>
-          <div className="flex justify-between text-faint">
-            <span>↳ Cache creation</span>
-            <span className="font-mono">{formatTokenCount(point.cacheCreationTokens)}</span>
+            <span>Cache read / creation</span>
+            <span className="font-mono">
+              {formatTokenCount(point.cacheReadTokens)} / {formatTokenCount(point.cacheCreationTokens)}
+            </span>
           </div>
         </div>
       </div>
@@ -434,6 +604,7 @@ function BarChart({
   padding,
   hoveredIndex,
   selectedIndex,
+  matchingSet,
 }: {
   data: TokenDataPoint[];
   chartW: number;
@@ -441,8 +612,9 @@ function BarChart({
   padding: { top: number; right: number; bottom: number; left: number };
   hoveredIndex: number | null;
   selectedIndex: number | null;
+  matchingSet: Set<number> | null;
 }) {
-  const maxTokens = Math.max(...data.map((d) => d.outputTokens), 1);
+  const maxTokens = Math.max(...data.map((d) => totalInput(d) + d.outputTokens), 1);
   const barGroupWidth = chartW / data.length;
   const barWidth = Math.max(Math.min(barGroupWidth * 0.7, 24), 2);
 
@@ -513,24 +685,39 @@ function BarChart({
         />
       )}
 
-      {/* Bars — output tokens per turn, colored by turn type */}
+      {/* Stacked bars — context size (blue) + output (amber) */}
       {data.map((d, i) => {
         const x = (i + 0.5) * barGroupWidth - barWidth / 2;
-        const h = (d.outputTokens / maxTokens) * chartH;
+        const ctx = totalInput(d);
+        const hCtx = (ctx / maxTokens) * chartH;
+        const hOut = (d.outputTokens / maxTokens) * chartH;
         const isActive = activeIndex === i;
-        const opacity = activeIndex === null || isActive ? 0.8 : 0.3;
+        const isMatch = matchingSet === null || matchingSet.has(i);
+        const opacity = !isMatch ? 0.12 : activeIndex === null || isActive ? 0.8 : 0.3;
 
         return (
-          <rect
-            key={i}
-            x={x}
-            y={chartH - h}
-            width={barWidth}
-            height={h}
-            fill={TURN_COLORS[d.turnType].input}
-            opacity={opacity}
-            rx={1}
-          />
+          <g key={i}>
+            {/* Context size (bottom) */}
+            <rect
+              x={x}
+              y={chartH - hCtx - hOut}
+              width={barWidth}
+              height={hCtx}
+              fill={TURN_COLORS.user.input}
+              opacity={opacity}
+              rx={1}
+            />
+            {/* Output (top) */}
+            <rect
+              x={x}
+              y={chartH - hOut}
+              width={barWidth}
+              height={hOut}
+              fill={TURN_COLORS.tool.input}
+              opacity={opacity}
+              rx={1}
+            />
+          </g>
         );
       })}
 
@@ -562,6 +749,7 @@ function LineChart({
   startTime,
   hoveredIndex,
   selectedIndex,
+  matchingSet,
 }: {
   data: (TokenDataPoint & { cumulativeOutput: number; contextSize: number })[];
   chartW: number;
@@ -570,6 +758,7 @@ function LineChart({
   startTime: number;
   hoveredIndex: number | null;
   selectedIndex: number | null;
+  matchingSet: Set<number> | null;
 }) {
   const endTime = data[data.length - 1].timestamp;
   const timeSpan = Math.max(endTime - startTime, 1);
@@ -650,6 +839,22 @@ function LineChart({
       {/* Lines */}
       <path d={contextPath} fill="none" stroke={TURN_COLORS.user.input} strokeWidth={2} />
       <path d={outputPath} fill="none" stroke={TURN_COLORS.tool.input} strokeWidth={2} />
+
+      {/* Matching turn markers */}
+      {matchingSet &&
+        data.map(
+          (d, i) =>
+            matchingSet.has(i) && (
+              <circle
+                key={`match-${i}`}
+                cx={xOf(d)}
+                cy={yOfContext(d)}
+                r={3}
+                fill={TURN_COLORS.user.input}
+                opacity={0.6}
+              />
+            ),
+        )}
 
       {/* Active data point indicators */}
       {activeIndex !== null && data[activeIndex] && (

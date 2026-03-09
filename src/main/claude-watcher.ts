@@ -4,7 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import type { ActivityEntry, TokenDataPoint, TokenTurnTool, TokenTurnType } from '../shared/types';
+import type {
+  ActivityEntry,
+  SubagentTokenData,
+  TokenDataPoint,
+  TokenTurnTool,
+  TokenTurnType,
+  TokenUsageResult,
+} from '../shared/types';
 import { loadConfig } from './config';
 import { summarizeTask } from './task-summarizer';
 
@@ -425,52 +432,12 @@ function parseLine(line: string): ParsedLine | null {
 }
 
 /**
- * Read all token usage data points from JSONL files for a task.
- *
- * Groups consecutive assistant JSONL lines into logical "turns" (one API call).
+ * Group parsed JSONL lines into logical turns (one API call each).
  * A turn boundary is a user message that is NOT a tool_result.
  * Within a turn, token usage is summed across blocks, and all tool calls / text
  * are collected.
  */
-export function getTokenUsageData(worktreePath: string, sessionId?: string): TokenDataPoint[] {
-  const dirName = projectDirName(worktreePath);
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
-
-  if (!fs.existsSync(projectDir)) return [];
-
-  const files: string[] = [];
-  if (sessionId) {
-    const filePath = path.join(projectDir, `${sessionId}.jsonl`);
-    if (fs.existsSync(filePath)) files.push(filePath);
-  } else {
-    try {
-      for (const f of fs.readdirSync(projectDir)) {
-        if (f.endsWith('.jsonl')) files.push(path.join(projectDir, f));
-      }
-    } catch {
-      return [];
-    }
-  }
-
-  // Parse all lines first
-  const allLines: ParsedLine[] = [];
-  for (const filePath of files) {
-    let content: string;
-    try {
-      content = fs.readFileSync(filePath, 'utf-8');
-    } catch {
-      continue;
-    }
-    for (const line of content.split('\n')) {
-      if (!line.trim()) continue;
-      const parsed = parseLine(line);
-      if (parsed) allLines.push(parsed);
-    }
-  }
-
-  // Group into turns: a turn starts with the first assistant line after a
-  // non-tool-result user message (the prompt), and ends when the next
-  // non-tool-result user message appears.
+function groupIntoTurns(allLines: ParsedLine[]): TokenDataPoint[] {
   const points: TokenDataPoint[] = [];
   let inPlanMode = false;
   let currentPrompt: string | undefined;
@@ -490,10 +457,6 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
   let turnTextTokens = 0;
 
   const classifyTurn = (): TokenTurnType => {
-    // user: turn triggered by user typing a prompt (text-only response)
-    // tool: user-triggered turn that involved tool calls
-    // plan: turn in plan mode
-    // agent: autonomous turn (no user prompt)
     if (turnPlanMode) return 'plan';
     if (!turnHasUserPrompt) return 'agent';
     if (turnTools.length > 0) return 'tool';
@@ -502,7 +465,6 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
 
   const flushTurn = () => {
     if (!turnHasData) return;
-    // Include the last sub-call's output
     turnUsage.output += turnSubCallMaxOutput;
     const totalInput = turnUsage.input + turnUsage.cacheRead + turnUsage.cacheCreation;
     if (totalInput === 0 && turnUsage.output === 0) return;
@@ -547,13 +509,11 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
   for (const line of allLines) {
     if (line.type === 'user') {
       if (!line.isToolResult) {
-        // Real user message = turn boundary
         flushTurn();
         resetTurn();
         currentPrompt = line.userText;
         turnHasUserPrompt = !!line.userText;
       }
-      // tool_result lines are mid-turn (between tool_use and next assistant block)
       continue;
     }
 
@@ -569,20 +529,14 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
       }
       turnHasData = true;
 
-      // Track usage per sub-call within the turn.
-      // Input/cache: keep the max (= context size at end of turn, not summed).
-      // Output: sum across sub-calls (each sub-call's max output).
-      // Per-block output delta: for tool/text token attribution.
       let blockOutputDelta = 0;
       if (line.usage) {
         const subCallKey = `${line.usage.input}:${line.usage.cacheRead}:${line.usage.cacheCreation}`;
         if (subCallKey !== turnLastSubCallKey) {
-          // New sub-call — context grew from tool results of previous sub-call
           const newSubCallInput = line.usage.input + line.usage.cacheRead + line.usage.cacheCreation;
           const prevSubCallInput = turnUsage.input + turnUsage.cacheRead + turnUsage.cacheCreation;
           const inputGrowth = Math.max(0, newSubCallInput - prevSubCallInput);
 
-          // Distribute input growth evenly across tools from previous sub-call
           if (inputGrowth > 0 && turnSubCallToolStart < turnTools.length) {
             const toolCount = turnTools.length - turnSubCallToolStart;
             const perTool = Math.round(inputGrowth / toolCount);
@@ -592,13 +546,11 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
           }
           turnSubCallToolStart = turnTools.length;
 
-          // Flush previous sub-call's output and reset
           turnUsage.output += turnSubCallMaxOutput;
           turnSubCallMaxOutput = 0;
           turnPrevBlockOutput = 0;
           turnLastSubCallKey = subCallKey;
         }
-        // Context size: take max across sub-calls (grows as tool results are added)
         const subCallInput = line.usage.input + line.usage.cacheRead + line.usage.cacheCreation;
         if (subCallInput > turnUsage.input + turnUsage.cacheRead + turnUsage.cacheCreation) {
           turnUsage.input = line.usage.input;
@@ -611,7 +563,6 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
       }
 
       if (line.toolName) {
-        // Track plan mode transitions
         if (line.toolName === 'EnterPlanMode') inPlanMode = true;
         else if (line.toolName === 'ExitPlanMode') inPlanMode = false;
 
@@ -629,11 +580,96 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
     }
   }
 
-  // Flush the last turn
   flushTurn();
-
   points.sort((a, b) => a.timestamp - b.timestamp);
   return points;
+}
+
+/** Read all lines from JSONL files and parse them */
+function readAndParseLines(files: string[]): ParsedLine[] {
+  const allLines: ParsedLine[] = [];
+  for (const filePath of files) {
+    let content: string;
+    try {
+      content = fs.readFileSync(filePath, 'utf-8');
+    } catch {
+      continue;
+    }
+    for (const line of content.split('\n')) {
+      if (!line.trim()) continue;
+      const parsed = parseLine(line);
+      if (parsed) allLines.push(parsed);
+    }
+  }
+  return allLines;
+}
+
+/**
+ * Read all token usage data points from JSONL files for a task.
+ */
+export function getTokenUsageData(worktreePath: string, sessionId?: string): TokenUsageResult {
+  const dirName = projectDirName(worktreePath);
+  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+
+  if (!fs.existsSync(projectDir)) return { points: [], subagents: [] };
+
+  const files: string[] = [];
+  if (sessionId) {
+    const filePath = path.join(projectDir, `${sessionId}.jsonl`);
+    if (fs.existsSync(filePath)) files.push(filePath);
+  } else {
+    try {
+      for (const f of fs.readdirSync(projectDir)) {
+        if (f.endsWith('.jsonl')) files.push(path.join(projectDir, f));
+      }
+    } catch {
+      return { points: [], subagents: [] };
+    }
+  }
+
+  // Discover subagent files
+  const subagentFiles: { filePath: string; id: string }[] = [];
+  if (sessionId) {
+    const subagentDir = path.join(projectDir, sessionId, 'subagents');
+    try {
+      for (const f of fs.readdirSync(subagentDir)) {
+        if (!f.endsWith('.jsonl')) continue;
+        subagentFiles.push({
+          filePath: path.join(subagentDir, f),
+          id: f.replace('.jsonl', ''),
+        });
+      }
+    } catch {
+      // No subagents directory
+    }
+  }
+
+  const allLines = readAndParseLines(files);
+  const points = groupIntoTurns(allLines);
+
+  // Parse subagent files
+  const subagents: SubagentTokenData[] = [];
+  for (const sf of subagentFiles) {
+    let slug = sf.id;
+    try {
+      const content = fs.readFileSync(sf.filePath, 'utf-8');
+      const firstLine = content.split('\n').find((l) => l.trim());
+      if (firstLine) {
+        const obj = JSON.parse(firstLine);
+        if (obj.slug) slug = obj.slug as string;
+      }
+    } catch {
+      // Fall back to id as slug
+    }
+
+    const subLines = readAndParseLines([sf.filePath]);
+    const subPoints = groupIntoTurns(subLines);
+    if (subPoints.length > 0) {
+      subagents.push({ id: sf.id, slug, points: subPoints });
+    }
+  }
+
+  return { points, subagents };
 }
 
 export function stopClaudeWatching(taskId: string): void {
