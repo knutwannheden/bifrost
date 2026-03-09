@@ -714,7 +714,9 @@ function BarChart({
         const hOut = (d.outputTokens / maxTokens) * chartH;
         const isActive = activeIndex === i;
         const isMatch = matchingSet === null || matchingSet.has(i);
-        const opacity = !isMatch ? 0.12 : activeIndex === null || isActive ? 0.8 : 0.3;
+        // Dim non-matching bars during search; without search, keep all at normal opacity
+        // and rely on the highlight band to distinguish the selected bar.
+        const opacity = !isMatch ? 0.12 : matchingSet !== null && !isActive ? 0.3 : 0.8;
 
         return (
           <g key={i}>

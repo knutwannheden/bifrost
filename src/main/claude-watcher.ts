@@ -634,6 +634,9 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
     try {
       for (const f of fs.readdirSync(subagentDir)) {
         if (!f.endsWith('.jsonl')) continue;
+        // Skip agent-acompact-* files — these are continuation segments after
+        // context compaction, already represented in the main session JSONL.
+        if (f.startsWith('agent-acompact-')) continue;
         subagentFiles.push({
           filePath: path.join(subagentDir, f),
           id: f.replace('.jsonl', ''),
