@@ -239,6 +239,11 @@ export default function TaskCreateDialog() {
 
   const handleRepoSelect = (id: string) => {
     setRepoId(id);
+    // Clear PR info when user selects a different repo from what the PR matched
+    if (prInfo && id !== prBanner?.repoId) {
+      setPrInfo(null);
+      setPrBanner(null);
+    }
     if (id) nameRef.current?.focus();
   };
 
@@ -246,6 +251,11 @@ export default function TaskCreateDialog() {
     setBranch(b);
     setBranchSearch(b);
     setBranchDropdownOpen(false);
+    // Clear PR info when user selects a branch different from the PR's head branch
+    if (prInfo && b !== prBanner?.headBranch) {
+      setPrInfo(null);
+      setPrBanner(null);
+    }
     createRef.current?.focus();
   };
 

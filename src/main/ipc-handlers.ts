@@ -841,7 +841,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.SET_ACTIVE_TASK_ID, (_event, taskId: string | null) => {
     setActiveTaskId(taskId);
     if (taskId && pendingRestore.has(taskId)) {
-      restoreTaskSession(taskId, mainWindow);
+      try {
+        restoreTaskSession(taskId, mainWindow);
+      } catch (err) {
+        console.error(`[ipc] Failed to restore task ${taskId}:`, err);
+        updateTask(taskId, { status: 'error' });
+      }
     }
   });
 
