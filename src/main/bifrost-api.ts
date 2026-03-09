@@ -295,6 +295,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const hookContext = (body.bifrost_context as string) || 'code';
       const hookTaskId = body.bifrost_task_id as string;
       const hookReviewId = body.bifrost_review_id as string;
+      console.log(`[api] /hook context=${hookContext} cwd=${cwd} triageId=${body.bifrost_triage_id || ''}`);
       if (!cwd) {
         errorResponse(res, 'Missing cwd');
         return;
@@ -303,7 +304,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Triage stop — notify renderer that triage is waiting for input
       const hookTriageId = body.bifrost_triage_id as string;
       if (hookContext === 'triage' && hookTriageId) {
-        const hookMessage = (body.message as string) || '';
+        const hookMessage = (body.last_assistant_message as string) || '';
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId, hookMessage);
         }

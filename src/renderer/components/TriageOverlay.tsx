@@ -222,9 +222,9 @@ export default function TriageOverlay() {
         return;
       }
 
-      // In interactive mode, only handle Alt+B for back
+      // In interactive mode, only handle Alt+B for back (use e.code since Alt produces special chars on macOS)
       if (interactiveId) {
-        if (e.altKey && e.key.toLowerCase() === 'b') {
+        if (e.altKey && e.code === 'KeyB') {
           e.preventDefault();
           setInteractiveId(null);
         }
@@ -236,39 +236,34 @@ export default function TriageOverlay() {
         if (handleSearchKey(e)) return;
       }
 
-      // Alt+S to start
-      if (e.altKey && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        handleStart();
-        return;
-      }
-
-      // Alt+E to enter first running triage
-      if (e.altKey && e.key.toLowerCase() === 'e') {
-        e.preventDefault();
-        const running = triageEntries.find(([, t]) => t.status === 'running');
-        if (running) handleEnter(running[0]);
-        return;
-      }
-
-      // Alt+C to cancel first running triage
-      if (e.altKey && e.key.toLowerCase() === 'c') {
-        e.preventDefault();
-        const running = triageEntries.find(([, t]) => t.status === 'running');
-        if (running) handleCancel(running[0]);
-        return;
-      }
-
-      // Alt+N / Alt+H to switch tabs
-      if (e.altKey && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        dispatch({ type: 'SET_TRIAGE_TAB', tab: 'new' });
-        return;
-      }
-      if (e.altKey && e.key.toLowerCase() === 'h') {
-        e.preventDefault();
-        dispatch({ type: 'SET_TRIAGE_TAB', tab: 'history' });
-        return;
+      // Alt+letter shortcuts (use e.code since Alt produces special chars on macOS)
+      if (e.altKey) {
+        switch (e.code) {
+          case 'KeyS':
+            e.preventDefault();
+            handleStart();
+            return;
+          case 'KeyE': {
+            e.preventDefault();
+            const running = triageEntries.find(([, t]) => t.status === 'running');
+            if (running) handleEnter(running[0]);
+            return;
+          }
+          case 'KeyC': {
+            e.preventDefault();
+            const running = triageEntries.find(([, t]) => t.status === 'running');
+            if (running) handleCancel(running[0]);
+            return;
+          }
+          case 'KeyN':
+            e.preventDefault();
+            dispatch({ type: 'SET_TRIAGE_TAB', tab: 'new' });
+            return;
+          case 'KeyH':
+            e.preventDefault();
+            dispatch({ type: 'SET_TRIAGE_TAB', tab: 'history' });
+            return;
+        }
       }
 
       // Enter to start when textarea not focused
