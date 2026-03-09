@@ -151,6 +151,16 @@ const TokenUsageChart = forwardRef<
     });
   }, [points]);
 
+  const subagentCumulativeData = useMemo(() => {
+    return data.subagents.map((sa) => ({
+      ...sa,
+      cumulativePoints: sa.points.map((p) => ({
+        ...p,
+        contextSize: totalInput(p),
+      })),
+    }));
+  }, [data.subagents]);
+
   const startTime = points.length > 0 ? points[0].timestamp : 0;
 
   const findClosestIndex = useCallback(
@@ -310,6 +320,12 @@ const TokenUsageChart = forwardRef<
               Output
             </span>
           )}
+          {mode === 'cumulative' && data.subagents.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.agent.input }} />
+              Subagent
+            </span>
+          )}
           {points.some((d) => d.compacted) && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded-sm bg-danger opacity-40" />
@@ -342,6 +358,7 @@ const TokenUsageChart = forwardRef<
             ) : (
               <LineChart
                 data={cumulativeData}
+                subagents={subagentCumulativeData}
                 chartW={chartW}
                 chartH={chartH}
                 padding={chartPadding}
@@ -371,7 +388,13 @@ const TokenUsageChart = forwardRef<
         <div className="px-4 pb-3 pt-2 border-t border-border-default flex-shrink-0">
           <div className="flex justify-between text-xs text-muted">
             <span>{points.length} turns</span>
-            <span>Total output: {formatTokenCount(points.reduce((sum, p) => sum + p.outputTokens, 0))}</span>
+            <span>
+              Total output:{' '}
+              {formatTokenCount(
+                points.reduce((sum, p) => sum + p.outputTokens, 0) +
+                  data.subagents.reduce((sum, sa) => sum + sa.points.reduce((s, p) => s + p.outputTokens, 0), 0),
+              )}
+            </span>
           </div>
         </div>
       )}
@@ -739,8 +762,11 @@ function BarChart({
   );
 }
 
+type CumulativePoint = TokenDataPoint & { contextSize: number };
+
 function LineChart({
   data,
+  subagents,
   chartW,
   chartH,
   padding,
@@ -749,7 +775,8 @@ function LineChart({
   selectedIndex,
   matchingSet,
 }: {
-  data: (TokenDataPoint & { contextSize: number })[];
+  data: CumulativePoint[];
+  subagents: { id: string; slug: string; cumulativePoints: CumulativePoint[] }[];
   chartW: number;
   chartH: number;
   padding: { top: number; right: number; bottom: number; left: number };
@@ -760,7 +787,9 @@ function LineChart({
 }) {
   const endTime = data[data.length - 1].timestamp;
   const timeSpan = Math.max(endTime - startTime, 1);
-  const maxTokens = Math.max(...data.map((d) => d.contextSize), 1);
+  const subagentMax =
+    subagents.length > 0 ? Math.max(...subagents.flatMap((sa) => sa.cumulativePoints.map((p) => p.contextSize))) : 0;
+  const maxTokens = Math.max(...data.map((d) => d.contextSize), subagentMax, 1);
 
   const xOf = (d: TokenDataPoint) => ((d.timestamp - startTime) / timeSpan) * chartW;
   const yOfContext = (d: (typeof data)[0]) => chartH - (d.contextSize / maxTokens) * chartH;
@@ -832,6 +861,21 @@ function LineChart({
 
       {/* Line */}
       <path d={contextPath} fill="none" stroke={TURN_COLORS.user.input} strokeWidth={2} />
+
+      {/* Subagent lines */}
+      {subagents.map((sa, saIdx) => {
+        const pts = sa.cumulativePoints;
+        if (pts.length === 0) return null;
+        const saPath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${xOf(p)},${yOfContext(p)}`).join(' ');
+        const saFill = `${saPath} L${xOf(pts[pts.length - 1])},${chartH} L${xOf(pts[0])},${chartH} Z`;
+        const lineOpacity = Math.max(0.4, 0.6 - saIdx * 0.1);
+        return (
+          <g key={sa.id}>
+            <path d={saFill} fill={TURN_COLORS.agent.input} opacity={0.05} />
+            <path d={saPath} fill="none" stroke={TURN_COLORS.agent.input} strokeWidth={1.5} opacity={lineOpacity} />
+          </g>
+        );
+      })}
 
       {/* Matching turn markers */}
       {matchingSet &&
