@@ -348,6 +348,18 @@ export default function ReviewContent({
       dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'idle' });
       dispatch({ type: 'SET_REVIEW_CONTENT', reviewId: newReviewId, content: markdown });
       dispatch({ type: 'SET_REVIEW_STATUS', reviewId: newReviewId, status: 'done' });
+      dispatch({ type: 'MARK_REVIEW_UNREAD', taskId });
+      dispatch({
+        type: 'PUSH_NOTIFICATION',
+        notification: {
+          id: `review-done-${newReviewId}`,
+          type: 'info',
+          title: 'Review complete',
+          message: `Code review finished for ${taskId}`,
+          read: false,
+          timestamp: Date.now(),
+        },
+      });
       onNewReviewCreated(review);
       setReviewInstructions('');
     } catch (err) {

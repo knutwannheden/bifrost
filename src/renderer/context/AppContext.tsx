@@ -53,6 +53,8 @@ export interface AppState {
   activeReviewId: Record<string, string | null>;
   /** Active discussion PTY sessions keyed by taskId */
   reviewDiscussion: Record<string, { ptySessionId: string; reviewId: string }>;
+  /** Tasks with a review that completed but hasn't been viewed yet */
+  unreadReview: Record<string, boolean>;
   toast: string | null;
   toastHint: string | null;
   toastDuration: number;
@@ -113,6 +115,8 @@ export type AppAction =
   | { type: 'UPDATE_REVIEW_SESSION'; taskId: string; reviewId: string; sessionId: string }
   | { type: 'SET_REVIEW_DISCUSSION'; taskId: string; reviewId: string; ptySessionId: string }
   | { type: 'CLEAR_REVIEW_DISCUSSION'; taskId: string }
+  | { type: 'MARK_REVIEW_UNREAD'; taskId: string }
+  | { type: 'CLEAR_REVIEW_UNREAD'; taskId: string }
   | { type: 'REORDER_TASKS'; taskIds: string[] }
   | { type: 'SHOW_ARCHIVE_CONFIRM'; taskId: string; taskName: string }
   | { type: 'HIDE_ARCHIVE_CONFIRM' };
@@ -142,6 +146,7 @@ const initialState: AppState = {
   reviews: {},
   activeReviewId: {},
   reviewDiscussion: {},
+  unreadReview: {},
   toast: null,
   toastHint: null,
   toastDuration: 2000,
@@ -275,7 +280,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const ps = getPaneState(state, state.activeTaskId);
       const opening = !ps.showDiff;
       const base = opening ? { ...state, ...allOverlaysClosed } : state;
-      return setPaneState(base, state.activeTaskId, { ...ps, showDiff: opening });
+      let next = setPaneState(base, state.activeTaskId, { ...ps, showDiff: opening });
+      if (opening && ps.diffMode === 'review' && state.unreadReview[state.activeTaskId]) {
+        const { [state.activeTaskId]: _, ...rest } = next.unreadReview;
+        void _;
+        next = { ...next, unreadReview: rest };
+      }
+      return next;
     }
     case 'TOGGLE_TASK_HISTORY':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showTaskHistory: !state.showTaskHistory });
@@ -296,7 +307,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_DIFF_MODE': {
       if (!state.activeTaskId) return state;
       const ps = getPaneState(state, state.activeTaskId);
-      return setPaneState(state, state.activeTaskId, { ...ps, diffMode: action.mode });
+      const next = setPaneState(state, state.activeTaskId, { ...ps, diffMode: action.mode });
+      if (action.mode === 'review' && state.unreadReview[state.activeTaskId]) {
+        const { [state.activeTaskId]: _, ...rest } = next.unreadReview;
+        void _;
+        return { ...next, unreadReview: rest };
+      }
+      return next;
     }
     case 'SET_DEV_SESSION': {
       const ps = getPaneState(state, action.taskId);
@@ -397,6 +414,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const { [action.taskId]: _removed, ...rest } = state.reviewDiscussion;
       void _removed;
       return { ...state, reviewDiscussion: rest };
+    }
+    case 'MARK_REVIEW_UNREAD':
+      return { ...state, unreadReview: { ...state.unreadReview, [action.taskId]: true } };
+    case 'CLEAR_REVIEW_UNREAD': {
+      const { [action.taskId]: _cleared, ...remaining } = state.unreadReview;
+      void _cleared;
+      return { ...state, unreadReview: remaining };
     }
     case 'REORDER_TASKS': {
       const idSet = new Set(action.taskIds);

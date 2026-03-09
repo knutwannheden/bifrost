@@ -188,6 +188,7 @@ export default function RightIconBar() {
 
   const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
+  const reviewBadge = state.activeTaskId && state.unreadReview[state.activeTaskId] ? ('blue' as const) : undefined;
   const supervisorBadge = useSupervisorBadge();
 
   const toggleDiffMode = (mode: DiffMode) => {
@@ -234,6 +235,7 @@ export default function RightIconBar() {
         label="Review"
         shortcut="Cmd+U"
         active={isDiffActive && diffMode === 'review'}
+        badge={reviewBadge}
         onClick={() => toggleDiffMode('review')}
       >
         <ReviewIcon />
