@@ -820,6 +820,7 @@ function ReviewPanel({ taskId }: { taskId: string }) {
 export default function DiffOverlay() {
   const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
+  const tokenChartRef = useRef<import('./TokenUsageChart').TokenUsageChartHandle>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const gitFilesRef = useRef<DiffFile[]>([]);
 
@@ -966,7 +967,9 @@ export default function DiffOverlay() {
 
       case 'ArrowUp':
         e.preventDefault();
-        if (isLog && filteredLogEntries.length > 0) {
+        if (isActivity) {
+          tokenChartRef.current?.handleKeyDown(e);
+        } else if (isLog && filteredLogEntries.length > 0) {
           setFocusedIdx((i) => (i > 0 ? i - 1 : filteredLogEntries.length - 1));
         } else if (diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i > 0 ? i - 1 : gitFileCount - 1));
@@ -975,7 +978,9 @@ export default function DiffOverlay() {
 
       case 'ArrowDown':
         e.preventDefault();
-        if (isLog && filteredLogEntries.length > 0) {
+        if (isActivity) {
+          tokenChartRef.current?.handleKeyDown(e);
+        } else if (isLog && filteredLogEntries.length > 0) {
           setFocusedIdx((i) => (i < filteredLogEntries.length - 1 ? i + 1 : 0));
         } else if (diffMode === 'git' && gitFileCount > 0) {
           setGitFileIdx((i) => (i < gitFileCount - 1 ? i + 1 : 0));
@@ -984,7 +989,10 @@ export default function DiffOverlay() {
 
       case 'ArrowLeft':
       case 'ArrowRight':
-        if (diffMode === 'git') {
+        if (isActivity) {
+          e.preventDefault();
+          tokenChartRef.current?.handleKeyDown(e);
+        } else if (diffMode === 'git') {
           e.preventDefault();
           setDiffScope(e.key === 'ArrowLeft' ? 'working' : 'all');
         }
@@ -1120,6 +1128,7 @@ export default function DiffOverlay() {
       {state.activeTaskId && isActivity && (
         <div className="flex-1 min-h-0">
           <TokenUsageChart
+            ref={tokenChartRef}
             data={tokenUsage.data}
             loading={tokenUsage.loading}
             error={tokenUsage.error}
