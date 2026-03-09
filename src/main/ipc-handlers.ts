@@ -426,23 +426,24 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       killSession(taskId);
     }
 
-    // Remove worktree but keep the branch
+    // Update status immediately so the UI can hide the tab
+    const archived = updateTask(taskId, {
+      status: 'archived',
+      archivedAt: Date.now(),
+    });
+
+    // Remove worktree in the background (can take several seconds)
     if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
       const config = loadConfig();
       const repo = config.repos.find((r: Repo) => r.id === task.repoId);
       if (repo) {
-        try {
-          await removeWorktree(repo.path, task.worktreePath);
-        } catch {
+        removeWorktree(repo.path, task.worktreePath).catch(() => {
           // Worktree may already be removed
-        }
+        });
       }
     }
 
-    return updateTask(taskId, {
-      status: 'archived',
-      archivedAt: Date.now(),
-    });
+    return archived;
   });
 
   ipcMain.handle(IPC.IS_WORKTREE_DIRTY, async (_event, taskId: string) => {
