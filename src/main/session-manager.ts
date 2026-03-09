@@ -61,13 +61,24 @@ export function spawnSession(
     spawnArgs = args;
   }
 
-  const shell = pty.spawn(spawnCommand, spawnArgs, {
-    name: 'xterm-256color',
-    cols: options?.cols ?? 120,
-    rows: options?.rows ?? 30,
-    cwd,
-    env,
-  });
+  let shell: IPty;
+  try {
+    shell = pty.spawn(spawnCommand, spawnArgs, {
+      name: 'xterm-256color',
+      cols: options?.cols ?? 120,
+      rows: options?.rows ?? 30,
+      cwd,
+      env,
+    });
+  } catch (err) {
+    const cwdExists = fs.existsSync(cwd);
+    const openSessions = sessions.size;
+    console.error(
+      `[session] pty.spawn failed for ${sessionId}: cmd=${spawnCommand}, cwd=${cwd} (exists=${cwdExists}), openSessions=${openSessions}`,
+      err,
+    );
+    throw err;
+  }
 
   sessions.set(sessionId, shell);
   sessionBuffers.set(sessionId, '');
