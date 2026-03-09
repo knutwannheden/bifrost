@@ -24,6 +24,7 @@ function TriageCard({
   interactiveId,
   onEnter,
   onCancel,
+  onBack,
   showAlt,
 }: {
   id: string;
@@ -31,6 +32,7 @@ function TriageCard({
   interactiveId: string | null;
   onEnter: (id: string) => void;
   onCancel: (id: string) => void;
+  onBack: (id: string) => void;
   showAlt: boolean;
 }) {
   const isInteractive = interactiveId === id;
@@ -39,6 +41,12 @@ function TriageCard({
     return (
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border-default">
+          <button
+            onClick={() => onBack(id)}
+            className="px-2 py-0.5 text-xs text-secondary hover:text-primary transition-colors"
+          >
+            <ActionLabel text="Back" hintIndex={0} showHint={showAlt} />
+          </button>
           <span className="text-xs text-secondary truncate flex-1">{item.prompt}</span>
           {item.waiting && (
             <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded">
@@ -90,13 +98,7 @@ function TriageCard({
 }
 
 /** A history row for completed triages. */
-function HistoryRow({
-  entry,
-  search,
-}: {
-  entry: TriageEntry;
-  search: string;
-}) {
+function HistoryRow({ entry, search }: { entry: TriageEntry; search: string }) {
   const statusColor =
     entry.status === 'done'
       ? 'text-green-400'
@@ -107,13 +109,7 @@ function HistoryRow({
           : 'text-accent';
 
   const statusLabel =
-    entry.status === 'done'
-      ? '✓'
-      : entry.status === 'error'
-        ? '✗'
-        : entry.status === 'cancelled'
-          ? '—'
-          : '…';
+    entry.status === 'done' ? '✓' : entry.status === 'error' ? '✗' : entry.status === 'cancelled' ? '—' : '…';
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 hover:bg-surface-hover transition-colors rounded">
@@ -196,6 +192,10 @@ export default function TriageOverlay() {
     setInteractiveId(id);
   }, []);
 
+  const handleBack = useCallback((_id: string) => {
+    setInteractiveId(null);
+  }, []);
+
   // Track Alt key
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -222,8 +222,14 @@ export default function TriageOverlay() {
         return;
       }
 
-      // In interactive mode, don't consume other keys
-      if (interactiveId) return;
+      // In interactive mode, only handle Alt+B for back
+      if (interactiveId) {
+        if (e.altKey && e.key.toLowerCase() === 'b') {
+          e.preventDefault();
+          setInteractiveId(null);
+        }
+        return;
+      }
 
       // History tab: handle instant search keys
       if (state.triageTab === 'history') {
@@ -234,6 +240,22 @@ export default function TriageOverlay() {
       if (e.altKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
         handleStart();
+        return;
+      }
+
+      // Alt+E to enter first running triage
+      if (e.altKey && e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        const running = triageEntries.find(([, t]) => t.status === 'running');
+        if (running) handleEnter(running[0]);
+        return;
+      }
+
+      // Alt+C to cancel first running triage
+      if (e.altKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        const running = triageEntries.find(([, t]) => t.status === 'running');
+        if (running) handleCancel(running[0]);
         return;
       }
 
@@ -289,10 +311,7 @@ export default function TriageOverlay() {
               }}
             />
           </div>
-          <button
-            onClick={close}
-            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
-          >
+          <button onClick={close} className="text-secondary hover:text-primary text-lg leading-none transition-colors">
             ×
           </button>
         </div>
@@ -343,6 +362,7 @@ export default function TriageOverlay() {
                     interactiveId={interactiveId}
                     onEnter={handleEnter}
                     onCancel={handleCancel}
+                    onBack={handleBack}
                     showAlt={altHeld}
                   />
                 ))}
@@ -377,10 +397,23 @@ export default function TriageOverlay() {
         <div className="px-4 pb-3 pt-2 border-t border-border-default">
           <div className="text-xs text-faint flex items-center gap-3">
             {interactiveId ? (
-              <span>Esc back</span>
+              <>
+                <span>{altSymbol}B back</span>
+                <span>Esc back</span>
+              </>
             ) : (
               <>
-                {state.triageTab === 'new' && <span>Enter start</span>}
+                {state.triageTab === 'new' && (
+                  <>
+                    <span>Enter start · {altSymbol}S</span>
+                    {triageEntries.some(([, t]) => t.status === 'running') && (
+                      <>
+                        <span>{altSymbol}E enter</span>
+                        <span>{altSymbol}C cancel</span>
+                      </>
+                    )}
+                  </>
+                )}
                 <span>
                   {altSymbol}N/{altSymbol}H tabs
                 </span>
