@@ -246,7 +246,7 @@ function TaskRow({
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
   const [filter, setFilter] = useState<Filter>('active');
-  const { search, handleSearchKey } = useInstantSearch();
+  const { search, searchVisible, handleSearchKey } = useInstantSearch();
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -608,7 +608,7 @@ export default function TaskHistoryPanel() {
           </div>
         )}
 
-        <SearchIndicator search={search} className="mx-4 mt-3" />
+        <SearchIndicator search={search} visible={searchVisible} className="mx-4 mt-3" />
 
         {/* List content */}
         <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-2">

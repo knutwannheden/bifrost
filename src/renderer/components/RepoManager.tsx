@@ -12,7 +12,7 @@ import SearchIndicator from './SearchIndicator';
 export default function RepoManager() {
   const { state, dispatch } = useApp();
   const [localPath, setLocalPath] = useState('');
-  const { search, handleSearchKey } = useInstantSearch();
+  const { search, searchVisible, handleSearchKey } = useInstantSearch();
   const [focusedSection, setFocusedSection] = useState<'suggestions' | 'repos'>('suggestions');
   const [focusedSuggestionIdx, setFocusedSuggestionIdx] = useState(0);
   const [focusedRepoIdx, setFocusedRepoIdx] = useState(0);
@@ -254,7 +254,7 @@ export default function RepoManager() {
         </div>
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
-          <SearchIndicator search={search} />
+          <SearchIndicator search={search} visible={searchVisible} />
 
           {/* Recent from Claude */}
           {suggestions.length > 0 && (

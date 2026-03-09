@@ -824,7 +824,7 @@ export default function DiffOverlay() {
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const gitFilesRef = useRef<DiffFile[]>([]);
 
-  const { search, handleSearchKey, clearSearch } = useInstantSearch();
+  const { search, searchVisible, handleSearchKey, clearSearch } = useInstantSearch();
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [gitFileIdx, setGitFileIdx] = useState(0);
   const [gitFileCount, setGitFileCount] = useState(0);
@@ -1069,6 +1069,7 @@ export default function DiffOverlay() {
 
       <SearchIndicator
         search={search}
+        visible={searchVisible}
         className="mx-4 mt-3 flex-shrink-0"
         matchInfo={
           isLog
