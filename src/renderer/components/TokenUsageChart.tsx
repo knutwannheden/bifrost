@@ -146,10 +146,8 @@ const TokenUsageChart = forwardRef<
   const chartH = svgSize.h - chartPadding.top - chartPadding.bottom;
 
   const cumulativeData = useMemo(() => {
-    let outputSum = 0;
     return points.map((p) => {
-      outputSum += p.outputTokens;
-      return { ...p, cumulativeOutput: outputSum, contextSize: totalInput(p) };
+      return { ...p, contextSize: totalInput(p) };
     });
   }, [points]);
 
@@ -296,7 +294,6 @@ const TokenUsageChart = forwardRef<
   }
 
   const detailPoint = selectedIndex !== null ? points[selectedIndex] : null;
-  const detailCumulative = selectedIndex !== null ? cumulativeData[selectedIndex] : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -307,10 +304,12 @@ const TokenUsageChart = forwardRef<
             <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.user.input }} />
             Context size
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.tool.input }} />
-            {mode === 'per-turn' ? 'Output' : 'Cumulative output'}
-          </span>
+          {mode === 'per-turn' && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.tool.input }} />
+              Output
+            </span>
+          )}
           {points.some((d) => d.compacted) && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded-sm bg-danger opacity-40" />
@@ -356,10 +355,10 @@ const TokenUsageChart = forwardRef<
         )}
       </div>
 
-      {detailPoint && detailCumulative ? (
+      {detailPoint ? (
         <DetailPanel
           point={detailPoint}
-          cumulativeOutput={detailCumulative.cumulativeOutput}
+          points={points}
           prevContextSize={selectedIndex > 0 ? totalInput(points[selectedIndex - 1]) : 0}
           index={selectedIndex}
           total={points.length}
@@ -372,9 +371,7 @@ const TokenUsageChart = forwardRef<
         <div className="px-4 pb-3 pt-2 border-t border-border-default flex-shrink-0">
           <div className="flex justify-between text-xs text-muted">
             <span>{points.length} turns</span>
-            <span>
-              Total output: {formatTokenCount(cumulativeData[cumulativeData.length - 1]?.cumulativeOutput ?? 0)}
-            </span>
+            <span>Total output: {formatTokenCount(points.reduce((sum, p) => sum + p.outputTokens, 0))}</span>
           </div>
         </div>
       )}
@@ -453,7 +450,7 @@ function CollapsibleBlock({
 
 function DetailPanel({
   point,
-  cumulativeOutput,
+  points,
   prevContextSize,
   index,
   total,
@@ -463,7 +460,7 @@ function DetailPanel({
   onClose,
 }: {
   point: TokenDataPoint;
-  cumulativeOutput: number;
+  points: TokenDataPoint[];
   prevContextSize: number;
   index: number;
   total: number;
@@ -474,6 +471,7 @@ function DetailPanel({
 }) {
   const inputTotal = totalInput(point);
   const contextGrowth = inputTotal - prevContextSize;
+  const cumulativeOutput = points.slice(0, index + 1).reduce((sum, p) => sum + p.outputTokens, 0);
 
   // Message index mapping: 0 = prompt (if present), then tools, then summary
   let msgIdx = 0;
@@ -751,7 +749,7 @@ function LineChart({
   selectedIndex,
   matchingSet,
 }: {
-  data: (TokenDataPoint & { cumulativeOutput: number; contextSize: number })[];
+  data: (TokenDataPoint & { contextSize: number })[];
   chartW: number;
   chartH: number;
   padding: { top: number; right: number; bottom: number; left: number };
@@ -762,16 +760,13 @@ function LineChart({
 }) {
   const endTime = data[data.length - 1].timestamp;
   const timeSpan = Math.max(endTime - startTime, 1);
-  const maxTokens = Math.max(...data.map((d) => Math.max(d.contextSize, d.cumulativeOutput)), 1);
+  const maxTokens = Math.max(...data.map((d) => d.contextSize), 1);
 
   const xOf = (d: TokenDataPoint) => ((d.timestamp - startTime) / timeSpan) * chartW;
   const yOfContext = (d: (typeof data)[0]) => chartH - (d.contextSize / maxTokens) * chartH;
-  const yOfOutput = (d: (typeof data)[0]) => chartH - (d.cumulativeOutput / maxTokens) * chartH;
 
   const contextPath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xOf(d)},${yOfContext(d)}`).join(' ');
   const contextFill = `${contextPath} L${xOf(data[data.length - 1])},${chartH} L${xOf(data[0])},${chartH} Z`;
-  const outputPath = data.map((d, i) => `${i === 0 ? 'M' : 'L'}${xOf(d)},${yOfOutput(d)}`).join(' ');
-  const outputFill = `${outputPath} L${xOf(data[data.length - 1])},${chartH} L${xOf(data[0])},${chartH} Z`;
 
   const yTicks = computeTicks(0, maxTokens, 5);
 
@@ -832,13 +827,11 @@ function LineChart({
         );
       })}
 
-      {/* Filled areas */}
+      {/* Filled area */}
       <path d={contextFill} fill={TURN_COLORS.user.input} opacity={0.08} />
-      <path d={outputFill} fill={TURN_COLORS.tool.input} opacity={0.1} />
 
-      {/* Lines */}
+      {/* Line */}
       <path d={contextPath} fill="none" stroke={TURN_COLORS.user.input} strokeWidth={2} />
-      <path d={outputPath} fill="none" stroke={TURN_COLORS.tool.input} strokeWidth={2} />
 
       {/* Matching turn markers */}
       {matchingSet &&
@@ -874,14 +867,6 @@ function LineChart({
             cy={yOfContext(data[activeIndex])}
             r={selectedIndex !== null ? 5 : 4}
             fill={TURN_COLORS.user.input}
-            stroke="var(--color-bg-surface)"
-            strokeWidth={selectedIndex !== null ? 2 : 0}
-          />
-          <circle
-            cx={xOf(data[activeIndex])}
-            cy={yOfOutput(data[activeIndex])}
-            r={selectedIndex !== null ? 5 : 4}
-            fill={TURN_COLORS.tool.input}
             stroke="var(--color-bg-surface)"
             strokeWidth={selectedIndex !== null ? 2 : 0}
           />
