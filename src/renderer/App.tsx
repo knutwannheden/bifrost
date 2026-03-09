@@ -96,6 +96,19 @@ export default function App() {
   // Listen for session exit to update task status
   useEffect(() => {
     const unsub = window.bifrost.onSessionExit((sessionId, code) => {
+      // Check if it's a triage session exit
+      if (sessionId.startsWith('triage-')) {
+        const triageEntry = Object.entries(state.triages).find(([, t]) => t.ptySessionId === sessionId);
+        if (triageEntry) {
+          const [triageId] = triageEntry;
+          dispatch({
+            type: 'UPDATE_TRIAGE',
+            id: triageId,
+            updates: { status: code === 0 ? 'done' : 'error' },
+          });
+        }
+        return;
+      }
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task && task.status !== 'archived') {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
@@ -106,7 +119,7 @@ export default function App() {
       }
     });
     return unsub;
-  }, [state.tasks, dispatch]);
+  }, [state.tasks, state.triages, dispatch]);
 
   // Buffer last assistant text per task for hook notifications.
   useEffect(() => {
@@ -210,9 +223,18 @@ export default function App() {
 
   // Listen for triage waiting notifications
   useEffect(() => {
-    const unsub = window.bifrost.onTriageWaiting((triageId) => {
+    const unsub = window.bifrost.onTriageWaiting((triageId, message) => {
       dispatch({ type: 'SET_TRIAGE_WAITING', triageId });
-      dispatch({ type: 'SHOW_TOAST', message: 'Triage waiting for input', duration: 3000 });
+      const preview = message ? message.split('\n').slice(0, 2).join('\n') : 'Triage waiting for input';
+      dispatch({
+        type: 'SHOW_TOAST',
+        message: `**Triage**\n${preview}`,
+        duration: 5000,
+        action: {
+          label: 'Open',
+          callback: () => dispatch({ type: 'SHOW_TRIAGE' }),
+        },
+      });
     });
     return unsub;
   }, [dispatch]);

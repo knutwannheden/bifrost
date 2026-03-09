@@ -303,8 +303,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Triage stop — notify renderer that triage is waiting for input
       const hookTriageId = body.bifrost_triage_id as string;
       if (hookContext === 'triage' && hookTriageId) {
+        const hookMessage = (body.message as string) || '';
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId);
+          mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId, hookMessage);
         }
         jsonResponse(res, { ok: true });
         return;

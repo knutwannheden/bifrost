@@ -335,7 +335,7 @@ export interface BifrostAPI {
   listTriages(): Promise<TriageEntry[]>;
   deleteTriage(triageId: string): Promise<void>;
   onTriageActivity(callback: (triageId: string, activity: string) => void): () => void;
-  onTriageWaiting(callback: (triageId: string) => void): () => void;
+  onTriageWaiting(callback: (triageId: string, message: string) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

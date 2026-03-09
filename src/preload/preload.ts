@@ -227,7 +227,8 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.TRIAGE_ACTIVITY, handler);
   },
   onTriageWaiting: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, triageId: string) => callback(triageId);
+    const handler = (_event: Electron.IpcRendererEvent, triageId: string, message: string) =>
+      callback(triageId, message);
     ipcRenderer.on(IPC_STREAM.TRIAGE_WAITING, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.TRIAGE_WAITING, handler);
   },
