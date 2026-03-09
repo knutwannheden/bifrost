@@ -585,6 +585,47 @@ function groupIntoTurns(allLines: ParsedLine[]): TokenDataPoint[] {
   return points;
 }
 
+/**
+ * Convert parsed subagent lines into one data point per API sub-call.
+ * Unlike the main session, subagent files have NO non-tool-result user messages,
+ * so `groupIntoTurns` collapses everything into a single turn.  Instead, we
+ * emit one point per distinct sub-call (identified by input-token signature changes).
+ * Each point keeps the max output seen within that sub-call.
+ */
+function groupSubagentIntoPoints(allLines: ParsedLine[]): TokenDataPoint[] {
+  const points: TokenDataPoint[] = [];
+  let lastKey = '';
+
+  for (const line of allLines) {
+    if (line.type !== 'assistant' || !line.usage) continue;
+
+    const { input, output, cacheRead, cacheCreation } = line.usage;
+    const key = `${input}:${cacheRead}:${cacheCreation}`;
+
+    if (key !== lastKey) {
+      // New sub-call — create a new point
+      const totalIn = input + cacheRead + cacheCreation;
+      if (totalIn === 0 && output === 0) continue;
+      points.push({
+        timestamp: line.timestamp,
+        inputTokens: input,
+        outputTokens: output,
+        cacheReadTokens: cacheRead,
+        cacheCreationTokens: cacheCreation,
+        turnType: 'agent',
+      });
+      lastKey = key;
+    } else if (points.length > 0) {
+      // Same sub-call — update output to max
+      const last = points[points.length - 1];
+      last.outputTokens = Math.max(last.outputTokens, output);
+      last.timestamp = line.timestamp; // use latest timestamp
+    }
+  }
+
+  return points;
+}
+
 /** Read all lines from JSONL files and parse them */
 function readAndParseLines(files: string[]): ParsedLine[] {
   const allLines: ParsedLine[] = [];
@@ -666,7 +707,7 @@ export function getTokenUsageData(worktreePath: string, sessionId?: string): Tok
     }
 
     const subLines = readAndParseLines([sf.filePath]);
-    const subPoints = groupIntoTurns(subLines);
+    const subPoints = groupSubagentIntoPoints(subLines);
     if (subPoints.length > 0) {
       subagents.push({ id: sf.id, slug, points: subPoints });
     }
