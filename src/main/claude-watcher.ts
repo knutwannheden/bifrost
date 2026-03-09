@@ -421,12 +421,6 @@ function parseLine(line: string): ParsedLine | null {
       parsed.userText = content;
     }
 
-    // Detect /clear command
-    const raw = typeof content === 'string' ? content : JSON.stringify(content);
-    if (raw.includes('<command-name>/clear</command-name>')) {
-      return { type: 'clear_boundary', timestamp };
-    }
-
     return parsed;
   }
 
@@ -456,8 +450,6 @@ function groupIntoTurns(allLines: ParsedLine[]): TokenDataPoint[] {
   let turnHasUserPrompt = false;
   let turnCompacted = false;
   let nextTurnCompacted = false;
-  let turnCleared = false;
-  let nextTurnCleared = false;
   let turnLastSubCallKey = '';
   let turnSubCallMaxOutput = 0;
   let turnSubCallToolStart = 0;
@@ -494,7 +486,6 @@ function groupIntoTurns(allLines: ParsedLine[]): TokenDataPoint[] {
           : currentPrompt
         : undefined,
       compacted: turnCompacted || undefined,
-      cleared: turnCleared || undefined,
     });
   };
 
@@ -508,8 +499,6 @@ function groupIntoTurns(allLines: ParsedLine[]): TokenDataPoint[] {
     turnHasUserPrompt = false;
     turnCompacted = nextTurnCompacted;
     nextTurnCompacted = false;
-    turnCleared = nextTurnCleared;
-    nextTurnCleared = false;
     turnLastSubCallKey = '';
     turnSubCallMaxOutput = 0;
     turnSubCallToolStart = 0;
@@ -530,13 +519,6 @@ function groupIntoTurns(allLines: ParsedLine[]): TokenDataPoint[] {
 
     if (line.type === 'compact_boundary') {
       nextTurnCompacted = true;
-      continue;
-    }
-
-    if (line.type === 'clear_boundary') {
-      flushTurn();
-      resetTurn();
-      nextTurnCleared = true;
       continue;
     }
 

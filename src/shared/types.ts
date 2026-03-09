@@ -154,8 +154,6 @@ export interface TokenDataPoint {
   prompt?: string;
   /** True if a context compaction occurred just before this turn */
   compacted?: boolean;
-  /** True if a /clear command occurred just before this turn */
-  cleared?: boolean;
 }
 
 export interface SubagentTokenData {

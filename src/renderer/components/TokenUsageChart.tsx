@@ -326,10 +326,10 @@ const TokenUsageChart = forwardRef<
               Subagent
             </span>
           )}
-          {points.some((d) => d.compacted || d.cleared) && (
+          {points.some((d) => d.compacted) && (
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-3 h-2 rounded-sm bg-danger opacity-40" />
-              Context reset
+              Compaction
             </span>
           )}
         </div>
@@ -520,7 +520,6 @@ function DetailPanel({
               {point.turnType[0].toUpperCase() + point.turnType.slice(1)}
             </span>
             {point.compacted && <span className="ml-2 text-danger">Compacted</span>}
-            {point.cleared && <span className="ml-2 text-danger">Cleared</span>}
           </div>
           <button
             className="text-secondary hover:text-primary text-lg leading-none transition-colors"
@@ -675,14 +674,14 @@ function BarChart({
         </text>
       ))}
 
-      {/* Context reset areas (compaction / clear) */}
+      {/* Compaction areas */}
       {data.map((d, i) => {
-        if (!d.compacted && !d.cleared) return null;
+        if (!d.compacted) return null;
         const x0 = Math.max(0, (i - 1) * barGroupWidth);
         const x1 = i * barGroupWidth + barGroupWidth;
         return (
           <rect
-            key={`reset-${i}`}
+            key={`compact-${i}`}
             x={x0}
             y={0}
             width={x1 - x0}
@@ -840,14 +839,14 @@ function LineChart({
         </text>
       ))}
 
-      {/* Context reset areas (compaction / clear) */}
+      {/* Compaction areas */}
       {data.map((d, i) => {
-        if (!d.compacted && !d.cleared) return null;
+        if (!d.compacted) return null;
         const x0 = i > 0 ? xOf(data[i - 1]) : 0;
         const x1 = xOf(d);
         return (
           <rect
-            key={`reset-${i}`}
+            key={`compact-${i}`}
             x={x0}
             y={0}
             width={Math.max(x1 - x0, 4)}
