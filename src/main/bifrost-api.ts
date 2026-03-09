@@ -420,7 +420,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       if (task.sessionId !== sessionId) {
-        updateTask(task.id, { sessionId });
+        // Preserve the old session ID in history (e.g. after /clear)
+        const sessionHistory = task.sessionId ? [...(task.sessionHistory ?? []), task.sessionId] : task.sessionHistory;
+        updateTask(task.id, { sessionId, sessionHistory });
       }
       jsonResponse(res, { ok: true });
       return;

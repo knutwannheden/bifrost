@@ -27,6 +27,8 @@ export interface Task {
   isExternal?: boolean;
   /** True if this task uses the main repo directory instead of a separate worktree */
   inPlace?: boolean;
+  /** Previous session IDs (accumulated when /clear creates a new session) */
+  sessionHistory?: string[];
 }
 
 export interface ReviewEntry {
