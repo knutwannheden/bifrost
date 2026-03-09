@@ -1119,7 +1119,12 @@ export default function DiffOverlay() {
 
       {state.activeTaskId && isActivity && (
         <div className="flex-1 min-h-0">
-          <TokenUsageChart data={tokenUsage.data} loading={tokenUsage.loading} error={tokenUsage.error} />
+          <TokenUsageChart
+            data={tokenUsage.data}
+            loading={tokenUsage.loading}
+            error={tokenUsage.error}
+            search={search}
+          />
         </div>
       )}
       {state.activeTaskId && isReview && <ReviewPanel taskId={state.activeTaskId} />}
