@@ -391,6 +391,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       killSession(reviewPtyId);
       reviewSessions.delete(taskId);
     }
+    cancelReview(taskId);
     await destroyTask(taskId);
   });
 
@@ -400,6 +401,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       cancelTaskRequests(taskId);
       killSession(taskId);
     }
+    // Kill dev terminal and review sessions too
+    const devSessionId = devSessions.get(taskId);
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
+    const reviewPtyId = reviewSessions.get(taskId);
+    if (reviewPtyId) {
+      killSession(reviewPtyId);
+      reviewSessions.delete(taskId);
+    }
+    cancelReview(taskId);
     return updateTask(taskId, { status: 'stopped' });
   });
 
@@ -420,6 +433,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       killSession(reviewPtyId);
       reviewSessions.delete(taskId);
     }
+    cancelReview(taskId);
 
     // Kill session if still running
     if (task.status === 'running') {

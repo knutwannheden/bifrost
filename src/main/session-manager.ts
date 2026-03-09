@@ -228,5 +228,6 @@ export function killAllSessions(): void {
   for (const [id, session] of sessions) {
     session.kill('SIGTERM');
     sessions.delete(id);
+    sessionBuffers.delete(id);
   }
 }
