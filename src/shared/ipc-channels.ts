@@ -102,6 +102,8 @@ export const IPC = {
   // Integration
   CHECK_INTEGRATION: 'integration:check',
   INSTALL_INTEGRATION: 'integration:install',
+  CHECK_PREREQUISITES: 'integration:prerequisites',
+  INSTALL_OLLAMA_MODEL: 'integration:install-ollama-model',
 
   // Notifications
   SET_ACTIVE_TASK_ID: 'notify:set-active-task',
@@ -259,6 +261,8 @@ export interface BifrostAPI {
   // Integration
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;
   installIntegration(): Promise<void>;
+  checkPrerequisites(): Promise<import('../shared/types').PrerequisiteStatus>;
+  installOllamaModel(model: string): Promise<void>;
 
   // Dialog
   selectDirectory(): Promise<string | null>;

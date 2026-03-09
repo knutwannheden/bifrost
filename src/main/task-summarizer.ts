@@ -12,7 +12,7 @@ let ollamaModelsCache: Set<string> | null = null;
 let ollamaModelsCacheTime = 0;
 const OLLAMA_CACHE_TTL_MS = 60_000;
 
-function getInstalledOllamaModels(): Set<string> {
+export function getInstalledOllamaModels(): Set<string> {
   const now = Date.now();
   if (ollamaModelsCache && now - ollamaModelsCacheTime < OLLAMA_CACHE_TTL_MS) {
     return ollamaModelsCache;

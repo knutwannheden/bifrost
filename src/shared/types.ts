@@ -361,6 +361,17 @@ export interface SlackConfig {
   enabled: boolean;
 }
 
+// Prerequisites check
+
+export interface PrerequisiteStatus {
+  git: boolean;
+  claude: boolean;
+  plugin: { installed: boolean; updateAvailable: boolean };
+  gh: boolean;
+  ollama: boolean;
+  ollamaModels: { name: string; installed: boolean }[];
+}
+
 // Notification types
 
 export interface AppNotification {

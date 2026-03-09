@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import type { PrerequisiteStatus } from '../../shared/types';
 import type { PaneTarget } from '../context/AppContext';
 import { defaultPaneState, useApp } from '../context/AppContext';
 import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
 import Kbd from './Kbd';
+import Spinner from './Spinner';
 import TerminalPane from './TerminalPane';
 
 const shortcuts = [
@@ -35,12 +37,9 @@ const tips = [
 export default function TaskView() {
   const { state, dispatch } = useApp();
   const [splitRatio, setSplitRatio] = useState(0.7);
-  const [integrationNeeded, setIntegrationNeeded] = useState(false);
-  const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [installing, setInstalling] = useState(false);
-  const [justInstalled, setJustInstalled] = useState(false);
+  const [prereqs, setPrereqs] = useState<PrerequisiteStatus | null>(null);
+  const [installing, setInstalling] = useState<string | null>(null);
   const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * tips.length));
-  const [ghMissing, setGhMissing] = useState(false);
 
   const openTasks = state.tasks.filter((t) => t.status === 'running');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
@@ -85,37 +84,46 @@ export default function TaskView() {
     document.addEventListener('mouseup', onMouseUp);
   }, []);
 
-  // Check integration status when welcome screen would show
+  // Check prerequisites when welcome screen would show
   useEffect(() => {
     if (!activeTask && state.tasksLoaded && openTasks.length === 0) {
-      window.bifrost.checkIntegration().then((status) => {
-        setIntegrationNeeded(!status.installed);
-        setUpdateAvailable(status.updateAvailable);
-      });
-      window.bifrost.checkGhAvailable().then((available) => {
-        setGhMissing(!available);
-      });
+      window.bifrost.checkPrerequisites().then(setPrereqs);
     }
   }, [activeTask, state.tasksLoaded, openTasks.length]);
 
-  const handleInstallIntegration = useCallback(async () => {
-    setInstalling(true);
+  const handleInstallPlugin = useCallback(async () => {
+    setInstalling('plugin');
     try {
       await window.bifrost.installIntegration();
-      setIntegrationNeeded(false);
-      setUpdateAvailable(false);
-      setJustInstalled(true);
-      dispatch({
-        type: 'SHOW_TOAST',
-        message: updateAvailable ? 'Claude integration updated' : 'Claude integration installed',
-      });
-      setTimeout(() => setJustInstalled(false), 2000);
+      setPrereqs((p) => (p ? { ...p, plugin: { installed: true, updateAvailable: false } } : p));
+      dispatch({ type: 'SHOW_TOAST', message: 'Claude integration installed' });
     } catch (err) {
       dispatch({ type: 'SHOW_TOAST', message: `Install failed: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
-      setInstalling(false);
+      setInstalling(null);
     }
   }, [dispatch]);
+
+  const handleInstallModel = useCallback(
+    async (model: string) => {
+      setInstalling(model);
+      try {
+        await window.bifrost.installOllamaModel(model);
+        setPrereqs((p) =>
+          p ? { ...p, ollamaModels: p.ollamaModels.map((m) => (m.name === model ? { ...m, installed: true } : m)) } : p,
+        );
+        dispatch({ type: 'SHOW_TOAST', message: `Model ${model} installed` });
+      } catch (err) {
+        dispatch({
+          type: 'SHOW_TOAST',
+          message: `Install failed: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      } finally {
+        setInstalling(null);
+      }
+    },
+    [dispatch],
+  );
 
   // Set window title from task name when active task changes
   useEffect(() => {
@@ -138,52 +146,18 @@ export default function TaskView() {
             A keyboard-centric command center for orchestrating parallel Claude Code sessions. Each task runs in its own
             isolated git worktree, so agents work independently without stepping on each other.
           </p>
-          {(integrationNeeded || updateAvailable || justInstalled) && (
-            <div className="mb-6 flex flex-col items-center gap-2">
-              {justInstalled ? (
-                <span className="text-sm text-success">&#10003; {updateAvailable ? 'Updated' : 'Installed'}</span>
-              ) : (
-                <button
-                  onClick={handleInstallIntegration}
-                  disabled={installing}
-                  className="px-4 py-2 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors"
-                >
-                  {installing
-                    ? updateAvailable
-                      ? 'Updating...'
-                      : 'Installing...'
-                    : updateAvailable
-                      ? 'Update Claude Integration'
-                      : 'Install Claude Integration'}
-                </button>
-              )}
-              <p className="text-xs text-muted max-w-sm text-center">
-                {updateAvailable
-                  ? 'A new version of the Bifrost plugin is available.'
-                  : 'Adds the Bifrost MCP server and skills to your Claude Code configuration.'}
-              </p>
+
+          {prereqs && (
+            <div className="mb-6 text-left">
+              <PrerequisiteChecklist
+                prereqs={prereqs}
+                installing={installing}
+                onInstallPlugin={handleInstallPlugin}
+                onInstallModel={handleInstallModel}
+              />
             </div>
           )}
-          {ghMissing && (
-            <div className="mb-6">
-              <div className="inline-flex items-center gap-2 bg-warning/10 border border-warning/30 rounded-full px-4 py-2">
-                <span className="text-xs text-warning">
-                  Install{' '}
-                  <a
-                    href="https://cli.github.com"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      window.bifrost.openUrl('https://cli.github.com');
-                    }}
-                    className="underline hover:text-warning/70"
-                  >
-                    GitHub CLI
-                  </a>{' '}
-                  to enable PR-based task creation
-                </span>
-              </div>
-            </div>
-          )}
+
           <div className="inline-grid grid-cols-[auto_auto] gap-x-4 gap-y-1.5 text-left">
             {shortcuts.map((s) => (
               <React.Fragment key={s.keys}>
@@ -288,6 +262,156 @@ export default function TaskView() {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// --- Prerequisite Checklist ---
+
+function CheckIcon({ ok }: { ok: boolean }) {
+  return ok ? (
+    <span className="text-success text-sm leading-none">&#10003;</span>
+  ) : (
+    <span className="text-danger text-sm leading-none">&#10007;</span>
+  );
+}
+
+function InstallButton({ label, spinning, onClick }: { label: string; spinning: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={spinning}
+      className="ml-2 px-2 py-0.5 text-[10px] bg-accent hover:bg-accent-hover disabled:opacity-50 text-white rounded transition-colors"
+    >
+      {spinning ? <Spinner size="sm" /> : label}
+    </button>
+  );
+}
+
+function ExternalLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        window.bifrost.openUrl(href);
+      }}
+      className="text-accent-hover hover:underline"
+    >
+      {children}
+    </a>
+  );
+}
+
+function PrerequisiteChecklist({
+  prereqs,
+  installing,
+  onInstallPlugin,
+  onInstallModel,
+}: {
+  prereqs: PrerequisiteStatus;
+  installing: string | null;
+  onInstallPlugin: () => void;
+  onInstallModel: (model: string) => void;
+}) {
+  const allRequiredOk = prereqs.git && prereqs.claude && prereqs.plugin.installed;
+  const allOptionalOk = prereqs.gh && prereqs.ollama && prereqs.ollamaModels.every((m) => m.installed);
+
+  // Hide checklist entirely when everything is installed and no updates available
+  if (allRequiredOk && !prereqs.plugin.updateAvailable && allOptionalOk) return null;
+
+  return (
+    <div className="space-y-3">
+      {/* Required */}
+      {(!prereqs.git || !prereqs.claude || !prereqs.plugin.installed || prereqs.plugin.updateAvailable) && (
+        <div>
+          <p className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">Required</p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs">
+              <CheckIcon ok={prereqs.git} />
+              <span className={prereqs.git ? 'text-secondary' : 'text-primary'}>
+                git {!prereqs.git && <span className="text-muted">— version control</span>}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <CheckIcon ok={prereqs.claude} />
+              <span className={prereqs.claude ? 'text-secondary' : 'text-primary'}>
+                claude{' '}
+                {!prereqs.claude && (
+                  <span className="text-muted">
+                    —{' '}
+                    <ExternalLink href="https://docs.anthropic.com/en/docs/claude-code/overview">
+                      Claude Code CLI
+                    </ExternalLink>
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <CheckIcon ok={prereqs.plugin.installed && !prereqs.plugin.updateAvailable} />
+              <span
+                className={
+                  prereqs.plugin.installed && !prereqs.plugin.updateAvailable ? 'text-secondary' : 'text-primary'
+                }
+              >
+                Bifrost plugin
+              </span>
+              {(!prereqs.plugin.installed || prereqs.plugin.updateAvailable) && (
+                <InstallButton
+                  label={prereqs.plugin.updateAvailable ? 'Update' : 'Install'}
+                  spinning={installing === 'plugin'}
+                  onClick={onInstallPlugin}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Optional */}
+      {(!prereqs.gh || !prereqs.ollama || prereqs.ollamaModels.some((m) => !m.installed)) && (
+        <div>
+          <p className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">Optional</p>
+          <div className="space-y-1">
+            {!prereqs.gh && (
+              <div className="flex items-center gap-2 text-xs">
+                <CheckIcon ok={false} />
+                <span className="text-primary">
+                  gh{' '}
+                  <span className="text-muted">
+                    — <ExternalLink href="https://cli.github.com">GitHub CLI</ExternalLink> for PR-based task creation
+                  </span>
+                </span>
+              </div>
+            )}
+            {!prereqs.ollama && (
+              <div className="flex items-center gap-2 text-xs">
+                <CheckIcon ok={false} />
+                <span className="text-primary">
+                  ollama{' '}
+                  <span className="text-muted">
+                    — <ExternalLink href="https://ollama.com">local models</ExternalLink> for task summaries
+                  </span>
+                </span>
+              </div>
+            )}
+            {prereqs.ollama &&
+              prereqs.ollamaModels
+                .filter((m) => !m.installed)
+                .map((m) => (
+                  <div key={m.name} className="flex items-center gap-2 text-xs pl-4">
+                    <CheckIcon ok={false} />
+                    <span className="text-primary font-mono">{m.name}</span>
+                    <InstallButton
+                      label="Pull"
+                      spinning={installing === m.name}
+                      onClick={() => onInstallModel(m.name)}
+                    />
+                  </div>
+                ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

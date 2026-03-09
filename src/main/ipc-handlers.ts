@@ -67,6 +67,7 @@ import {
   stopSupervisor,
 } from './supervisor-service';
 import { loadTasks, saveTasks } from './task-store';
+import { getInstalledOllamaModels } from './task-summarizer';
 import { createWorktree, createWorktreeFromPr, removeWorktree, restoreWorktree } from './worktree-manager';
 
 // In-memory task list, synced to disk
@@ -852,6 +853,35 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Integration
   ipcMain.handle(IPC.CHECK_INTEGRATION, () => checkIntegration());
   ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());
+
+  ipcMain.handle(IPC.CHECK_PREREQUISITES, async () => {
+    const config = loadConfig();
+    const [gitOk, claudeOk, ghOk, ollamaOk] = await Promise.all([
+      execFile('git', ['--version'], { timeout: 5000 })
+        .then(() => true)
+        .catch(() => false),
+      execFile('claude', ['--version'], { timeout: 5000 })
+        .then(() => true)
+        .catch(() => false),
+      execFile('gh', ['--version'], { timeout: 5000, killSignal: 'SIGKILL' })
+        .then(() => true)
+        .catch(() => false),
+      execFile('ollama', ['--version'], { timeout: 5000 })
+        .then(() => true)
+        .catch(() => false),
+    ]);
+    const plugin = checkIntegration();
+    const installedModels = ollamaOk ? getInstalledOllamaModels() : new Set<string>();
+    const ollamaModels = (config.ollamaModels ?? []).map((name) => ({
+      name,
+      installed: installedModels.has(name) || [...installedModels].some((m) => m.startsWith(`${name}:`)),
+    }));
+    return { git: gitOk, claude: claudeOk, plugin, gh: ghOk, ollama: ollamaOk, ollamaModels };
+  });
+
+  ipcMain.handle(IPC.INSTALL_OLLAMA_MODEL, async (_event, model: string) => {
+    await execFile('ollama', ['pull', model], { timeout: 300_000 });
+  });
 
   ipcMain.handle(IPC.SET_ACTIVE_TASK_ID, (_event, taskId: string | null) => {
     setActiveTaskId(taskId);

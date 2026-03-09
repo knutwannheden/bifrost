@@ -117,6 +117,8 @@ const api: BifrostAPI = {
   // Integration
   checkIntegration: () => ipcRenderer.invoke(IPC.CHECK_INTEGRATION),
   installIntegration: () => ipcRenderer.invoke(IPC.INSTALL_INTEGRATION),
+  checkPrerequisites: () => ipcRenderer.invoke(IPC.CHECK_PREREQUISITES),
+  installOllamaModel: (model) => ipcRenderer.invoke(IPC.INSTALL_OLLAMA_MODEL, model),
 
   // Dialog
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
