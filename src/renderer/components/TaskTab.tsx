@@ -122,8 +122,9 @@ export default function TaskTab({
           </span>
           <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
         </span>
-        <button
-          className="ml-1 text-muted hover:text-primary flex-shrink-0 hidden group-hover:inline transition-colors"
+        <span
+          role="button"
+          className="ml-1 text-muted hover:text-primary flex-shrink-0 hidden group-hover:inline transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -131,7 +132,7 @@ export default function TaskTab({
           tabIndex={-1}
         >
           &times;
-        </button>
+        </span>
       </button>
       {showTooltip &&
         tooltipPos &&
