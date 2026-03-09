@@ -175,7 +175,7 @@ const TokenUsageChart = forwardRef<
 
       let closestIdx = 0;
       let closestDist = Number.POSITIVE_INFINITY;
-      const barGroupWidth = chartW / points.length;
+      const barGroupWidth = Math.min(chartW / points.length, 32);
       for (let i = 0; i < points.length; i++) {
         const x =
           mode === 'per-turn'
@@ -636,7 +636,7 @@ function BarChart({
   matchingSet: Set<number> | null;
 }) {
   const maxTokens = Math.max(...data.map((d) => totalInput(d) + d.outputTokens), 1);
-  const barGroupWidth = chartW / data.length;
+  const barGroupWidth = Math.min(chartW / data.length, 32);
   const barWidth = Math.max(Math.min(barGroupWidth * 0.7, 24), 2);
 
   const yTicks = computeTicks(0, maxTokens, 5);
