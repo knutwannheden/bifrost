@@ -10,6 +10,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
+import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import CloseButton from './CloseButton';
 import Highlight from './Highlight';
@@ -242,6 +243,15 @@ export default function KeyboardShortcutsPanel() {
         if (entry?.type === 'action') executeItem(entry.item);
         break;
       }
+      case 'r':
+      case 'R': {
+        if (!e.altKey) break;
+        e.preventDefault();
+        const itemIdx = executableIndices[selectedIndex];
+        const entry = itemIdx != null ? items[itemIdx] : null;
+        if (entry?.type === 'action') startRecording(entry.item.actionId);
+        break;
+      }
     }
   };
 
@@ -334,7 +344,7 @@ export default function KeyboardShortcutsPanel() {
         {conflict && <div className="px-4 py-2 text-xs text-warning border-t border-border-default">{conflict}</div>}
         <OverlayFooter>
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Enter execute &middot; double-click rebind &middot; Esc close
+            &uarr;&darr; navigate &middot; Enter execute &middot; {altSymbol}R rebind &middot; Esc close
           </span>
           {hasCustomBindings && (
             <button
