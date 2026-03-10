@@ -49,7 +49,7 @@
     "@xterm/addon-webgl": "^0.20.0-beta.179",
     "@xterm/xterm": "^6.1.0-beta.180",
     "electron-squirrel-startup": "^1.0.1",
-    "node-pty": "^1.1.0",
+    "node-pty": "^1.2.0-beta.11",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "shiki": "^4.0.2",
