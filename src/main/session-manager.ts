@@ -80,6 +80,43 @@ function collectSpawnDiagnostics(
   // Active PTY sessions tracked by Bifrost
   diag.activeSessions = sessions.size;
 
+  // PTY device exhaustion — macOS has a kernel limit (default 127)
+  if (process.platform === 'darwin') {
+    try {
+      diag.ptyMax = execFileSync('sysctl', ['-n', 'kern.tty.ptmx_max'], { timeout: 3000 }).toString().trim();
+    } catch {
+      // ignore
+    }
+  }
+  try {
+    // Count PTY devices in use system-wide
+    const ptyCount = execFileSync('sh', ['-c', 'ls /dev/ttys* 2>/dev/null | wc -l'], { timeout: 3000 })
+      .toString()
+      .trim();
+    diag.ptyDevicesInUse = ptyCount;
+  } catch {
+    // ignore
+  }
+
+  // Can we open /dev/ptmx directly? Distinguishes PTY allocation failure from exec failure.
+  try {
+    const ptmxFd = fs.openSync('/dev/ptmx', 'r');
+    fs.closeSync(ptmxFd);
+    diag.ptmxOpenOk = true;
+  } catch (e) {
+    diag.ptmxOpenOk = false;
+    diag.ptmxOpenError = e instanceof Error ? e.message : String(e);
+  }
+
+  // Can we spawn a basic child_process (no PTY)? Isolates posix_spawnp from PTY.
+  try {
+    execFileSync('/bin/echo', ['ok'], { timeout: 3000 });
+    diag.execProbeOk = true;
+  } catch (e) {
+    diag.execProbeOk = false;
+    diag.execProbeError = e instanceof Error ? e.message : String(e);
+  }
+
   // Can we open a PTY at all? (quick test via posix_openpt equivalent)
   try {
     const probe = pty.spawn('/bin/echo', ['ok'], { name: 'xterm-256color', cols: 10, rows: 1, cwd: '/tmp' });
