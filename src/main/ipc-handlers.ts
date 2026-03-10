@@ -767,7 +767,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       repoId: matchedRepo?.id ?? '',
       branch,
       worktreePath: cwd,
-      sessionId,
+      sessionId: externalSessionId,
       status: 'running',
       hasUnread: false,
       createdAt: Date.now(),
@@ -777,7 +777,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     tasks.push(task);
     saveTasks(tasks);
 
-    startWatching(taskId, cwd, mainWindow, claudeCallbacks, sessionId);
+    startWatching(taskId, cwd, mainWindow, claudeCallbacks, externalSessionId);
 
     return task;
   });
@@ -1070,7 +1070,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       repoId: item.repoId,
       branch: item.branch,
       worktreePath: item.worktreePath,
-      sessionId,
       status: 'running',
       hasUnread: false,
       createdAt: Date.now(),
@@ -1078,7 +1077,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     tasks.push(task);
     saveTasks(tasks);
-    startWatching(taskId, item.worktreePath, mainWindow, claudeCallbacks, sessionId);
+    startWatching(taskId, item.worktreePath, mainWindow, claudeCallbacks);
     return task;
   };
 

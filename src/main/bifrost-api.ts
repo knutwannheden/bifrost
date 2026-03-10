@@ -406,7 +406,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const context = body.bifrost_context as string;
       const taskId = body.bifrost_task_id as string;
       const reviewId = body.bifrost_review_id as string;
-      const supervisorItemId = body.bifrost_supervisor_item_id as string;
       if (!sessionId || !cwd) {
         errorResponse(res, 'Missing session_id or cwd');
         return;
@@ -418,9 +417,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: true });
         return;
       }
-      // Supervisor context — set session ID on the supervisor item
-      if (context === 'supervisor' && supervisorItemId) {
-        setSupervisorItemSessionId(supervisorItemId, sessionId);
+      // Supervisor context — no per-item session tracking yet
+      if (context === 'supervisor') {
         jsonResponse(res, { ok: true });
         return;
       }

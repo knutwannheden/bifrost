@@ -14,7 +14,7 @@ export interface Task {
   repoId: string;
   branch: string;
   worktreePath: string;
-  sessionId: string;
+  sessionId?: string;
   status: TaskStatus;
   hasUnread: boolean;
   createdAt: number;
