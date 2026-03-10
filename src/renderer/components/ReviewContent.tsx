@@ -671,15 +671,9 @@ export default function ReviewContent({
           {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
         </div>
         <div className="flex items-center gap-3 px-4 py-3 border-t border-border-default shrink-0">
-          <button
-            onClick={handleCopyPrompt}
-            disabled={!hasChecked}
-            className={`px-3 py-1.5 rounded text-xs transition-colors ${
-              hasChecked ? 'bg-accent hover:bg-accent-hover text-white' : 'bg-surface text-faint cursor-not-allowed'
-            }`}
-          >
+          <PrimaryButton size="sm" onClick={handleCopyPrompt} disabled={!hasChecked}>
             Copy Prompt
-          </button>
+          </PrimaryButton>
           {hasReviewSession && !showDiscussion && (
             <PrimaryButton size="sm" onClick={handleDiscuss}>
               Discuss
