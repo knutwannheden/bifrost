@@ -618,7 +618,16 @@ function GitDiffContent({
 
   const fileSectionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const files = useMemo(() => (diff ? parseDiff(diff) : null), [diff]);
+  const files = useMemo(() => {
+    if (!diff) return null;
+    const parsed = parseDiff(diff);
+    parsed.sort((a, b) => {
+      const aPath = a.newPath || a.oldPath;
+      const bPath = b.newPath || b.oldPath;
+      return aPath.localeCompare(bPath);
+    });
+    return parsed;
+  }, [diff]);
 
   // Fetch file statuses alongside the diff
   useEffect(() => {
