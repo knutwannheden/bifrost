@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import path from 'node:path';
 import { app, BrowserWindow, Notification } from 'electron';
 
 let mainWindow: BrowserWindow | null = null;
@@ -39,10 +40,20 @@ export function handleBellNotification(_taskId: string, taskName: string, isActi
   if (focused && isActiveTask) return;
 
   // Sound for background tasks or when unfocused
+  const bellPath = path.join(__dirname, '../../assets/bell.wav');
   if (process.platform === 'darwin') {
-    execFile('afplay', ['/System/Library/Sounds/Glass.aiff'], () => {});
+    execFile('afplay', [bellPath], () => {});
   } else if (process.platform === 'linux') {
-    execFile('paplay', ['/usr/share/sounds/freedesktop/stereo/bell.oga'], () => {});
+    // Try paplay (PulseAudio), then pw-play (PipeWire), then aplay (ALSA)
+    execFile('paplay', [bellPath], (err) => {
+      if (err) {
+        execFile('pw-play', [bellPath], (err2) => {
+          if (err2) {
+            execFile('aplay', [bellPath], () => {});
+          }
+        });
+      }
+    });
   }
 
   // OS notification + dock bounce only when window is not focused

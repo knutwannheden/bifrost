@@ -179,13 +179,20 @@ export function createSession(
   });
 }
 
+function findShell(): string {
+  for (const p of ['/bin/bash', '/usr/bin/bash', '/bin/sh']) {
+    if (fs.existsSync(p)) return p;
+  }
+  return '/bin/sh';
+}
+
 export function createShellSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
   options?: { taskId?: string },
 ): void {
-  const shellPath = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash');
+  const shellPath = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : findShell());
   const extraEnv: Record<string, string> = {
     BIFROST_CONTEXT: 'dev',
     BIFROST_WORKTREE: cwd,
