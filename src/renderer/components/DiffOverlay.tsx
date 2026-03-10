@@ -41,9 +41,7 @@ const lineNumWidth = 'w-12';
 
 function LineNumber({ num }: { num: number | null }) {
   return (
-    <span
-      className={`${lineNumWidth} inline-block text-right pr-2 select-none text-faint text-xs leading-5 flex-shrink-0`}
-    >
+    <span className={`${lineNumWidth} inline-block text-right pr-2 select-none text-faint text-xs leading-5 shrink-0`}>
       {num ?? ''}
     </span>
   );
@@ -62,7 +60,7 @@ function DiffLineRow({ line, tokens }: { line: DiffLine; tokens: HighlightedToke
     <div className={`flex leading-5 ${bgClass}`}>
       <LineNumber num={line.oldLineNo} />
       <LineNumber num={line.newLineNo} />
-      <span className={`${signColor} w-4 inline-block text-center flex-shrink-0 text-xs leading-5`}>{sign}</span>
+      <span className={`${signColor} w-4 inline-block text-center shrink-0 text-xs leading-5`}>{sign}</span>
       <span className="flex-1 text-xs leading-5 whitespace-pre">
         {tokens.map((token, i) => (
           <span key={i} style={{ color: token.color }}>
@@ -352,7 +350,7 @@ function FileRowItem({
       }`}
       style={style}
     >
-      <span className="flex gap-0.5 flex-shrink-0">
+      <span className="flex gap-0.5 shrink-0">
         <span className={`${cfg.color} font-bold`}>{cfg.letter}</span>
         {stages.map((stage) => {
           const si = stageIndicator[stage];
@@ -367,9 +365,9 @@ function FileRowItem({
         <Highlight text={displayName} search={search} />
       </span>
       {file.binary ? (
-        <span className="text-xs text-faint italic flex-shrink-0 ml-auto">binary</span>
+        <span className="text-xs text-faint italic shrink-0 ml-auto">binary</span>
       ) : (
-        <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
+        <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="shrink-0 ml-auto" />
       )}
     </div>
   );
@@ -407,11 +405,11 @@ function FileTreeItem({
         style={{ paddingLeft: depth * 16 + 8 }}
         onClick={() => onToggle(node.path)}
       >
-        <span className="text-muted w-3 text-center flex-shrink-0">{isCollapsed ? '▸' : '▾'}</span>
+        <span className="text-muted w-3 text-center shrink-0">{isCollapsed ? '▸' : '▾'}</span>
         <span className="text-secondary truncate">
           <Highlight text={node.label} search={search} />
         </span>
-        <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="flex-shrink-0 ml-auto" />
+        <DiffStatsBadge additions={stats.additions} deletions={stats.deletions} className="shrink-0 ml-auto" />
       </div>
       {/* Children (dirs then files) when expanded */}
       {!isCollapsed && (
@@ -515,7 +513,7 @@ function FileListSidebar({
   const hasTree = tree.children.length > 0;
 
   return (
-    <div className="w-72 flex-shrink-0 border-r border-border-default overflow-y-auto">
+    <div className="w-72 shrink-0 border-r border-border-default overflow-y-auto">
       <div className="px-3 py-2 border-b border-border-default text-xs text-secondary flex items-center gap-2">
         <span>
           {files.length} file{files.length !== 1 ? 's' : ''}
@@ -600,7 +598,7 @@ const scopeOptions: PillOption<DiffScope>[] = (['working', 'all'] as const).map(
 
 function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: DiffScope) => void }) {
   return (
-    <div className="px-3 py-2 border-b border-border-default flex-shrink-0">
+    <div className="px-3 py-2 border-b border-border-default shrink-0">
       <PillToggle options={scopeOptions} value={scope} onChange={onChange} />
     </div>
   );
@@ -751,16 +749,16 @@ function GitLogEntryView({ entry, focused, search }: { entry: GitLogEntry; focus
         focused ? 'ring-1 ring-accent-muted bg-accent/10' : ''
       }`}
     >
-      <span className="text-warning font-mono flex-shrink-0">
+      <span className="text-warning font-mono shrink-0">
         <Highlight text={entry.shortSha} search={search} />
       </span>
-      <span className="text-primary flex-1 min-w-0 break-words">
+      <span className="text-primary flex-1 min-w-0 wrap-break-word">
         <Highlight text={entry.subject} search={search} />
       </span>
-      <span className="text-muted flex-shrink-0">
+      <span className="text-muted shrink-0">
         <Highlight text={entry.author} search={search} />
       </span>
-      <span className="text-faint flex-shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
+      <span className="text-faint shrink-0 w-16 text-right">{formatRelative(new Date(entry.date).getTime())}</span>
     </div>
   );
 }
@@ -1056,12 +1054,12 @@ export default function DiffOverlay() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-30 flex flex-col focus:outline-none"
+      className="absolute inset-0 z-30 flex flex-col focus:outline-hidden"
       style={{ backgroundColor: 'var(--color-app)' }}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
-      <div className="flex items-center justify-between h-10 px-4 border-b border-border-default flex-shrink-0">
+      <div className="flex items-center justify-between h-10 px-4 border-b border-border-default shrink-0">
         <div className="flex items-center gap-4">
           <PillToggle
             options={modeOptions}
@@ -1081,7 +1079,7 @@ export default function DiffOverlay() {
       <SearchIndicator
         search={search}
         visible={searchVisible}
-        className="mx-4 mt-3 flex-shrink-0"
+        className="mx-4 mt-3 shrink-0"
         matchInfo={
           isLog
             ? `${filteredLogEntries.length} commit${filteredLogEntries.length !== 1 ? 's' : ''}`

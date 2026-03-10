@@ -22,7 +22,7 @@ export default function StatusBar({ activeTask, config, repos, apiPort, onToggle
           </>
         )}
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
+      <div className="flex items-center gap-3 shrink-0">
         {config && (
           <button
             type="button"

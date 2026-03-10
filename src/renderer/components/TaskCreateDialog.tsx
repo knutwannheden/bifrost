@@ -355,7 +355,7 @@ export default function TaskCreateDialog() {
     <div
       ref={overlayRef}
       tabIndex={-1}
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-hidden"
       onClick={close}
       onKeyDown={handleKeyDown}
     >
@@ -368,7 +368,7 @@ export default function TaskCreateDialog() {
         <div className="p-4 space-y-4">
           {/* PR detection banner */}
           {prBanner && (
-            <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded px-3 py-2">
+            <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded-sm px-3 py-2">
               <p className="text-xs text-accent-hover">
                 {prBanner.message
                   ? prBanner.message
@@ -388,7 +388,7 @@ export default function TaskCreateDialog() {
 
           {/* Slack link banner */}
           {slackUrl && (
-            <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded px-3 py-2">
+            <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded-sm px-3 py-2">
               <p className="text-xs text-accent-hover truncate">Slack message detected</p>
               <button
                 onClick={() => setSlackUrl(null)}
@@ -401,7 +401,7 @@ export default function TaskCreateDialog() {
 
           {/* Existing task banner */}
           {existingTask && (
-            <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded px-3 py-2">
+            <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded-sm px-3 py-2">
               <p className="text-xs text-warning">Task &ldquo;{existingTask.name}&rdquo; already uses this branch</p>
               <button
                 onClick={() => openExistingTask(existingTask.id, existingTask.status)}
@@ -462,7 +462,7 @@ export default function TaskCreateDialog() {
                     onClick={regenerateName}
                     title={`Generate new name (${altSymbol}N)`}
                     tabIndex={-1}
-                    className="px-2 py-1.5 bg-surface-alt border border-border-input rounded text-secondary hover:text-primary hover:border-border-input text-sm transition-colors"
+                    className="px-2 py-1.5 bg-surface-alt border border-border-input rounded-sm text-secondary hover:text-primary hover:border-border-input text-sm transition-colors"
                   >
                     &#x21bb;
                   </button>
@@ -484,14 +484,14 @@ export default function TaskCreateDialog() {
                       setPrInfo(null);
                     }
                   }}
-                  className="rounded border-border-input bg-surface-alt text-accent focus:ring-accent focus:ring-offset-0"
+                  className="rounded-sm border-border-input bg-surface-alt text-accent focus:ring-accent focus:ring-offset-0"
                 />
                 <span className="text-xs text-secondary">Use main worktree (no separate checkout)</span>
               </label>
 
               {/* In-place conflict banner */}
               {existingInPlaceTask && (
-                <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded px-3 py-2">
+                <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded-sm px-3 py-2">
                   <p className="text-xs text-warning">
                     Task &ldquo;{existingInPlaceTask.name}&rdquo; already uses the main worktree
                   </p>
@@ -508,7 +508,7 @@ export default function TaskCreateDialog() {
               <div className="relative">
                 <label className="block text-xs text-secondary mb-1">Branch</label>
                 {inPlace ? (
-                  <div className="w-full px-3 py-1.5 bg-surface-alt/50 border border-border-input rounded text-sm text-secondary">
+                  <div className="w-full px-3 py-1.5 bg-surface-alt/50 border border-border-input rounded-sm text-sm text-secondary">
                     {currentBranch ?? 'Detecting...'}
                   </div>
                 ) : (
@@ -582,7 +582,7 @@ export default function TaskCreateDialog() {
                     {branchDropdownOpen && filteredBranches.length > 0 && (
                       <div
                         ref={branchListRef}
-                        className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
+                        className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded-sm shadow-lg max-h-[200px] overflow-y-auto"
                       >
                         {filteredBranches.map((b, idx) => (
                           <div
@@ -634,7 +634,7 @@ export default function TaskCreateDialog() {
             </span>
             <button
               onClick={close}
-              className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded focus:outline-none focus:ring-1 focus:ring-border-input transition-colors"
+              className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded-sm focus:outline-hidden focus:ring-1 focus:ring-border-input transition-colors"
             >
               Cancel
             </button>

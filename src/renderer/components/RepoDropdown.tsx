@@ -151,12 +151,12 @@ export default function RepoDropdown({
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={`w-full ${styles.input} bg-surface-alt border border-border-input rounded text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent`}
+        className={`w-full ${styles.input} bg-surface-alt border border-border-input rounded-sm text-primary placeholder-muted focus:outline-hidden focus:border-accent focus:ring-1 focus:ring-accent`}
       />
       {open && filtered.length > 0 && (
         <div
           ref={listRef}
-          className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded shadow-lg max-h-[200px] overflow-y-auto"
+          className="absolute z-10 mt-1 w-full bg-surface-alt border border-border-input rounded-sm shadow-lg max-h-[200px] overflow-y-auto"
         >
           {filtered.map((repo, idx) => (
             <div

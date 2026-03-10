@@ -170,7 +170,7 @@ export default function TaskView() {
           {state.config?.showTips !== false && (
             <div className="mt-6 flex flex-col items-center gap-1.5">
               <div className="bg-surface-alt/50 border border-border-input/50 rounded-full px-4 py-2 flex items-center gap-2 max-w-sm">
-                <span className="text-warning text-sm flex-shrink-0">&#x1F4A1;</span>
+                <span className="text-warning text-sm shrink-0">&#x1F4A1;</span>
                 <p className="text-xs text-secondary leading-relaxed">{tips[tipIndex]}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -235,7 +235,7 @@ export default function TaskView() {
             {/* Draggable divider between panes */}
             {showDev && showClaude && (
               <div
-                className="flex-shrink-0 bg-border-default hover:bg-accent cursor-row-resize transition-colors"
+                className="shrink-0 bg-border-default hover:bg-accent cursor-row-resize transition-colors"
                 style={{ height: 4 }}
                 onMouseDown={handleDividerMouseDown}
               />
@@ -282,7 +282,7 @@ function InstallButton({ label, spinning, onClick }: { label: string; spinning: 
     <button
       onClick={onClick}
       disabled={spinning}
-      className="ml-2 px-2 py-0.5 text-[10px] bg-accent hover:bg-accent-hover disabled:opacity-50 text-white rounded transition-colors"
+      className="ml-2 px-2 py-0.5 text-[10px] bg-accent hover:bg-accent-hover disabled:opacity-50 text-white rounded-sm transition-colors"
     >
       {spinning ? <Spinner size="sm" /> : label}
     </button>

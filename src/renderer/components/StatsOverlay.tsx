@@ -57,8 +57,8 @@ function BarChart({ entries, done }: { entries: { name: string; count: number }[
         const pct = (entry.count / maxCount) * 100;
         return (
           <div key={entry.name} className="flex items-center gap-2">
-            <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
-              <div className="h-full bg-accent rounded" style={{ width: `${pct}%` }} />
+            <div className="flex-1 h-5 bg-surface-alt/50 rounded-sm overflow-hidden relative">
+              <div className="h-full bg-accent rounded-sm" style={{ width: `${pct}%` }} />
               <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">
                 {entry.name}
               </span>
@@ -100,12 +100,12 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
         return (
           <div
             key={entry.name}
-            className="cursor-pointer hover:bg-surface-alt/30 rounded px-1 -mx-1"
+            className="cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1"
             onClick={() => toggle(entry.name)}
           >
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-5 bg-surface-alt/50 rounded overflow-hidden relative">
-                <div className="h-full bg-accent-hover rounded" style={{ width: `${pct}%` }} />
+              <div className="flex-1 h-5 bg-surface-alt/50 rounded-sm overflow-hidden relative">
+                <div className="h-full bg-accent-hover rounded-sm" style={{ width: `${pct}%` }} />
                 <span className="absolute inset-0 flex items-center px-1.5 text-[11px] text-primary truncate pointer-events-none">
                   {entry.name}
                 </span>
@@ -153,7 +153,7 @@ function EscalationTable({ entries, done }: { entries: EscalationEntry[]; done: 
         return (
           <div
             key={entry.command}
-            className="cursor-pointer hover:bg-surface-alt/30 rounded px-1 -mx-1"
+            className="cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1"
             onClick={() => toggle(entry.command)}
           >
             <div className="flex items-center gap-2 py-0.5">
@@ -256,7 +256,7 @@ export default function StatsOverlay() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-hidden"
       onClick={close}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
@@ -283,7 +283,7 @@ export default function StatsOverlay() {
             />
             {!done && <Spinner size="sm" className="ml-2" />}
           </div>
-          <div className="bg-surface-alt/50 rounded px-0.5 py-0.5">
+          <div className="bg-surface-alt/50 rounded-sm px-0.5 py-0.5">
             <PillToggle options={timeRangeOptions} value={timeRange} onChange={(v) => setTimeRange(v)} />
           </div>
         </OverlayHeader>

@@ -309,28 +309,28 @@ const TokenUsageChart = forwardRef<
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-4 px-4 py-2 flex-shrink-0">
+      <div className="flex items-center gap-4 px-4 py-2 shrink-0">
         <PillToggle options={modeOptions} value={mode} onChange={(v) => setMode(v)} size="sm" />
         <div className="flex items-center gap-4 text-xs text-secondary ml-auto">
           <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.user.input }} />
+            <span className="inline-block w-3 h-2 rounded-xs" style={{ backgroundColor: TURN_COLORS.user.input }} />
             Context size
           </span>
           {mode === 'per-turn' && (
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.tool.input }} />
+              <span className="inline-block w-3 h-2 rounded-xs" style={{ backgroundColor: TURN_COLORS.tool.input }} />
               Output
             </span>
           )}
           {mode === 'cumulative' && data.subagents.length > 0 && (
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-2 rounded-sm" style={{ backgroundColor: TURN_COLORS.agent.input }} />
+              <span className="inline-block w-3 h-2 rounded-xs" style={{ backgroundColor: TURN_COLORS.agent.input }} />
               Subagent
             </span>
           )}
           {points.some((d) => d.compacted) && (
             <span className="flex items-center gap-1.5">
-              <span className="inline-block w-3 h-2 rounded-sm bg-danger opacity-40" />
+              <span className="inline-block w-3 h-2 rounded-xs bg-danger opacity-40" />
               Compaction
             </span>
           )}
@@ -387,7 +387,7 @@ const TokenUsageChart = forwardRef<
           onClose={() => setSelectedIndex(null)}
         />
       ) : (
-        <OverlayFooter className="flex-shrink-0">
+        <OverlayFooter className="shrink-0">
           <div className="flex justify-between text-xs text-muted">
             <span>{points.length} turns</span>
             <span>
@@ -451,13 +451,13 @@ function CollapsibleBlock({
   return (
     <div
       ref={elRef}
-      className={`mb-1.5 text-[11px] ${bgColor} border ${focused ? 'border-accent' : borderColor} rounded px-2 py-1 cursor-pointer transition-colors ${focused ? 'ring-1 ring-accent' : ''} ${faded ? 'opacity-30' : ''}`}
+      className={`mb-1.5 text-[11px] ${bgColor} border ${focused ? 'border-accent' : borderColor} rounded-sm px-2 py-1 cursor-pointer transition-colors ${focused ? 'ring-1 ring-accent' : ''} ${faded ? 'opacity-30' : ''}`}
       onClick={() => setExpanded((v) => !v)}
     >
       <div className="flex items-start gap-1.5">
-        <span className={`${labelColor} font-semibold flex-shrink-0`}>{label}</span>
+        <span className={`${labelColor} font-semibold shrink-0`}>{label}</span>
         {(hasOut || hasIn) && (
-          <span className="font-mono flex-shrink-0 flex items-center gap-1">
+          <span className="font-mono shrink-0 flex items-center gap-1">
             {hasOut && <span className="text-warning">{formatTokenCount(outputTokens)}</span>}
             {hasOut && hasIn && <span className="text-faint">/</span>}
             {hasIn && <span className="text-accent-hover">{formatTokenCount(inputTokens)}</span>}

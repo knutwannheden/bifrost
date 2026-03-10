@@ -85,14 +85,14 @@ function renderMarkdownLine(
     return (
       <label
         key={lineIndex}
-        className="flex items-start gap-2 py-0.5 cursor-pointer hover:bg-surface-alt/30 rounded px-1 -mx-1"
+        className="flex items-start gap-2 py-0.5 cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1"
         style={{ paddingLeft: indent * 4 }}
       >
         <input
           type="checkbox"
           checked={isChecked}
           onChange={() => onToggle(lineIndex)}
-          className="mt-1 accent-accent flex-shrink-0"
+          className="mt-1 accent-accent shrink-0"
         />
         <span className="text-base text-primary">{renderInline(checkboxMatch[3])}</span>
       </label>
@@ -105,7 +105,7 @@ function renderMarkdownLine(
     const indent = bulletMatch[1].length;
     return (
       <div key={lineIndex} className="flex items-start gap-2 py-0.5" style={{ paddingLeft: indent * 4 }}>
-        <span className="text-muted flex-shrink-0 mt-0.5">-</span>
+        <span className="text-muted shrink-0 mt-0.5">-</span>
         <span className="text-base text-primary">{renderInline(bulletMatch[2])}</span>
       </div>
     );
@@ -165,7 +165,7 @@ function renderInline(text: string): React.ReactNode {
       if (endCode >= 0) {
         if (codeIdx > 0) parts.push(remaining.slice(0, codeIdx));
         parts.push(
-          <code key={key++} className="px-1 py-0.5 bg-surface-alt rounded text-sm text-warning font-mono">
+          <code key={key++} className="px-1 py-0.5 bg-surface-alt rounded-sm text-sm text-warning font-mono">
             {remaining.slice(codeIdx + 1, endCode)}
           </code>,
         );
@@ -534,7 +534,7 @@ export default function ReviewContent({
           )}
           <button
             onClick={handleCancelReview}
-            className="px-3 py-1.5 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded transition-colors"
+            className="px-3 py-1.5 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded-sm transition-colors"
           >
             Cancel
           </button>
@@ -596,7 +596,7 @@ export default function ReviewContent({
   if (status === 'running') {
     return (
       <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-default flex-shrink-0 text-secondary">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-default shrink-0 text-secondary">
           <Spinner />
           <span className="text-sm">
             Running review... <span className="text-muted">{formatElapsed(elapsed)}</span>
@@ -617,7 +617,7 @@ export default function ReviewContent({
           )}
           <button
             onClick={handleCancelReview}
-            className="ml-auto px-2 py-1 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded transition-colors flex-shrink-0"
+            className="ml-auto px-2 py-1 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded-sm transition-colors shrink-0"
           >
             Cancel
           </button>
@@ -649,7 +649,7 @@ export default function ReviewContent({
     <div className="flex-1 flex flex-col min-h-0">
       {/* Metadata bar */}
       {activeEntry && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-default flex-shrink-0 text-xs text-muted">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border-default shrink-0 text-xs text-muted">
           <span
             className={`px-1.5 py-0.5 rounded ${
               activeEntry.scope === 'working' ? 'bg-success/15 text-success' : 'bg-accent/10 text-accent-hover'
@@ -670,7 +670,7 @@ export default function ReviewContent({
         <div className="flex-1 overflow-auto p-4">
           {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
         </div>
-        <div className="flex items-center gap-3 px-4 py-3 border-t border-border-default flex-shrink-0">
+        <div className="flex items-center gap-3 px-4 py-3 border-t border-border-default shrink-0">
           <button
             onClick={handleCopyPrompt}
             disabled={!hasChecked}
@@ -712,10 +712,10 @@ export default function ReviewContent({
           <div className="flex-1 min-h-0">
             <TerminalPane sessionId={reviewPtySessionId} active={showDiscussion} focused={showDiscussion} />
           </div>
-          <div className="flex items-center gap-3 px-4 py-2 border-t border-border-default flex-shrink-0">
+          <div className="flex items-center gap-3 px-4 py-2 border-t border-border-default shrink-0">
             <button
               onClick={handleCloseDiscussion}
-              className="px-3 py-1.5 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded transition-colors"
+              className="px-3 py-1.5 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded-sm transition-colors"
             >
               Close Discussion
             </button>

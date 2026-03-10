@@ -168,7 +168,7 @@ function TaskRow({
           {task.isExternal && <span className="text-xs text-faint">external</span>}
           {task.inPlace && <span className="text-xs text-faint">in-place</span>}
         </div>
-        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+        <div className="flex items-center gap-1 ml-2 shrink-0">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -176,7 +176,7 @@ function TaskRow({
             }}
             title="Rename (F2)"
             tabIndex={-1}
-            className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded transition-colors"
+            className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded-sm transition-colors"
           >
             <ActionLabel text="Rename" showHint={idx === focusedIdx} />
           </button>
@@ -188,7 +188,7 @@ function TaskRow({
               }}
               title={`Reopen task (${altSymbol}O)`}
               tabIndex={-1}
-              className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
+              className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded-sm transition-colors"
             >
               <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
             </button>
@@ -201,7 +201,7 @@ function TaskRow({
               }}
               title={`Archive task (${altSymbol}A)`}
               tabIndex={-1}
-              className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded transition-colors"
+              className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded-sm transition-colors"
             >
               <ActionLabel text="Archive" showHint={idx === focusedIdx} />
             </button>
@@ -217,7 +217,7 @@ function TaskRow({
                 : `Delete task and worktree (${altSymbol}D)`
             }
             tabIndex={-1}
-            className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded transition-colors"
+            className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded-sm transition-colors"
           >
             <ActionLabel text="Delete" showHint={idx === focusedIdx} />
           </button>
@@ -565,7 +565,7 @@ export default function TaskHistoryPanel() {
     <div
       ref={overlayRef}
       tabIndex={-1}
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-hidden"
       onClick={close}
       onKeyDown={handleKeyDown}
     >
@@ -584,7 +584,7 @@ export default function TaskHistoryPanel() {
         {error && <p className="text-xs text-danger px-4 pt-2">{error}</p>}
 
         {branchConfirm && (
-          <div className="mx-4 mt-3 px-3 py-2 bg-warning/10 border border-warning/30 rounded flex items-center gap-3">
+          <div className="mx-4 mt-3 px-3 py-2 bg-warning/10 border border-warning/30 rounded-sm flex items-center gap-3">
             <span className="text-xs text-warning flex-1">
               Branch changed from <span className="font-medium">{branchConfirm.task.branch}</span> to{' '}
               <span className="font-medium">{branchConfirm.currentBranch}</span>
@@ -594,7 +594,7 @@ export default function TaskHistoryPanel() {
             </PrimaryButton>
             <button
               onClick={() => setBranchConfirm(null)}
-              className="px-2 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
+              className="px-2 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded-sm"
             >
               Cancel
             </button>
@@ -632,7 +632,7 @@ export default function TaskHistoryPanel() {
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-primary truncate">{shortPath(session.cwd)}</span>
-                    <span className="text-xs text-accent-hover flex-shrink-0 ml-2">Resume</span>
+                    <span className="text-xs text-accent-hover shrink-0 ml-2">Resume</span>
                   </div>
                   <div className="flex items-center gap-3 mt-1.5 text-xs text-muted">
                     {session.slug && <span className="text-secondary">{session.slug}</span>}

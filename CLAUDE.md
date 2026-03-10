@@ -99,7 +99,7 @@ All colors use semantic CSS custom properties from `index.css`, referenced via T
 ### Overlay Structure
 
 All overlays follow this pattern:
-- Backdrop: `absolute inset-0 z-20 bg-overlay focus:outline-none` with `tabIndex={-1}`, `onClick={close}`
+- Backdrop: `absolute inset-0 z-20 bg-overlay focus:outline-hidden` with `tabIndex={-1}`, `onClick={close}`
 - Inner panel: `bg-surface rounded-lg border border-border-input shadow-xl` with `onClick={(e) => e.stopPropagation()}`
 - Header: `text-sm font-semibold text-primary` title + close button (`text-secondary hover:text-primary text-lg leading-none transition-colors`)
 - Footer hint bar: `px-4 pb-3 pt-2 border-t border-border-default` with `text-xs text-faint` for keyboard hints
@@ -108,8 +108,8 @@ All overlays follow this pattern:
 ### Interactive Elements
 
 - All hover-state buttons/links must include `transition-colors`
-- Primary action buttons: `bg-accent hover:bg-accent-hover text-white rounded`
-- Standard form input: `bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent`
+- Primary action buttons: `bg-accent hover:bg-accent-hover text-white rounded-sm`
+- Standard form input: `bg-surface-alt border border-border-input rounded-sm text-sm text-primary placeholder-muted focus:outline-hidden focus:border-accent focus:ring-1 focus:ring-accent`
 - Section group headers: `text-xs font-semibold text-secondary uppercase tracking-wider`
 
 ### Reusable Components

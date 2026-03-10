@@ -81,7 +81,7 @@ export default function TaskTab({
             e.stopPropagation();
           }}
           onBlur={submitEdit}
-          className="px-1.5 py-0.5 bg-surface-hover border border-accent rounded text-xs text-primary focus:outline-none focus:ring-1 focus:ring-accent w-28"
+          className="px-1.5 py-0.5 bg-surface-hover border border-accent rounded-sm text-xs text-primary focus:outline-hidden focus:ring-1 focus:ring-accent w-28"
         />
       </div>
     );
@@ -117,7 +117,7 @@ export default function TaskTab({
       >
         <span className="flex flex-col items-center min-w-0 max-w-[200px]">
           <span className="flex items-center gap-1.5">
-            {task.hasUnread && !isActive ? <span className="w-2 h-2 rounded-full bg-accent flex-shrink-0" /> : null}
+            {task.hasUnread && !isActive ? <span className="w-2 h-2 rounded-full bg-accent shrink-0" /> : null}
             <span className="text-xs leading-tight truncate">{task.name}</span>
           </span>
           <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
@@ -125,7 +125,7 @@ export default function TaskTab({
         {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
         <span
           role="button"
-          className="ml-1 text-muted hover:text-primary flex-shrink-0 hidden group-hover:inline transition-colors cursor-pointer"
+          className="ml-1 text-muted hover:text-primary shrink-0 hidden group-hover:inline transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -139,7 +139,7 @@ export default function TaskTab({
         tooltipPos &&
         createPortal(
           <div
-            className="fixed z-50 pointer-events-none bg-app border border-border-input rounded px-2 py-1.5 shadow-lg max-w-xl"
+            className="fixed z-50 pointer-events-none bg-app border border-border-input rounded-sm px-2 py-1.5 shadow-lg max-w-xl"
             style={{ left: tooltipPos.x, top: tooltipPos.y }}
           >
             {tooltipLines.map((line, i) => (

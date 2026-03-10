@@ -115,7 +115,7 @@ export default function PermissionPanel() {
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       data-permission-panel
-      className="fixed bottom-14 right-4 z-40 w-96 bg-surface border border-border-input rounded-lg shadow-2xl focus:outline-none focus:ring-1 focus:ring-accent-muted"
+      className="fixed bottom-14 right-4 z-40 w-96 bg-surface border border-border-input rounded-lg shadow-2xl focus:outline-hidden focus:ring-1 focus:ring-accent-muted"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-default">
@@ -170,7 +170,7 @@ export default function PermissionPanel() {
             type="checkbox"
             checked={persist}
             onChange={(e) => setPersist(e.target.checked)}
-            className="rounded border-border-input bg-surface-alt text-accent"
+            className="rounded-sm border-border-input bg-surface-alt text-accent"
           />
           <span>
             Remember <span className="text-faint">(P)</span>
@@ -217,13 +217,13 @@ export default function PermissionPanel() {
       <div className="px-3 py-2 flex gap-2">
         <button
           onClick={() => handleDecision('allow')}
-          className="flex-1 px-3 py-1.5 bg-success/80 hover:bg-success text-white text-sm font-medium rounded transition-colors"
+          className="flex-1 px-3 py-1.5 bg-success/80 hover:bg-success text-white text-sm font-medium rounded-sm transition-colors"
         >
           Allow <span className="opacity-60 text-xs">(A)</span>
         </button>
         <button
           onClick={() => handleDecision('deny')}
-          className="flex-1 px-3 py-1.5 bg-danger/80 hover:bg-danger text-white text-sm font-medium rounded transition-colors"
+          className="flex-1 px-3 py-1.5 bg-danger/80 hover:bg-danger text-white text-sm font-medium rounded-sm transition-colors"
         >
           Deny <span className="opacity-60 text-xs">(D)</span>
         </button>

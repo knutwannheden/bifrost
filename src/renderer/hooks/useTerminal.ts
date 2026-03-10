@@ -47,7 +47,7 @@ export function useTerminal(
       : {
           cursorBlink: options?.cursorBlink ?? true,
           cursorStyle: 'block' as const,
-          cursorInactiveStyle: 'outline' as const,
+          cursorInactiveStyle: 'outline-solid' as const,
         };
 
     const terminal = new Terminal({

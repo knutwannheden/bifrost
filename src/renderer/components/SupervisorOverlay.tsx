@@ -21,7 +21,7 @@ function ItemRow({
 }) {
   return (
     <div
-      className={`flex items-start gap-2 px-3 py-2 rounded group ${focused ? 'bg-surface-alt/50' : 'hover:bg-surface-alt/50'}`}
+      className={`flex items-start gap-2 px-3 py-2 rounded-sm group ${focused ? 'bg-surface-alt/50' : 'hover:bg-surface-alt/50'}`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -37,7 +37,7 @@ function ItemRow({
         {item.status === 'running' && (
           <button
             onClick={() => onAction('pause', item.id)}
-            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
+            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded-sm bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             Pause
           </button>
@@ -45,7 +45,7 @@ function ItemRow({
         {item.status === 'paused' && (
           <button
             onClick={() => onAction('resume', item.id)}
-            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
+            className="text-xs text-secondary hover:text-primary px-1.5 py-0.5 rounded-sm bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             Resume
           </button>
@@ -53,7 +53,7 @@ function ItemRow({
         {(item.status === 'done' || item.status === 'error' || item.status === 'paused') && (
           <button
             onClick={() => onAction('open', item.id)}
-            className="text-xs text-accent-hover hover:brightness-125 px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
+            className="text-xs text-accent-hover hover:brightness-125 px-1.5 py-0.5 rounded-sm bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             Open
           </button>
@@ -61,7 +61,7 @@ function ItemRow({
         {item.status !== 'running' && item.status !== 'opened' && (
           <button
             onClick={() => onAction('remove', item.id)}
-            className="text-xs text-muted hover:text-danger px-1.5 py-0.5 rounded bg-surface-alt hover:bg-surface-hover transition-colors"
+            className="text-xs text-muted hover:text-danger px-1.5 py-0.5 rounded-sm bg-surface-alt hover:bg-surface-hover transition-colors"
           >
             &times;
           </button>
@@ -187,14 +187,14 @@ export default function SupervisorOverlay() {
 
   return (
     <div
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-hidden"
       onClick={close}
     >
       <div
         ref={panelRef}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="bg-surface rounded-lg border border-border-input w-[640px] flex flex-col shadow-xl max-h-[80vh] outline-none"
+        className="bg-surface rounded-lg border border-border-input w-[640px] flex flex-col shadow-xl max-h-[80vh] outline-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -213,14 +213,14 @@ export default function SupervisorOverlay() {
             <span className="text-xs text-secondary">Concurrency</span>
             <button
               onClick={() => handleConcurrency(-1)}
-              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm transition-colors"
+              className="w-5 h-5 flex items-center justify-center rounded-sm text-secondary hover:text-primary hover:bg-surface-alt text-sm transition-colors"
             >
               &minus;
             </button>
             <span className="text-xs text-secondary w-4 text-center">{svState?.concurrency ?? 2}</span>
             <button
               onClick={() => handleConcurrency(1)}
-              className="w-5 h-5 flex items-center justify-center rounded text-secondary hover:text-primary hover:bg-surface-alt text-sm transition-colors"
+              className="w-5 h-5 flex items-center justify-center rounded-sm text-secondary hover:text-primary hover:bg-surface-alt text-sm transition-colors"
             >
               +
             </button>

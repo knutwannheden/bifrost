@@ -178,7 +178,7 @@ function IconButton({ active, badge, label, shortcut, onClick, children, ...rest
     >
       {children}
       {badge && <span className={`absolute top-1 right-1.5 w-2 h-2 rounded-full ${badgeClasses[badge]}`} />}
-      <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded bg-app border border-border-default shadow-lg whitespace-nowrap z-50">
+      <span className="pointer-events-none absolute right-full mr-2 top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1.5 px-2 py-1 rounded-sm bg-app border border-border-default shadow-lg whitespace-nowrap z-50">
         <span className="text-xs text-primary">{label}</span>
         {shortcut && <Kbd>{shortcut}</Kbd>}
       </span>

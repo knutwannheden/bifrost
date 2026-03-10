@@ -52,7 +52,7 @@ function TriageCard({
           </button>
           <span className="text-xs text-secondary truncate flex-1">{item.prompt}</span>
           {item.waiting && (
-            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded">
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded-sm">
               Waiting
             </span>
           )}
@@ -74,7 +74,9 @@ function TriageCard({
         {item.status === 'error' && <span className="text-danger text-xs">✗</span>}
         <span className="text-xs text-primary truncate flex-1">{item.prompt}</span>
         {item.waiting && (
-          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded">Waiting</span>
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded-sm">
+            Waiting
+          </span>
         )}
       </div>
       {lastActivity && <div className="text-xs text-muted truncate mb-2">{lastActivity}</div>}
@@ -112,7 +114,7 @@ function HistoryRow({ entry, search }: { entry: TriageEntry; search: string }) {
     entry.status === 'done' ? '✓' : entry.status === 'error' ? '✗' : entry.status === 'cancelled' ? '—' : '…';
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2 hover:bg-surface-hover transition-colors rounded">
+    <div className="flex items-center gap-3 px-3 py-2 hover:bg-surface-hover transition-colors rounded-sm">
       <span className={`text-xs ${statusColor} w-4 text-center`}>{statusLabel}</span>
       <span className="text-xs text-primary truncate flex-1">
         <Highlight text={entry.prompt} search={search} />
@@ -283,7 +285,7 @@ export default function TriageOverlay() {
 
   return (
     <div
-      className="absolute inset-0 z-20 bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 bg-overlay focus:outline-hidden"
       tabIndex={-1}
       ref={panelRef}
       onClick={close}

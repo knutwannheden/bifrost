@@ -52,7 +52,7 @@ function buildSettings(): SettingDef[] {
         <select
           value={config.terminalTheme}
           onChange={(e) => update({ terminalTheme: e.target.value })}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="bg-surface-alt border border-border-input rounded-sm px-2 py-1 text-sm text-primary focus:outline-hidden focus:border-accent focus:ring-1 focus:ring-accent"
         >
           {TERMINAL_THEME_NAMES.map((name) => (
             <option key={name} value={name}>
@@ -71,14 +71,14 @@ function buildSettings(): SettingDef[] {
         <div className="flex items-center gap-2">
           <button
             onClick={() => update({ fontSize: Math.max(8, config.fontSize - 1) })}
-            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-sm bg-surface-alt text-secondary hover:bg-surface-hover text-sm transition-colors"
           >
             -
           </button>
           <span className="text-sm text-primary w-6 text-center tabular-nums">{config.fontSize}</span>
           <button
             onClick={() => update({ fontSize: Math.min(32, config.fontSize + 1) })}
-            className="w-7 h-7 flex items-center justify-center rounded bg-surface-alt text-secondary hover:bg-surface-hover text-sm transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-sm bg-surface-alt text-secondary hover:bg-surface-hover text-sm transition-colors"
           >
             +
           </button>
@@ -94,7 +94,7 @@ function buildSettings(): SettingDef[] {
         <select
           value={config.fontFamily}
           onChange={(e) => update({ fontFamily: e.target.value })}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="bg-surface-alt border border-border-input rounded-sm px-2 py-1 text-sm text-primary focus:outline-hidden focus:border-accent focus:ring-1 focus:ring-accent"
         >
           {[
             { label: 'MesloLGS NF', value: 'MesloLGS NF' },
@@ -344,7 +344,7 @@ function buildSettings(): SettingDef[] {
               }
             }}
             disabled={!config.slack?.clientId || !config.slack?.clientSecret}
-            className="px-3 py-1 text-xs rounded bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-3 py-1 text-xs rounded-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Connect to Slack
           </button>
@@ -421,7 +421,7 @@ function PromptEditor({
   return (
     <div className="mt-6">
       <SectionHeader className="mb-2">Prompts</SectionHeader>
-      <div className="border border-border-input rounded overflow-hidden">
+      <div className="border border-border-input rounded-sm overflow-hidden">
         <table className="w-full text-sm">
           <tbody>
             {promptDefs.map((p) => {
@@ -441,7 +441,7 @@ function PromptEditor({
                         <Highlight text={p.name} search={search} />
                       </span>
                       {hasCustom && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent">custom</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-sm bg-accent/20 text-accent">custom</span>
                       )}
                     </div>
                     <p className="text-xs text-muted">
@@ -482,7 +482,7 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
   return (
     <button
       onClick={() => onChange(!checked)}
-      className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+      className={`relative w-10 h-5 rounded-full transition-colors shrink-0 ${
         checked ? 'bg-accent' : 'bg-surface-hover'
       }`}
     >
@@ -571,7 +571,7 @@ export default function SettingsOverlay() {
     <div
       ref={overlayRef}
       tabIndex={-1}
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-hidden"
       onClick={close}
       onKeyDown={handleKeyDown}
     >
@@ -594,7 +594,7 @@ export default function SettingsOverlay() {
         {/* Body */}
         <div className="flex flex-1 min-h-0">
           {/* Left nav */}
-          <div className="w-[140px] flex-shrink-0 border-r border-border-default py-2">
+          <div className="w-[140px] shrink-0 border-r border-border-default py-2">
             {visibleCategories.map((cat) => (
               <button
                 key={cat}
@@ -639,7 +639,7 @@ export default function SettingsOverlay() {
                             </p>
                           )}
                           {setting.tooltip && (
-                            <div className="hidden group-hover/tip:block absolute left-0 top-full mt-1 z-50 bg-app border border-border-input rounded px-3 py-2 shadow-lg w-96 whitespace-pre-line text-xs text-secondary leading-relaxed">
+                            <div className="hidden group-hover/tip:block absolute left-0 top-full mt-1 z-50 bg-app border border-border-input rounded-sm px-3 py-2 shadow-lg w-96 whitespace-pre-line text-xs text-secondary leading-relaxed">
                               {setting.tooltip}
                             </div>
                           )}

@@ -96,7 +96,7 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
 
   return (
     <div
-      className="absolute top-1 right-4 z-10 flex items-center gap-1 rounded bg-surface border border-border-input px-2 py-1 shadow-lg"
+      className="absolute top-1 right-4 z-10 flex items-center gap-1 rounded-sm bg-surface border border-border-input px-2 py-1 shadow-lg"
       onMouseDown={(e) => e.stopPropagation()}
     >
       <input
@@ -106,7 +106,7 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         placeholder="Find…"
-        className="bg-transparent text-sm text-primary placeholder-muted outline-none w-40"
+        className="bg-transparent text-sm text-primary placeholder-muted outline-hidden w-40"
       />
       {matchLabel && <span className="text-xs text-secondary whitespace-nowrap mr-1">{matchLabel}</span>}
       <button

@@ -60,7 +60,7 @@ function renderInline(text: string): React.ReactNode[] {
     else if (match[3]) parts.push(<em key={match.index}>{match[3]}</em>);
     else if (match[4])
       parts.push(
-        <code key={match.index} className="bg-surface-alt px-1 rounded text-xs">
+        <code key={match.index} className="bg-surface-alt px-1 rounded-sm text-xs">
           {match[4]}
         </code>,
       );
@@ -506,7 +506,7 @@ export default function App() {
       {/* Archive confirmation dialog */}
       {state.archiveConfirm && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay focus:outline-none"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay focus:outline-hidden"
           tabIndex={-1}
           ref={(el) => el?.focus()}
           onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
@@ -532,7 +532,7 @@ export default function App() {
               <button
                 autoFocus
                 onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
-                className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded transition-colors"
+                className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
               >
                 Cancel
               </button>
@@ -542,7 +542,7 @@ export default function App() {
                   dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
                   performArchive(taskId, state, dispatch);
                 }}
-                className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded transition-colors"
+                className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded-sm transition-colors"
               >
                 Force Archive
               </button>
@@ -563,7 +563,7 @@ export default function App() {
                   a.callback();
                   dispatch({ type: 'HIDE_TOAST' });
                 }}
-                className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded transition-colors"
+                className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded-sm transition-colors"
               >
                 <ActionLabel text={a.label} showHint={true} />
               </button>

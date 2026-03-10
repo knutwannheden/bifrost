@@ -287,21 +287,21 @@ export default function NotesOverlay() {
 
   return (
     <div
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-hidden"
       onClick={close}
     >
       <div
         ref={panelRef}
         tabIndex={-1}
         onKeyDown={handleOverlayKeyDown}
-        className="bg-surface rounded-lg border border-border-input w-[720px] flex flex-col shadow-xl min-h-[80vh] max-h-[90vh] outline-none"
+        className="bg-surface rounded-lg border border-border-input w-[720px] flex flex-col shadow-xl min-h-[80vh] max-h-[90vh] outline-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-default gap-3">
-          <span className="text-sm font-semibold text-primary flex-shrink-0">Notes</span>
+          <span className="text-sm font-semibold text-primary shrink-0">Notes</span>
           <div className="flex items-center gap-1.5 flex-1 max-w-[280px]">
-            <label className="text-xs text-secondary flex-shrink-0">
+            <label className="text-xs text-secondary shrink-0">
               <ActionLabel text="Repo" showHint={true} />
             </label>
             <div className="flex-1">
@@ -316,16 +316,13 @@ export default function NotesOverlay() {
               />
             </div>
           </div>
-          <CloseButton onClick={close} className="flex-shrink-0" />
+          <CloseButton onClick={close} className="shrink-0" />
         </div>
 
         {/* Body: sidebar + content */}
         <div className="flex-1 flex min-h-0">
           {/* Sidebar */}
-          <div
-            ref={sidebarRef}
-            className="w-44 flex-shrink-0 border-r border-border-default flex flex-col overflow-hidden"
-          >
+          <div ref={sidebarRef} className="w-44 shrink-0 border-r border-border-default flex flex-col overflow-hidden">
             {/* New Note button */}
             <button
               onClick={startNewNote}
@@ -363,7 +360,7 @@ export default function NotesOverlay() {
                             toggleAddressed(note);
                           }}
                           onClick={(e) => e.stopPropagation()}
-                          className="accent-accent flex-shrink-0"
+                          className="accent-accent shrink-0"
                         />
                         <span className="text-xs text-secondary truncate flex-1">
                           {firstLine.length > 30 ? `${firstLine.slice(0, 30)}\u2026` : firstLine}
@@ -373,7 +370,7 @@ export default function NotesOverlay() {
                             e.stopPropagation();
                             deleteNoteById(note.id);
                           }}
-                          className="opacity-0 group-hover:opacity-100 text-danger hover:brightness-125 flex-shrink-0 transition-opacity"
+                          className="opacity-0 group-hover:opacity-100 text-danger hover:brightness-125 shrink-0 transition-opacity"
                           title="Delete note"
                         >
                           <svg
@@ -410,7 +407,7 @@ export default function NotesOverlay() {
                 onBlur={handleTextareaBlur}
                 onKeyDown={handleTextareaKeyDown}
                 placeholder={isNewNote ? 'Type a new note...' : 'Note text...'}
-                className="flex-1 bg-transparent text-sm text-primary placeholder-muted p-4 resize-none outline-none min-h-0"
+                className="flex-1 bg-transparent text-sm text-primary placeholder-muted p-4 resize-none outline-hidden min-h-0"
               />
             )}
           </div>

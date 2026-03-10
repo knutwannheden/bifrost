@@ -88,7 +88,7 @@ export default function ReviewSidebar({
   const sortedReviews = [...reviews].sort((a, b) => b.timestamp - a.timestamp);
 
   return (
-    <div className="w-48 flex-shrink-0 border-r border-border-default flex flex-col overflow-hidden">
+    <div className="w-48 shrink-0 border-r border-border-default flex flex-col overflow-hidden">
       <button
         onClick={onNewReview}
         className={`mx-2 mt-2 mb-1 px-3 py-1.5 text-xs rounded transition-colors ${

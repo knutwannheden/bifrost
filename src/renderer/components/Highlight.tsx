@@ -13,7 +13,7 @@ export default function Highlight({ text, search }: { text: string; search: stri
     <span>
       {parts.map((part, i) =>
         testRegex.test(part) ? (
-          <span key={i} className="bg-highlight rounded-sm">
+          <span key={i} className="bg-highlight rounded-xs">
             {part}
           </span>
         ) : (

@@ -14,7 +14,7 @@ export default function SearchIndicator({
   if (!search && !visible) return null;
   return (
     <div
-      className={`px-3 py-1.5 bg-surface-alt/70 border border-border-input rounded flex items-center gap-2 ${className ?? ''}`}
+      className={`px-3 py-1.5 bg-surface-alt/70 border border-border-input rounded-sm flex items-center gap-2 ${className ?? ''}`}
     >
       <span className="text-xs text-secondary">Search:</span>
       {search ? (

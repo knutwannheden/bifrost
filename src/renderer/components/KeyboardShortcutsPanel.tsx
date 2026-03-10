@@ -191,7 +191,7 @@ export default function KeyboardShortcutsPanel() {
     <div
       ref={overlayRef}
       tabIndex={-1}
-      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-none"
+      className="absolute inset-0 z-20 flex items-center justify-center bg-overlay focus:outline-hidden"
       onClick={close}
       onKeyDown={handleKeyDown}
     >
@@ -206,7 +206,7 @@ export default function KeyboardShortcutsPanel() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search shortcuts…"
-            className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-none"
+            className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-hidden"
           />
           <CloseButton onClick={close} className="ml-2" />
         </div>
