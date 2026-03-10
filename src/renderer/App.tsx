@@ -518,6 +518,16 @@ export default function App() {
                 e.stopPropagation();
                 dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
               }
+              if (e.altKey && e.code === 'KeyC') {
+                e.preventDefault();
+                dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
+              }
+              if (e.altKey && e.code === 'KeyA') {
+                e.preventDefault();
+                const { taskId } = state.archiveConfirm!;
+                dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
+                performArchive(taskId, state, dispatch);
+              }
             }}
           >
             <div
@@ -536,7 +546,7 @@ export default function App() {
                   onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
                   className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
                 >
-                  Cancel
+                  <ActionLabel text="Cancel" showHint />
                 </button>
                 <button
                   onClick={() => {
@@ -546,7 +556,7 @@ export default function App() {
                   }}
                   className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded-sm transition-colors"
                 >
-                  Force Archive
+                  Force <ActionLabel text="Archive" showHint />
                 </button>
               </div>
             </div>
