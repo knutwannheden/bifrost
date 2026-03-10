@@ -248,11 +248,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       // Restore persisted active task, or auto-select first running task
       const persisted = localStorage.getItem('bifrost:activeTaskId');
       const autoSelect = !state.activeTaskId
-        ? persisted && action.tasks.some((t) => t.id === persisted && t.status !== 'archived')
+        ? persisted && action.tasks.some((t) => t.id === persisted && t.status === 'running')
           ? persisted
-          : (action.tasks.find((t) => t.status === 'running')?.id ??
-            action.tasks.find((t) => t.status !== 'archived')?.id ??
-            null)
+          : (action.tasks.find((t) => t.status === 'running')?.id ?? null)
         : state.activeTaskId;
       return { ...state, tasks: action.tasks, tasksLoaded: true, activeTaskId: autoSelect };
     }

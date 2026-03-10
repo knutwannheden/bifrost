@@ -110,8 +110,8 @@ function TriageIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="M8 2v4M8 6L4 12h8L8 6z" />
-      <circle cx="8" cy="10" r="0.5" fill="currentColor" />
+      <path d="M8 14v-4M8 10L4 4h8L8 10z" />
+      <circle cx="8" cy="6" r="0.5" fill="currentColor" />
     </svg>
   );
 }
