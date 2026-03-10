@@ -4,6 +4,7 @@ import type { PaneTarget } from '../context/AppContext';
 import { defaultPaneState, useApp } from '../context/AppContext';
 import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
 import Kbd from './Kbd';
+import SectionHeader from './SectionHeader';
 import Spinner from './Spinner';
 import TerminalPane from './TerminalPane';
 
@@ -325,7 +326,7 @@ function PrerequisiteChecklist({
       {/* Required */}
       {(!prereqs.git || !prereqs.claude || !prereqs.plugin.installed || prereqs.plugin.updateAvailable) && (
         <div>
-          <p className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">Required</p>
+          <SectionHeader className="mb-1.5">Required</SectionHeader>
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs">
               <CheckIcon ok={prereqs.git} />
@@ -371,7 +372,7 @@ function PrerequisiteChecklist({
       {/* Optional */}
       {(!prereqs.gh || !prereqs.ollama || prereqs.ollamaModels.some((m) => !m.installed)) && (
         <div>
-          <p className="text-xs font-semibold text-secondary uppercase tracking-wider mb-1.5">Optional</p>
+          <SectionHeader className="mb-1.5">Optional</SectionHeader>
           <div className="space-y-1">
             {!prereqs.gh && (
               <div className="flex items-center gap-2 text-xs">

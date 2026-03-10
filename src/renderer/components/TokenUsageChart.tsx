@@ -11,7 +11,9 @@ import {
 } from 'react';
 import type { TokenDataPoint, TokenTurnType, TokenUsageResult } from '../../shared/types';
 import { matchesAllTerms } from '../utils/search';
+import CloseButton from './CloseButton';
 import Highlight from './Highlight';
+import OverlayFooter from './OverlayFooter';
 import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
 
@@ -385,7 +387,7 @@ const TokenUsageChart = forwardRef<
           onClose={() => setSelectedIndex(null)}
         />
       ) : (
-        <div className="px-4 pb-3 pt-2 border-t border-border-default flex-shrink-0">
+        <OverlayFooter className="flex-shrink-0">
           <div className="flex justify-between text-xs text-muted">
             <span>{points.length} turns</span>
             <span>
@@ -396,7 +398,7 @@ const TokenUsageChart = forwardRef<
               )}
             </span>
           </div>
-        </div>
+        </OverlayFooter>
       )}
     </div>
   );
@@ -521,12 +523,7 @@ function DetailPanel({
             </span>
             {point.compacted && <span className="ml-2 text-danger">Compacted</span>}
           </div>
-          <button
-            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
-            onClick={onClose}
-          >
-            &times;
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
 
         {/* User prompt */}

@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { ContextRotEntry, EscalationEntry, StatsData } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import FlaskIcon from './FlaskIcon';
+import OverlayFooter from './OverlayFooter';
+import OverlayHeader from './OverlayHeader';
 import PillToggle, { type PillOption } from './PillToggle';
 import Spinner from './Spinner';
 
@@ -264,7 +266,7 @@ export default function StatsOverlay() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
+        <OverlayHeader title="Stats" onClose={close}>
           <div className="flex items-center gap-1">
             <PillToggle
               options={visibleTabs.map((tab) => ({
@@ -284,14 +286,7 @@ export default function StatsOverlay() {
           <div className="bg-surface-alt/50 rounded px-0.5 py-0.5">
             <PillToggle options={timeRangeOptions} value={timeRange} onChange={(v) => setTimeRange(v)} />
           </div>
-          <button
-            onClick={close}
-            tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none ml-2 transition-colors"
-          >
-            &times;
-          </button>
-        </div>
+        </OverlayHeader>
 
         {/* Content */}
         <div className="overflow-y-auto flex-1 min-h-0">
@@ -305,11 +300,11 @@ export default function StatsOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+        <OverlayFooter>
           <span className="text-xs text-faint">
             Tab/&#8679;Tab tabs &middot; &larr;&rarr; time range &middot; Esc close
           </span>
-        </div>
+        </OverlayFooter>
       </div>
     </div>
   );

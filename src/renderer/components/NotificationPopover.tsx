@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import PrimaryButton from './PrimaryButton';
 
 export default function NotificationPopover() {
   const { state, dispatch } = useApp();
@@ -128,12 +129,9 @@ export default function NotificationPopover() {
               <div className="text-xs text-secondary mt-0.5">{n.message}</div>
               {n.action && (
                 <div className="mt-1.5 flex gap-2">
-                  <button
-                    onClick={() => handleAction(n.id, n.action!.handler)}
-                    className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded transition-colors"
-                  >
+                  <PrimaryButton size="sm" onClick={() => handleAction(n.id, n.action!.handler)}>
                     {n.action.label}
-                  </button>
+                  </PrimaryButton>
                   <button
                     onClick={() => dispatch({ type: 'DISMISS_NOTIFICATION', id: n.id })}
                     className="px-2 py-0.5 text-xs text-secondary hover:text-primary transition-colors"

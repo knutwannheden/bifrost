@@ -6,7 +6,10 @@ import { repoDisplayName, shortPath } from '../utils/paths';
 import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
+import FormInput from './FormInput';
 import Highlight from './Highlight';
+import OverlayFooter from './OverlayFooter';
+import OverlayHeader from './OverlayHeader';
 import SearchIndicator from './SearchIndicator';
 
 export default function RepoManager() {
@@ -242,16 +245,7 @@ export default function RepoManager() {
         className="bg-surface rounded-lg border border-border-input w-[500px] max-h-[80vh] flex flex-col shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-          <h2 className="text-sm font-semibold text-primary">Manage Repositories</h2>
-          <button
-            onClick={close}
-            tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
-          >
-            &times;
-          </button>
-        </div>
+        <OverlayHeader title="Manage Repositories" onClose={close} />
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
           <SearchIndicator search={search} visible={searchVisible} />
@@ -365,7 +359,7 @@ export default function RepoManager() {
           <div>
             <label className="block text-xs text-secondary mb-1">Add Local Repository</label>
             <div className="flex gap-2">
-              <input
+              <FormInput
                 ref={inputRef}
                 type="text"
                 value={localPath}
@@ -379,7 +373,7 @@ export default function RepoManager() {
                   }
                 }}
                 placeholder="/path/to/repo"
-                className="flex-1 px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                className="flex-1 px-3 py-1.5"
               />
               <button
                 onClick={handleBrowse}
@@ -402,12 +396,12 @@ export default function RepoManager() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+        <OverlayFooter>
           <span className="text-xs text-faint">
             &uarr;&darr; navigate &middot; Tab cycle &middot; type to search &middot; {altSymbol}B browse &middot;{' '}
             {altSymbol}A add &middot; Esc close
           </span>
-        </div>
+        </OverlayFooter>
       </div>
     </div>
   );

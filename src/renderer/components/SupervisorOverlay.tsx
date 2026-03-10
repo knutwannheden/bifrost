@@ -4,6 +4,8 @@ import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/format-time';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
+import CloseButton from './CloseButton';
+import SectionHeader from './SectionHeader';
 import Spinner from './Spinner';
 
 function ItemRow({
@@ -236,13 +238,7 @@ export default function SupervisorOverlay() {
             <ActionLabel text={svState?.running ? 'Stop' : 'Start'} showHint={true} />
           </button>
 
-          <button
-            onClick={close}
-            tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none ml-1 transition-colors"
-          >
-            &times;
-          </button>
+          <CloseButton onClick={close} className="ml-1" />
         </div>
 
         {/* Body */}
@@ -312,7 +308,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
   return (
     <div className="mb-2">
       <div className="flex items-center gap-2 px-3 py-1">
-        <span className="text-xs font-semibold text-secondary uppercase tracking-wider">{title}</span>
+        <SectionHeader>{title}</SectionHeader>
         <span className="text-xs text-faint">{count}</span>
       </div>
       {children}

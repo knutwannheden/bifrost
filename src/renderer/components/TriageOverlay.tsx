@@ -6,8 +6,11 @@ import { useInstantSearch } from '../hooks/useInstantSearch';
 import { formatTime } from '../utils/format-time';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
+import FormTextarea from './FormTextarea';
 import Highlight from './Highlight';
+import OverlayFooter from './OverlayFooter';
 import PillToggle from './PillToggle';
+import PrimaryButton from './PrimaryButton';
 import SearchIndicator from './SearchIndicator';
 import Spinner from './Spinner';
 import TerminalPane from './TerminalPane';
@@ -78,12 +81,9 @@ function TriageCard({
       <div className="flex items-center gap-2">
         {item.status === 'running' && (
           <>
-            <button
-              onClick={() => onEnter(id)}
-              className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded transition-colors"
-            >
+            <PrimaryButton size="sm" onClick={() => onEnter(id)}>
               <ActionLabel text="Enter" hintIndex={0} showHint={showAlt} />
-            </button>
+            </PrimaryButton>
             <button
               onClick={() => onCancel(id)}
               className="px-2 py-0.5 text-xs text-secondary hover:text-danger transition-colors"
@@ -317,13 +317,13 @@ export default function TriageOverlay() {
             <div className="flex-1 min-h-0 flex flex-col">
               {/* Prompt input */}
               <div className="p-4 border-b border-border-default">
-                <textarea
+                <FormTextarea
                   ref={textareaRef}
                   value={state.triageDraftPrompt}
                   onChange={(e) => dispatch({ type: 'SET_TRIAGE_DRAFT_PROMPT', prompt: e.target.value })}
                   placeholder="Paste a URL or describe what to triage…"
                   rows={3}
-                  className="w-full bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted p-2 resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                  className="w-full resize-none p-2"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault();
@@ -332,13 +332,14 @@ export default function TriageOverlay() {
                   }}
                 />
                 <div className="flex items-center justify-end mt-2">
-                  <button
+                  <PrimaryButton
+                    size="sm"
                     onClick={handleStart}
                     disabled={!state.triageDraftPrompt.trim()}
-                    className="px-3 py-1 text-xs bg-accent hover:bg-accent-hover text-white rounded transition-colors disabled:opacity-40"
+                    className="px-3 py-1"
                   >
                     <ActionLabel text="Start" hintIndex={0} showHint={altHeld} />
-                  </button>
+                  </PrimaryButton>
                 </div>
               </div>
 
@@ -389,7 +390,7 @@ export default function TriageOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+        <OverlayFooter>
           <div className="text-xs text-faint flex items-center gap-3">
             {interactiveId ? (
               <>
@@ -416,7 +417,7 @@ export default function TriageOverlay() {
               </>
             )}
           </div>
-        </div>
+        </OverlayFooter>
       </div>
     </div>
   );

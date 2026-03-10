@@ -15,6 +15,7 @@ import { matchesAllTerms } from '../utils/search';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { highlightLines } from '../utils/syntax-highlight';
 import ActionLabel from './ActionLabel';
+import CloseButton from './CloseButton';
 import DiffStatsBadge from './DiffStatsBadge';
 import Highlight from './Highlight';
 import PillToggle, { type PillOption } from './PillToggle';
@@ -1073,13 +1074,7 @@ export default function DiffOverlay() {
           <span className="text-xs text-faint">
             &uarr;&darr; navigate &middot; Tab/&#8679;Tab cycle &middot; type to search &middot; Esc close
           </span>
-          <button
-            tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
-            onClick={() => dispatch({ type: 'TOGGLE_DIFF' })}
-          >
-            &times;
-          </button>
+          <CloseButton onClick={() => dispatch({ type: 'TOGGLE_DIFF' })} />
         </div>
       </div>
 

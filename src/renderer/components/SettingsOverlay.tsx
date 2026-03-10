@@ -5,8 +5,13 @@ import { useApp } from '../context/AppContext';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
 import { modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
+import FormInput from './FormInput';
+import FormTextarea from './FormTextarea';
 import Highlight from './Highlight';
+import OverlayFooter from './OverlayFooter';
+import OverlayHeader from './OverlayHeader';
 import PillToggle from './PillToggle';
+import SectionHeader from './SectionHeader';
 
 interface SettingDef {
   key: string;
@@ -247,7 +252,7 @@ function buildSettings(): SettingDef[] {
       tooltip:
         'Comma-separated list of ollama model names. Bifrost tries each in order for task summarization, falling back to Claude Haiku if none are available.',
       render: (config, update) => (
-        <input
+        <FormInput
           type="text"
           value={(config.ollamaModels ?? []).join(', ')}
           onChange={(e) =>
@@ -258,7 +263,7 @@ function buildSettings(): SettingDef[] {
                 .filter(Boolean),
             })
           }
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="px-2 py-1 w-48"
           placeholder="phi4-mini, gemma3:1b"
         />
       ),
@@ -281,11 +286,11 @@ function buildSettings(): SettingDef[] {
       label: 'Client ID',
       description: 'Slack app Client ID',
       render: (config, update) => (
-        <input
+        <FormInput
           type="text"
           value={config.slack?.clientId ?? ''}
           onChange={(e) => update({ slack: { ...config.slack, clientId: e.target.value } } as Partial<BifrostConfig>)}
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="px-2 py-1 w-48"
         />
       ),
     },
@@ -295,13 +300,13 @@ function buildSettings(): SettingDef[] {
       label: 'Client Secret',
       description: 'Slack app Client Secret',
       render: (config, update) => (
-        <input
+        <FormInput
           type="password"
           value={config.slack?.clientSecret ?? ''}
           onChange={(e) =>
             update({ slack: { ...config.slack, clientSecret: e.target.value } } as Partial<BifrostConfig>)
           }
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="px-2 py-1 w-48"
         />
       ),
     },
@@ -352,7 +357,7 @@ function buildSettings(): SettingDef[] {
       label: 'Reactions',
       description: 'Emoji names to watch for (without colons)',
       render: (config, update) => (
-        <input
+        <FormInput
           type="text"
           value={(config.slack?.reactions ?? []).join(', ')}
           onChange={(e) =>
@@ -366,7 +371,7 @@ function buildSettings(): SettingDef[] {
               },
             } as Partial<BifrostConfig>)
           }
-          className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          className="px-2 py-1 w-48"
           placeholder="bifrost, robot_face"
         />
       ),
@@ -415,7 +420,7 @@ function PromptEditor({
 
   return (
     <div className="mt-6">
-      <h4 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-2">Prompts</h4>
+      <SectionHeader className="mb-2">Prompts</SectionHeader>
       <div className="border border-border-input rounded overflow-hidden">
         <table className="w-full text-sm">
           <tbody>
@@ -461,11 +466,11 @@ function PromptEditor({
               Revert to default
             </button>
           </div>
-          <textarea
+          <FormTextarea
             value={currentValue || selected.defaultValue}
             onChange={(e) => handleSave(e.target.value)}
             rows={12}
-            className="w-full bg-surface-alt border border-border-input rounded text-xs text-primary font-mono p-2 resize-y focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className="w-full text-xs font-mono p-2 resize-y"
           />
         </div>
       )}
@@ -575,26 +580,16 @@ export default function SettingsOverlay() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-          <h2 className="text-sm font-semibold text-primary">Settings</h2>
-          <div className="flex items-center gap-3">
-            <input
-              ref={searchRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search settings..."
-              className="bg-surface-alt border border-border-input rounded px-2 py-1 text-sm text-primary placeholder-muted w-48 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-            <button
-              onClick={close}
-              tabIndex={-1}
-              className="text-secondary hover:text-primary text-lg leading-none transition-colors"
-            >
-              &times;
-            </button>
-          </div>
-        </div>
+        <OverlayHeader title="Settings" onClose={close}>
+          <FormInput
+            ref={searchRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search settings..."
+            className="px-2 py-1 w-48"
+          />
+        </OverlayHeader>
 
         {/* Body */}
         <div className="flex flex-1 min-h-0">
@@ -627,7 +622,7 @@ export default function SettingsOverlay() {
                     categoryRefs.current[cat] = el;
                   }}
                 >
-                  <h3 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-3">{cat}</h3>
+                  <SectionHeader className="mb-3">{cat}</SectionHeader>
                   <div className="space-y-4">
                     {catSettings.map((setting) => (
                       <div key={setting.key} className="flex items-start justify-between gap-4">
@@ -671,9 +666,9 @@ export default function SettingsOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+        <OverlayFooter>
           <span className="text-xs text-faint">&uarr;&darr; categories &middot; type to search &middot; Esc close</span>
-        </div>
+        </OverlayFooter>
       </div>
     </div>
   );

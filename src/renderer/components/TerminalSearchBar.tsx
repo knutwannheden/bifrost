@@ -1,6 +1,7 @@
 import type { ISearchOptions } from '@xterm/addon-search';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { searchAddonRegistry } from '../hooks/useTerminal';
+import CloseButton from './CloseButton';
 
 interface TerminalSearchBarProps {
   sessionId: string;
@@ -122,13 +123,7 @@ export default function TerminalSearchBar({ sessionId, onClose }: TerminalSearch
       >
         &#x25BC;
       </button>
-      <button
-        onClick={onClose}
-        title="Close (Escape)"
-        className="text-secondary hover:text-primary text-lg leading-none px-1 transition-colors"
-      >
-        &times;
-      </button>
+      <CloseButton onClick={onClose} className="px-1" />
     </div>
   );
 }

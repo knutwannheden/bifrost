@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { requestArchive } from '../utils/archive';
 import { matchesAllTerms } from '../utils/search';
+import CloseButton from './CloseButton';
 import Highlight from './Highlight';
 import Kbd from './Kbd';
+import OverlayFooter from './OverlayFooter';
+import SectionHeader from './SectionHeader';
 
 interface Shortcut {
   key: string;
@@ -205,13 +208,7 @@ export default function KeyboardShortcutsPanel() {
             placeholder="Search shortcuts…"
             className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-none"
           />
-          <button
-            onClick={close}
-            tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none ml-2 transition-colors"
-          >
-            &times;
-          </button>
+          <CloseButton onClick={close} className="ml-2" />
         </div>
         <div ref={listRef} className="p-2 overflow-y-auto">
           {items.length === 0 ? (
@@ -220,12 +217,9 @@ export default function KeyboardShortcutsPanel() {
             items.map((item, i) => {
               if (item.type === 'header') {
                 return (
-                  <div
-                    key={`group-${item.label}`}
-                    className={`px-2 pt-3 pb-1 text-xs font-semibold text-secondary uppercase tracking-wider ${i === 0 ? 'pt-1' : ''}`}
-                  >
+                  <SectionHeader key={`group-${item.label}`} className={`px-2 pt-3 pb-1 ${i === 0 ? 'pt-1' : ''}`}>
                     {item.label}
-                  </div>
+                  </SectionHeader>
                 );
               }
               const navIdx = executableIndices.indexOf(i);
@@ -247,11 +241,11 @@ export default function KeyboardShortcutsPanel() {
             })
           )}
         </div>
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+        <OverlayFooter>
           <span className="text-xs text-faint">
             &uarr;&darr; navigate &middot; Enter execute &middot; type to search &middot; Esc close
           </span>
-        </div>
+        </OverlayFooter>
       </div>
     </div>
   );

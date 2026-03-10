@@ -4,6 +4,8 @@ import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/format-time';
 import { altSymbol, deleteSymbol, isModKey, modSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
+import CloseButton from './CloseButton';
+import OverlayFooter from './OverlayFooter';
 import RepoDropdown from './RepoDropdown';
 
 export default function NotesOverlay() {
@@ -314,13 +316,7 @@ export default function NotesOverlay() {
               />
             </div>
           </div>
-          <button
-            onClick={close}
-            tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none flex-shrink-0 transition-colors"
-          >
-            &times;
-          </button>
+          <CloseButton onClick={close} className="flex-shrink-0" />
         </div>
 
         {/* Body: sidebar + content */}
@@ -421,13 +417,13 @@ export default function NotesOverlay() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+        <OverlayFooter>
           <span className="text-xs text-faint">
             Esc close &middot; {altSymbol}N new note &middot; {altSymbol}R repo &middot; &uarr;&darr; navigate &middot;{' '}
             {modSymbol}
             {deleteSymbol} delete
           </span>
-        </div>
+        </OverlayFooter>
       </div>
     </div>
   );

@@ -9,9 +9,14 @@ import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
+import FormInput from './FormInput';
 import Highlight from './Highlight';
+import OverlayFooter from './OverlayFooter';
+import OverlayHeader from './OverlayHeader';
 import PillToggle, { type PillOption } from './PillToggle';
+import PrimaryButton from './PrimaryButton';
 import SearchIndicator from './SearchIndicator';
+import SectionHeader from './SectionHeader';
 import Spinner from './Spinner';
 
 const statusLabel: Record<string, string> = {
@@ -135,7 +140,7 @@ function TaskRow({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {editingId === task.id ? (
-            <input
+            <FormInput
               autoFocus
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
@@ -147,7 +152,7 @@ function TaskRow({
                 }
               }}
               onBlur={() => submitRename(task.id)}
-              className="px-2 py-0.5 bg-surface-hover border border-border-input rounded text-sm text-primary focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent w-48"
+              className="px-2 py-0.5 w-48"
             />
           ) : (
             <span
@@ -569,16 +574,7 @@ export default function TaskHistoryPanel() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-          <h2 className="text-sm font-semibold text-primary">{isSessionsMode ? 'Claude Sessions' : 'Task History'}</h2>
-          <button
-            onClick={close}
-            tabIndex={-1}
-            className="text-secondary hover:text-primary text-lg leading-none transition-colors"
-          >
-            &times;
-          </button>
-        </div>
+        <OverlayHeader title={isSessionsMode ? 'Claude Sessions' : 'Task History'} onClose={close} />
 
         {/* Filter tabs */}
         <div className="flex gap-1 px-4 pt-3">
@@ -593,12 +589,9 @@ export default function TaskHistoryPanel() {
               Branch changed from <span className="font-medium">{branchConfirm.task.branch}</span> to{' '}
               <span className="font-medium">{branchConfirm.currentBranch}</span>
             </span>
-            <button
-              onClick={() => doReopen(branchConfirm.task)}
-              className="px-2 py-0.5 text-xs bg-accent hover:bg-accent-hover text-white rounded transition-colors"
-            >
+            <PrimaryButton size="sm" onClick={() => doReopen(branchConfirm.task)}>
               Reopen on {branchConfirm.currentBranch}
-            </button>
+            </PrimaryButton>
             <button
               onClick={() => setBranchConfirm(null)}
               className="px-2 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded"
@@ -656,9 +649,7 @@ export default function TaskHistoryPanel() {
                 let flatIdx = 0;
                 return taskGroups.map((group) => (
                   <div key={group.name} className="space-y-2">
-                    <div className="text-xs font-semibold text-secondary uppercase tracking-wider px-1 pt-2 pb-1">
-                      {group.name}
-                    </div>
+                    <SectionHeader className="px-1 pt-2 pb-1">{group.name}</SectionHeader>
                     {group.tasks.map((task) => {
                       const idx = flatIdx++;
                       return (
@@ -696,7 +687,7 @@ export default function TaskHistoryPanel() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 pb-3 pt-2 border-t border-border-default">
+        <OverlayFooter>
           <span className="text-xs text-faint">
             Tab/&larr;&rarr; tabs &middot; &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'}{' '}
             &middot;{' '}
@@ -707,7 +698,7 @@ export default function TaskHistoryPanel() {
             )}
             type to search &middot; Esc close
           </span>
-        </div>
+        </OverlayFooter>
       </div>
     </div>
   );

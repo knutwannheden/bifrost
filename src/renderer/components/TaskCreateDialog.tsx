@@ -5,6 +5,10 @@ import { useApp } from '../context/AppContext';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
+import FormInput from './FormInput';
+import FormTextarea from './FormTextarea';
+import OverlayHeader from './OverlayHeader';
+import PrimaryButton from './PrimaryButton';
 import RepoDropdown from './RepoDropdown';
 import Spinner from './Spinner';
 
@@ -359,18 +363,7 @@ export default function TaskCreateDialog() {
         className="bg-surface rounded-lg border border-border-input w-[550px] shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-          <h2 className="text-sm font-semibold text-primary">Create Task</h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={close}
-              tabIndex={-1}
-              className="text-secondary hover:text-primary text-lg leading-none transition-colors"
-            >
-              &times;
-            </button>
-          </div>
-        </div>
+        <OverlayHeader title="Create Task" onClose={close} />
 
         <div className="p-4 space-y-4">
           {/* PR detection banner */}
@@ -423,16 +416,15 @@ export default function TaskCreateDialog() {
           {state.repos.length === 0 && (
             <div className="text-center py-2">
               <p className="text-sm text-secondary mb-2">No repositories added yet.</p>
-              <button
+              <PrimaryButton
                 autoFocus
                 onClick={() => {
                   close();
                   dispatch({ type: 'TOGGLE_REPO_MANAGER' });
                 }}
-                className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
               >
                 Add a Repository
-              </button>
+              </PrimaryButton>
             </div>
           )}
 
@@ -458,13 +450,13 @@ export default function TaskCreateDialog() {
                   Task <ActionLabel text="Name" showHint={true} />
                 </label>
                 <div className="flex gap-2">
-                  <input
+                  <FormInput
                     ref={nameRef}
                     type="text"
                     value={taskName}
                     onChange={(e) => setTaskName(e.target.value)}
                     placeholder="select a repo to generate..."
-                    className="flex-1 px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                    className="flex-1 px-3 py-1.5"
                   />
                   <button
                     onClick={regenerateName}
@@ -522,7 +514,7 @@ export default function TaskCreateDialog() {
                 ) : (
                   <>
                     <div className="relative">
-                      <input
+                      <FormInput
                         ref={branchRef}
                         type="text"
                         value={branchesLoading ? '' : branchSearch}
@@ -578,7 +570,7 @@ export default function TaskCreateDialog() {
                           branchesLoading ? '' : branches.length === 0 ? 'Select a repo first' : 'Type to search...'
                         }
                         disabled={branchesLoading || branches.length === 0}
-                        className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
+                        className="w-full px-3 py-1.5 disabled:opacity-50"
                       />
                       {branchesLoading && (
                         <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
@@ -615,7 +607,7 @@ export default function TaskCreateDialog() {
                 <label className="block text-xs text-secondary mb-1">
                   <ActionLabel text="Prompt" showHint={true} />
                 </label>
-                <textarea
+                <FormTextarea
                   ref={promptRef}
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -625,7 +617,7 @@ export default function TaskCreateDialog() {
                   }}
                   placeholder="Initial prompt sent to Claude (optional)"
                   rows={3}
-                  className="w-full px-3 py-1.5 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent resize-y"
+                  className="w-full px-3 py-1.5 resize-y"
                 />
               </div>
 
@@ -646,14 +638,14 @@ export default function TaskCreateDialog() {
             >
               Cancel
             </button>
-            <button
+            <PrimaryButton
               ref={createRef}
               onClick={handleSubmit}
               disabled={loading || !repoId || !taskName.trim() || (!inPlace && !branch)}
-              className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded focus:outline-none focus:ring-2 focus:ring-accent transition-colors"
+              className="px-4"
             >
               {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
-            </button>
+            </PrimaryButton>
           </div>
         )}
       </div>

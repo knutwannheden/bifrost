@@ -6,8 +6,10 @@ import { formatElapsed } from '../utils/format-time';
 import { isModKey } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
+import FormTextarea from './FormTextarea';
 import Kbd from './Kbd';
 import PillToggle, { type PillOption } from './PillToggle';
+import PrimaryButton from './PrimaryButton';
 import Spinner from './Spinner';
 import TerminalPane from './TerminalPane';
 
@@ -554,7 +556,7 @@ export default function ReviewContent({
             <label className="text-xs text-secondary">
               <ActionLabel text="Instructions" showHint={true} /> (optional):
             </label>
-            <textarea
+            <FormTextarea
               ref={instructionsRef}
               value={reviewInstructions}
               onChange={(e) => setReviewInstructions(e.target.value)}
@@ -565,14 +567,14 @@ export default function ReviewContent({
                 }
               }}
               placeholder="Focus on error handling, security..."
-              className="w-full px-3 py-2 bg-surface-alt border border-border-input rounded text-sm text-primary placeholder-muted resize-none focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              className="w-full px-3 py-2 resize-none"
               rows={2}
             />
           </div>
           <button
             onClick={handleRunReview}
             disabled={!canRunReview}
-            className={`px-6 py-3 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-3 py-1.5 rounded text-sm transition-colors ${
               canRunReview ? 'bg-accent hover:bg-accent-hover text-white' : 'bg-surface text-faint cursor-not-allowed'
             }`}
           >
@@ -679,12 +681,9 @@ export default function ReviewContent({
             Copy Prompt
           </button>
           {hasReviewSession && !showDiscussion && (
-            <button
-              onClick={handleDiscuss}
-              className="px-3 py-1.5 bg-accent hover:bg-accent-hover text-white rounded text-xs transition-colors"
-            >
+            <PrimaryButton size="sm" onClick={handleDiscuss}>
               Discuss
-            </button>
+            </PrimaryButton>
           )}
           {hasChecked && (
             <span className="text-xs text-faint">
