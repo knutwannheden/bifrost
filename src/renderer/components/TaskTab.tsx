@@ -99,7 +99,7 @@ export default function TaskTab({
       <button
         ref={buttonRef}
         draggable
-        className={`group flex items-center gap-1.5 px-3 h-full whitespace-nowrap transition-colors ${
+        className={`group flex items-center gap-1.5 px-3 h-full whitespace-nowrap overflow-hidden max-w-[220px] transition-colors ${
           isActive
             ? 'bg-surface-alt border-b-2 border-accent text-primary'
             : 'bg-transparent hover:bg-surface-alt/50 text-secondary'
@@ -122,6 +122,7 @@ export default function TaskTab({
           </span>
           <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
         </span>
+        {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
         <span
           role="button"
           className="ml-1 text-muted hover:text-primary flex-shrink-0 hidden group-hover:inline transition-colors cursor-pointer"
