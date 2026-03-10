@@ -67,7 +67,12 @@ const config: ForgeConfig = {
       }
     },
   },
-  rebuildConfig: {},
+  rebuildConfig: {
+    // node-pty ships with prebuilds for all platforms — skip rebuilding to
+    // avoid creating a build/Release that shadows the prebuilds directory
+    // and can break when spawn-helper goes missing.
+    ignoreModules: ['node-pty'],
+  },
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ['darwin']),
