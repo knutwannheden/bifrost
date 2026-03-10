@@ -2,8 +2,10 @@ import path from 'node:path';
 import { app, BrowserWindow, globalShortcut, Menu, nativeImage, shell } from 'electron';
 import started from 'electron-squirrel-startup';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { resolveKeymap, serializeBinding } from '../shared/keymap';
 import { stopAllWatching } from './activity-watcher';
 import { initApi, startApi, stopApi } from './bifrost-api';
+import { loadConfig } from './config';
 import { ensureHooks } from './integration-installer';
 import { registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
@@ -52,9 +54,20 @@ const createWindow = () => {
 let lastQuitAttempt = 0;
 const DOUBLE_TAP_MS = 500;
 
+function toElectronAccelerator(serialized: string): string {
+  return serialized.replace(/Cmd/g, 'CommandOrControl');
+}
+
 function buildMenu() {
   const sendAction = (action: string) => {
     mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, action);
+  };
+
+  const config = loadConfig();
+  const keymap = resolveKeymap(config.keybindings);
+  const accelFor = (actionId: string): string | undefined => {
+    const binding = keymap.find((b) => b.actionId === actionId);
+    return binding ? toElectronAccelerator(serializeBinding(binding.strokes)) : undefined;
   };
 
   const isMac = process.platform === 'darwin';
@@ -94,19 +107,19 @@ function buildMenu() {
       submenu: [
         {
           label: 'New Task',
-          accelerator: 'CommandOrControl+T',
+          accelerator: accelFor('task.new'),
           registerAccelerator: false,
           click: () => sendAction('new-task'),
         },
         {
           label: 'Close Pane',
-          accelerator: 'CommandOrControl+W',
+          accelerator: accelFor('task.close'),
           registerAccelerator: false,
           click: () => sendAction('close-pane'),
         },
         {
           label: 'Archive Task',
-          accelerator: 'CommandOrControl+Shift+W',
+          accelerator: accelFor('task.archive'),
           registerAccelerator: false,
           click: () => sendAction('archive-task'),
         },
@@ -131,39 +144,39 @@ function buildMenu() {
       submenu: [
         {
           label: 'Toggle Dev Terminal',
-          accelerator: 'CommandOrControl+/',
+          accelerator: accelFor('view.devTerminal'),
           registerAccelerator: false,
           click: () => sendAction('toggle-dev-terminal'),
         },
         { type: 'separator' },
         {
           label: 'Diff',
-          accelerator: 'CommandOrControl+D',
+          accelerator: accelFor('view.diff'),
           registerAccelerator: false,
           click: () => sendAction('diff'),
         },
         {
           label: 'Task History',
-          accelerator: 'CommandOrControl+H',
+          accelerator: accelFor('view.history'),
           registerAccelerator: false,
           click: () => sendAction('task-history'),
         },
         {
           label: 'Repositories',
-          accelerator: 'CommandOrControl+R',
+          accelerator: accelFor('view.repos'),
           registerAccelerator: false,
           click: () => sendAction('repositories'),
         },
         {
           label: 'Review',
-          accelerator: 'CommandOrControl+U',
+          accelerator: accelFor('view.review'),
           registerAccelerator: false,
           click: () => sendAction('review'),
         },
         { type: 'separator' },
         {
           label: 'Open in IDE',
-          accelerator: 'CommandOrControl+O',
+          accelerator: accelFor('action.openIde'),
           registerAccelerator: false,
           click: () => sendAction('open-in-ide'),
         },

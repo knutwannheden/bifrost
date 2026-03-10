@@ -20,7 +20,8 @@ import TaskView from './components/TaskView';
 import TriageOverlay from './components/TriageOverlay';
 import type { PaneTarget } from './context/AppContext';
 import { defaultPaneState, getActiveDiffState, useApp } from './context/AppContext';
-import { useKeyboard } from './hooks/useKeyboard';
+import { KeymapProvider } from './context/KeymapContext';
+import { useKeymapEngine } from './hooks/useKeymapEngine';
 import { useTheme } from './hooks/useTheme';
 import { performArchive, requestArchive } from './utils/archive';
 import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
@@ -74,7 +75,7 @@ function renderInline(text: string): React.ReactNode[] {
 export default function App() {
   const { state, dispatch } = useApp();
 
-  useKeyboard(state, dispatch);
+  useKeymapEngine(state, dispatch);
   useTheme();
 
   const activeTask = state.tasks.find((t) => t.id === state.activeTaskId) ?? null;
@@ -449,123 +450,125 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-app text-primary">
-      {/* Title bar drag area */}
-      <div
-        className="h-8 bg-surface border-b border-border-default flex items-center justify-center"
-        style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}
-      >
-        <span className="text-xs font-semibold tracking-wide text-faint">BIFROST</span>
-      </div>
-
-      {/* Main area: content + right icon bar */}
-      <div className="flex flex-1 min-h-0">
-        {/* Content column — relative for overlay positioning */}
-        <div className="flex flex-col flex-1 min-w-0 relative">
-          {/* Task tab bar */}
-          <TaskBar />
-
-          {/* Task content area — relative container for content-scoped overlays */}
-          <div className="flex-1 min-h-0 relative flex flex-col">
-            {/* Main content: terminal */}
-            <TaskView />
-
-            {/* Content-scoped overlays (absolute within content area) */}
-            <DiffOverlay />
-            {state.showSettings && <SettingsOverlay />}
-            {state.showRepoManager && <RepoManager />}
-            {state.showCreateDialog && <TaskCreateDialog />}
-            {state.showTaskHistory && <TaskHistoryPanel />}
-            {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
-            {state.showNotes && <NotesOverlay />}
-            {state.showStats && <StatsOverlay />}
-            {state.showSupervisor && <SupervisorOverlay />}
-            {state.showTriage && <TriageOverlay />}
-          </div>
-
-          {/* Status bar */}
-          <StatusBar activeTask={activeTask} config={state.config} onToggleIde={handleToggleIde} />
+    <KeymapProvider config={state.config}>
+      <div className="flex flex-col h-screen bg-app text-primary">
+        {/* Title bar drag area */}
+        <div
+          className="h-8 bg-surface border-b border-border-default flex items-center justify-center"
+          style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}
+        >
+          <span className="text-xs font-semibold tracking-wide text-faint">BIFROST</span>
         </div>
 
-        {/* Right icon bar */}
-        <RightIconBar />
-      </div>
+        {/* Main area: content + right icon bar */}
+        <div className="flex flex-1 min-h-0">
+          {/* Content column — relative for overlay positioning */}
+          <div className="flex flex-col flex-1 min-w-0 relative">
+            {/* Task tab bar */}
+            <TaskBar />
 
-      {/* Permission approval panel */}
-      <PermissionPanel />
+            {/* Task content area — relative container for content-scoped overlays */}
+            <div className="flex-1 min-h-0 relative flex flex-col">
+              {/* Main content: terminal */}
+              <TaskView />
 
-      {/* Notification popover */}
-      <NotificationPopover />
+              {/* Content-scoped overlays (absolute within content area) */}
+              <DiffOverlay />
+              {state.showSettings && <SettingsOverlay />}
+              {state.showRepoManager && <RepoManager />}
+              {state.showCreateDialog && <TaskCreateDialog />}
+              {state.showTaskHistory && <TaskHistoryPanel />}
+              {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
+              {state.showNotes && <NotesOverlay />}
+              {state.showStats && <StatsOverlay />}
+              {state.showSupervisor && <SupervisorOverlay />}
+              {state.showTriage && <TriageOverlay />}
+            </div>
 
-      {/* Archive confirmation dialog */}
-      {state.archiveConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay focus:outline-hidden"
-          tabIndex={-1}
-          ref={(el) => el?.focus()}
-          onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.stopPropagation();
-              dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
-            }
-          }}
-        >
+            {/* Status bar */}
+            <StatusBar activeTask={activeTask} config={state.config} onToggleIde={handleToggleIde} />
+          </div>
+
+          {/* Right icon bar */}
+          <RightIconBar />
+        </div>
+
+        {/* Permission approval panel */}
+        <PermissionPanel />
+
+        {/* Notification popover */}
+        <NotificationPopover />
+
+        {/* Archive confirmation dialog */}
+        {state.archiveConfirm && (
           <div
-            className="bg-surface rounded-lg border border-border-input p-6 w-[400px] shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-overlay focus:outline-hidden"
+            tabIndex={-1}
+            ref={(el) => el?.focus()}
+            onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
+              }
+            }}
           >
-            <h3 className="text-sm font-semibold text-primary mb-3">Uncommitted Changes</h3>
-            <p className="text-sm text-secondary mb-5">
-              <span className="font-medium text-primary">{state.archiveConfirm.taskName}</span> has uncommitted changes
-              that will be lost when the worktree is removed.
-            </p>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-faint flex-1">Esc cancel</span>
-              <button
-                autoFocus
-                onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
-                className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  const { taskId } = state.archiveConfirm!;
-                  dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
-                  performArchive(taskId, state, dispatch);
-                }}
-                className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded-sm transition-colors"
-              >
-                Force Archive
-              </button>
+            <div
+              className="bg-surface rounded-lg border border-border-input p-6 w-[400px] shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-sm font-semibold text-primary mb-3">Uncommitted Changes</h3>
+              <p className="text-sm text-secondary mb-5">
+                <span className="font-medium text-primary">{state.archiveConfirm.taskName}</span> has uncommitted
+                changes that will be lost when the worktree is removed.
+              </p>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-faint flex-1">Esc cancel</span>
+                <button
+                  autoFocus
+                  onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
+                  className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const { taskId } = state.archiveConfirm!;
+                    dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' });
+                    performArchive(taskId, state, dispatch);
+                  }}
+                  className="px-4 py-1.5 text-sm bg-danger/80 hover:bg-danger text-white rounded-sm transition-colors"
+                >
+                  Force Archive
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Toast notification */}
-      {state.toast && (
-        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-lg shadow-2xl border border-border-input animate-fade-in max-w-lg">
-          <div className="flex items-center gap-3">
-            <SimpleMarkdown text={state.toast} />
-            {state.toastAction?.map((a, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  a.callback();
-                  dispatch({ type: 'HIDE_TOAST' });
-                }}
-                className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded-sm transition-colors"
-              >
-                <ActionLabel text={a.label} showHint={true} />
-              </button>
-            ))}
+        {/* Toast notification */}
+        {state.toast && (
+          <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-lg shadow-2xl border border-border-input animate-fade-in max-w-lg">
+            <div className="flex items-center gap-3">
+              <SimpleMarkdown text={state.toast} />
+              {state.toastAction?.map((a, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    a.callback();
+                    dispatch({ type: 'HIDE_TOAST' });
+                  }}
+                  className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded-sm transition-colors"
+                >
+                  <ActionLabel text={a.label} showHint={true} />
+                </button>
+              ))}
+            </div>
+            {state.toastHint && <div className="text-right text-xs text-faint mt-1">{state.toastHint}</div>}
           </div>
-          {state.toastHint && <div className="text-right text-xs text-faint mt-1">{state.toastHint}</div>}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </KeymapProvider>
   );
 }

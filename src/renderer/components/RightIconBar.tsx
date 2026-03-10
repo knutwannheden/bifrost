@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { SupervisorState } from '../../shared/types';
 import type { DiffMode } from '../context/AppContext';
 import { getActiveDiffState, useApp } from '../context/AppContext';
+import { useKeymap } from '../context/KeymapContext';
 import FlaskIcon from './FlaskIcon';
 import Kbd from './Kbd';
 
@@ -203,6 +204,7 @@ function useSupervisorBadge(): 'green' | 'blue' | undefined {
 
 export default function RightIconBar() {
   const { state, dispatch } = useApp();
+  const { getDisplayString } = useKeymap();
 
   const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
@@ -239,7 +241,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Diff"
-        shortcut="Cmd+D"
+        shortcut={getDisplayString('view.diff')}
         active={isDiffActive && diffMode === 'git'}
         onClick={() => toggleDiffMode('git')}
       >
@@ -256,7 +258,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Review"
-        shortcut="Cmd+U"
+        shortcut={getDisplayString('view.review')}
         active={isDiffActive && diffMode === 'review'}
         badge={reviewBadge}
         onClick={() => toggleDiffMode('review')}
@@ -280,6 +282,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Triage"
+        shortcut={getDisplayString('view.triage')}
         active={state.showTriage}
         badge={triageBadge}
         onClick={() => dispatch({ type: 'SHOW_TRIAGE' })}
@@ -297,7 +300,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Settings"
-        shortcut="Cmd+,"
+        shortcut={getDisplayString('app.settings')}
         active={state.showSettings}
         onClick={() => dispatch({ type: 'TOGGLE_SETTINGS' })}
       >

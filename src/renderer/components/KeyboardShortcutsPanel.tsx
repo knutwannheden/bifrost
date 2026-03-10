@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ACTION_CATEGORIES,
+  ACTION_REGISTRY,
+  isCustomized,
+  type KeyStroke,
+  parseBinding,
+  serializeBinding,
+} from '../../shared/keymap';
 import { useApp } from '../context/AppContext';
+import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
 import { matchesAllTerms } from '../utils/search';
 import CloseButton from './CloseButton';
@@ -8,94 +17,56 @@ import Kbd from './Kbd';
 import OverlayFooter from './OverlayFooter';
 import SectionHeader from './SectionHeader';
 
-interface Shortcut {
-  key: string;
+interface ActionItem {
+  actionId: string;
   label: string;
-  group: string;
-  /** Simulated key for synthetic KeyboardEvent (lowercase). Omit for non-executable entries. */
-  execKey?: string;
-  execShift?: boolean;
-  execCode?: string;
-  /** Direct action — bypasses synthetic keyboard event. */
-  action?: string;
+  category: string;
+  binding: string;
 }
-
-const GROUPS = ['Tasks', 'Navigation', 'Views', 'Actions', 'App'] as const;
-
-const shortcuts: Shortcut[] = [
-  // Tasks
-  { key: 'T', label: 'New task', group: 'Tasks', execKey: 't' },
-  { key: 'W', label: 'Close pane / stop task', group: 'Tasks', execKey: 'w' },
-  { key: 'Shift+W', label: 'Archive task', group: 'Tasks', action: 'archive-task' },
-
-  // Navigation
-  {
-    key: 'Shift+[',
-    label: 'Previous tab',
-    group: 'Navigation',
-    execKey: '[',
-    execShift: true,
-    execCode: 'BracketLeft',
-  },
-  { key: 'Shift+]', label: 'Next tab', group: 'Navigation', execKey: ']', execShift: true, execCode: 'BracketRight' },
-  { key: '1-9', label: 'Switch to tab N', group: 'Navigation' },
-  { key: '-', label: 'Switch to last active tab', group: 'Navigation', execKey: '-' },
-  { key: '=', label: 'Switch to last notified tab', group: 'Navigation', execKey: '=' },
-
-  // Views
-  { key: '/', label: 'Toggle dev terminal', group: 'Views', execKey: '/' },
-  { key: 'D', label: 'Git diff', group: 'Views', execKey: 'd' },
-  { key: 'L', label: 'Git log', group: 'Views', execKey: 'l' },
-  { key: 'H', label: 'Task history', group: 'Views', execKey: 'h' },
-  { key: 'R', label: 'Repositories', group: 'Views', execKey: 'r' },
-  { key: 'U', label: 'Review', group: 'Views', execKey: 'u' },
-  { key: 'N', label: 'Notes', group: 'Views', execKey: 'n' },
-
-  // Actions
-  { key: 'O', label: 'Open in IDE', group: 'Actions', execKey: 'o' },
-  { key: 'G', label: 'Open PR in GitHub', group: 'Actions', execKey: 'g' },
-  { key: 'F', label: 'Find in terminal', group: 'Actions', execKey: 'f' },
-  { key: 'Shift+C', label: 'Capture context', group: 'Actions', execKey: 'c', execShift: true },
-
-  // App
-  { key: 'K', label: 'Keyboard shortcuts', group: 'App', execKey: 'k' },
-  { key: ',', label: 'Settings', group: 'App', execKey: ',' },
-];
 
 export default function KeyboardShortcutsPanel() {
   const { state, dispatch } = useApp();
+  const { getDisplayString } = useKeymap();
   const overlayRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [recordingActionId, setRecordingActionId] = useState<string | null>(null);
+  const [recordedStrokes, setRecordedStrokes] = useState<KeyStroke[]>([]);
+  const [conflict, setConflict] = useState<string | null>(null);
+
+  const allActions = useMemo<ActionItem[]>(() => {
+    return Object.values(ACTION_REGISTRY).map((def) => ({
+      actionId: def.id,
+      label: def.label,
+      category: ACTION_CATEGORIES.find((c) => c.id === def.category)?.label ?? def.category,
+      binding: getDisplayString(def.id),
+    }));
+  }, [getDisplayString]);
 
   const filtered = useMemo(() => {
-    if (!query) return shortcuts;
-    return shortcuts.filter((s) => matchesAllTerms(`${s.label} ${s.key}`, query));
-  }, [query]);
+    if (!query) return allActions;
+    return allActions.filter((a) => matchesAllTerms(`${a.label} ${a.binding}`, query));
+  }, [query, allActions]);
 
-  // Build a flat list of items (group headers + shortcuts) for rendering and navigation
   const { items, executableIndices } = useMemo(() => {
-    const items: ({ type: 'header'; label: string } | { type: 'shortcut'; shortcut: Shortcut; flatIdx: number })[] = [];
+    const items: ({ type: 'header'; label: string } | { type: 'action'; item: ActionItem })[] = [];
     const executableIndices: number[] = [];
-    const isSearching = !!query;
 
-    if (isSearching) {
-      // Flat list when searching — no group headers
-      filtered.forEach((s, i) => {
+    if (query) {
+      for (const a of filtered) {
         executableIndices.push(items.length);
-        items.push({ type: 'shortcut', shortcut: s, flatIdx: i });
-      });
+        items.push({ type: 'action', item: a });
+      }
     } else {
-      let flatIdx = 0;
-      for (const group of GROUPS) {
-        const groupItems = filtered.filter((s) => s.group === group);
-        if (groupItems.length === 0) continue;
-        items.push({ type: 'header', label: group });
-        for (const s of groupItems) {
+      for (const cat of ACTION_CATEGORIES) {
+        const catItems = filtered.filter((a) => a.category === cat.label);
+        if (catItems.length === 0) continue;
+        items.push({ type: 'header', label: cat.label });
+        for (const a of catItems) {
           executableIndices.push(items.length);
-          items.push({ type: 'shortcut', shortcut: s, flatIdx: flatIdx++ });
+          items.push({ type: 'action', item: a });
         }
       }
     }
@@ -103,19 +74,17 @@ export default function KeyboardShortcutsPanel() {
     return { items, executableIndices };
   }, [filtered, query]);
 
-  // Reset selection when filter changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [filtered.length]);
 
-  // Scroll selected item into view
   useEffect(() => {
     const list = listRef.current;
     if (!list) return;
     const itemIdx = executableIndices[selectedIndex];
     if (itemIdx == null) return;
-    const item = list.children[itemIdx] as HTMLElement | undefined;
-    item?.scrollIntoView({ block: 'nearest' });
+    const el = list.children[itemIdx] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, executableIndices]);
 
   useEffect(() => {
@@ -124,40 +93,129 @@ export default function KeyboardShortcutsPanel() {
 
   const close = () => dispatch({ type: 'TOGGLE_KEYBOARD_SHORTCUTS' });
 
-  const executeAction = (action: string) => {
-    if (action === 'archive-task') {
+  const executeItem = (item: ActionItem) => {
+    if (recordingActionId) return;
+
+    if (item.actionId === 'task.archive') {
+      close();
       const taskId = state.activeTaskId;
       if (!taskId) return;
       const task = state.tasks.find((t) => t.id === taskId);
       if (!task) return;
       requestArchive(taskId, task.name, state, dispatch);
-    }
-  };
-
-  const execute = (shortcut: Shortcut) => {
-    if (shortcut.action) {
-      close();
-      executeAction(shortcut.action);
       return;
     }
-    const { execKey } = shortcut;
-    if (!execKey) return;
+
+    const binding = item.binding;
+    if (!binding) return;
     close();
-    // Dispatch synthetic keyboard event so useKeyboard handles it
+    const strokes = parseBinding(binding);
+    if (strokes.length === 0) return;
+    const first = strokes[0];
     requestAnimationFrame(() => {
       window.dispatchEvent(
         new KeyboardEvent('keydown', {
-          key: execKey,
-          code: shortcut.execCode ?? (execKey === '/' ? 'Slash' : `Key${execKey.toUpperCase()}`),
-          metaKey: true,
-          shiftKey: !!shortcut.execShift,
+          key: first.key,
+          code: first.key === '/' ? 'Slash' : first.key.length === 1 ? `Key${first.key.toUpperCase()}` : first.key,
+          metaKey: !!first.mod,
+          ctrlKey: false,
+          shiftKey: !!first.shift,
+          altKey: !!first.alt,
           bubbles: true,
         }),
       );
     });
   };
 
+  const startRecording = (actionId: string) => {
+    setRecordingActionId(actionId);
+    setRecordedStrokes([]);
+    setConflict(null);
+  };
+
+  const cancelRecording = () => {
+    setRecordingActionId(null);
+    setRecordedStrokes([]);
+    setConflict(null);
+  };
+
+  const saveBinding = async (actionId: string, strokes: KeyStroke[]) => {
+    if (!state.config) return;
+    const serialized = serializeBinding(strokes);
+    const keybindings = { ...state.config.keybindings, [actionId]: serialized };
+    const newConfig = { ...state.config, keybindings };
+    await window.bifrost.saveConfig(newConfig);
+    dispatch({ type: 'SET_CONFIG', config: newConfig });
+    cancelRecording();
+  };
+
+  const resetBinding = async (actionId: string) => {
+    if (!state.config?.keybindings) return;
+    const { [actionId]: _, ...rest } = state.config.keybindings;
+    void _;
+    const keybindings = Object.keys(rest).length > 0 ? rest : undefined;
+    const newConfig = { ...state.config, keybindings };
+    await window.bifrost.saveConfig(newConfig);
+    dispatch({ type: 'SET_CONFIG', config: newConfig });
+  };
+
+  const resetAllBindings = async () => {
+    if (!state.config) return;
+    const { keybindings: _, ...rest } = state.config;
+    void _;
+    const newConfig = rest as typeof state.config;
+    await window.bifrost.saveConfig(newConfig);
+    dispatch({ type: 'SET_CONFIG', config: newConfig });
+  };
+
+  // Handle recording keystrokes
+  useEffect(() => {
+    if (!recordingActionId) return;
+
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (e.key === 'Escape') {
+        cancelRecording();
+        return;
+      }
+
+      if (['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return;
+
+      const stroke: KeyStroke = {
+        mod: e.metaKey || e.ctrlKey,
+        shift: e.shiftKey,
+        alt: e.altKey,
+        key: e.key.toLowerCase(),
+      };
+
+      const newStrokes = [...recordedStrokes, stroke];
+      const serialized = serializeBinding(newStrokes);
+      const conflictAction = allActions.find((a) => a.actionId !== recordingActionId && a.binding === serialized);
+
+      if (conflictAction) {
+        setConflict(`Conflicts with "${conflictAction.label}"`);
+      } else {
+        setConflict(null);
+      }
+
+      if (newStrokes.length >= 2 || !stroke.mod) {
+        // Chord complete or single non-mod keystroke
+        saveBinding(recordingActionId, newStrokes);
+      } else {
+        // First stroke of potential chord
+        setRecordedStrokes(newStrokes);
+      }
+    };
+
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [recordingActionId, recordedStrokes, allActions]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (recordingActionId) return;
+
     switch (e.key) {
       case 'Escape':
         e.preventDefault();
@@ -180,12 +238,14 @@ export default function KeyboardShortcutsPanel() {
       case 'Enter': {
         e.preventDefault();
         const itemIdx = executableIndices[selectedIndex];
-        const item = itemIdx != null ? items[itemIdx] : null;
-        if (item?.type === 'shortcut') execute(item.shortcut);
+        const entry = itemIdx != null ? items[itemIdx] : null;
+        if (entry?.type === 'action') executeItem(entry.item);
         break;
       }
     }
   };
+
+  const hasCustomBindings = !!state.config?.keybindings && Object.keys(state.config.keybindings).length > 0;
 
   return (
     <div
@@ -196,7 +256,7 @@ export default function KeyboardShortcutsPanel() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-surface rounded-lg border border-border-input w-[400px] flex flex-col shadow-xl max-h-[80vh]"
+        className="bg-surface rounded-lg border border-border-input w-[480px] flex flex-col shadow-xl max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center px-4 py-3 border-b border-border-default">
@@ -205,8 +265,9 @@ export default function KeyboardShortcutsPanel() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search shortcuts…"
+            placeholder="Search actions…"
             className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-hidden"
+            disabled={!!recordingActionId}
           />
           <CloseButton onClick={close} className="ml-2" />
         </div>
@@ -223,28 +284,66 @@ export default function KeyboardShortcutsPanel() {
                 );
               }
               const navIdx = executableIndices.indexOf(i);
+              const isRecording = recordingActionId === item.item.actionId;
+              const isModified = isCustomized(item.item.actionId, state.config?.keybindings);
               return (
                 <div
-                  key={item.shortcut.key}
+                  key={item.item.actionId}
                   className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer ${
                     navIdx === selectedIndex ? 'bg-surface-alt' : 'hover:bg-surface-alt/50'
                   }`}
-                  onClick={() => execute(item.shortcut)}
+                  onClick={() => executeItem(item.item)}
                   onMouseEnter={() => setSelectedIndex(navIdx)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    startRecording(item.item.actionId);
+                  }}
                 >
-                  <span className="text-sm text-secondary">
-                    <Highlight text={item.shortcut.label} search={query} />
+                  <span className="text-sm text-secondary flex items-center gap-1.5">
+                    {isModified && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0" title="Customized" />}
+                    <Highlight text={item.item.label} search={query} />
                   </span>
-                  <Kbd size="sm">{`Cmd+${item.shortcut.key}`}</Kbd>
+                  <div className="flex items-center gap-1">
+                    {isRecording ? (
+                      <span className="text-xs text-accent animate-pulse">
+                        {recordedStrokes.length > 0 ? `${serializeBinding(recordedStrokes)} …` : 'Press shortcut…'}
+                      </span>
+                    ) : item.item.binding ? (
+                      <Kbd size="sm">{item.item.binding}</Kbd>
+                    ) : (
+                      <span className="text-xs text-faint">&mdash;</span>
+                    )}
+                    {isModified && !isRecording && (
+                      <button
+                        className="text-xs text-muted hover:text-primary transition-colors ml-1"
+                        title="Reset to default"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resetBinding(item.item.actionId);
+                        }}
+                      >
+                        &#x21BA;
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })
           )}
         </div>
+        {conflict && <div className="px-4 py-2 text-xs text-warning border-t border-border-default">{conflict}</div>}
         <OverlayFooter>
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Enter execute &middot; type to search &middot; Esc close
+            &uarr;&darr; navigate &middot; Enter execute &middot; double-click rebind &middot; Esc close
           </span>
+          {hasCustomBindings && (
+            <button
+              className="text-xs text-muted hover:text-primary transition-colors ml-auto"
+              onClick={resetAllBindings}
+            >
+              Reset all
+            </button>
+          )}
         </OverlayFooter>
       </div>
     </div>

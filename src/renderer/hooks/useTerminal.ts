@@ -5,12 +5,17 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef, useState } from 'react';
+import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
 import { resolveTerminalTheme } from '../terminal-themes';
 import { isMac, isModKey } from '../utils/platform';
 
 // Global registry so keyboard shortcuts can access terminal instances
 export const terminalRegistry = new Map<string, Terminal>();
 export const searchAddonRegistry = new Map<string, SearchAddon>();
+
+// Module-level ref so KeymapContext can update intercepted keys without re-attaching the handler.
+// Initialised from DEFAULT_KEYMAP so terminal interception works before KeymapProvider mounts.
+export const interceptedKeysRef: { current: InterceptedKeys } = { current: getInterceptedKeys(DEFAULT_KEYMAP) };
 
 interface TerminalOptions {
   cursorBlink?: boolean;
@@ -153,11 +158,11 @@ export function useTerminal(
         // to the dev terminal instead of intercepting them for app shortcuts.
         // Users can Ctrl+/ to switch to the Claude pane for those shortcuts.
         if (!isMac && paneType === 'dev' && 'adrhkl'.includes(key)) return true;
-        if ('atdrhkuno,lgf/'.includes(key)) return false;
+        if (interceptedKeysRef.current.modKeys.has(key)) return false;
       }
       if (isModKey(e) && e.shiftKey) {
         const key = e.key.toLowerCase();
-        if (key === 'w' || key === 'c') return false;
+        if (interceptedKeysRef.current.shiftModKeys.has(key)) return false;
       }
       return true;
     });

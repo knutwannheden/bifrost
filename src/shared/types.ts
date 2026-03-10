@@ -71,6 +71,7 @@ export interface BifrostConfig {
   theme: 'system' | 'dark' | 'light';
   terminalTheme: string;
   slack?: SlackConfig;
+  keybindings?: Record<string, string | null>;
   prompts?: {
     triage?: string;
     reviewInstructions?: string;
