@@ -18,7 +18,7 @@ import TaskCreateDialog from './components/TaskCreateDialog';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import TaskView from './components/TaskView';
 import TriageOverlay from './components/TriageOverlay';
-import type { PaneTarget } from './context/AppContext';
+import type { AppAction, AppState, PaneTarget } from './context/AppContext';
 import { defaultPaneState, getActiveDiffState, useApp } from './context/AppContext';
 import { KeymapProvider } from './context/KeymapContext';
 import { useKeymapEngine } from './hooks/useKeymapEngine';
@@ -72,10 +72,15 @@ function renderInline(text: string): React.ReactNode[] {
   return parts;
 }
 
+/** Rendered inside KeymapProvider so useKeymapEngine can read resolved keymap via context */
+function KeymapEngineHost({ state, dispatch }: { state: AppState; dispatch: React.Dispatch<AppAction> }) {
+  useKeymapEngine(state, dispatch);
+  return null;
+}
+
 export default function App() {
   const { state, dispatch } = useApp();
 
-  useKeymapEngine(state, dispatch);
   useTheme();
 
   const activeTask = state.tasks.find((t) => t.id === state.activeTaskId) ?? null;
@@ -451,6 +456,7 @@ export default function App() {
 
   return (
     <KeymapProvider config={state.config}>
+      <KeymapEngineHost state={state} dispatch={dispatch} />
       <div className="flex flex-col h-screen bg-app text-primary">
         {/* Title bar drag area */}
         <div
