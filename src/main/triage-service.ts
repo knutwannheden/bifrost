@@ -21,6 +21,7 @@ interface TriageSession {
 }
 
 const sessions = new Map<string, TriageSession>();
+const completedTriages = new Set<string>();
 
 function getTriagePrompt(userPrompt: string): string {
   const config = loadConfig();
@@ -177,8 +178,9 @@ export function startTriage(prompt: string, mainWindow: BrowserWindow): { triage
     onBeforeExit: (_buffer, exitCode) => {
       stopActivityWatch(triageId);
       sessions.delete(triageId);
+      const completed = completedTriages.delete(triageId);
       updateTriage(triageId, {
-        status: exitCode === 0 ? 'done' : 'error',
+        status: exitCode === 0 || completed ? 'done' : 'error',
         completedAt: Date.now(),
       });
       return false;
@@ -188,6 +190,13 @@ export function startTriage(prompt: string, mainWindow: BrowserWindow): { triage
   startActivityWatch(triageId, mainWindow);
 
   return { triageId, ptySessionId };
+}
+
+export function completeTriage(triageId: string): void {
+  const session = sessions.get(triageId);
+  if (!session) return;
+  completedTriages.add(triageId);
+  killSession(session.ptySessionId);
 }
 
 export function cancelTriage(triageId: string): void {

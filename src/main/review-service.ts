@@ -180,7 +180,7 @@ export async function runReview(
       extraEnv,
       autoTrust: true,
       prompt,
-      onBeforeExit: (_buffer, exitCode) => {
+      onBeforeExit: (_buffer, _exitCode) => {
         if (settled) return false;
         settled = true;
         clearTimeout(timeout);
@@ -190,7 +190,7 @@ export async function runReview(
         if (cancelledReviews.has(taskId)) {
           cancelledReviews.delete(taskId);
           reject(new Error('Review cancelled'));
-        } else if (exitCode === 0) {
+        } else {
           try {
             const content = fs.readFileSync(reviewFilePath, 'utf-8').trim();
             if (content) {
@@ -201,8 +201,6 @@ export async function runReview(
           } catch {
             reject(new Error('Review file not written'));
           }
-        } else {
-          reject(new Error(`claude exited with code ${exitCode}`));
         }
         return false;
       },
@@ -213,6 +211,12 @@ export async function runReview(
   lastWrittenContent.set(reviewId, markdown);
 
   return { reviewId, markdown };
+}
+
+export function completeReview(taskId: string): void {
+  const ptySessionId = runningReviews.get(taskId);
+  if (!ptySessionId) return;
+  killSession(ptySessionId);
 }
 
 export function cancelReview(taskId: string): void {

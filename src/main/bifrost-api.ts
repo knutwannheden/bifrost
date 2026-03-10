@@ -13,8 +13,8 @@ import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { checkExistingRules, createRequest } from './permission-manager';
 import { addRepo } from './repo-manager';
-import { loadReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
-import { addTriageTaskId, setTriageSessionId } from './triage-service';
+import { completeReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
+import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -318,29 +318,26 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const cwd = body.cwd as string;
       const hookContext = (body.bifrost_context as string) || 'code';
       const hookTaskId = body.bifrost_task_id as string;
-      const hookReviewId = body.bifrost_review_id as string;
       if (!cwd) {
         errorResponse(res, 'Missing cwd');
         return;
       }
 
-      // Triage stop — notify renderer that triage is waiting for input
+      // Triage stop — notify renderer and complete the session
       const hookTriageId = body.bifrost_triage_id as string;
       if (hookContext === 'triage' && hookTriageId) {
         const hookMessage = (body.last_assistant_message as string) || '';
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId, hookMessage);
         }
+        completeTriage(hookTriageId);
         jsonResponse(res, { ok: true });
         return;
       }
 
-      // Review stop — read the review file and send it to the renderer
-      if (hookContext === 'review' && hookTaskId && hookReviewId) {
-        const content = loadReview(hookTaskId, hookReviewId);
-        if (content && mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.REVIEW_PROGRESS, hookTaskId, hookReviewId, content);
-        }
+      // Review stop — review is complete, kill the session so the Promise resolves
+      if (hookContext === 'review' && hookTaskId) {
+        completeReview(hookTaskId);
         jsonResponse(res, { ok: true });
         return;
       }
