@@ -17,7 +17,7 @@ export type TriageTab = 'new' | 'history';
 
 export interface TriageItem {
   prompt: string;
-  status: 'idle' | 'running' | 'done' | 'error';
+  status: 'idle' | 'running' | 'done' | 'error' | 'cancelled';
   ptySessionId: string | null;
   activity: string[];
   waiting: boolean;

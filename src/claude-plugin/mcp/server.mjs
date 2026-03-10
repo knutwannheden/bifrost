@@ -272,6 +272,25 @@ server.registerTool(
 );
 
 server.registerTool(
+  'add_repo',
+  {
+    title: 'Add Repo',
+    description:
+      'Add a local git repository to Bifrost. The path must point to an existing git repo on disk. If the repo is already configured, returns the existing entry.',
+    inputSchema: {
+      path: z
+        .string()
+        .describe("Absolute path to the git repository (e.g. '/Users/me/git/my-repo' or '~/git/my-repo')"),
+    },
+  },
+  async ({ path }) => {
+    const result = await apiCall('/add-repo', { path });
+    const text = `Added repo: ${result.name} (${result.githubPath || result.path}, branch: ${result.defaultBranch})`;
+    return { content: [{ type: 'text', text }] };
+  },
+);
+
+server.registerTool(
   'create_task',
   {
     title: 'Create Task',

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { PROMPT_DEFS } from '../../shared/default-prompts';
 import type { BifrostConfig } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
@@ -16,7 +17,7 @@ interface SettingDef {
   render: (config: BifrostConfig, update: (updates: Partial<BifrostConfig>) => void) => React.ReactNode;
 }
 
-const CATEGORIES = ['Appearance', 'Claude Code', 'General', 'Slack'] as const;
+const CATEGORIES = ['Appearance', 'Agent', 'General', 'Slack'] as const;
 
 function buildSettings(): SettingDef[] {
   return [
@@ -138,7 +139,7 @@ function buildSettings(): SettingDef[] {
     },
     {
       key: 'permissionMode',
-      category: 'Claude Code',
+      category: 'Agent',
       label: 'Permission Mode',
       tooltip:
         'Controls how Claude Code handles tool permissions.\n\nDefault: Claude asks before running tools that could modify files or execute commands.\n\nSandbox: Restricts file system and network access to a safe subset, reducing the need for manual approvals.\n\nSkip Permissions: Auto-approves all tool use without asking. Use with caution — Claude can run any command.',
@@ -168,7 +169,7 @@ function buildSettings(): SettingDef[] {
     },
     {
       key: 'managePermissions',
-      category: 'Claude Code',
+      category: 'Agent',
       label: 'Manage permissions',
       description: 'Handle tool permission prompts in Bifrost instead of Claude Code',
       tooltip:
@@ -179,7 +180,7 @@ function buildSettings(): SettingDef[] {
     },
     {
       key: 'hideTerminalOnSwitch',
-      category: 'Claude Code',
+      category: 'Agent',
       label: 'Hide terminal on switch',
       description: `${modSymbol}/ hides dev terminal when switching to Claude`,
       tooltip: `When you press ${modSymbol}/ to switch focus from the dev terminal to the Claude pane, this setting also hides the dev terminal to give Claude the full screen. Press ${modSymbol}/ again to bring it back.`,
@@ -189,7 +190,7 @@ function buildSettings(): SettingDef[] {
     },
     {
       key: 'agentTeams',
-      category: 'Claude Code',
+      category: 'Agent',
       label: 'Agent Teams',
       description: 'Enable experimental agent teams feature',
       tooltip:
@@ -373,6 +374,105 @@ function buildSettings(): SettingDef[] {
   ];
 }
 
+function PromptEditor({
+  config,
+  updateConfig,
+  selectedPrompt,
+  setSelectedPrompt,
+  search,
+}: {
+  config: BifrostConfig;
+  updateConfig: (updates: Partial<BifrostConfig>) => void;
+  selectedPrompt: string | null;
+  setSelectedPrompt: (key: string | null) => void;
+  search: string;
+}) {
+  const promptDefs = search.trim()
+    ? PROMPT_DEFS.filter((p) => matchesAllTerms(`${p.name} ${p.description} Prompts`, search))
+    : PROMPT_DEFS;
+  const selected = PROMPT_DEFS.find((p) => p.key === selectedPrompt);
+  const currentValue = selected ? config.prompts?.[selected.key] || '' : '';
+  const isCustom = selected ? !!config.prompts?.[selected.key] : false;
+
+  const handleSave = (value: string) => {
+    if (!selected) return;
+    const trimmed = value.trim();
+    const prompts = { ...config.prompts };
+    if (trimmed && trimmed !== selected.defaultValue.trim()) {
+      prompts[selected.key] = trimmed;
+    } else {
+      delete prompts[selected.key];
+    }
+    updateConfig({ prompts });
+  };
+
+  const handleRevert = () => {
+    if (!selected) return;
+    const prompts = { ...config.prompts };
+    delete prompts[selected.key];
+    updateConfig({ prompts });
+  };
+
+  return (
+    <div className="mt-6">
+      <h4 className="text-xs font-semibold text-secondary uppercase tracking-wider mb-2">Prompts</h4>
+      <div className="border border-border-input rounded overflow-hidden">
+        <table className="w-full text-sm">
+          <tbody>
+            {promptDefs.map((p) => {
+              const isActive = selectedPrompt === p.key;
+              const hasCustom = !!config.prompts?.[p.key];
+              return (
+                <tr
+                  key={p.key}
+                  onClick={() => setSelectedPrompt(isActive ? null : p.key)}
+                  className={`cursor-pointer transition-colors ${
+                    isActive ? 'bg-surface-alt' : 'hover:bg-surface-hover'
+                  }`}
+                >
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-primary">
+                        <Highlight text={p.name} search={search} />
+                      </span>
+                      {hasCustom && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/20 text-accent">custom</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted">
+                      <Highlight text={p.description} search={search} />
+                    </p>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {selected && (
+        <div className="mt-3">
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs text-secondary">{selected.name} prompt</label>
+            <button
+              onClick={handleRevert}
+              disabled={!isCustom}
+              className="text-xs text-danger hover:brightness-125 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              Revert to default
+            </button>
+          </div>
+          <textarea
+            value={currentValue || selected.defaultValue}
+            onChange={(e) => handleSave(e.target.value)}
+            rows={12}
+            className="w-full bg-surface-alt border border-border-input rounded text-xs text-primary font-mono p-2 resize-y focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -397,6 +497,7 @@ export default function SettingsOverlay() {
   const config = state.config;
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>(CATEGORIES[0]);
+  const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
 
   const settings = useMemo(() => buildSettings(), []);
 
@@ -552,6 +653,17 @@ export default function SettingsOverlay() {
                       </div>
                     ))}
                   </div>
+                  {cat === 'Agent' &&
+                    (!search.trim() ||
+                      PROMPT_DEFS.some((p) => matchesAllTerms(`${p.name} ${p.description} Prompts`, search))) && (
+                      <PromptEditor
+                        config={config}
+                        updateConfig={updateConfig}
+                        selectedPrompt={selectedPrompt}
+                        setSelectedPrompt={setSelectedPrompt}
+                        search={search}
+                      />
+                    )}
                 </div>
               );
             })}

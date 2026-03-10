@@ -5,13 +5,14 @@ import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { getActivityLog } from './activity-watcher';
-import { loadConfig } from './config';
+import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
 import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { checkExistingRules, createRequest } from './permission-manager';
+import { addRepo } from './repo-manager';
 import { loadReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
 import { addTriageTaskId, setTriageSessionId } from './triage-service';
 
@@ -161,6 +162,29 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    case '/add-repo': {
+      const repoPath = body.path as string;
+      if (!repoPath) {
+        errorResponse(res, 'path is required');
+        return;
+      }
+      try {
+        const config = loadConfig();
+        const existing = config.repos.find((r: { path: string }) => r.path === path.resolve(repoPath));
+        if (existing) {
+          jsonResponse(res, existing);
+          return;
+        }
+        const repo = await addRepo({ type: 'local', path: repoPath });
+        config.repos.push(repo);
+        saveConfig(config);
+        jsonResponse(res, repo);
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 400);
+      }
+      return;
+    }
+
     case '/list-tasks': {
       const tasks = getTasks().map((t) => ({
         id: t.id,
@@ -295,7 +319,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const hookContext = (body.bifrost_context as string) || 'code';
       const hookTaskId = body.bifrost_task_id as string;
       const hookReviewId = body.bifrost_review_id as string;
-      console.log(`[api] /hook context=${hookContext} cwd=${cwd} triageId=${body.bifrost_triage_id || ''}`);
       if (!cwd) {
         errorResponse(res, 'Missing cwd');
         return;

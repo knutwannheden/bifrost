@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import type { BifrostAPI } from '../shared/ipc-channels';
 import type { BifrostConfig } from '../shared/types';
+import ActionLabel from './components/ActionLabel';
 import DiffOverlay from './components/DiffOverlay';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
 import NotesOverlay from './components/NotesOverlay';
@@ -423,6 +424,22 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [state.toast, state.toastDuration, dispatch]);
 
+  // Alt+letter shortcuts for toast action buttons (use e.code for macOS compatibility)
+  useEffect(() => {
+    if (!state.toastAction?.length) return;
+    const handler = (e: KeyboardEvent) => {
+      if (!e.altKey) return;
+      const match = state.toastAction?.find((a) => `Key${a.label[0].toUpperCase()}` === e.code);
+      if (match) {
+        e.preventDefault();
+        match.callback();
+        dispatch({ type: 'HIDE_TOAST' });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [state.toastAction, dispatch]);
+
   const handleToggleIde = async () => {
     if (!state.config) return;
     const ides: BifrostConfig['ide'][] = ['code', 'idea', 'zed'];
@@ -548,7 +565,7 @@ export default function App() {
                 }}
                 className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded transition-colors"
               >
-                {a.label}
+                <ActionLabel text={a.label} showHint={true} />
               </button>
             ))}
           </div>

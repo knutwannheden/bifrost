@@ -71,6 +71,10 @@ export interface BifrostConfig {
   theme: 'system' | 'dark' | 'light';
   terminalTheme: string;
   slack?: SlackConfig;
+  prompts?: {
+    triage?: string;
+    reviewInstructions?: string;
+  };
 }
 
 export interface CreateTaskParams {

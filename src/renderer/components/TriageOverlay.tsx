@@ -183,7 +183,7 @@ export default function TriageOverlay() {
   const handleCancel = useCallback(
     async (id: string) => {
       await window.bifrost.cancelTriage(id);
-      dispatch({ type: 'UPDATE_TRIAGE', id, updates: { status: 'error' } });
+      dispatch({ type: 'UPDATE_TRIAGE', id, updates: { status: 'cancelled', waiting: false } });
     },
     [dispatch],
   );

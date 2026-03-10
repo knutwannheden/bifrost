@@ -4,31 +4,23 @@ import os from 'node:os';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 
+import { DEFAULT_REVIEW_INSTRUCTIONS } from '../shared/default-prompts';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ReviewEntry } from '../shared/types';
+import { loadConfig } from './config';
 import { killSession, spawnSession } from './session-manager';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const REVIEW_TIMEOUT_MS = 900_000;
 
-const REVIEW_INSTRUCTIONS = `Produce a Markdown document with:
-1. A brief summary paragraph of the changes
-2. A "## Review Items" section with a checked checkbox list (- [x]) of actionable findings:
-   bugs, logic errors, security issues, missing edge cases, code quality concerns.
-   Each item should be specific and actionable, prefixed with a severity tag:
-   \`[critical]\` — bugs, security vulnerabilities, data loss risks
-   \`[important]\` — logic errors, missing edge cases, correctness issues
-   \`[suggestion]\` — code quality, style, maintainability improvements
-   Order items by severity (critical first).
-If the code looks good, say so and use fewer items.
-Write ONLY the Markdown to the specified file, no preamble.`;
-
 function getReviewPrompt(scope: 'working' | 'all', baseBranch?: string): string {
+  const config = loadConfig();
+  const instructions = config.prompts?.reviewInstructions || DEFAULT_REVIEW_INSTRUCTIONS;
   if (scope === 'all' && baseBranch) {
-    return `Review all changes in this worktree since the base branch. Use \`git merge-base ${baseBranch} HEAD\` to find the fork point and diff against it. ${REVIEW_INSTRUCTIONS}`;
+    return `Review all changes in this worktree since the base branch. Use \`git merge-base ${baseBranch} HEAD\` to find the fork point and diff against it. ${instructions}`;
   }
-  return `Review the uncommitted changes in this worktree (git diff HEAD). ${REVIEW_INSTRUCTIONS}`;
+  return `Review the uncommitted changes in this worktree (git diff HEAD). ${instructions}`;
 }
 
 // --- Path helpers ---
