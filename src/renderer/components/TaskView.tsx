@@ -32,7 +32,7 @@ const tips = [
   'When a permission prompt appears, press Tab to focus it \u2014 then use A/D to allow/deny, Esc to deny once.',
   `Press ${modSymbol}- to jump back to your previous tab \u2014 like cd - for tasks.`,
   `Press ${modSymbol}= to jump to the last tab that had a notification.`,
-  `Copy a GitHub PR URL before pressing ${modSymbol}T \u2014 the new task dialog will auto-fill the PR details.`,
+  'Copy a GitHub PR or issue URL to your clipboard \u2014 Bifrost will detect it automatically.',
 ];
 
 export default function TaskView() {
