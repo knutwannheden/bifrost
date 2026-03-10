@@ -24,7 +24,7 @@ const tips = [
   `Use ${modSymbol}F to search within the terminal. Enter/Shift+Enter to navigate matches.`,
   'Each task runs in its own git worktree \u2014 agents work independently without conflicts.',
   `Press ${modSymbol}H to browse task history and resume archived tasks.`,
-  `Use ${modSymbol}K to open the command palette for quick access to all actions.`,
+  `Use ${modSymbol}K to open the command palette for quick access to all actions. Double-click any action to assign a custom keybinding.`,
   `Press ${modSymbol}, to open settings and customize font size, IDE, and more.`,
   `Press ${modSymbol}/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.`,
   `Press ${modSymbol}${shiftSymbol}C to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.`,
