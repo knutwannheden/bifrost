@@ -1,4 +1,4 @@
-import type { Highlighter } from 'shiki';
+import { type BundledLanguage, createHighlighter, type Highlighter } from 'shiki';
 
 let highlighterPromise: Promise<Highlighter> | null = null;
 
@@ -41,12 +41,14 @@ const extToLang: Record<string, string> = {
 
 async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then((shiki) =>
-      shiki.createHighlighter({
-        themes: ['github-dark', 'github-light'],
-        langs: [...new Set(Object.values(extToLang))],
-      }),
-    );
+    highlighterPromise = createHighlighter({
+      themes: ['github-dark', 'github-light'],
+      langs: [...new Set(Object.values(extToLang))],
+    }).catch((err) => {
+      // Reset so next call retries instead of caching the rejected promise
+      highlighterPromise = null;
+      throw err;
+    });
   }
   return highlighterPromise;
 }
@@ -72,7 +74,7 @@ export async function highlightLines(lines: string[], ext: string, dark = true):
     const highlighter = await getHighlighter();
     const code = lines.join('\n');
     const result = highlighter.codeToTokens(code, {
-      lang: lang as import('shiki').BundledLanguage,
+      lang: lang as BundledLanguage,
       theme: shikiTheme,
     });
 
@@ -82,7 +84,8 @@ export async function highlightLines(lines: string[], ext: string, dark = true):
         color: token.color ?? fallback,
       })),
     );
-  } catch {
+  } catch (err) {
+    console.warn('[syntax-highlight] Shiki highlighting failed:', err);
     return lines.map((line) => [{ content: line, color: fallback }]);
   }
 }

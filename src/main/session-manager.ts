@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -15,6 +16,53 @@ const sessions = new Map<string, IPty>();
 // renderer's terminal listener is registered.
 const sessionBuffers = new Map<string, string>();
 const MAX_BUFFER = 256 * 1024; // 256 KB per session
+
+function collectSpawnDiagnostics(command: string, cwd: string, env: Record<string, string>): Record<string, unknown> {
+  const diag: Record<string, unknown> = {};
+
+  // Uptime since Bifrost started (rough proxy for idle time)
+  diag.processUptimeS = Math.round(process.uptime());
+  diag.memoryMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+
+  // Can we resolve the command on PATH?
+  try {
+    diag.whichCommand = execFileSync('which', [command], { timeout: 3000, env }).toString().trim();
+  } catch {
+    diag.whichCommand = null;
+  }
+
+  // Can we open a PTY at all? (quick test via posix_openpt equivalent)
+  try {
+    const probe = pty.spawn('/bin/echo', ['ok'], { name: 'xterm-256color', cols: 10, rows: 1, cwd: '/tmp' });
+    probe.kill();
+    diag.ptyProbeOk = true;
+  } catch (e) {
+    diag.ptyProbeOk = false;
+    diag.ptyProbeError = String(e);
+  }
+
+  // CWD permissions
+  try {
+    fs.accessSync(cwd, fs.constants.R_OK | fs.constants.X_OK);
+    diag.cwdAccessible = true;
+  } catch {
+    diag.cwdAccessible = false;
+  }
+
+  // Open FD count for this process
+  try {
+    diag.openFds = fs.readdirSync('/dev/fd').length;
+  } catch {
+    // /dev/fd not available
+  }
+
+  // Environment size (large envs can cause posix_spawn failures)
+  diag.envKeyCount = Object.keys(env).length;
+  diag.envSize = Object.entries(env).reduce((n, [k, v]) => n + k.length + v.length + 2, 0);
+  diag.PATH = env.PATH;
+
+  return diag;
+}
 
 function shellEscape(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
@@ -73,10 +121,12 @@ export function spawnSession(
   } catch (err) {
     const cwdExists = fs.existsSync(cwd);
     const openSessions = sessions.size;
+    const diag = collectSpawnDiagnostics(spawnCommand, cwd, env);
     console.error(
       `[session] pty.spawn failed for ${sessionId}: cmd=${spawnCommand}, cwd=${cwd} (exists=${cwdExists}), openSessions=${openSessions}`,
       err,
     );
+    console.error('[session] diagnostics:', JSON.stringify(diag, null, 2));
     throw err;
   }
 
