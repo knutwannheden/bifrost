@@ -338,6 +338,10 @@ export default function TaskCreateDialog() {
           }
           break;
         }
+        case 'KeyR':
+          e.preventDefault();
+          repoRef.current?.focus();
+          break;
         case 'KeyB':
           e.preventDefault();
           branchRef.current?.focus();
@@ -417,7 +421,9 @@ export default function TaskCreateDialog() {
           {/* Repo select */}
           {state.repos.length > 0 && (
             <div>
-              <label className="block text-xs text-secondary mb-1">Repository</label>
+              <label className="block text-xs text-secondary mb-1">
+                <ActionLabel text="Repository" showHint={true} />
+              </label>
               <RepoDropdown
                 repos={state.repos}
                 selectedId={repoId}
@@ -617,16 +623,7 @@ export default function TaskCreateDialog() {
         {/* Footer */}
         {state.repos.length > 0 && (
           <div className="flex items-center gap-2 px-4 pb-3 pt-2 border-t border-border-default">
-            <span className="text-xs text-faint flex-1">
-              Enter create &middot; {altSymbol}N name &middot; {altSymbol}B branch &middot; {altSymbol}P prompt &middot;
-              Esc cancel
-            </span>
-            <button
-              onClick={close}
-              className="px-3 py-1.5 text-sm text-secondary hover:text-primary rounded-sm focus:outline-hidden focus:ring-1 focus:ring-border-input transition-colors"
-            >
-              Cancel
-            </button>
+            <span className="flex-1" />
             <PrimaryButton
               ref={createRef}
               onClick={handleSubmit}
