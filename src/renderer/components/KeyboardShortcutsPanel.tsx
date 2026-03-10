@@ -182,6 +182,12 @@ export default function KeyboardShortcutsPanel() {
         return;
       }
 
+      // Enter confirms the current recorded strokes (e.g. single Cmd+K without chord)
+      if (e.key === 'Enter' && recordedStrokes.length > 0) {
+        saveBinding(recordingActionId, recordedStrokes);
+        return;
+      }
+
       if (['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return;
 
       const stroke: KeyStroke = {
@@ -205,7 +211,7 @@ export default function KeyboardShortcutsPanel() {
         // Chord complete or single non-mod keystroke
         saveBinding(recordingActionId, newStrokes);
       } else {
-        // First stroke of potential chord
+        // First stroke of potential chord — Enter to confirm or press another key
         setRecordedStrokes(newStrokes);
       }
     };
@@ -243,13 +249,14 @@ export default function KeyboardShortcutsPanel() {
         if (entry?.type === 'action') executeItem(entry.item);
         break;
       }
-      case 'r':
-      case 'R': {
-        if (!e.altKey) break;
-        e.preventDefault();
-        const itemIdx = executableIndices[selectedIndex];
-        const entry = itemIdx != null ? items[itemIdx] : null;
-        if (entry?.type === 'action') startRecording(entry.item.actionId);
+      default: {
+        // Alt+R to rebind — check e.code because macOS Alt+R produces '®' as e.key
+        if (e.altKey && e.code === 'KeyR') {
+          e.preventDefault();
+          const itemIdx = executableIndices[selectedIndex];
+          const entry = itemIdx != null ? items[itemIdx] : null;
+          if (entry?.type === 'action') startRecording(entry.item.actionId);
+        }
         break;
       }
     }
@@ -275,6 +282,12 @@ export default function KeyboardShortcutsPanel() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              // Intercept Alt+R at the input level to prevent macOS inserting '®'
+              if (e.altKey && e.nativeEvent.code === 'KeyR') {
+                e.preventDefault();
+              }
+            }}
             placeholder="Search actions…"
             className="flex-1 bg-transparent text-sm text-primary placeholder-muted outline-hidden"
             disabled={!!recordingActionId}
@@ -316,7 +329,9 @@ export default function KeyboardShortcutsPanel() {
                   <div className="flex items-center gap-1">
                     {isRecording ? (
                       <span className="text-xs text-accent animate-pulse">
-                        {recordedStrokes.length > 0 ? `${serializeBinding(recordedStrokes)} …` : 'Press shortcut…'}
+                        {recordedStrokes.length > 0
+                          ? `${serializeBinding(recordedStrokes)} … Enter to confirm`
+                          : 'Press shortcut…'}
                       </span>
                     ) : item.item.binding ? (
                       <Kbd size="sm">{item.item.binding}</Kbd>
