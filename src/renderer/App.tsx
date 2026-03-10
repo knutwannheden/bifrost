@@ -484,13 +484,7 @@ export default function App() {
           </div>
 
           {/* Status bar */}
-          <StatusBar
-            activeTask={activeTask}
-            config={state.config}
-            repos={state.repos}
-            apiPort={state.apiPort}
-            onToggleIde={handleToggleIde}
-          />
+          <StatusBar activeTask={activeTask} config={state.config} onToggleIde={handleToggleIde} />
         </div>
 
         {/* Right icon bar */}

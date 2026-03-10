@@ -77,11 +77,6 @@ export default function TaskCreateDialog() {
     return b.toLowerCase().includes(branchSearch.toLowerCase());
   });
 
-  const existingTask =
-    repoId && branch && !inPlace
-      ? state.tasks.find((t) => t.repoId === repoId && t.branch === branch && t.status !== 'archived')
-      : undefined;
-
   const repo = state.repos.find((r) => r.id === repoId);
   const existingInPlaceTask =
     inPlace && repo ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path) : undefined;
@@ -336,13 +331,17 @@ export default function TaskCreateDialog() {
           regenerateName();
           break;
         case 'KeyO': {
-          const openTask = existingTask ?? existingInPlaceTask;
+          const openTask = existingInPlaceTask;
           if (openTask) {
             e.preventDefault();
             openExistingTask(openTask.id, openTask.status);
           }
           break;
         }
+        case 'KeyB':
+          e.preventDefault();
+          branchRef.current?.focus();
+          break;
         case 'KeyP':
           e.preventDefault();
           promptRef.current?.focus();
@@ -395,19 +394,6 @@ export default function TaskCreateDialog() {
                 className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap"
               >
                 Ignore
-              </button>
-            </div>
-          )}
-
-          {/* Existing task banner */}
-          {existingTask && (
-            <div className="flex items-center justify-between bg-warning/10 border border-warning/30 rounded-sm px-3 py-2">
-              <p className="text-xs text-warning">Task &ldquo;{existingTask.name}&rdquo; already uses this branch</p>
-              <button
-                onClick={() => openExistingTask(existingTask.id, existingTask.status)}
-                className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap"
-              >
-                <ActionLabel text="Open" showHint={true} />
               </button>
             </div>
           )}
@@ -506,7 +492,9 @@ export default function TaskCreateDialog() {
 
               {/* Branch select */}
               <div className="relative">
-                <label className="block text-xs text-secondary mb-1">Branch</label>
+                <label className="block text-xs text-secondary mb-1">
+                  <ActionLabel text="Branch" showHint={true} />
+                </label>
                 {inPlace ? (
                   <div className="w-full px-3 py-1.5 bg-surface-alt/50 border border-border-input rounded-sm text-sm text-secondary">
                     {currentBranch ?? 'Detecting...'}
@@ -630,7 +618,8 @@ export default function TaskCreateDialog() {
         {state.repos.length > 0 && (
           <div className="flex items-center gap-2 px-4 pb-3 pt-2 border-t border-border-default">
             <span className="text-xs text-faint flex-1">
-              Enter create &middot; {altSymbol}N name &middot; {altSymbol}P prompt &middot; Esc cancel
+              Enter create &middot; {altSymbol}N name &middot; {altSymbol}B branch &middot; {altSymbol}P prompt &middot;
+              Esc cancel
             </span>
             <button
               onClick={close}

@@ -1,15 +1,37 @@
-import type { BifrostConfig, Repo, Task } from '../../shared/types';
+import { useEffect, useState } from 'react';
+import type { BifrostConfig, DiffStats, Task } from '../../shared/types';
 import { shortPath } from '../utils/paths';
+import DiffStatsBadge from './DiffStatsBadge';
 
 interface StatusBarProps {
   activeTask: Task | null;
   config: BifrostConfig | null;
-  repos: Repo[];
-  apiPort: number | null;
   onToggleIde: () => void;
 }
 
-export default function StatusBar({ activeTask, config, repos, apiPort, onToggleIde }: StatusBarProps) {
+export default function StatusBar({ activeTask, config, onToggleIde }: StatusBarProps) {
+  const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
+
+  useEffect(() => {
+    if (!activeTask) {
+      setDiffStats(null);
+      return;
+    }
+
+    const fetchStats = () => {
+      window.bifrost
+        .getDiffStats(activeTask.id)
+        .then(setDiffStats)
+        .catch(() => setDiffStats(null));
+    };
+    fetchStats();
+
+    const unsub = window.bifrost.onActivityEntry((entry) => {
+      if (entry.taskId === activeTask.id) fetchStats();
+    });
+    return unsub;
+  }, [activeTask?.id]);
+
   return (
     <div className="h-6 bg-surface border-t border-border-default flex items-center px-4 text-xs text-muted">
       <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -19,6 +41,7 @@ export default function StatusBar({ activeTask, config, repos, apiPort, onToggle
               {shortPath(activeTask.worktreePath)}
             </span>
             <span className="capitalize">{activeTask.status}</span>
+            <DiffStatsBadge additions={diffStats?.additions ?? 0} deletions={diffStats?.deletions ?? 0} />
           </>
         )}
       </div>
@@ -33,8 +56,6 @@ export default function StatusBar({ activeTask, config, repos, apiPort, onToggle
             IDE: {config.ide}
           </button>
         )}
-        <span>{apiPort ? `MCP :${apiPort}` : 'MCP off'}</span>
-        <span>Repos: {repos.length}</span>
       </div>
     </div>
   );
