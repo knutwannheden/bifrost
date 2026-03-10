@@ -17,8 +17,27 @@ const sessions = new Map<string, IPty>();
 const sessionBuffers = new Map<string, string>();
 const MAX_BUFFER = 256 * 1024; // 256 KB per session
 
-function collectSpawnDiagnostics(command: string, cwd: string, env: Record<string, string>): Record<string, unknown> {
+function collectSpawnDiagnostics(
+  command: string,
+  cwd: string,
+  env: Record<string, string>,
+  err?: unknown,
+): Record<string, unknown> {
   const diag: Record<string, unknown> = {};
+
+  // Extract all properties from the error (node-pty may set errno/code)
+  if (err instanceof Error) {
+    diag.errorMessage = err.message;
+    diag.errorCode = (err as NodeJS.ErrnoException).code;
+    diag.errorErrno = (err as NodeJS.ErrnoException).errno;
+    diag.errorSyscall = (err as NodeJS.ErrnoException).syscall;
+    // Capture any non-standard properties node-pty may attach
+    for (const key of Object.getOwnPropertyNames(err)) {
+      if (!['message', 'stack', 'name', 'code', 'errno', 'syscall'].includes(key)) {
+        diag[`error_${key}`] = (err as unknown as Record<string, unknown>)[key];
+      }
+    }
+  }
 
   // Uptime since Bifrost started (rough proxy for idle time)
   diag.processUptimeS = Math.round(process.uptime());
@@ -31,6 +50,36 @@ function collectSpawnDiagnostics(command: string, cwd: string, env: Record<strin
     diag.whichCommand = null;
   }
 
+  // FD limit vs open count — EMFILE is a common posix_spawnp failure
+  try {
+    diag.openFds = fs.readdirSync('/dev/fd').length;
+  } catch {
+    // /dev/fd not available
+  }
+  try {
+    const ulimitOut = execFileSync('sh', ['-c', 'ulimit -n'], { timeout: 3000 }).toString().trim();
+    diag.fdLimit = ulimitOut;
+  } catch {
+    // ignore
+  }
+
+  // Process count limit — EAGAIN if too many processes
+  try {
+    const ulimitU = execFileSync('sh', ['-c', 'ulimit -u'], { timeout: 3000 }).toString().trim();
+    diag.processLimit = ulimitU;
+  } catch {
+    // ignore
+  }
+  try {
+    const psCount = execFileSync('sh', ['-c', 'ps -u $(whoami) | wc -l'], { timeout: 3000 }).toString().trim();
+    diag.userProcessCount = psCount;
+  } catch {
+    // ignore
+  }
+
+  // Active PTY sessions tracked by Bifrost
+  diag.activeSessions = sessions.size;
+
   // Can we open a PTY at all? (quick test via posix_openpt equivalent)
   try {
     const probe = pty.spawn('/bin/echo', ['ok'], { name: 'xterm-256color', cols: 10, rows: 1, cwd: '/tmp' });
@@ -39,6 +88,10 @@ function collectSpawnDiagnostics(command: string, cwd: string, env: Record<strin
   } catch (e) {
     diag.ptyProbeOk = false;
     diag.ptyProbeError = String(e);
+    if (e instanceof Error) {
+      diag.ptyProbeCode = (e as NodeJS.ErrnoException).code;
+      diag.ptyProbeErrno = (e as NodeJS.ErrnoException).errno;
+    }
   }
 
   // CWD permissions
@@ -47,13 +100,6 @@ function collectSpawnDiagnostics(command: string, cwd: string, env: Record<strin
     diag.cwdAccessible = true;
   } catch {
     diag.cwdAccessible = false;
-  }
-
-  // Open FD count for this process
-  try {
-    diag.openFds = fs.readdirSync('/dev/fd').length;
-  } catch {
-    // /dev/fd not available
   }
 
   // Environment size (large envs can cause posix_spawn failures)
@@ -121,7 +167,7 @@ export function spawnSession(
   } catch (err) {
     const cwdExists = fs.existsSync(cwd);
     const openSessions = sessions.size;
-    const diag = collectSpawnDiagnostics(spawnCommand, cwd, env);
+    const diag = collectSpawnDiagnostics(spawnCommand, cwd, env, err);
     console.error(
       `[session] pty.spawn failed for ${sessionId}: cmd=${spawnCommand}, cwd=${cwd} (exists=${cwdExists}), openSessions=${openSessions}`,
       err,
