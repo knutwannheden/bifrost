@@ -275,6 +275,17 @@ function buildFileTree(files: DiffFile[]): FileTreeNode {
   return root;
 }
 
+/** Extract files from tree in visual traversal order (dirs first, depth-first) */
+function treeVisualOrder(tree: FileTreeNode): DiffFile[] {
+  const result: DiffFile[] = [];
+  function walk(node: FileTreeNode): void {
+    for (const child of node.children) walk(child);
+    for (const f of node.files) result.push(f.file);
+  }
+  walk(tree);
+  return result;
+}
+
 /** Compute aggregate stats for a tree node and all descendants */
 function treeNodeStats(node: FileTreeNode): { additions: number; deletions: number } {
   let additions = 0;
@@ -621,12 +632,8 @@ function GitDiffContent({
   const files = useMemo(() => {
     if (!diff) return null;
     const parsed = parseDiff(diff);
-    parsed.sort((a, b) => {
-      const aPath = a.newPath || a.oldPath;
-      const bPath = b.newPath || b.oldPath;
-      return aPath.localeCompare(bPath);
-    });
-    return parsed;
+    const tree = buildFileTree(parsed);
+    return treeVisualOrder(tree);
   }, [diff]);
 
   // Fetch file statuses alongside the diff
