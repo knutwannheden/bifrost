@@ -780,7 +780,7 @@ function ReviewPanel({ taskId }: { taskId: string }) {
     window.bifrost.listReviews(taskId).then((entries) => {
       dispatch({ type: 'SET_REVIEWS', taskId, reviews: entries });
       // Auto-select the most recent review if none selected
-      if (entries.length > 0 && !state.activeReviewId[taskId] && state.reviewStatus.__pending__ !== 'running') {
+      if (entries.length > 0 && !state.activeReviewId[taskId] && state.reviewStatus[`__pending__:${taskId}`] !== 'running') {
         const newest = entries.reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
         dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: newest.id });
       }

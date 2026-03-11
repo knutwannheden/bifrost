@@ -330,7 +330,7 @@ export default function ReviewContent({
 
   const handleRunReview = useCallback(async () => {
     // Generate a temporary ID for tracking; the real one comes from the backend
-    dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'running' });
+    dispatch({ type: 'SET_REVIEW_STATUS', reviewId: `__pending__:${taskId}`, status: 'running' });
     dispatch({ type: 'CLEAR_REVIEW_DISCUSSION', taskId });
     setShowDiscussion(false);
     setReviewActivity(null);
@@ -347,17 +347,19 @@ export default function ReviewContent({
         timestamp: Date.now(),
         sessionId,
       };
-      dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'idle' });
+      dispatch({ type: 'SET_REVIEW_STATUS', reviewId: `__pending__:${taskId}`, status: 'idle' });
       dispatch({ type: 'SET_REVIEW_CONTENT', reviewId: newReviewId, content: markdown });
       dispatch({ type: 'SET_REVIEW_STATUS', reviewId: newReviewId, status: 'done' });
       dispatch({ type: 'MARK_REVIEW_UNREAD', taskId });
+      const taskName = state.tasks.find((t) => t.id === taskId)?.name ?? taskId;
       dispatch({
         type: 'PUSH_NOTIFICATION',
         notification: {
           id: `review-done-${newReviewId}`,
           type: 'info',
           title: 'Review complete',
-          message: `Code review finished for ${taskId}`,
+          message: `Code review finished for ${taskName}`,
+          action: { label: 'View', handler: `view-review:${taskId}` },
           read: false,
           timestamp: Date.now(),
         },
@@ -369,7 +371,7 @@ export default function ReviewContent({
       if (msg !== 'Review cancelled') {
         dispatch({ type: 'SHOW_TOAST', message: `Review failed: ${msg}` });
       }
-      dispatch({ type: 'SET_REVIEW_STATUS', reviewId: '__pending__', status: 'idle' });
+      dispatch({ type: 'SET_REVIEW_STATUS', reviewId: `__pending__:${taskId}`, status: 'idle' });
     }
   }, [taskId, reviewScope, reviewInstructions, dispatch, onNewReviewCreated]);
 
@@ -423,7 +425,7 @@ export default function ReviewContent({
     setShowDiscussion(false);
   }, [taskId, dispatch]);
 
-  const isReviewRunning = status === 'running' || state.reviewStatus.__pending__ === 'running';
+  const isReviewRunning = status === 'running' || state.reviewStatus[`__pending__:${taskId}`] === 'running';
   const elapsed = useElapsed(isReviewRunning, state.reviewStartedAt);
 
   const handleCancelReview = useCallback(() => {
@@ -518,7 +520,7 @@ export default function ReviewContent({
 
   // === New Review Form ===
   if (!reviewId) {
-    const isRunning = state.reviewStatus.__pending__ === 'running';
+    const isRunning = state.reviewStatus[`__pending__:${taskId}`] === 'running';
 
     if (isRunning) {
       return (

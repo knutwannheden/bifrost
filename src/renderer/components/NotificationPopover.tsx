@@ -46,6 +46,15 @@ export default function NotificationPopover() {
 
   const handleAction = (notificationId: string, handler: string) => {
     dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' });
+    if (handler.startsWith('view-review:')) {
+      const targetTaskId = handler.slice('view-review:'.length);
+      dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
+      dispatch({ type: 'SET_ACTIVE_TASK', taskId: targetTaskId });
+      dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
+      const ps = state.paneStates[targetTaskId];
+      if (!ps?.showDiff) dispatch({ type: 'TOGGLE_DIFF' });
+      return;
+    }
     if (handler.startsWith('slack-create-task:')) {
       const url = handler.slice('slack-create-task:'.length);
       dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
