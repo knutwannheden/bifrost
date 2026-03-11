@@ -131,12 +131,15 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
         if (entry.isIntersecting) {
           observer.disconnect();
           setVisible(true);
-          const ext = extFromPath(file.newPath || file.oldPath);
+          const filePath = file.newPath || file.oldPath;
+          const ext = extFromPath(filePath);
+          const filename = filePath.split('/').pop() || '';
           const allLines = file.hunks.flatMap((h) => h.lines);
           highlightLines(
             allLines.map((l) => l.content),
             ext,
             isDarkTheme(),
+            filename,
           ).then((result) => {
             if (!cancelled) setTokens(result);
           });

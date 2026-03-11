@@ -7,6 +7,10 @@ const extToLang: Record<string, string> = {
   tsx: 'tsx',
   js: 'javascript',
   jsx: 'jsx',
+  mjs: 'javascript',
+  cjs: 'javascript',
+  mts: 'typescript',
+  cts: 'typescript',
   java: 'java',
   py: 'python',
   rb: 'ruby',
@@ -18,32 +22,81 @@ const extToLang: Record<string, string> = {
   hpp: 'cpp',
   cs: 'csharp',
   json: 'json',
+  jsonc: 'jsonc',
+  json5: 'json5',
   yaml: 'yaml',
   yml: 'yaml',
   toml: 'toml',
   xml: 'xml',
+  xsl: 'xsl',
+  svg: 'xml',
+  pom: 'xml',
+  csproj: 'xml',
+  fsproj: 'xml',
+  props: 'xml',
+  targets: 'xml',
+  resx: 'xml',
   html: 'html',
   css: 'css',
   scss: 'scss',
+  less: 'less',
   md: 'markdown',
+  mdx: 'mdx',
   sh: 'bash',
   bash: 'bash',
   zsh: 'bash',
   sql: 'sql',
   graphql: 'graphql',
   kt: 'kotlin',
+  kts: 'kts',
+  groovy: 'groovy',
+  gradle: 'groovy',
+  scala: 'scala',
   swift: 'swift',
   vue: 'vue',
   svelte: 'svelte',
   php: 'php',
   tf: 'hcl',
+  tfvars: 'hcl',
+  dockerfile: 'dockerfile',
+  makefile: 'makefile',
+  proto: 'proto',
+  ini: 'ini',
+  properties: 'properties',
+  dart: 'dart',
+  lua: 'lua',
+  r: 'r',
+  zig: 'zig',
+  nim: 'nim',
+  nix: 'nix',
+  elm: 'elm',
+  ex: 'elixir',
+  exs: 'elixir',
+  erl: 'erlang',
+  hs: 'haskell',
+  clj: 'clojure',
+  lisp: 'lisp',
+  prisma: 'prisma',
+};
+
+/** Filename-based mapping for files whose extension is ambiguous (e.g. `.config`) */
+const nameToLang: Record<string, string> = {
+  'nuget.config': 'xml',
+  '.eslintrc': 'json',
+  '.prettierrc': 'json',
+  'tsconfig.json': 'jsonc',
+  '.gitignore': 'ini',
+  Dockerfile: 'dockerfile',
+  Makefile: 'makefile',
+  Jenkinsfile: 'groovy',
 };
 
 async function getHighlighter(): Promise<Highlighter> {
   if (!highlighterPromise) {
+    const allLangs = [...new Set([...Object.values(extToLang), ...Object.values(nameToLang)])];
     highlighterPromise = createHighlighter({
       themes: ['github-dark', 'github-light'],
-      langs: [...new Set(Object.values(extToLang))],
+      langs: allLangs,
     }).catch((err) => {
       // Reset so next call retries instead of caching the rejected promise
       highlighterPromise = null;
@@ -61,8 +114,13 @@ export interface HighlightedToken {
 const FALLBACK_DARK = '#e2e8f0';
 const FALLBACK_LIGHT = '#24292e';
 
-export async function highlightLines(lines: string[], ext: string, dark = true): Promise<HighlightedToken[][]> {
-  const lang = extToLang[ext];
+export async function highlightLines(
+  lines: string[],
+  ext: string,
+  dark = true,
+  filename?: string,
+): Promise<HighlightedToken[][]> {
+  const lang = (filename && nameToLang[filename]) || extToLang[ext];
   const fallback = dark ? FALLBACK_DARK : FALLBACK_LIGHT;
   const shikiTheme = dark ? 'github-dark' : 'github-light';
 
