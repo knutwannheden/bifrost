@@ -203,7 +203,24 @@ export function useTerminal(
     // line so they can read without the view jumping.  When the viewport
     // is at the bottom, let xterm auto-scroll to follow new output
     // (tail -f behaviour).
+    //
+    // We track scroll lock as a persistent state (`scrollLockY`) rather
+    // than snapshotting per-write, because rapid successive writes can
+    // race: write N auto-scrolls to bottom before its callback restores,
+    // so write N+1's snapshot sees viewportY===baseY and stops locking.
     let hasReceivedData = false;
+    let scrollLockY: number | null = null;
+    let restoringScroll = false;
+
+    terminal.onScroll(() => {
+      if (restoringScroll) return;
+      const buf = terminal.buffer.active;
+      if (buf.viewportY >= buf.baseY) {
+        scrollLockY = null;
+      } else if (scrollLockY === null) {
+        scrollLockY = buf.viewportY;
+      }
+    });
 
     const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
       if (sid === sessionId) {
@@ -211,12 +228,17 @@ export function useTerminal(
           hasReceivedData = true;
           setLoading(false);
         }
-        const buf = terminal.buffer.active;
-        const viewportY = buf.viewportY;
-        const isScrolledUp = viewportY < buf.baseY;
+        if (scrollLockY === null) {
+          const buf = terminal.buffer.active;
+          if (buf.viewportY < buf.baseY) {
+            scrollLockY = buf.viewportY;
+          }
+        }
         terminal.write(data, () => {
-          if (isScrolledUp) {
-            terminal.scrollToLine(viewportY);
+          if (scrollLockY !== null) {
+            restoringScroll = true;
+            terminal.scrollToLine(scrollLockY);
+            restoringScroll = false;
           }
         });
       }
