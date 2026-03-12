@@ -1,9 +1,14 @@
+import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { BrowserWindow } from 'electron';
 import type { Repo } from '../shared/types';
+
+const execFile = promisify(execFileCb);
+
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
@@ -249,6 +254,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     case '/close-task': {
       const taskId = body.taskId as string;
       const archive = body.archive === true;
+      const force = body.force === true;
       if (!taskId) {
         errorResponse(res, 'taskId is required');
         return;
@@ -256,21 +262,51 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       try {
         const task = getTask(taskId);
         cancelTaskRequests(taskId);
-        stopWatching(taskId);
         killTaskSessions(taskId);
-        const archived = updateTask(taskId, { status: 'archived', archivedAt: Date.now() });
-        // Remove worktree in the background
-        if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
-          const config = loadConfig();
-          const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-          if (repo) {
-            removeWorktree(repo.path, task.worktreePath).catch(() => {});
+
+        if (archive) {
+          // Archive: stop + mark archived + remove worktree
+          stopWatching(taskId);
+
+          // Check if worktree is dirty (unless forced or external/in-place)
+          if (!force && !task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
+            try {
+              const { stdout } = await execFile('git', ['status', '--porcelain'], {
+                cwd: task.worktreePath,
+                timeout: 5000,
+              });
+              if (stdout.trim().length > 0) {
+                errorResponse(res, 'Worktree has uncommitted changes. Use force=true to archive anyway.', 409);
+                return;
+              }
+            } catch {
+              // git status failed — proceed with archive
+            }
           }
+
+          const updated = updateTask(taskId, { status: 'archived', archivedAt: Date.now() });
+
+          // Remove worktree in the background
+          if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
+            const config = loadConfig();
+            const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+            if (repo) {
+              removeWorktree(repo.path, task.worktreePath).catch(() => {});
+            }
+          }
+
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, taskId, true);
+          }
+          jsonResponse(res, updated);
+        } else {
+          // Close: stop sessions + set status to stopped, preserve worktree
+          const updated = updateTask(taskId, { status: 'stopped' });
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, taskId, false);
+          }
+          jsonResponse(res, updated);
         }
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, taskId, archive);
-        }
-        jsonResponse(res, archived);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
       }

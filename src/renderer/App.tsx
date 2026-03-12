@@ -159,7 +159,7 @@ export default function App() {
           dispatch({ type: 'UPDATE_TASK', task: { ...task, status: 'archived', archivedAt: Date.now() } });
         }
       } else {
-        dispatch({ type: 'REMOVE_TASK', taskId });
+        dispatch({ type: 'SET_TASK_STATUS', taskId, status: 'stopped' });
       }
     });
     return unsub;
