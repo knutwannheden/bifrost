@@ -364,5 +364,43 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  'close_task',
+  {
+    title: 'Close Task',
+    description:
+      'Close a Bifrost task, stopping its Claude Code session and removing the git worktree. Use archive=true to keep the task in history (soft delete) instead of removing it entirely.',
+    inputSchema: {
+      taskId: z.string().optional().describe('Task ID to close (optional, defaults to calling task)'),
+      archive: z
+        .boolean()
+        .optional()
+        .describe('If true, archive the task (soft delete, keeps in history). Defaults to false (hard delete).'),
+    },
+  },
+  async ({ taskId, archive }) => {
+    const targetId = taskId || TASK_ID;
+    if (!targetId) {
+      return {
+        content: [{ type: 'text', text: "No task specified. Provide a 'taskId' or run inside a Bifrost task." }],
+        isError: true,
+      };
+    }
+    const result = await apiCall('/close-task', {
+      taskId: targetId,
+      archive: archive || false,
+    });
+    const action = archive ? 'archived' : 'closed';
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Task "${result.name}" (${result.id}) ${action}.`,
+        },
+      ],
+    };
+  },
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

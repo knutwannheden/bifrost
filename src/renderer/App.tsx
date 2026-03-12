@@ -150,6 +150,21 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
+  // Listen for tasks closed/archived via the HTTP API (e.g. from MCP close_task tool)
+  useEffect(() => {
+    const unsub = window.bifrost.onTaskClosed((taskId, archived) => {
+      if (archived) {
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (task) {
+          dispatch({ type: 'UPDATE_TASK', task: { ...task, status: 'archived', archivedAt: Date.now() } });
+        }
+      } else {
+        dispatch({ type: 'REMOVE_TASK', taskId });
+      }
+    });
+    return unsub;
+  }, [dispatch, state.tasks]);
+
   // Listen for hook-based notifications (from Claude Code plugin)
   useEffect(() => {
     const unsub = window.bifrost.onHookNotification((taskId, taskName, message) => {

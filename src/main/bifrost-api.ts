@@ -3,18 +3,21 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { BrowserWindow } from 'electron';
+import type { Repo } from '../shared/types';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import { getActivityLog } from './activity-watcher';
+import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
 import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
-import { checkExistingRules, createRequest } from './permission-manager';
+import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { addRepo } from './repo-manager';
-import { completeReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
+import { cancelReview, completeReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
+import { killSession } from './session-manager';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
+import { removeWorktree } from './worktree-manager';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -123,6 +126,17 @@ function resolveTaskId(body: Record<string, unknown>): string | undefined {
   return (body.taskId as string) || (body.callerTaskId as string) || undefined;
 }
 
+/**
+ * Kill all sessions associated with a task: main, dev terminal, and review.
+ * Uses deterministic session IDs so we don't need the in-memory Maps from ipc-handlers.
+ */
+function killTaskSessions(taskId: string): void {
+  killSession(taskId);
+  killSession(`${taskId}-dev`);
+  killSession(`${taskId}-review`);
+  cancelReview(taskId);
+}
+
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
     errorResponse(res, 'Method not allowed', 405);
@@ -226,6 +240,37 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         }
 
         jsonResponse(res, task);
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 400);
+      }
+      return;
+    }
+
+    case '/close-task': {
+      const taskId = body.taskId as string;
+      const archive = body.archive === true;
+      if (!taskId) {
+        errorResponse(res, 'taskId is required');
+        return;
+      }
+      try {
+        const task = getTask(taskId);
+        cancelTaskRequests(taskId);
+        stopWatching(taskId);
+        killTaskSessions(taskId);
+        const archived = updateTask(taskId, { status: 'archived', archivedAt: Date.now() });
+        // Remove worktree in the background
+        if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
+          const config = loadConfig();
+          const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+          if (repo) {
+            removeWorktree(repo.path, task.worktreePath).catch(() => {});
+          }
+        }
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, taskId, archive);
+        }
+        jsonResponse(res, archived);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
       }

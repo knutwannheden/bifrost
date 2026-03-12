@@ -169,6 +169,7 @@ export const IPC_STREAM = {
   STATS_UPDATE: 'stats:update',
   SUPERVISOR_UPDATE: 'supervisor:update',
   TASK_CREATED: 'task:created',
+  TASK_CLOSED: 'task:closed',
   SLACK_REACTION: 'slack:reaction',
   TRIAGE_ACTIVITY: 'triage:activity',
   TRIAGE_WAITING: 'triage:waiting',
@@ -287,6 +288,7 @@ export interface BifrostAPI {
   // Task events
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
   onTaskCreated(callback: (task: Task) => void): () => void;
+  onTaskClosed(callback: (taskId: string, archived: boolean) => void): () => void;
 
   // Notifications
   setActiveTaskId(taskId: string | null): Promise<void>;

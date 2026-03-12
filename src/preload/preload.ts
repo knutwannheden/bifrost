@@ -142,6 +142,12 @@ const api: BifrostAPI = {
     ipcRenderer.on(IPC_STREAM.TASK_CREATED, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.TASK_CREATED, handler);
   },
+  onTaskClosed: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, archived: boolean) =>
+      callback(taskId, archived);
+    ipcRenderer.on(IPC_STREAM.TASK_CLOSED, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TASK_CLOSED, handler);
+  },
 
   // Notifications
   setActiveTaskId: (taskId) => ipcRenderer.invoke(IPC.SET_ACTIVE_TASK_ID, taskId),
