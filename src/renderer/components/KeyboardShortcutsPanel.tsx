@@ -134,20 +134,24 @@ export default function KeyboardShortcutsPanel() {
     setConflict(null);
   };
 
+  const refocus = () => requestAnimationFrame(() => inputRef.current?.focus());
+
   const cancelRecording = () => {
     setRecordingActionId(null);
     setRecordedStrokes([]);
     setConflict(null);
+    refocus();
   };
 
-  const saveBinding = async (actionId: string, strokes: KeyStroke[]) => {
+  const saveBinding = async (actionId: string, strokes: KeyStroke[] | null) => {
     if (!state.config) return;
-    const serialized = serializeBinding(strokes);
+    const serialized = strokes ? serializeBinding(strokes) : null;
     const keybindings = { ...state.config.keybindings, [actionId]: serialized };
     const newConfig = { ...state.config, keybindings };
     await window.bifrost.saveConfig(newConfig);
     dispatch({ type: 'SET_CONFIG', config: newConfig });
     cancelRecording();
+    refocus();
   };
 
   const resetBinding = async (actionId: string) => {
@@ -158,6 +162,7 @@ export default function KeyboardShortcutsPanel() {
     const newConfig = { ...state.config, keybindings };
     await window.bifrost.saveConfig(newConfig);
     dispatch({ type: 'SET_CONFIG', config: newConfig });
+    refocus();
   };
 
   const resetAllBindings = async () => {
@@ -167,6 +172,7 @@ export default function KeyboardShortcutsPanel() {
     const newConfig = rest as typeof state.config;
     await window.bifrost.saveConfig(newConfig);
     dispatch({ type: 'SET_CONFIG', config: newConfig });
+    refocus();
   };
 
   // Handle recording keystrokes
@@ -227,9 +233,9 @@ export default function KeyboardShortcutsPanel() {
       case 'Escape':
         e.preventDefault();
         e.stopPropagation();
-        if ((e.target as HTMLElement).tagName === 'INPUT') {
-          (e.target as HTMLElement).blur();
-          overlayRef.current?.focus();
+        if (query) {
+          setQuery('');
+          inputRef.current?.focus();
         } else {
           close();
         }
@@ -256,6 +262,13 @@ export default function KeyboardShortcutsPanel() {
           const itemIdx = executableIndices[selectedIndex];
           const entry = itemIdx != null ? items[itemIdx] : null;
           if (entry?.type === 'action') startRecording(entry.item.actionId);
+        }
+        // Alt+U to unassign
+        if (e.altKey && e.code === 'KeyU') {
+          e.preventDefault();
+          const itemIdx = executableIndices[selectedIndex];
+          const entry = itemIdx != null ? items[itemIdx] : null;
+          if (entry?.type === 'action') saveBinding(entry.item.actionId, null);
         }
         break;
       }
@@ -284,7 +297,7 @@ export default function KeyboardShortcutsPanel() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               // Intercept Alt+R at the input level to prevent macOS inserting '®'
-              if (e.altKey && e.nativeEvent.code === 'KeyR') {
+              if (e.altKey && (e.nativeEvent.code === 'KeyR' || e.nativeEvent.code === 'KeyU')) {
                 e.preventDefault();
               }
             }}
@@ -312,7 +325,7 @@ export default function KeyboardShortcutsPanel() {
               return (
                 <div
                   key={item.item.actionId}
-                  className={`flex items-center justify-between px-2 py-1.5 rounded cursor-pointer ${
+                  className={`group/row flex items-center justify-between px-2 py-1.5 rounded cursor-pointer ${
                     navIdx === selectedIndex ? 'bg-surface-alt' : 'hover:bg-surface-alt/50'
                   }`}
                   onClick={() => executeItem(item.item)}
@@ -338,6 +351,18 @@ export default function KeyboardShortcutsPanel() {
                     ) : (
                       <span className="text-xs text-faint">&mdash;</span>
                     )}
+                    {item.item.binding && !isRecording && (
+                      <button
+                        className="text-xs text-muted hover:text-primary transition-colors ml-1 hidden group-hover/row:block"
+                        title="Unassign shortcut"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          saveBinding(item.item.actionId, null);
+                        }}
+                      >
+                        &#x2715;
+                      </button>
+                    )}
                     {isModified && !isRecording && (
                       <button
                         className="text-xs text-muted hover:text-primary transition-colors ml-1"
@@ -359,7 +384,8 @@ export default function KeyboardShortcutsPanel() {
         {conflict && <div className="px-4 py-2 text-xs text-warning border-t border-border-default">{conflict}</div>}
         <OverlayFooter>
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Enter execute &middot; {altSymbol}R rebind &middot; Esc close
+            &uarr;&darr; navigate &middot; Enter execute &middot; {altSymbol}R rebind &middot; {altSymbol}U unassign
+            &middot; Esc close
           </span>
           {hasCustomBindings && (
             <button
