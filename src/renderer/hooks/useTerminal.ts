@@ -204,16 +204,6 @@ export function useTerminal(
     // is at the bottom, let xterm auto-scroll to follow new output
     // (tail -f behaviour).
     let hasReceivedData = false;
-    let userScrolledUp = false;
-    let savedViewportY = 0;
-
-    terminal.onScroll(() => {
-      const buf = terminal.buffer.active;
-      userScrolledUp = buf.viewportY < buf.baseY;
-      if (userScrolledUp) {
-        savedViewportY = buf.viewportY;
-      }
-    });
 
     const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
       if (sid === sessionId) {
@@ -221,9 +211,12 @@ export function useTerminal(
           hasReceivedData = true;
           setLoading(false);
         }
+        const buf = terminal.buffer.active;
+        const viewportY = buf.viewportY;
+        const isScrolledUp = viewportY < buf.baseY;
         terminal.write(data, () => {
-          if (userScrolledUp) {
-            terminal.scrollToLine(savedViewportY);
+          if (isScrolledUp) {
+            terminal.scrollToLine(viewportY);
           }
         });
       }
