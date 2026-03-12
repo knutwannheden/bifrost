@@ -365,11 +365,11 @@ server.registerTool(
 );
 
 server.registerTool(
-  'close_task',
+  'close_or_archive_task',
   {
-    title: 'Close Task',
+    title: 'Close / Archive Task',
     description:
-      'Close or archive a Bifrost task. Close (default) stops sessions and closes the tab but preserves the git worktree. Archive does everything close does plus marks the task as archived and deletes the worktree.',
+      'Close or archive a Bifrost task. Use this to archive a task when done. Close (default) stops sessions and closes the tab but preserves the git worktree. Archive does everything close does plus marks the task as archived and deletes the worktree.',
     inputSchema: {
       taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
       archive: z
