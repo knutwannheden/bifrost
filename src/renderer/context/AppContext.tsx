@@ -80,6 +80,7 @@ export interface AppState {
   showNotificationPopover: boolean;
   apiPort: number | null;
   archiveConfirm: { taskId: string; taskName: string } | null;
+  renamingTaskId: string | null;
 }
 
 export type AppAction =
@@ -145,7 +146,9 @@ export type AppAction =
   | { type: 'REMOVE_TRIAGE'; id: string }
   | { type: 'SET_TRIAGE_ACTIVITY'; triageId: string; activity: string }
   | { type: 'SET_TRIAGE_WAITING'; triageId: string }
-  | { type: 'SET_TRIAGE_HISTORY'; history: TriageEntry[] };
+  | { type: 'SET_TRIAGE_HISTORY'; history: TriageEntry[] }
+  | { type: 'START_RENAME_TASK'; taskId: string }
+  | { type: 'CLEAR_RENAME_TASK' };
 
 const initialState: AppState = {
   repos: [],
@@ -187,6 +190,7 @@ const initialState: AppState = {
   showNotificationPopover: false,
   apiPort: null,
   archiveConfirm: null,
+  renamingTaskId: null,
 };
 
 export const defaultPaneState: TaskPaneState = {
@@ -483,6 +487,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, archiveConfirm: { taskId: action.taskId, taskName: action.taskName } };
     case 'HIDE_ARCHIVE_CONFIRM':
       return { ...state, archiveConfirm: null };
+    case 'START_RENAME_TASK':
+      return { ...state, renamingTaskId: action.taskId };
+    case 'CLEAR_RENAME_TASK':
+      return { ...state, renamingTaskId: null };
     case 'SHOW_TRIAGE':
       return closeActiveTaskDiff({
         ...state,

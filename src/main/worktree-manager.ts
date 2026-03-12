@@ -6,8 +6,23 @@ import { getRemotes } from './repo-manager';
 
 const execFile = promisify(execFileCb);
 
+/** Sanitize a task name into a valid git branch name / directory name. */
+function slugify(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9._/-]+/g, '-') // replace invalid chars with hyphens
+      .replace(/\.{2,}/g, '.') // no consecutive dots
+      .replace(/(^[./-]+|[./-]+$)/g, '') // no leading/trailing dots, slashes, hyphens
+      .replace(/@\{/g, 'at-') // no @{ sequence
+      .replace(/\.lock(\/|$)/g, '-lock$1') // no .lock component
+      .slice(0, 100) || // reasonable length limit
+    'task'
+  ); // fallback if nothing remains
+}
+
 function resolveWorktreePath(repoPath: string, taskName: string): string {
-  return path.join(repoPath, '.worktrees', taskName);
+  return path.join(repoPath, '.worktrees', slugify(taskName));
 }
 
 /** Ensure /.worktrees/ is listed in .git/info/exclude so it stays untracked without touching .gitignore. */
@@ -69,7 +84,7 @@ export async function createWorktree(
     }
   }
 
-  const newBranchName = await resolveAvailableBranchName(repoPath, branchName ?? taskName);
+  const newBranchName = await resolveAvailableBranchName(repoPath, branchName ?? slugify(taskName));
 
   await execFile('git', ['worktree', 'add', worktreePath, '-b', newBranchName, branch], {
     cwd: repoPath,
@@ -126,11 +141,12 @@ export async function createWorktreeFromPr(
   }
 
   await execFile('git', ['fetch', remoteName, prInfo.headBranch], { cwd: repoPath, timeout: 30000 });
-  await execFile('git', ['worktree', 'add', worktreePath, '-b', taskName, `${remoteName}/${prInfo.headBranch}`], {
+  const localBranch = slugify(taskName);
+  await execFile('git', ['worktree', 'add', worktreePath, '-b', localBranch, `${remoteName}/${prInfo.headBranch}`], {
     cwd: repoPath,
     timeout: 30000,
   });
-  await execFile('git', ['branch', '--set-upstream-to', `${remoteName}/${prInfo.headBranch}`, taskName], {
+  await execFile('git', ['branch', '--set-upstream-to', `${remoteName}/${prInfo.headBranch}`, localBranch], {
     cwd: worktreePath,
     timeout: 10000,
   });
@@ -143,7 +159,7 @@ export async function restoreWorktree(repoPath: string, taskName: string): Promi
 
   await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
 
-  await execFile('git', ['worktree', 'add', worktreePath, taskName], {
+  await execFile('git', ['worktree', 'add', worktreePath, slugify(taskName)], {
     cwd: repoPath,
     timeout: 30000,
   });

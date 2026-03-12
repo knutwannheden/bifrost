@@ -175,6 +175,12 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
         }
 
+        case 'task.rename': {
+          if (!s.activeTaskId) break;
+          dispatch({ type: 'START_RENAME_TASK', taskId: s.activeTaskId });
+          break;
+        }
+
         case 'task.archive': {
           const taskId = s.activeTaskId;
           if (!taskId) break;

@@ -164,6 +164,10 @@ export function useTerminal(
         const key = e.key.toLowerCase();
         if (interceptedKeysRef.current.shiftModKeys.has(key)) return false;
       }
+      // Bare keys (no modifiers) like F2
+      if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        if (interceptedKeysRef.current.bareKeys.has(e.key.toLowerCase())) return false;
+      }
       return true;
     });
 

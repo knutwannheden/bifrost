@@ -17,6 +17,7 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
     requiresTask: true,
     doubleConfirm: true,
   },
+  'task.rename': { id: 'task.rename', label: 'Rename task', category: 'tasks', requiresTask: true },
   'task.archive': {
     id: 'task.archive',
     label: 'Archive task',
@@ -112,6 +113,7 @@ function kb(actionId: string, shortcut: string): KeyBinding {
 export const DEFAULT_KEYMAP: KeyBinding[] = [
   kb('task.new', 'Cmd+T'),
   kb('task.close', 'Cmd+W'),
+  kb('task.rename', 'F2'),
   kb('task.archive', 'Cmd+Shift+W'),
   kb('nav.prevTab', 'Cmd+Shift+['),
   kb('nav.nextTab', 'Cmd+Shift+]'),
@@ -167,23 +169,30 @@ export function resolveKeymap(keybindings?: Record<string, string | null>): KeyB
 export interface InterceptedKeys {
   modKeys: Set<string>;
   shiftModKeys: Set<string>;
+  /** Keys without any modifier (e.g. F2) */
+  bareKeys: Set<string>;
 }
 
 export function getInterceptedKeys(keymap: KeyBinding[]): InterceptedKeys {
   const modKeys = new Set<string>();
   const shiftModKeys = new Set<string>();
+  const bareKeys = new Set<string>();
 
   for (const binding of keymap) {
     const first = binding.strokes[0];
-    if (!first?.mod) continue;
-    if (first.shift) {
-      shiftModKeys.add(first.key);
-    } else {
-      modKeys.add(first.key);
+    if (!first) continue;
+    if (first.mod) {
+      if (first.shift) {
+        shiftModKeys.add(first.key);
+      } else {
+        modKeys.add(first.key);
+      }
+    } else if (!first.shift && !first.alt) {
+      bareKeys.add(first.key);
     }
   }
 
-  return { modKeys, shiftModKeys };
+  return { modKeys, shiftModKeys, bareKeys };
 }
 
 export function strokeMatchesEvent(

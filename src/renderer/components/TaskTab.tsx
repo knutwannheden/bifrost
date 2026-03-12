@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task } from '../../shared/types';
+import { useApp } from '../context/AppContext';
 
 interface TaskTabProps {
   task: Task;
@@ -23,6 +24,7 @@ export default function TaskTab({
   onDragStart,
   onDragEnd,
 }: TaskTabProps) {
+  const { state, dispatch } = useApp();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(task.name);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -36,6 +38,14 @@ export default function TaskTab({
       inputRef.current?.select();
     }
   }, [editing]);
+
+  // React to START_RENAME_TASK from keymap engine
+  useEffect(() => {
+    if (state.renamingTaskId === task.id) {
+      dispatch({ type: 'CLEAR_RENAME_TASK' });
+      startEdit();
+    }
+  }, [state.renamingTaskId]);
 
   const handleMouseEnter = () => {
     hoverTimer.current = setTimeout(() => {
