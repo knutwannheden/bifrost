@@ -468,6 +468,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const targetId = resolveTaskId(body);
       const promptText = body.text as string;
       const mode = (body.mode as string) || 'direct';
+      const waitForTurn = body.waitForTurn === true;
       if (!targetId) {
         errorResponse(res, 'No taskId provided');
         return;
@@ -481,7 +482,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       try {
-        const result = await sendPromptToTask(targetId, promptText, mode);
+        const result = await sendPromptToTask(targetId, promptText, mode, waitForTurn);
         jsonResponse(res, result);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);

@@ -46,7 +46,7 @@ export function scrapePartialPrompt(taskId: string): string {
       if (!cLine) break;
       const cText = cLine.translateToString(true);
       // Stop at separator line or status bar
-      if (cText.includes('───') || cText.includes('bypass permissions')) break;
+      if (cText.includes('───') || cText.includes('shift+tab to cycle')) break;
       const stripped = cText.startsWith('  ') ? cText.slice(2) : cText;
       userText += `\n${stripped}`;
     }

@@ -1,5 +1,7 @@
 import type { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import type { ActivityEntry } from '../shared/types';
+import { getRecentClaudeEntries } from './claude-watcher';
 import { getTask } from './ipc-handlers';
 import { writeToSession } from './session-manager';
 
@@ -14,11 +16,13 @@ export interface SendPromptResult {
   ok: boolean;
   error?: string;
   queued?: boolean;
+  response?: string;
 }
 
 // Per-task state
 const activeSet = new Set<string>();
 const promptQueues = new Map<string, QueuedPrompt[]>();
+const turnWaiters = new Map<string, Array<() => void>>();
 
 let mainWindow: BrowserWindow | null = null;
 const scrapeResponseResolvers = new Map<string, (text: string) => void>();
@@ -36,6 +40,13 @@ export function markActive(taskId: string): void {
 /** Called by bifrost-api when Stop hook fires for a task. */
 export function markIdle(taskId: string): void {
   activeSet.delete(taskId);
+
+  // Resolve any waiters blocked on turn completion
+  const waiters = turnWaiters.get(taskId);
+  if (waiters && waiters.length > 0) {
+    turnWaiters.delete(taskId);
+    for (const resolve of waiters) resolve();
+  }
 
   // Drain queue — send next queued prompt
   const queue = promptQueues.get(taskId);
@@ -126,10 +137,32 @@ async function doSendPrompt(text: string, taskId: string): Promise<SendPromptRes
   return { ok: true };
 }
 
+function getLastAssistantMessage(taskId: string): string | null {
+  const task = getTask(taskId);
+  const entries = getRecentClaudeEntries(taskId, task.worktreePath);
+  const isAgentOutput = (e: ActivityEntry) =>
+    e.claudeEventKind === 'assistant_text' ||
+    (e.claudeEventKind === 'tool_use' && e.claudeToolName === 'AskUserQuestion');
+  const last = [...entries].reverse().find(isAgentOutput);
+  return last?.claudeText ?? null;
+}
+
+function waitForTurnComplete(taskId: string): Promise<void> {
+  return new Promise((resolve) => {
+    let waiters = turnWaiters.get(taskId);
+    if (!waiters) {
+      waiters = [];
+      turnWaiters.set(taskId, waiters);
+    }
+    waiters.push(resolve);
+  });
+}
+
 export async function sendPrompt(
   taskId: string,
   text: string,
   mode: SendPromptMode = 'direct',
+  waitForTurn = false,
 ): Promise<SendPromptResult> {
   // Validate task exists and is running
   try {
@@ -141,33 +174,46 @@ export async function sendPrompt(
     return { ok: false, error: `Task ${taskId} not found` };
   }
 
+  let sendResult: SendPromptResult;
+
   switch (mode) {
     case 'direct':
-      return doSendPrompt(text, taskId);
+      sendResult = await doSendPrompt(text, taskId);
+      break;
 
     case 'only-when-idle':
       if (!isIdle(taskId)) {
         return { ok: false, error: 'Claude is currently active' };
       }
-      return doSendPrompt(text, taskId);
+      sendResult = await doSendPrompt(text, taskId);
+      break;
 
     case 'queue':
       if (isIdle(taskId)) {
-        return doSendPrompt(text, taskId);
+        sendResult = await doSendPrompt(text, taskId);
+      } else {
+        // Queue for later — resolves when the queued prompt is actually sent
+        sendResult = await new Promise<SendPromptResult>((resolve) => {
+          let queue = promptQueues.get(taskId);
+          if (!queue) {
+            queue = [];
+            promptQueues.set(taskId, queue);
+          }
+          queue.push({ text, resolve });
+        });
       }
-      // Queue for later
-      return new Promise<SendPromptResult>((resolve) => {
-        let queue = promptQueues.get(taskId);
-        if (!queue) {
-          queue = [];
-          promptQueues.set(taskId, queue);
-        }
-        queue.push({ text, resolve });
-      });
+      break;
 
     default:
       return { ok: false, error: `Unknown mode: ${mode}` };
   }
+
+  if (!sendResult.ok || !waitForTurn) return sendResult;
+
+  // Block until the turn completes, then include the response
+  await waitForTurnComplete(taskId);
+  sendResult.response = getLastAssistantMessage(taskId) ?? undefined;
+  return sendResult;
 }
 
 /** Resolve a taskId from either explicit taskId or callerTaskId. */

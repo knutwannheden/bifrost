@@ -24,7 +24,7 @@ function getApiPort() {
 
 const TASK_ID = process.env.BIFROST_TASK_ID || null;
 
-function apiCall(endpoint, body) {
+function apiCall(endpoint, body, { timeout = 5000 } = {}) {
   const port = getApiPort();
   if (!port) return Promise.reject(new Error('Bifrost API not running'));
 
@@ -36,7 +36,7 @@ function apiCall(endpoint, body) {
         port,
         path: endpoint,
         method: 'POST',
-        timeout: 5000,
+        timeout,
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(data),
@@ -410,11 +410,56 @@ server.registerTool(
 );
 
 server.registerTool(
-  'send_prompt',
+  'ask_task',
   {
-    title: 'Send Prompt',
+    title: 'Ask Task',
     description:
-      'Send a prompt to a Bifrost task\'s Claude Code session. Saves any partial user input, submits the prompt, and restores the partial input after Claude finishes. Modes: "direct" sends immediately, "queue" waits for current turn to finish, "only-when-idle" fails if Claude is active.',
+      "Send a prompt to a Bifrost task's Claude Code session and wait for the response. Blocks until the task's turn completes, then returns the assistant's reply. Use 'queue' mode (default) to wait for any active turn to finish before sending, or 'only-when-idle' to fail immediately if Claude is active.",
+    inputSchema: {
+      taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
+      text: z.string().describe('The prompt text to send'),
+      mode: z
+        .enum(['queue', 'only-when-idle'])
+        .optional()
+        .describe('Send mode (default: queue). "direct" is not available for ask_task.'),
+    },
+  },
+  async ({ taskId, text, mode }) => {
+    const targetId = taskId || TASK_ID;
+    if (!targetId) {
+      return {
+        content: [{ type: 'text', text: "No task specified. Provide a 'taskId' or run inside a Bifrost task." }],
+        isError: true,
+      };
+    }
+    const result = await apiCall(
+      '/send-prompt',
+      {
+        taskId: targetId,
+        text,
+        mode: mode || 'queue',
+        waitForTurn: true,
+      },
+      { timeout: 0 },
+    );
+    if (!result.ok) {
+      return {
+        content: [{ type: 'text', text: `Failed: ${result.error}` }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: 'text', text: result.response || '(no response text captured)' }],
+    };
+  },
+);
+
+server.registerTool(
+  'tell_task',
+  {
+    title: 'Tell Task',
+    description:
+      'Send a prompt to a Bifrost task\'s Claude Code session without waiting for a response. Returns immediately after submitting. Modes: "direct" sends immediately (even if Claude is active), "queue" (default) waits for current turn to finish, "only-when-idle" fails if Claude is active.',
     inputSchema: {
       taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
       text: z.string().describe('The prompt text to send'),

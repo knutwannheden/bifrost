@@ -46,6 +46,53 @@ function getWordBeforeCursor(terminal: Terminal): string {
 }
 
 /**
+ * Fallback for TUIs (like Claude Code) that park the xterm cursor away from
+ * the input area. Scans the buffer for the last `❯` prompt between `───`
+ * separators and returns the last word of the input text.
+ */
+function getWordFromTuiPrompt(terminal: Terminal): string {
+  const buffer = terminal.buffer.active;
+  const totalLines = buffer.baseY + terminal.rows;
+
+  for (let y = totalLines - 1; y >= Math.max(0, totalLines - 50); y--) {
+    const line = buffer.getLine(y);
+    if (!line) continue;
+    const text = line.translateToString(true);
+    const promptIdx = text.indexOf('❯');
+    if (promptIdx < 0) continue;
+
+    // Verify separator above
+    let hasSeparatorAbove = false;
+    for (let sy = y - 1; sy >= Math.max(0, y - 3); sy--) {
+      const sLine = buffer.getLine(sy);
+      if (!sLine) continue;
+      if (sLine.translateToString(true).includes('───')) {
+        hasSeparatorAbove = true;
+        break;
+      }
+    }
+    if (!hasSeparatorAbove) continue;
+
+    // Build the full input text (first line + continuation lines)
+    let inputText = text.slice(promptIdx + 1).trim();
+    for (let cy = y + 1; cy < totalLines; cy++) {
+      const cLine = buffer.getLine(cy);
+      if (!cLine) break;
+      const cText = cLine.translateToString(true);
+      if (cText.includes('───') || cText.includes('shift+tab to cycle')) break;
+      const stripped = cText.startsWith('  ') ? cText.slice(2) : cText;
+      inputText += ` ${stripped}`;
+    }
+    inputText = inputText.trimEnd();
+
+    // Extract the last word
+    const words = inputText.split(/\s+/).filter(Boolean);
+    return words.length > 0 ? words[words.length - 1] : '';
+  }
+  return '';
+}
+
+/**
  * Search the terminal buffer for words starting with the given prefix.
  * Scans bottom-to-top so nearest matches come first. Deduplicates.
  */
@@ -87,13 +134,20 @@ export function hippieExpand(terminal: Terminal, sessionId: string): void {
     const match = state!.matches[state!.matchIndex];
     const suffix = match.slice(state!.prefix.length);
 
-    // Delete previous completion, insert new one
+    // Delete previous completion, then insert new one (separate writes
+    // so the TUI processes backspaces before receiving new text)
     const backspaces = '\x7f'.repeat(state!.insertedLength);
-    window.bifrost.writeToSession(sessionId, backspaces + suffix);
+    window.bifrost.writeToSession(sessionId, backspaces);
+    setTimeout(() => {
+      window.bifrost.writeToSession(sessionId, suffix);
+    }, 20);
     state!.insertedLength = suffix.length;
   } else {
-    // Fresh expand
-    const prefix = getWordBeforeCursor(terminal);
+    // Fresh expand — try cursor-based first, fall back to TUI prompt scanning
+    let prefix = getWordBeforeCursor(terminal);
+    if (!prefix) {
+      prefix = getWordFromTuiPrompt(terminal);
+    }
     if (!prefix) return;
 
     const matches = findMatches(terminal, prefix);
