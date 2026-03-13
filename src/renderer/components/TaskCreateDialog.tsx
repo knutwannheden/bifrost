@@ -90,8 +90,7 @@ export default function TaskCreateDialog() {
     branchListRef.current?.children[branchFocusedIdx]?.scrollIntoView({ block: 'nearest' });
   }, [branchFocusedIdx]);
 
-  // Save/restore focus; when repos exist, RepoDropdown handles its own autoFocus
-  useOverlayFocus(overlayRef);
+  useOverlayFocus(repoRef);
 
   // Detect PR or Slack URL on clipboard when dialog opens (skip if slackUrl was passed via action)
   useEffect(() => {
