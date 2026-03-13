@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { generateTaskName } from '../../shared/name-generator';
 import type { PrInfo, Repo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
@@ -89,12 +90,8 @@ export default function TaskCreateDialog() {
     branchListRef.current?.children[branchFocusedIdx]?.scrollIntoView({ block: 'nearest' });
   }, [branchFocusedIdx]);
 
-  // Focus overlay when no repos (RepoDropdown handles its own autoFocus)
-  useEffect(() => {
-    if (state.repos.length === 0) {
-      overlayRef.current?.focus();
-    }
-  }, [state.repos.length]);
+  // Save/restore focus; when repos exist, RepoDropdown handles its own autoFocus
+  useOverlayFocus(overlayRef);
 
   // Detect PR or Slack URL on clipboard when dialog opens (skip if slackUrl was passed via action)
   useEffect(() => {

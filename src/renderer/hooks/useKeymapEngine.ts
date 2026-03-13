@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { ACTION_REGISTRY, type KeyBinding, strokeMatchesEvent } from '../../shared/keymap';
 import type { CaptureContextParams } from '../../shared/types';
 import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
-import { defaultPaneState, getActiveDiffState } from '../context/AppContext';
+import { defaultPaneState, getActiveDiffState, isAnyOverlayOpen } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
 import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
@@ -534,6 +534,13 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
         clearTimeout(chordStateRef.current.timeoutId);
         chordStateRef.current = null;
       }
+
+      // Skip shortcuts when typing in an overlay input/textarea/select
+      const target = e.target as HTMLElement;
+      const inOverlayInput =
+        isAnyOverlayOpen(stateRef.current) &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+      if (inOverlayInput) return;
 
       const key = e.key.toLowerCase();
       const s = stateRef.current;

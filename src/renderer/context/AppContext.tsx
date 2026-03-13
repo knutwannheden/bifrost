@@ -235,6 +235,27 @@ function closeActiveTaskDiff(state: AppState): AppState {
   return setPaneState(state, state.activeTaskId, { ...ps, showDiff: false });
 }
 
+/** Check whether any modal overlay is open (excludes non-modal popover and confirm dialog) */
+export function isAnyOverlayOpen(state: AppState): boolean {
+  if (
+    state.showRepoManager ||
+    state.showCreateDialog ||
+    state.showTaskHistory ||
+    state.showKeyboardShortcuts ||
+    state.showSettings ||
+    state.showNotes ||
+    state.showStats ||
+    state.showSupervisor ||
+    state.showTriage
+  )
+    return true;
+  if (state.activeTaskId) {
+    const ps = state.paneStates[state.activeTaskId];
+    if (ps?.showDiff) return true;
+  }
+  return false;
+}
+
 /** Get diff state for the active task (convenience for consumers) */
 export function getActiveDiffState(state: AppState): { showDiff: boolean; diffMode: DiffMode } {
   if (!state.activeTaskId) return { showDiff: false, diffMode: 'git' };

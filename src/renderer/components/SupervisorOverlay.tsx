@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { SupervisorItem, SupervisorState } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { formatTime } from '../utils/format-time';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
@@ -81,9 +82,7 @@ export default function SupervisorOverlay() {
   const panelRef = useRef<HTMLDivElement>(null);
   const close = () => dispatch({ type: 'TOGGLE_SUPERVISOR' });
 
-  useEffect(() => {
-    panelRef.current?.focus();
-  }, []);
+  useOverlayFocus(panelRef);
 
   useEffect(() => {
     window.bifrost.getSupervisorState().then(setSvState);

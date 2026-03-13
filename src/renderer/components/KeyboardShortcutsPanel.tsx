@@ -9,6 +9,7 @@ import {
 } from '../../shared/keymap';
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { requestArchive } from '../utils/archive';
 import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
@@ -88,9 +89,7 @@ export default function KeyboardShortcutsPanel() {
     el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIndex, executableIndices]);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useOverlayFocus(inputRef);
 
   const close = () => dispatch({ type: 'TOGGLE_KEYBOARD_SHORTCUTS' });
 

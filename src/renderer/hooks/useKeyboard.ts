@@ -2,7 +2,7 @@ import type { Terminal } from '@xterm/xterm';
 import { useEffect, useRef } from 'react';
 import type { CaptureContextParams } from '../../shared/types';
 import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
-import { defaultPaneState, getActiveDiffState } from '../context/AppContext';
+import { defaultPaneState, getActiveDiffState, isAnyOverlayOpen } from '../context/AppContext';
 import { requestArchive } from '../utils/archive';
 import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
 import { terminalRegistry } from './useTerminal';
@@ -151,6 +151,13 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
       const { showDiff, diffMode } = getActiveDiffState(state);
 
       if (!isModKey(e)) return;
+
+      // Skip shortcuts when typing in an overlay input/textarea/select
+      const target = e.target as HTMLElement;
+      const inOverlayInput =
+        isAnyOverlayOpen(state) &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+      if (inOverlayInput) return;
 
       const key = e.key.toLowerCase();
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Note } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { formatTime } from '../utils/format-time';
 import { altSymbol, deleteSymbol, isModKey, modSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
@@ -52,10 +53,7 @@ export default function NotesOverlay() {
     });
   }, [repoId]);
 
-  // Focus panel on mount so keyboard shortcuts work
-  useEffect(() => {
-    panelRef.current?.focus();
-  }, []);
+  useOverlayFocus(panelRef);
 
   // Focus textarea only when entering new-note mode (not on initial mount)
   const mountedRef = useRef(false);

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { ClaudeSession, DiffStats, Task } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { requestArchive } from '../utils/archive';
 import { formatDate, formatRelative } from '../utils/format-time';
 import { shortPath } from '../utils/paths';
@@ -375,10 +376,7 @@ export default function TaskHistoryPanel() {
     itemRefs.current[focusedIdx]?.scrollIntoView({ block: 'nearest' });
   }, [focusedIdx]);
 
-  // Focus the overlay on mount
-  useEffect(() => {
-    overlayRef.current?.focus();
-  }, []);
+  useOverlayFocus(overlayRef);
 
   const close = useCallback(() => dispatch({ type: 'TOGGLE_TASK_HISTORY' }), [dispatch]);
 

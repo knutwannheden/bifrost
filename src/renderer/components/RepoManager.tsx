@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { RecentRepo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { repoDisplayName, shortPath } from '../utils/paths';
 import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
@@ -31,9 +32,7 @@ export default function RepoManager() {
     dispatch({ type: 'TOGGLE_REPO_MANAGER' });
   }, [dispatch]);
 
-  useEffect(() => {
-    overlayRef.current?.focus();
-  }, []);
+  useOverlayFocus(overlayRef);
 
   const filteredRepos = state.repos.filter((r) => matchesAllTerms(`${repoDisplayName(r)} ${r.path}`, search));
 

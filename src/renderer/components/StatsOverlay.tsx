@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ContextRotEntry, EscalationEntry, StatsData } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import FlaskIcon from './FlaskIcon';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
@@ -209,9 +210,7 @@ export default function StatsOverlay() {
   const [data, setData] = useState<StatsData>(emptyStats);
   const [done, setDone] = useState(false);
 
-  useEffect(() => {
-    containerRef.current?.focus();
-  }, []);
+  useOverlayFocus(containerRef);
 
   useEffect(() => {
     setData(emptyStats);

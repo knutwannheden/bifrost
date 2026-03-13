@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { PROMPT_DEFS } from '../../shared/default-prompts';
 import type { BifrostConfig } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
 import { modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
@@ -506,9 +507,7 @@ export default function SettingsOverlay() {
 
   const settings = useMemo(() => buildSettings(), []);
 
-  useEffect(() => {
-    searchRef.current?.focus();
-  }, []);
+  useOverlayFocus(searchRef);
 
   const close = () => dispatch({ type: 'TOGGLE_SETTINGS' });
 

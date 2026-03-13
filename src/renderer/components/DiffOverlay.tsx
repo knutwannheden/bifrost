@@ -788,7 +788,11 @@ function ReviewPanel({ taskId }: { taskId: string }) {
     window.bifrost.listReviews(taskId).then((entries) => {
       dispatch({ type: 'SET_REVIEWS', taskId, reviews: entries });
       // Auto-select the most recent review if none selected
-      if (entries.length > 0 && !state.activeReviewId[taskId] && state.reviewStatus[`__pending__:${taskId}`] !== 'running') {
+      if (
+        entries.length > 0 &&
+        !state.activeReviewId[taskId] &&
+        state.reviewStatus[`__pending__:${taskId}`] !== 'running'
+      ) {
         const newest = entries.reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
         dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: newest.id });
       }
@@ -906,9 +910,17 @@ export default function DiffOverlay() {
     }
   }, [focusedIdx, isLog]);
 
+  const previousFocusRef = useRef<Element | null>(null);
   useEffect(() => {
     if (showDiff) {
+      previousFocusRef.current = document.activeElement;
       containerRef.current?.focus();
+    } else if (previousFocusRef.current) {
+      const prev = previousFocusRef.current;
+      previousFocusRef.current = null;
+      if (prev instanceof HTMLElement && document.contains(prev)) {
+        prev.focus();
+      }
     }
   }, [showDiff]);
 

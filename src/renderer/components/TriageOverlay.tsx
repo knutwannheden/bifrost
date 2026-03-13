@@ -3,6 +3,7 @@ import type { TriageEntry } from '../../shared/types';
 import type { TriageItem, TriageTab } from '../context/AppContext';
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
+import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { formatTime } from '../utils/format-time';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
@@ -148,12 +149,7 @@ export default function TriageOverlay() {
     }
   }, [state.triageTab, dispatch]);
 
-  // Focus panel on mount
-  useEffect(() => {
-    if (!interactiveId) {
-      panelRef.current?.focus();
-    }
-  }, [interactiveId]);
+  useOverlayFocus(panelRef);
 
   const close = useCallback(() => {
     if (interactiveId) {

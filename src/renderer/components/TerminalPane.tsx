@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
-import { getActiveDiffState, useApp } from '../context/AppContext';
+import { isAnyOverlayOpen, useApp } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
 import { useResolvedDark } from '../hooks/useTheme';
 import { isModKey } from '../utils/platform';
@@ -63,17 +63,7 @@ export default function TerminalPane({
   // Focus the terminal when it becomes the focused pane and no overlays are showing.
   // When `focused` transitions to true, the caller explicitly wants focus (e.g. discussion
   // terminal inside the diff overlay), so skip the overlay guard in that case.
-  const { showDiff } = getActiveDiffState(state);
-  const anyOverlay =
-    state.showRepoManager ||
-    state.showCreateDialog ||
-    showDiff ||
-    state.showTaskHistory ||
-    state.showKeyboardShortcuts ||
-    state.showSettings ||
-    state.showNotes ||
-    state.showStats ||
-    state.showSupervisor;
+  const anyOverlay = isAnyOverlayOpen(state);
   const prevFocused = useRef(false);
   useEffect(() => {
     const becameFocused = focused && !prevFocused.current;
