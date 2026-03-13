@@ -1,10 +1,21 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import PrimaryButton from './PrimaryButton';
 
 export default function NotificationPopover() {
   const { state, dispatch } = useApp();
   const popoverRef = useRef<HTMLDivElement>(null);
+  const [focusedIdx, setFocusedIdx] = useState(0);
+
+  // Reset focus index when popover opens or notification list changes
+  useEffect(() => {
+    if (state.showNotificationPopover) setFocusedIdx(0);
+  }, [state.showNotificationPopover]);
+
+  // Auto-focus the popover when opened
+  useEffect(() => {
+    if (state.showNotificationPopover) popoverRef.current?.focus();
+  }, [state.showNotificationPopover]);
 
   // Close on click outside
   useEffect(() => {
@@ -24,22 +35,6 @@ export default function NotificationPopover() {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handler);
     };
-  }, [state.showNotificationPopover, dispatch]);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!state.showNotificationPopover) return;
-
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' });
-      }
-    };
-
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
   }, [state.showNotificationPopover, dispatch]);
 
   if (!state.showNotificationPopover) return null;
@@ -119,21 +114,63 @@ export default function NotificationPopover() {
     }
   };
 
+  const notifications = state.notifications;
+  const clampedIdx = Math.min(focusedIdx, notifications.length - 1);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (notifications.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+      case 'j':
+        e.preventDefault();
+        setFocusedIdx((i) => (i < notifications.length - 1 ? i + 1 : 0));
+        break;
+      case 'ArrowUp':
+      case 'k':
+        e.preventDefault();
+        setFocusedIdx((i) => (i > 0 ? i - 1 : notifications.length - 1));
+        break;
+      case 'Enter': {
+        e.preventDefault();
+        const n = notifications[clampedIdx];
+        if (n?.action) handleAction(n.id, n.action.handler);
+        break;
+      }
+      case 'd': {
+        e.preventDefault();
+        const n = notifications[clampedIdx];
+        if (n) dispatch({ type: 'DISMISS_NOTIFICATION', id: n.id });
+        break;
+      }
+      case 'Escape':
+        e.preventDefault();
+        e.stopPropagation();
+        dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' });
+        break;
+    }
+  };
+
   return (
     <div
       ref={popoverRef}
-      className="fixed right-11 top-20 z-50 w-72 max-h-[300px] flex flex-col bg-app/60 backdrop-blur-xl border border-border-input rounded-lg shadow-2xl overflow-hidden"
+      tabIndex={-1}
+      className="fixed right-11 top-20 z-50 w-72 max-h-[300px] flex flex-col bg-app/60 backdrop-blur-xl border border-border-input rounded-lg shadow-2xl overflow-hidden focus:outline-hidden"
+      onKeyDown={handleKeyDown}
     >
       <div className="px-3 py-2 border-b border-border-default">
         <span className="text-xs font-semibold text-secondary">Notifications</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {state.notifications.length === 0 ? (
+        {notifications.length === 0 ? (
           <div className="px-3 py-6 text-center text-xs text-muted">No notifications</div>
         ) : (
-          state.notifications.map((n) => (
-            <div key={n.id} className="px-3 py-2 border-b border-border-default/50 last:border-0">
+          notifications.map((n, idx) => (
+            <div
+              key={n.id}
+              className={`px-3 py-2 border-b border-border-default/50 last:border-0 ${idx === clampedIdx ? 'bg-surface-hover' : ''}`}
+            >
               <div className="text-xs font-medium text-primary">{n.title}</div>
               <div className="text-xs text-secondary mt-0.5">{n.message}</div>
               {n.action && (
@@ -153,6 +190,11 @@ export default function NotificationPopover() {
           ))
         )}
       </div>
+      {notifications.length > 0 && (
+        <div className="px-3 py-1.5 border-t border-border-default">
+          <span className="text-xs text-faint">↑↓ navigate · Enter action · d dismiss · Esc close</span>
+        </div>
+      )}
     </div>
   );
 }
