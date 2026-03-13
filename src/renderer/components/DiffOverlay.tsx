@@ -120,40 +120,48 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
   const [tokens, setTokens] = useState<HighlightedToken[][] | null>(null);
   const observerRef = useRef<HTMLDivElement | null>(null);
 
+  // Effect 1: detect when the section scrolls near the viewport
   useEffect(() => {
+    if (visible) return;
     const el = observerRef.current;
     if (!el) return;
-
-    let cancelled = false;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
           observer.disconnect();
           setVisible(true);
-          const filePath = file.newPath || file.oldPath;
-          const ext = extFromPath(filePath);
-          const filename = filePath.split('/').pop() || '';
-          const allLines = file.hunks.flatMap((h) => h.lines);
-          highlightLines(
-            allLines.map((l) => l.content),
-            ext,
-            isDarkTheme(),
-            filename,
-          ).then((result) => {
-            if (!cancelled) setTokens(result);
-          });
         }
       },
       { rootMargin: '300px' },
     );
 
     observer.observe(el);
+    return () => observer.disconnect();
+  }, [visible]);
+
+  // Effect 2: run Shiki highlighting once visible (re-runs if file changes)
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+
+    const filePath = file.newPath || file.oldPath;
+    const ext = extFromPath(filePath);
+    const filename = filePath.split('/').pop() || '';
+    const allLines = file.hunks.flatMap((h) => h.lines);
+    highlightLines(
+      allLines.map((l) => l.content),
+      ext,
+      isDarkTheme(),
+      filename,
+    ).then((result) => {
+      if (!cancelled) setTokens(result);
+    });
+
     return () => {
       cancelled = true;
-      observer.disconnect();
     };
-  }, [file]);
+  }, [visible, file]);
 
   if (!visible) {
     // Estimated height: 20px per line (leading-5) + hunk separator headers
