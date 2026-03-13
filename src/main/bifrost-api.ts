@@ -18,7 +18,7 @@ import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
-import { initPromptSender, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
+import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
 import { addRepo } from './repo-manager';
 import { cancelReview, completeReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
 import { killSession } from './session-manager';
@@ -212,6 +212,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         name: t.name,
         repoId: t.repoId,
         status: t.status,
+        idle: t.status === 'running' ? isIdle(t.id) : undefined,
         branch: t.branch,
         worktreePath: t.worktreePath,
         createdAt: t.createdAt,

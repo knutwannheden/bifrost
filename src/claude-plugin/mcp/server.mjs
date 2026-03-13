@@ -135,7 +135,12 @@ server.registerTool(
     const result = await apiCall('/list-tasks', {});
     const text =
       result.tasks.length > 0
-        ? result.tasks.map((t) => `- ${t.name} [${t.status}] (branch: ${t.branch}, id: ${t.id})`).join('\n')
+        ? result.tasks
+            .map((t) => {
+              const status = t.idle === false ? 'working' : t.idle === true ? 'idle' : t.status;
+              return `- ${t.name} [${status}] (branch: ${t.branch}, id: ${t.id})`;
+            })
+            .join('\n')
         : 'No active Bifrost tasks.';
     return { content: [{ type: 'text', text }] };
   },
@@ -414,7 +419,7 @@ server.registerTool(
   {
     title: 'Ask Task',
     description:
-      "Send a prompt to a Bifrost task's Claude Code session and wait for the response. Blocks until the task's turn completes, then returns the assistant's reply. Use 'queue' mode (default) to wait for any active turn to finish before sending, or 'only-when-idle' to fail immediately if Claude is active.",
+      "Send a prompt to a Bifrost task's Claude Code session and wait for the response. Blocks until the task's turn completes, then returns the assistant's reply. WARNING: This can take a long time if the task is currently busy — the prompt is queued and the call blocks until both the current turn and the prompted turn finish. Use list_tasks to check task status before calling. Use 'queue' mode (default) to wait for any active turn to finish before sending, or 'only-when-idle' to fail immediately if the task is busy.",
     inputSchema: {
       taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
       text: z.string().describe('The prompt text to send'),

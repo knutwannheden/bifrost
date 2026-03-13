@@ -2,7 +2,7 @@ import type { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
-import { getTask } from './ipc-handlers';
+import { getTask, isPendingRestore, restoreTaskSession } from './ipc-handlers';
 import { writeToSession } from './session-manager';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle';
@@ -66,7 +66,7 @@ export function handleScrapeResponse(requestId: string, text: string): void {
   }
 }
 
-function isIdle(taskId: string): boolean {
+export function isIdle(taskId: string): boolean {
   return !activeSet.has(taskId);
 }
 
@@ -172,6 +172,13 @@ export async function sendPrompt(
     }
   } catch {
     return { ok: false, error: `Task ${taskId} not found` };
+  }
+
+  // Auto-restore tasks whose sessions were deferred on startup.
+  // Force queue mode since the session needs time to start up.
+  if (isPendingRestore(taskId) && mainWindow && !mainWindow.isDestroyed()) {
+    restoreTaskSession(taskId, mainWindow);
+    mode = 'queue';
   }
 
   let sendResult: SendPromptResult;

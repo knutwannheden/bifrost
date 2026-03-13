@@ -254,7 +254,12 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   return task;
 }
 
-function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): void {
+/** Check if a task needs session restoration (deferred on startup). */
+export function isPendingRestore(taskId: string): boolean {
+  return pendingRestore.has(taskId);
+}
+
+export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): void {
   pendingRestore.delete(taskId);
   const task = getTask(taskId);
   const config = loadConfig();
