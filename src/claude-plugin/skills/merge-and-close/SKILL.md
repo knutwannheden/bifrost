@@ -28,7 +28,7 @@ Skipping this = broken main branch, reverted merges, wasted time for the whole t
 
 Run:
 ```
-gh pr checks <pr-number> --json name,state,status --jq '.[] | [.name, .state, .status] | @tsv'
+gh pr checks <pr-number> --json name,state --jq '.[] | [.name, .state] | @tsv'
 ```
 
 Evaluate the result:
@@ -36,8 +36,8 @@ Evaluate the result:
 | State | Action |
 |-------|--------|
 | All checks `SUCCESS` | Proceed to merge |
-| Any check `PENDING` or `IN_PROGRESS` | Poll (see step 3) |
-| Any check `FAILURE` or `ERROR` | Report which checks failed and **stop** |
+| Any check `PENDING` | Poll (see step 3) |
+| Any check `FAILURE` | Report which checks failed and **stop** |
 | No checks configured | Proceed to merge with a note to the user |
 
 ### 3. Poll for pending checks
