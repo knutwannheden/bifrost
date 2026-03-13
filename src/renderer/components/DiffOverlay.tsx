@@ -60,8 +60,8 @@ function DiffLineRow({ line, tokens }: { line: DiffLine; tokens: HighlightedToke
     <div className={`flex leading-5 ${bgClass}`}>
       <LineNumber num={line.oldLineNo} />
       <LineNumber num={line.newLineNo} />
-      <span className={`${signColor} w-4 inline-block text-center shrink-0 text-xs leading-5`}>{sign}</span>
       <span className="flex-1 text-xs leading-5 whitespace-pre">
+        <span className={`${signColor} inline-block w-4 text-center`}>{sign}</span>
         {tokens.map((token, i) => (
           <span key={i} style={{ color: token.color }}>
             {token.content}
