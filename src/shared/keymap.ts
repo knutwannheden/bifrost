@@ -198,7 +198,10 @@ export function getInterceptedKeys(keymap: KeyBinding[]): InterceptedKeys {
 export function strokeMatchesEvent(
   stroke: KeyStroke,
   e: { key: string; code?: string; shiftKey: boolean; altKey: boolean },
+  /** Whether the platform modifier key (Cmd on Mac, Ctrl on Linux/Win) is held */
+  mod: boolean,
 ): boolean {
+  if (!!stroke.mod !== mod) return false;
   const key = e.key.toLowerCase();
   if (stroke.key === '[' || stroke.key === ']') {
     const code = e.code ?? '';

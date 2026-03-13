@@ -517,7 +517,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           chordStateRef.current = null;
 
           for (const binding of chord.firstStroke) {
-            if (binding.strokes.length >= 2 && strokeMatchesEvent(binding.strokes[1], e)) {
+            if (binding.strokes.length >= 2 && strokeMatchesEvent(binding.strokes[1], e, isModKey(e))) {
               e.preventDefault();
               handleActionWithDoubleConfirm(binding.actionId);
               return;
@@ -555,7 +555,8 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
 
       // Find all bindings whose first stroke matches
       const currentKeymap = keymapRef.current;
-      const matchingBindings = currentKeymap.filter((b) => strokeMatchesEvent(b.strokes[0], e));
+      const mod = isModKey(e);
+      const matchingBindings = currentKeymap.filter((b) => strokeMatchesEvent(b.strokes[0], e, mod));
       if (matchingBindings.length === 0) return;
 
       // Cmd+Shift+C: skip if already handled by DiffOverlay
