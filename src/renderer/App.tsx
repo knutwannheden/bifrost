@@ -22,6 +22,7 @@ import type { AppAction, AppState, PaneTarget } from './context/AppContext';
 import { defaultPaneState, getActiveDiffState, useApp } from './context/AppContext';
 import { KeymapProvider } from './context/KeymapContext';
 import { useKeymapEngine } from './hooks/useKeymapEngine';
+import { lockTerminalInput, unlockTerminalInput } from './hooks/useTerminal';
 import { useTheme } from './hooks/useTheme';
 import { performArchive, requestArchive } from './utils/archive';
 import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
@@ -138,13 +139,21 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
-  // Handle scrape-prompt requests from main process (prompt-sender)
+  // Handle scrape-prompt requests from main process (prompt-sender).
+  // Lock terminal input during the send to prevent user keystrokes from interfering.
   useEffect(() => {
-    const unsub = window.bifrost.onScrapePromptRequest((taskId, requestId) => {
+    const unsubScrape = window.bifrost.onScrapePromptRequest((taskId, requestId) => {
+      lockTerminalInput(taskId);
       const text = scrapePartialPrompt(taskId);
       window.bifrost.scrapePromptResponse(requestId, text);
     });
-    return unsub;
+    const unsubUnlock = window.bifrost.onTerminalUnlock((taskId) => {
+      unlockTerminalInput(taskId);
+    });
+    return () => {
+      unsubScrape();
+      unsubUnlock();
+    };
   }, []);
 
   // Buffer last assistant text per task for hook notifications.

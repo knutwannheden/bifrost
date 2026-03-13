@@ -5,10 +5,6 @@ import { writeToSession } from './session-manager';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle';
 
-interface PendingRestore {
-  savedText: string;
-}
-
 interface QueuedPrompt {
   text: string;
   resolve: (result: SendPromptResult) => void;
@@ -22,7 +18,6 @@ export interface SendPromptResult {
 
 // Per-task state
 const activeSet = new Set<string>();
-const pendingRestores = new Map<string, PendingRestore>();
 const promptQueues = new Map<string, QueuedPrompt[]>();
 
 let mainWindow: BrowserWindow | null = null;
@@ -41,14 +36,6 @@ export function markActive(taskId: string): void {
 /** Called by bifrost-api when Stop hook fires for a task. */
 export function markIdle(taskId: string): void {
   activeSet.delete(taskId);
-
-  // Restore saved partial prompt
-  const restore = pendingRestores.get(taskId);
-  if (restore) {
-    pendingRestores.delete(taskId);
-    // Convert \n to \r so the TUI interprets them as Enter keypresses
-    writeToSession(taskId, restore.savedText.replace(/\n/g, '\r'));
-  }
 
   // Drain queue — send next queued prompt
   const queue = promptQueues.get(taskId);
@@ -77,9 +64,12 @@ async function scrapePartialPrompt(taskId: string): Promise<string> {
 
   const requestId = `scrape-${++scrapeIdCounter}`;
   return new Promise<string>((resolve) => {
-    // Timeout after 2s — if renderer doesn't respond, assume empty
+    // Timeout after 2s — if renderer doesn't respond, assume empty and unlock
     const timer = setTimeout(() => {
       scrapeResponseResolvers.delete(requestId);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_STREAM.TERMINAL_UNLOCK, taskId);
+      }
       resolve('');
     }, 2000);
 
@@ -97,13 +87,8 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function doSendPrompt(text: string, taskId: string): Promise<SendPromptResult> {
-  // Scrape any partial prompt the user typed
+  // Scrape any partial prompt the user typed (also locks terminal input)
   const savedText = await scrapePartialPrompt(taskId);
-
-  // Store for restoration after Claude finishes
-  if (savedText) {
-    pendingRestores.set(taskId, { savedText });
-  }
 
   // Clear any existing input regardless of cursor position.
   // Option+Backspace (\x1b\x7f) erases one word backward per press.
@@ -124,7 +109,19 @@ async function doSendPrompt(text: string, taskId: string): Promise<SendPromptRes
     }
   }
 
+  // Send the prompt
   writeToSession(taskId, `${text}\r`);
+
+  // Restore saved text immediately — characters written to the PTY
+  // will be buffered in stdin and appear when the prompt area returns.
+  if (savedText) {
+    writeToSession(taskId, savedText.replace(/\n/g, '\r'));
+  }
+
+  // Unlock terminal input in the renderer
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.TERMINAL_UNLOCK, taskId);
+  }
 
   return { ok: true };
 }

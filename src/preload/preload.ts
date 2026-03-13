@@ -255,6 +255,11 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.SCRAPE_PROMPT_REQUEST, handler);
   },
   scrapePromptResponse: (requestId, text) => ipcRenderer.invoke(IPC.SCRAPE_PROMPT_RESPONSE, requestId, text),
+  onTerminalUnlock: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string) => callback(taskId);
+    ipcRenderer.on(IPC_STREAM.TERMINAL_UNLOCK, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TERMINAL_UNLOCK, handler);
+  },
 
   // Menu actions
   onMenuAction: (callback) => {

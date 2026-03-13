@@ -14,6 +14,26 @@ import { isMac, isModKey } from '../utils/platform';
 export const terminalRegistry = new Map<string, Terminal>();
 export const searchAddonRegistry = new Map<string, SearchAddon>();
 
+// Terminal input lock for prompt-sender: when locked, keystrokes are buffered
+export const terminalInputLocks = new Set<string>();
+const terminalInputBuffers = new Map<string, string[]>();
+
+export function lockTerminalInput(sessionId: string): void {
+  terminalInputLocks.add(sessionId);
+}
+
+export function unlockTerminalInput(sessionId: string): void {
+  terminalInputLocks.delete(sessionId);
+  // Replay buffered keystrokes
+  const buffer = terminalInputBuffers.get(sessionId);
+  if (buffer && buffer.length > 0) {
+    for (const data of buffer) {
+      window.bifrost.writeToSession(sessionId, data);
+    }
+  }
+  terminalInputBuffers.delete(sessionId);
+}
+
 // Module-level ref so KeymapContext can update intercepted keys without re-attaching the handler.
 // Initialised from DEFAULT_KEYMAP so terminal interception works before KeymapProvider mounts.
 export const interceptedKeysRef: { current: InterceptedKeys } = { current: getInterceptedKeys(DEFAULT_KEYMAP) };
@@ -181,10 +201,19 @@ export function useTerminal(
       return true;
     });
 
-    // Send keystrokes to session
+    // Send keystrokes to session (buffer when locked by prompt-sender)
     terminal.onData((data) => {
       resetHippieState();
-      window.bifrost.writeToSession(sessionId, data);
+      if (terminalInputLocks.has(sessionId)) {
+        let buf = terminalInputBuffers.get(sessionId);
+        if (!buf) {
+          buf = [];
+          terminalInputBuffers.set(sessionId, buf);
+        }
+        buf.push(data);
+      } else {
+        window.bifrost.writeToSession(sessionId, data);
+      }
     });
 
     // Listen for terminal title changes (OSC 0/2)

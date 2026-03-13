@@ -179,6 +179,7 @@ export const IPC_STREAM = {
   TRIAGE_WAITING: 'triage:waiting',
   CLAUDE_ACTIVE: 'claude:active',
   SCRAPE_PROMPT_REQUEST: 'prompt:scrape-request',
+  TERMINAL_UNLOCK: 'terminal:unlock',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -356,6 +357,7 @@ export interface BifrostAPI {
   ): Promise<{ ok: boolean; error?: string; queued?: boolean }>;
   onScrapePromptRequest(callback: (taskId: string, requestId: string) => void): () => void;
   scrapePromptResponse(requestId: string, text: string): Promise<void>;
+  onTerminalUnlock(callback: (taskId: string) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;
