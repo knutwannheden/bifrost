@@ -5,7 +5,18 @@ const BASE =
 
 export default function FormTextarea({
   className = '',
+  onKeyDown,
   ...props
 }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: React.Ref<HTMLTextAreaElement> }) {
-  return <textarea className={`${BASE} ${className}`} {...props} />;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Option+Enter inserts a newline (like Shift+Enter), consistent with xterm.js
+    if (e.key === 'Enter' && e.altKey) {
+      e.preventDefault();
+      document.execCommand('insertText', false, '\n');
+      return;
+    }
+    onKeyDown?.(e);
+  };
+
+  return <textarea className={`${BASE} ${className}`} onKeyDown={handleKeyDown} {...props} />;
 }
