@@ -5,7 +5,7 @@ import { getRecentClaudeEntries } from './claude-watcher';
 import { getTask, isPendingRestore, restoreTaskSession } from './ipc-handlers';
 import { writeToSession } from './session-manager';
 
-export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle';
+export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
 
 interface QueuedPrompt {
   text: string;
@@ -97,6 +97,15 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function doInterruptAndSend(text: string, taskId: string): Promise<SendPromptResult> {
+  // Send Escape to stop current generation, then wait for prompt area
+  writeToSession(taskId, '\x1b');
+  await sleep(200);
+  // Now send the prompt normally (no save/restore — we interrupted)
+  writeToSession(taskId, `${text}\r`);
+  return { ok: true };
+}
+
 async function doSendPrompt(text: string, taskId: string): Promise<SendPromptResult> {
   // Scrape any partial prompt the user typed (also locks terminal input)
   const savedText = await scrapePartialPrompt(taskId);
@@ -163,6 +172,7 @@ export async function sendPrompt(
   text: string,
   mode: SendPromptMode = 'direct',
   waitForTurn = false,
+  callerName?: string,
 ): Promise<SendPromptResult> {
   // Validate task exists and is running
   try {
@@ -181,23 +191,31 @@ export async function sendPrompt(
     mode = 'queue';
   }
 
+  // Prefix with caller identity so the recipient knows who's talking
+  const prefix = callerName ? `[From Bifrost task "${callerName}"]` : '[From unknown agent]';
+  const prefixedText = `${prefix} ${text}`;
+
   let sendResult: SendPromptResult;
 
   switch (mode) {
     case 'direct':
-      sendResult = await doSendPrompt(text, taskId);
+      sendResult = await doSendPrompt(prefixedText, taskId);
+      break;
+
+    case 'interrupt':
+      sendResult = await doInterruptAndSend(prefixedText, taskId);
       break;
 
     case 'only-when-idle':
       if (!isIdle(taskId)) {
         return { ok: false, error: 'Claude is currently active' };
       }
-      sendResult = await doSendPrompt(text, taskId);
+      sendResult = await doSendPrompt(prefixedText, taskId);
       break;
 
     case 'queue':
       if (isIdle(taskId)) {
-        sendResult = await doSendPrompt(text, taskId);
+        sendResult = await doSendPrompt(prefixedText, taskId);
       } else {
         // Queue for later — resolves when the queued prompt is actually sent
         sendResult = await new Promise<SendPromptResult>((resolve) => {
@@ -206,7 +224,7 @@ export async function sendPrompt(
             queue = [];
             promptQueues.set(taskId, queue);
           }
-          queue.push({ text, resolve });
+          queue.push({ text: prefixedText, resolve });
         });
       }
       break;

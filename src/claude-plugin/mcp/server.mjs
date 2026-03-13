@@ -414,19 +414,31 @@ server.registerTool(
   },
 );
 
+/** Resolve the calling task's name for message attribution. */
+async function getCallerName() {
+  if (!TASK_ID) return undefined;
+  try {
+    const result = await apiCall('/list-tasks', {});
+    const caller = result.tasks.find((t) => t.id === TASK_ID);
+    return caller?.name;
+  } catch {
+    return undefined;
+  }
+}
+
 server.registerTool(
   'ask_task',
   {
     title: 'Ask Task',
     description:
-      "Send a prompt to a Bifrost task's Claude Code session and wait for the response. Blocks until the task's turn completes, then returns the assistant's reply. WARNING: This can take a long time if the task is currently busy — the prompt is queued and the call blocks until both the current turn and the prompted turn finish. Use list_tasks to check task status before calling. Use 'queue' mode (default) to wait for any active turn to finish before sending, or 'only-when-idle' to fail immediately if the task is busy.",
+      'Send a prompt to a Bifrost task\'s Claude Code session and wait for the response. Blocks until the task\'s turn completes, then returns the assistant\'s reply. Messages are automatically prefixed with the sender\'s identity. WARNING: This can take a long time if the task is currently busy — the prompt is queued and the call blocks until both the current turn and the prompted turn finish. Use list_tasks to check task status before calling. Modes: "queue" (default) waits for any active turn to finish before sending, "interrupt" stops the task\'s current work and sends immediately, "only-when-idle" fails if the task is busy.',
     inputSchema: {
       taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
       text: z.string().describe('The prompt text to send'),
       mode: z
-        .enum(['queue', 'only-when-idle'])
+        .enum(['queue', 'interrupt', 'only-when-idle'])
         .optional()
-        .describe('Send mode (default: queue). "direct" is not available for ask_task.'),
+        .describe('Send mode (default: queue). "interrupt" stops the task\'s current work first.'),
     },
   },
   async ({ taskId, text, mode }) => {
@@ -437,6 +449,7 @@ server.registerTool(
         isError: true,
       };
     }
+    const callerName = await getCallerName();
     const result = await apiCall(
       '/send-prompt',
       {
@@ -444,6 +457,7 @@ server.registerTool(
         text,
         mode: mode || 'queue',
         waitForTurn: true,
+        callerName,
       },
       { timeout: 0 },
     );
@@ -464,11 +478,14 @@ server.registerTool(
   {
     title: 'Tell Task',
     description:
-      'Send a prompt to a Bifrost task\'s Claude Code session without waiting for a response. Returns immediately after submitting. Modes: "direct" sends immediately (even if Claude is active), "queue" (default) waits for current turn to finish, "only-when-idle" fails if Claude is active.',
+      'Send a prompt to a Bifrost task\'s Claude Code session without waiting for a response. Messages are automatically prefixed with the sender\'s identity. Returns immediately after submitting. Modes: "direct" sends immediately (typed into the terminal as-is), "queue" (default) waits for current turn to finish, "interrupt" stops the task\'s current work and sends immediately, "only-when-idle" fails if the task is busy.',
     inputSchema: {
       taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
       text: z.string().describe('The prompt text to send'),
-      mode: z.enum(['direct', 'queue', 'only-when-idle']).optional().describe('Send mode (default: queue)'),
+      mode: z
+        .enum(['direct', 'queue', 'interrupt', 'only-when-idle'])
+        .optional()
+        .describe('Send mode (default: queue). "interrupt" stops the task\'s current work first.'),
     },
   },
   async ({ taskId, text, mode }) => {
@@ -479,10 +496,12 @@ server.registerTool(
         isError: true,
       };
     }
+    const callerName = await getCallerName();
     const result = await apiCall('/send-prompt', {
       taskId: targetId,
       text,
       mode: mode || 'queue',
+      callerName,
     });
     if (!result.ok) {
       return {

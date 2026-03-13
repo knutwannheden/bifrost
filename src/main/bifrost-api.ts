@@ -470,6 +470,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const promptText = body.text as string;
       const mode = (body.mode as string) || 'direct';
       const waitForTurn = body.waitForTurn === true;
+      const callerName = body.callerName as string | undefined;
       if (!targetId) {
         errorResponse(res, 'No taskId provided');
         return;
@@ -478,12 +479,19 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'No text provided');
         return;
       }
-      if (mode !== 'direct' && mode !== 'queue' && mode !== 'only-when-idle') {
-        errorResponse(res, `Invalid mode: ${mode}. Must be direct, queue, or only-when-idle`);
+      const validModes = ['direct', 'queue', 'only-when-idle', 'interrupt'];
+      if (!validModes.includes(mode)) {
+        errorResponse(res, `Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
         return;
       }
       try {
-        const result = await sendPromptToTask(targetId, promptText, mode, waitForTurn);
+        const result = await sendPromptToTask(
+          targetId,
+          promptText,
+          mode as 'direct' | 'queue' | 'only-when-idle' | 'interrupt',
+          waitForTurn,
+          callerName,
+        );
         jsonResponse(res, result);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
