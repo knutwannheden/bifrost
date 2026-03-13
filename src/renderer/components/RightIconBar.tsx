@@ -229,6 +229,7 @@ export default function RightIconBar() {
     <div className="flex flex-col w-11 bg-surface border-l border-border-default shrink-0">
       <IconButton
         label="Notifications"
+        shortcut={getDisplayString('view.notifications')}
         active={state.showNotificationPopover}
         badge={hasUnreadNotifications ? 'amber' : undefined}
         onClick={() => dispatch({ type: 'TOGGLE_NOTIFICATION_POPOVER' })}
@@ -250,6 +251,7 @@ export default function RightIconBar() {
 
       <IconButton
         label="Tokens"
+        shortcut={getDisplayString('view.activity')}
         active={isDiffActive && diffMode === 'activity'}
         onClick={() => toggleDiffMode('activity')}
       >
@@ -269,6 +271,7 @@ export default function RightIconBar() {
       {state.config?.experimentalFeatures && (
         <IconButton
           label="Supervisor"
+          shortcut={getDisplayString('view.supervisor')}
           active={state.showSupervisor}
           badge={supervisorBadge}
           onClick={() => dispatch({ type: 'TOGGLE_SUPERVISOR' })}
@@ -294,7 +297,12 @@ export default function RightIconBar() {
 
       <div className="mx-2 my-1 border-t border-border-default" />
 
-      <IconButton label="Statistics" active={state.showStats} onClick={() => dispatch({ type: 'TOGGLE_STATS' })}>
+      <IconButton
+        label="Statistics"
+        shortcut={getDisplayString('view.stats')}
+        active={state.showStats}
+        onClick={() => dispatch({ type: 'TOGGLE_STATS' })}
+      >
         <StatsIcon />
       </IconButton>
 

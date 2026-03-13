@@ -40,7 +40,6 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
             <span className="truncate" title={activeTask.worktreePath}>
               {shortPath(activeTask.worktreePath)}
             </span>
-            <span className="capitalize">{activeTask.status}</span>
             <DiffStatsBadge additions={diffStats?.additions ?? 0} deletions={diffStats?.deletions ?? 0} />
           </>
         )}
