@@ -447,7 +447,9 @@ export default function ReviewContent({
 
       // New review form shortcuts
       if (!reviewId && !showDiscussion) {
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const tag = (e.target as HTMLElement)?.tagName;
+        const isInInput = tag === 'INPUT' || tag === 'TEXTAREA';
+        if (!isInInput && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
           e.preventDefault();
           setReviewScope(e.key === 'ArrowLeft' ? 'working' : 'all');
           return;
