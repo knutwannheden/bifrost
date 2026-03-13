@@ -550,11 +550,11 @@ export default function ReviewContent({
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex-1 flex flex-col items-center justify-center gap-4 p-4">
-          <div className="flex flex-col gap-2 w-full max-w-md">
+          <div className="flex flex-col gap-2 w-full max-w-xl">
             <label className="text-xs text-secondary">Scope:</label>
             <ReviewScopeToggle scope={reviewScope} onChange={setReviewScope} stats={scopeStats} />
           </div>
-          <div className="flex flex-col gap-2 w-full max-w-md">
+          <div className="flex flex-col gap-2 w-full max-w-xl">
             <label className="text-xs text-secondary">
               <ActionLabel text="Instructions" showHint={true} /> (optional):
             </label>
@@ -570,7 +570,7 @@ export default function ReviewContent({
               }}
               placeholder="Focus on error handling, security..."
               className="w-full px-3 py-2 resize-none"
-              rows={2}
+              rows={5}
             />
           </div>
           <button
