@@ -133,10 +133,12 @@ export default function NotificationPopover() {
         break;
       case 'Enter': {
         e.preventDefault();
+        e.stopPropagation();
         const n = notifications[clampedIdx];
         if (n?.action) handleAction(n.id, n.action.handler);
         break;
       }
+      case 'Backspace':
       case 'd': {
         e.preventDefault();
         const n = notifications[clampedIdx];
@@ -192,7 +194,7 @@ export default function NotificationPopover() {
       </div>
       {notifications.length > 0 && (
         <div className="px-3 py-1.5 border-t border-border-default">
-          <span className="text-xs text-faint">↑↓ navigate · Enter action · d dismiss · Esc close</span>
+          <span className="text-xs text-faint">↑↓ navigate · Enter action · ⌫ dismiss · Esc close</span>
         </div>
       )}
     </div>
