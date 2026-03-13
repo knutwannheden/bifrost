@@ -246,6 +246,16 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.CLAUDE_ACTIVE, handler);
   },
 
+  // Prompt sender
+  sendPrompt: (taskId, text, mode) => ipcRenderer.invoke(IPC.SEND_PROMPT, taskId, text, mode),
+  onScrapePromptRequest: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, requestId: string) =>
+      callback(taskId, requestId);
+    ipcRenderer.on(IPC_STREAM.SCRAPE_PROMPT_REQUEST, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.SCRAPE_PROMPT_REQUEST, handler);
+  },
+  scrapePromptResponse: (requestId, text) => ipcRenderer.invoke(IPC.SCRAPE_PROMPT_RESPONSE, requestId, text),
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action);

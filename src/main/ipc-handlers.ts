@@ -34,6 +34,7 @@ import { checkIntegration, installIntegration } from './integration-installer';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { setActiveTaskId } from './notification-service';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
+import { handleScrapeResponse, sendPrompt } from './prompt-sender';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
   cancelReview,
@@ -1108,5 +1109,16 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
   ipcMain.handle(IPC.DELETE_TRIAGE, (_event, triageId: string) => {
     deleteTriageEntry(triageId);
+  });
+
+  // Prompt sender
+  ipcMain.handle(
+    IPC.SEND_PROMPT,
+    (_event, taskId: string, text: string, mode?: 'direct' | 'queue' | 'only-when-idle') => {
+      return sendPrompt(taskId, text, mode || 'direct');
+    },
+  );
+  ipcMain.handle(IPC.SCRAPE_PROMPT_RESPONSE, (_event, requestId: string, text: string) => {
+    handleScrapeResponse(requestId, text);
   });
 }

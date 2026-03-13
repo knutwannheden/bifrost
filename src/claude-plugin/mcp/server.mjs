@@ -409,5 +409,42 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  'send_prompt',
+  {
+    title: 'Send Prompt',
+    description:
+      'Send a prompt to a Bifrost task\'s Claude Code session. Saves any partial user input, submits the prompt, and restores the partial input after Claude finishes. Modes: "direct" sends immediately, "queue" waits for current turn to finish, "only-when-idle" fails if Claude is active.',
+    inputSchema: {
+      taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
+      text: z.string().describe('The prompt text to send'),
+      mode: z.enum(['direct', 'queue', 'only-when-idle']).optional().describe('Send mode (default: queue)'),
+    },
+  },
+  async ({ taskId, text, mode }) => {
+    const targetId = taskId || TASK_ID;
+    if (!targetId) {
+      return {
+        content: [{ type: 'text', text: "No task specified. Provide a 'taskId' or run inside a Bifrost task." }],
+        isError: true,
+      };
+    }
+    const result = await apiCall('/send-prompt', {
+      taskId: targetId,
+      text,
+      mode: mode || 'queue',
+    });
+    if (!result.ok) {
+      return {
+        content: [{ type: 'text', text: `Failed: ${result.error}` }],
+        isError: true,
+      };
+    }
+    return {
+      content: [{ type: 'text', text: `Prompt sent to task ${targetId} (mode: ${mode || 'queue'}).` }],
+    };
+  },
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);

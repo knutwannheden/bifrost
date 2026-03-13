@@ -26,6 +26,7 @@ import { useTheme } from './hooks/useTheme';
 import { performArchive, requestArchive } from './utils/archive';
 import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
 import { modSymbol } from './utils/platform';
+import { scrapePartialPrompt } from './utils/scrape-prompt';
 import { slackToPlainText } from './utils/slack-markup';
 
 declare global {
@@ -136,6 +137,15 @@ export default function App() {
     });
     return unsub;
   }, [dispatch]);
+
+  // Handle scrape-prompt requests from main process (prompt-sender)
+  useEffect(() => {
+    const unsub = window.bifrost.onScrapePromptRequest((taskId, requestId) => {
+      const text = scrapePartialPrompt(taskId);
+      window.bifrost.scrapePromptResponse(requestId, text);
+    });
+    return unsub;
+  }, []);
 
   // Buffer last assistant text per task for hook notifications.
   useEffect(() => {

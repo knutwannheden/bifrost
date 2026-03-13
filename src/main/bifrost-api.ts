@@ -18,6 +18,7 @@ import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
+import { initPromptSender, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
 import { addRepo } from './repo-manager';
 import { cancelReview, completeReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
 import { killSession } from './session-manager';
@@ -93,6 +94,7 @@ export function getSessionMtime(worktreePath: string, sessionId?: string): numbe
 
 export function initApi(window: BrowserWindow): void {
   mainWindow = window;
+  initPromptSender(window);
 }
 
 const PORT_START = 7623;
@@ -408,8 +410,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // UserPromptSubmit — signal Claude is actively working
       if (hookEventName === 'UserPromptSubmit' && hookContext === 'code') {
         const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
-        if (task && mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
+        if (task) {
+          markActive(task.id);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
+          }
         }
         jsonResponse(res, { ok: true });
         return;
@@ -439,6 +444,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'No matching task', 404);
         return;
       }
+      // Stop hook for code context — mark task idle for prompt-sender queue/restore
+      if (hookContext === 'code') {
+        markIdle(task.id);
+      }
       if (isDebounced(task.id)) {
         jsonResponse(res, { ok: true, debounced: true });
         return;
@@ -452,6 +461,31 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType);
       }
       jsonResponse(res, { ok: true });
+      return;
+    }
+
+    case '/send-prompt': {
+      const targetId = resolveTaskId(body);
+      const promptText = body.text as string;
+      const mode = (body.mode as string) || 'direct';
+      if (!targetId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      if (!promptText) {
+        errorResponse(res, 'No text provided');
+        return;
+      }
+      if (mode !== 'direct' && mode !== 'queue' && mode !== 'only-when-idle') {
+        errorResponse(res, `Invalid mode: ${mode}. Must be direct, queue, or only-when-idle`);
+        return;
+      }
+      try {
+        const result = await sendPromptToTask(targetId, promptText, mode);
+        jsonResponse(res, result);
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 400);
+      }
       return;
     }
 

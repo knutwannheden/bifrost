@@ -152,6 +152,10 @@ export const IPC = {
   CANCEL_TRIAGE: 'triage:cancel',
   LIST_TRIAGES: 'triage:list',
   DELETE_TRIAGE: 'triage:delete',
+
+  // Prompt sender
+  SEND_PROMPT: 'prompt:send',
+  SCRAPE_PROMPT_RESPONSE: 'prompt:scrape-response',
 } as const;
 
 // Streaming channels (send/on)
@@ -174,6 +178,7 @@ export const IPC_STREAM = {
   TRIAGE_ACTIVITY: 'triage:activity',
   TRIAGE_WAITING: 'triage:waiting',
   CLAUDE_ACTIVE: 'claude:active',
+  SCRAPE_PROMPT_REQUEST: 'prompt:scrape-request',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -342,6 +347,15 @@ export interface BifrostAPI {
 
   // Claude activity
   onClaudeActive(callback: (taskId: string, active: boolean) => void): () => void;
+
+  // Prompt sender
+  sendPrompt(
+    taskId: string,
+    text: string,
+    mode?: 'direct' | 'queue' | 'only-when-idle',
+  ): Promise<{ ok: boolean; error?: string; queued?: boolean }>;
+  onScrapePromptRequest(callback: (taskId: string, requestId: string) => void): () => void;
+  scrapePromptResponse(requestId: string, text: string): Promise<void>;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;
