@@ -526,13 +526,13 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           dispatch({ type: 'SHOW_TOAST', message: 'Chord cancelled' });
           return;
         }
-        return;
-      }
-
-      // Cancel any pending chord on a new mod key press
-      if (chordStateRef.current) {
-        clearTimeout(chordStateRef.current.timeoutId);
-        chordStateRef.current = null;
+        // Fall through for bare key bindings (e.g. F2)
+      } else {
+        // Cancel any pending chord on a new mod key press
+        if (chordStateRef.current) {
+          clearTimeout(chordStateRef.current.timeoutId);
+          chordStateRef.current = null;
+        }
       }
 
       // Skip shortcuts when typing in an overlay input/textarea/select
