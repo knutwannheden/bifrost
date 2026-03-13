@@ -119,6 +119,7 @@ export default function App() {
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task && task.status !== 'archived') {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
+        dispatch({ type: 'SET_CLAUDE_ACTIVE', taskId: task.id, active: false });
         if (code !== 0 && code !== 143) {
           // 143 = SIGTERM (intentional kill)
           dispatch({ type: 'SHOW_TOAST', message: `${task.name} exited with code ${code}` });
@@ -127,6 +128,14 @@ export default function App() {
     });
     return unsub;
   }, [state.tasks, state.triages, dispatch]);
+
+  // Listen for Claude active/inactive signals
+  useEffect(() => {
+    const unsub = window.bifrost.onClaudeActive((taskId, active) => {
+      dispatch({ type: 'SET_CLAUDE_ACTIVE', taskId, active });
+    });
+    return unsub;
+  }, [dispatch]);
 
   // Buffer last assistant text per task for hook notifications.
   useEffect(() => {

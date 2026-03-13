@@ -29,6 +29,8 @@ export interface Task {
   inPlace?: boolean;
   /** Previous session IDs (accumulated when /clear creates a new session) */
   sessionHistory?: string[];
+  /** True while Claude is actively working (writing JSONL output) */
+  claudeActive?: boolean;
 }
 
 export interface ReviewEntry {

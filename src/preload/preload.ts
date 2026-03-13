@@ -239,6 +239,13 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.TRIAGE_WAITING, handler);
   },
 
+  // Claude activity
+  onClaudeActive: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, active: boolean) => callback(taskId, active);
+    ipcRenderer.on(IPC_STREAM.CLAUDE_ACTIVE, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.CLAUDE_ACTIVE, handler);
+  },
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action);

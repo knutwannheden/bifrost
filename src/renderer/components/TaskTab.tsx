@@ -104,12 +104,16 @@ export default function TaskTab({
     task.terminalTitle ? `Terminal: ${task.terminalTitle}` : undefined,
   ].filter(Boolean) as string[];
 
+  // Activity indicator: green sweep when Claude is working, blue when results waiting
+  const showGreen = task.claudeActive === true;
+  const showBlue = !showGreen && task.hasUnread && !isActive;
+
   return (
     <>
       <button
         ref={buttonRef}
         draggable
-        className={`group flex items-center gap-1.5 px-3 h-full whitespace-nowrap overflow-hidden max-w-[220px] transition-colors ${
+        className={`group relative flex items-center gap-1.5 px-3 h-full whitespace-nowrap overflow-hidden max-w-[220px] transition-colors ${
           isActive
             ? 'bg-surface-alt border-b-2 border-accent text-primary'
             : 'bg-transparent hover:bg-surface-alt/50 text-secondary'
@@ -144,6 +148,8 @@ export default function TaskTab({
         >
           &times;
         </span>
+        {showGreen && <span className="activity-sweep absolute bottom-0 left-0 right-0 h-[2px]" />}
+        {showBlue && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />}
       </button>
       {showTooltip &&
         tooltipPos &&

@@ -11,6 +11,7 @@ const execFile = promisify(execFileCb);
 
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { getActivityLog, stopWatching } from './activity-watcher';
+import { resetClaudeActive } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
@@ -428,6 +429,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'No matching task', 404);
         return;
       }
+      // Signal Claude stopped working
+      resetClaudeActive(task.id);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+      }
+
       if (isDebounced(task.id)) {
         jsonResponse(res, { ok: true, debounced: true });
         return;

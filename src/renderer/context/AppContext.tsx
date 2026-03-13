@@ -148,7 +148,8 @@ export type AppAction =
   | { type: 'SET_TRIAGE_WAITING'; triageId: string }
   | { type: 'SET_TRIAGE_HISTORY'; history: TriageEntry[] }
   | { type: 'START_RENAME_TASK'; taskId: string }
-  | { type: 'CLEAR_RENAME_TASK' };
+  | { type: 'CLEAR_RENAME_TASK' }
+  | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean };
 
 const initialState: AppState = {
   repos: [],
@@ -558,6 +559,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'SET_TRIAGE_HISTORY':
       return { ...state, triageHistory: action.history };
+    case 'SET_CLAUDE_ACTIVE':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, claudeActive: action.active } : t)),
+      };
     default:
       return state;
   }

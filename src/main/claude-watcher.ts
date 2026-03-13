@@ -28,6 +28,8 @@ interface ClaudeWatcher {
   lineCount: number;
   /** lineCount at which we last triggered a summary */
   lastSummaryAt: number;
+  /** True if we already sent claudeActive=true (avoid redundant sends) */
+  sentActive: boolean;
 }
 
 const watchers = new Map<string, ClaudeWatcher>();
@@ -297,6 +299,10 @@ export function startClaudeWatching(
       if (lines.length > 0) {
         const w = watchers.get(taskId);
         if (w) {
+          if (!w.sentActive) {
+            w.sentActive = true;
+            mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, taskId, true);
+          }
           w.lineCount += lines.length;
           const { onSummary } = callbacks ?? {};
           if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
@@ -315,7 +321,22 @@ export function startClaudeWatching(
     }
   }, 1000);
 
-  watchers.set(taskId, { taskId, sessionId, projectDir, fileOffsets, pollTimer, lineCount: 0, lastSummaryAt: 0 });
+  watchers.set(taskId, {
+    taskId,
+    sessionId,
+    projectDir,
+    fileOffsets,
+    pollTimer,
+    lineCount: 0,
+    lastSummaryAt: 0,
+    sentActive: false,
+  });
+}
+
+/** Reset the sentActive flag so the next JSONL activity re-triggers the active signal. */
+export function resetClaudeActive(taskId: string): void {
+  const w = watchers.get(taskId);
+  if (w) w.sentActive = false;
 }
 
 /**

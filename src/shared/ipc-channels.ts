@@ -173,6 +173,7 @@ export const IPC_STREAM = {
   SLACK_REACTION: 'slack:reaction',
   TRIAGE_ACTIVITY: 'triage:activity',
   TRIAGE_WAITING: 'triage:waiting',
+  CLAUDE_ACTIVE: 'claude:active',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -338,6 +339,9 @@ export interface BifrostAPI {
   deleteTriage(triageId: string): Promise<void>;
   onTriageActivity(callback: (triageId: string, activity: string) => void): () => void;
   onTriageWaiting(callback: (triageId: string, message: string) => void): () => void;
+
+  // Claude activity
+  onClaudeActive(callback: (taskId: string, active: boolean) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;
