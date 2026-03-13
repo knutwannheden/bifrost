@@ -11,7 +11,6 @@ const execFile = promisify(execFileCb);
 
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { getActivityLog, stopWatching } from './activity-watcher';
-import { resetClaudeActive } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
@@ -400,8 +399,19 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const cwd = body.cwd as string;
       const hookContext = (body.bifrost_context as string) || 'code';
       const hookTaskId = body.bifrost_task_id as string;
+      const hookEventName = body.hook_event_name as string;
       if (!cwd) {
         errorResponse(res, 'Missing cwd');
+        return;
+      }
+
+      // UserPromptSubmit — signal Claude is actively working
+      if (hookEventName === 'UserPromptSubmit' && hookContext === 'code') {
+        const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+        if (task && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
+        }
+        jsonResponse(res, { ok: true });
         return;
       }
 
@@ -429,12 +439,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'No matching task', 404);
         return;
       }
-      // Signal Claude stopped working
-      resetClaudeActive(task.id);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-      }
-
       if (isDebounced(task.id)) {
         jsonResponse(res, { ok: true, debounced: true });
         return;

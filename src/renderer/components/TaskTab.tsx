@@ -104,9 +104,9 @@ export default function TaskTab({
     task.terminalTitle ? `Terminal: ${task.terminalTitle}` : undefined,
   ].filter(Boolean) as string[];
 
-  // Activity indicator: green sweep when Claude is working, blue when results waiting
-  const showGreen = task.claudeActive === true;
-  const showBlue = !showGreen && task.hasUnread && !isActive;
+  // Activity indicator: green sweep when Claude is working, solid green when results waiting
+  const showSweep = task.claudeActive === true;
+  const showSolid = !showSweep && task.hasUnread && !isActive;
 
   return (
     <>
@@ -131,7 +131,9 @@ export default function TaskTab({
       >
         <span className="flex flex-col items-center min-w-0 max-w-[200px]">
           <span className="flex items-center gap-1.5">
-            {task.hasUnread && !isActive ? <span className="w-2 h-2 rounded-full bg-accent shrink-0" /> : null}
+            {task.hasUnread && !isActive && !showSolid ? (
+              <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
+            ) : null}
             <span className="text-xs leading-tight truncate">{task.name}</span>
           </span>
           <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
@@ -148,8 +150,8 @@ export default function TaskTab({
         >
           &times;
         </span>
-        {showGreen && <span className="activity-sweep absolute bottom-0 left-0 right-0 h-[2px]" />}
-        {showBlue && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />}
+        {showSweep && <span className="activity-sweep absolute bottom-0 left-0 right-0 h-[2px]" />}
+        {showSolid && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#22c55e]" />}
       </button>
       {showTooltip &&
         tooltipPos &&

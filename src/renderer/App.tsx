@@ -177,6 +177,7 @@ export default function App() {
   // Listen for hook-based notifications (from Claude Code plugin)
   useEffect(() => {
     const unsub = window.bifrost.onHookNotification((taskId, taskName, message) => {
+      dispatch({ type: 'SET_CLAUDE_ACTIVE', taskId, active: false });
       if (taskId === state.activeTaskId) return;
       dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: true });
       if (message) {
