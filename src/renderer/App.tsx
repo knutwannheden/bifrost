@@ -111,7 +111,7 @@ export default function App() {
           dispatch({
             type: 'UPDATE_TRIAGE',
             id: triageId,
-            updates: { status: code === 0 ? 'done' : 'error' },
+            updates: { status: code === 0 ? 'done' : 'error', waiting: false },
           });
         }
         return;
