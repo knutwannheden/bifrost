@@ -3,6 +3,7 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { getTask, isPendingRestore, restoreTaskSession } from './ipc-handlers';
+import { onTaskIdle as deliverDeferredMessages } from './message-store';
 import { writeToSession } from './session-manager';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
@@ -55,6 +56,9 @@ export function markIdle(taskId: string): void {
     if (queue.length === 0) promptQueues.delete(taskId);
     doSendPrompt(next.text, taskId).then(next.resolve);
   }
+
+  // Deliver deferred agent message nudges
+  deliverDeferredMessages(taskId);
 }
 
 /** Handle scrape response from renderer. */
@@ -172,7 +176,6 @@ export async function sendPrompt(
   text: string,
   mode: SendPromptMode = 'direct',
   waitForTurn = false,
-  callerName?: string,
 ): Promise<SendPromptResult> {
   // Validate task exists and is running
   try {
@@ -191,31 +194,27 @@ export async function sendPrompt(
     mode = 'queue';
   }
 
-  // Prefix with caller identity so the recipient knows who's talking
-  const prefix = callerName ? `[From Bifrost task "${callerName}"]` : '[From unknown agent]';
-  const prefixedText = `${prefix} ${text}`;
-
   let sendResult: SendPromptResult;
 
   switch (mode) {
     case 'direct':
-      sendResult = await doSendPrompt(prefixedText, taskId);
+      sendResult = await doSendPrompt(text, taskId);
       break;
 
     case 'interrupt':
-      sendResult = await doInterruptAndSend(prefixedText, taskId);
+      sendResult = await doInterruptAndSend(text, taskId);
       break;
 
     case 'only-when-idle':
       if (!isIdle(taskId)) {
         return { ok: false, error: 'Claude is currently active' };
       }
-      sendResult = await doSendPrompt(prefixedText, taskId);
+      sendResult = await doSendPrompt(text, taskId);
       break;
 
     case 'queue':
       if (isIdle(taskId)) {
-        sendResult = await doSendPrompt(prefixedText, taskId);
+        sendResult = await doSendPrompt(text, taskId);
       } else {
         // Queue for later — resolves when the queued prompt is actually sent
         sendResult = await new Promise<SendPromptResult>((resolve) => {
@@ -224,7 +223,7 @@ export async function sendPrompt(
             queue = [];
             promptQueues.set(taskId, queue);
           }
-          queue.push({ text: prefixedText, resolve });
+          queue.push({ text, resolve });
         });
       }
       break;
@@ -239,6 +238,20 @@ export async function sendPrompt(
   await waitForTurnComplete(taskId);
   sendResult.response = getLastAssistantMessage(taskId) ?? undefined;
   return sendResult;
+}
+
+/**
+ * Send a system nudge to a task's PTY. Used by message-store to notify
+ * recipients about new agent messages. Unlike sendPrompt, this skips
+ * scrape/restore of user input — it's a lightweight PTY write.
+ */
+export function sendNudge(taskId: string, text: string, mode: 'direct' | 'interrupt'): void {
+  if (mode === 'interrupt') {
+    writeToSession(taskId, '\x1b');
+    setTimeout(() => writeToSession(taskId, `${text}\r`), 200);
+  } else {
+    writeToSession(taskId, `${text}\r`);
+  }
 }
 
 /** Resolve a taskId from either explicit taskId or callerTaskId. */

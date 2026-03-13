@@ -15,6 +15,7 @@ import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
 import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
+import { cleanupTask as cleanupMessages, readMessages, replyToMessage, sendMessage } from './message-store';
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
@@ -134,6 +135,34 @@ function resolveTaskId(body: Record<string, unknown>): string | undefined {
 }
 
 /**
+ * Resolve a task identifier that may be an ID, exact name, or partial name match.
+ * Returns the task, or null if not found / ambiguous.
+ */
+function findTask(idOrName: string): import('../shared/types').Task | null {
+  // Try exact ID first
+  try {
+    return getTask(idOrName);
+  } catch {
+    // fall through to name matching
+  }
+
+  const allTasks = getTasks();
+  const lower = idOrName.toLowerCase();
+
+  // Exact name match (case-insensitive)
+  const exactName = allTasks.find((t) => t.name.toLowerCase() === lower);
+  if (exactName) return exactName;
+
+  // Partial name/branch match — only if unambiguous
+  const partials = allTasks.filter(
+    (t) => t.name.toLowerCase().includes(lower) || t.branch.toLowerCase().includes(lower),
+  );
+  if (partials.length === 1) return partials[0];
+
+  return null;
+}
+
+/**
  * Kill all sessions associated with a task: main, dev terminal, and review.
  * Uses deterministic session IDs so we don't need the in-memory Maps from ipc-handlers.
  */
@@ -142,6 +171,7 @@ function killTaskSessions(taskId: string): void {
   killSession(`${taskId}-dev`);
   killSession(`${taskId}-review`);
   cancelReview(taskId);
+  cleanupMessages(taskId);
 }
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -470,7 +500,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const promptText = body.text as string;
       const mode = (body.mode as string) || 'direct';
       const waitForTurn = body.waitForTurn === true;
-      const callerName = body.callerName as string | undefined;
       if (!targetId) {
         errorResponse(res, 'No taskId provided');
         return;
@@ -490,7 +519,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           promptText,
           mode as 'direct' | 'queue' | 'only-when-idle' | 'interrupt',
           waitForTurn,
-          callerName,
         );
         jsonResponse(res, result);
       } catch (e) {
@@ -532,6 +560,75 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: true });
       } catch (e) {
         errorResponse(res, (e as Error).message, 404);
+      }
+      return;
+    }
+
+    case '/send-message': {
+      const fromTaskId = body.fromTaskId as string;
+      const fromTaskName = body.fromTaskName as string;
+      const toTaskId = body.toTaskId as string;
+      const text = body.text as string;
+      const type = body.type as 'tell' | 'ask';
+      const mode = (body.mode as string) || 'queue';
+      if (!fromTaskId || !fromTaskName || !toTaskId || !text || !type) {
+        errorResponse(res, 'Missing required fields: fromTaskId, fromTaskName, toTaskId, text, type');
+        return;
+      }
+      const validModes = ['queue', 'direct', 'interrupt'];
+      if (!validModes.includes(mode)) {
+        errorResponse(res, `Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
+        return;
+      }
+      const recipient = findTask(toTaskId);
+      if (!recipient) {
+        errorResponse(res, `Recipient task "${toTaskId}" not found`, 404);
+        return;
+      }
+      const result = sendMessage(
+        fromTaskId,
+        fromTaskName,
+        recipient.id,
+        text,
+        type,
+        mode as 'queue' | 'direct' | 'interrupt',
+      );
+      if (type === 'ask' && result.replyPromise) {
+        try {
+          const reply = await result.replyPromise;
+          jsonResponse(res, { messageId: result.messageId, reply });
+        } catch (e) {
+          errorResponse(res, (e as Error).message, 408);
+        }
+      } else {
+        jsonResponse(res, { messageId: result.messageId });
+      }
+      return;
+    }
+
+    case '/read-messages': {
+      const targetId = resolveTaskId(body);
+      if (!targetId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      const messages = readMessages(targetId);
+      jsonResponse(res, { messages });
+      return;
+    }
+
+    case '/reply-message': {
+      const messageId = body.messageId as string;
+      const text = body.text as string;
+      if (!messageId || !text) {
+        errorResponse(res, 'Missing required fields: messageId, text');
+        return;
+      }
+      try {
+        replyToMessage(messageId, text);
+        jsonResponse(res, { ok: true });
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 400);
       }
       return;
     }

@@ -414,27 +414,19 @@ server.registerTool(
   },
 );
 
-/** Resolve the calling task's name for message attribution. */
-async function getCallerName() {
-  if (!TASK_ID) return undefined;
-  try {
-    const result = await apiCall('/list-tasks', {});
-    const caller = result.tasks.find((t) => t.id === TASK_ID);
-    return caller?.name;
-  } catch {
-    return undefined;
-  }
-}
+// ---------------------------------------------------------------------------
+// PTY injection tools (raw terminal injection, no identity attribution)
+// ---------------------------------------------------------------------------
 
 server.registerTool(
-  'ask_task',
+  'ask_prompt',
   {
-    title: 'Ask Task',
+    title: 'Ask Prompt',
     description:
-      'Send a prompt to a Bifrost task\'s Claude Code session and wait for the response. Blocks until the task\'s turn completes, then returns the assistant\'s reply. Messages are automatically prefixed with the sender\'s identity. WARNING: This can take a long time if the task is currently busy — the prompt is queued and the call blocks until both the current turn and the prompted turn finish. Use list_tasks to check task status before calling. Modes: "queue" (default) waits for any active turn to finish before sending, "interrupt" stops the task\'s current work and sends immediately, "only-when-idle" fails if the task is busy.',
+      'Inject a prompt into a Bifrost task\'s terminal and wait for the response. This is raw PTY injection — the recipient sees it as user input with no sender identity. Blocks until the task\'s turn completes, then returns the assistant\'s reply. WARNING: Can take a long time if the task is busy. Use list_tasks to check status first. Modes: "queue" (default) waits for any active turn to finish, "interrupt" stops current work first, "only-when-idle" fails if busy.',
     inputSchema: {
       taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
-      text: z.string().describe('The prompt text to send'),
+      text: z.string().describe('The prompt text to inject'),
       mode: z
         .enum(['queue', 'interrupt', 'only-when-idle'])
         .optional()
@@ -449,7 +441,6 @@ server.registerTool(
         isError: true,
       };
     }
-    const callerName = await getCallerName();
     const result = await apiCall(
       '/send-prompt',
       {
@@ -457,7 +448,6 @@ server.registerTool(
         text,
         mode: mode || 'queue',
         waitForTurn: true,
-        callerName,
       },
       { timeout: 0 },
     );
@@ -474,14 +464,14 @@ server.registerTool(
 );
 
 server.registerTool(
-  'tell_task',
+  'send_prompt',
   {
-    title: 'Tell Task',
+    title: 'Send Prompt',
     description:
-      'Send a prompt to a Bifrost task\'s Claude Code session without waiting for a response. Messages are automatically prefixed with the sender\'s identity. Returns immediately after submitting. Modes: "direct" sends immediately (typed into the terminal as-is), "queue" (default) waits for current turn to finish, "interrupt" stops the task\'s current work and sends immediately, "only-when-idle" fails if the task is busy.',
+      'Inject a prompt into a Bifrost task\'s terminal without waiting for a response. This is raw PTY injection — the recipient sees it as user input with no sender identity. Returns immediately after submitting. Modes: "direct" sends immediately, "queue" (default) waits for current turn to finish, "interrupt" stops current work first, "only-when-idle" fails if busy.',
     inputSchema: {
       taskId: z.string().optional().describe('Task ID (optional, defaults to calling task)'),
-      text: z.string().describe('The prompt text to send'),
+      text: z.string().describe('The prompt text to inject'),
       mode: z
         .enum(['direct', 'queue', 'interrupt', 'only-when-idle'])
         .optional()
@@ -496,12 +486,10 @@ server.registerTool(
         isError: true,
       };
     }
-    const callerName = await getCallerName();
     const result = await apiCall('/send-prompt', {
       taskId: targetId,
       text,
       mode: mode || 'queue',
-      callerName,
     });
     if (!result.ok) {
       return {
@@ -512,6 +500,161 @@ server.registerTool(
     return {
       content: [{ type: 'text', text: `Prompt sent to task ${targetId} (mode: ${mode || 'queue'}).` }],
     };
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Agent messaging tools (structured communication with sender identity)
+// ---------------------------------------------------------------------------
+
+/** Resolve the calling task's name for message attribution. */
+async function getCallerName() {
+  if (!TASK_ID) return undefined;
+  try {
+    const result = await apiCall('/list-tasks', {});
+    const caller = result.tasks.find((t) => t.id === TASK_ID);
+    return caller?.name;
+  } catch {
+    return undefined;
+  }
+}
+
+server.registerTool(
+  'tell_task',
+  {
+    title: 'Tell Task',
+    description:
+      'Send a message to another Bifrost task\'s inbox. The recipient is notified and can read the message using read_messages. The message includes your task identity. Returns immediately. Modes: "queue" (default) nudges when the task becomes idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
+    inputSchema: {
+      taskId: z.string().describe('Recipient task ID or name (partial name match supported)'),
+      text: z.string().describe('The message text to send'),
+      mode: z.enum(['queue', 'direct', 'interrupt']).optional().describe('Nudge delivery mode (default: queue).'),
+    },
+  },
+  async ({ taskId, text, mode }) => {
+    if (!TASK_ID) {
+      return {
+        content: [{ type: 'text', text: 'tell_task requires running inside a Bifrost task.' }],
+        isError: true,
+      };
+    }
+    const callerName = (await getCallerName()) || 'unknown';
+    const result = await apiCall('/send-message', {
+      fromTaskId: TASK_ID,
+      fromTaskName: callerName,
+      toTaskId: taskId,
+      text,
+      type: 'tell',
+      mode: mode || 'queue',
+    });
+    return {
+      content: [{ type: 'text', text: `Message sent to task ${taskId} (id: ${result.messageId}).` }],
+    };
+  },
+);
+
+server.registerTool(
+  'ask_task',
+  {
+    title: 'Ask Task',
+    description:
+      'Send a message to another Bifrost task\'s inbox and wait for a reply. The recipient reads the message via read_messages and replies using reply_to_task. Blocks until the reply arrives (5-minute timeout). The message includes your task identity. Modes: "queue" (default) nudges when idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
+    inputSchema: {
+      taskId: z.string().describe('Recipient task ID or name (partial name match supported)'),
+      text: z.string().describe('The question/message text to send'),
+      mode: z.enum(['queue', 'direct', 'interrupt']).optional().describe('Nudge delivery mode (default: queue).'),
+    },
+  },
+  async ({ taskId, text, mode }) => {
+    if (!TASK_ID) {
+      return {
+        content: [{ type: 'text', text: 'ask_task requires running inside a Bifrost task.' }],
+        isError: true,
+      };
+    }
+    const callerName = (await getCallerName()) || 'unknown';
+    try {
+      const result = await apiCall(
+        '/send-message',
+        {
+          fromTaskId: TASK_ID,
+          fromTaskName: callerName,
+          toTaskId: taskId,
+          text,
+          type: 'ask',
+          mode: mode || 'queue',
+        },
+        { timeout: 0 },
+      );
+      return {
+        content: [{ type: 'text', text: result.reply }],
+      };
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `ask_task failed: ${e.message}` }],
+        isError: true,
+      };
+    }
+  },
+);
+
+server.registerTool(
+  'read_messages',
+  {
+    title: 'Read Messages',
+    description:
+      'Read unread messages from your inbox. Returns all unread agent messages sent via tell_task or ask_task, and marks them as read. For ask-type messages, use reply_to_task to send a reply back to the sender.',
+    inputSchema: {},
+  },
+  async () => {
+    if (!TASK_ID) {
+      return {
+        content: [{ type: 'text', text: 'read_messages requires running inside a Bifrost task.' }],
+        isError: true,
+      };
+    }
+    const result = await apiCall('/read-messages', { taskId: TASK_ID });
+    if (result.messages.length === 0) {
+      return { content: [{ type: 'text', text: 'No unread messages.' }] };
+    }
+    const lines = result.messages
+      .map((m) => {
+        const tag = m.type === 'ask' ? '[ask — reply required]' : '[tell]';
+        const idInfo = m.type === 'ask' ? ` (messageId: ${m.id})` : '';
+        return `${tag} From "${m.fromTaskName}" (${m.fromTaskId})${idInfo}:\n${m.text}`;
+      })
+      .join('\n\n---\n\n');
+    const hasAsk = result.messages.some((m) => m.type === 'ask');
+    const footer = hasAsk
+      ? '\n\n⚠️ For ask messages: reply ONLY via reply_to_task. Do not produce additional text output after replying.'
+      : '';
+    return { content: [{ type: 'text', text: lines + footer }] };
+  },
+);
+
+server.registerTool(
+  'reply_to_task',
+  {
+    title: 'Reply to Task',
+    description:
+      "Reply to an ask-type message. The reply is delivered back to the sender's ask_task call, unblocking it. Use the messageId from read_messages. After calling this tool, do NOT produce any additional text output — the reply IS the response.",
+    inputSchema: {
+      messageId: z.string().describe('The message ID to reply to (from read_messages)'),
+      text: z.string().describe('The reply text'),
+    },
+  },
+  async ({ messageId, text }) => {
+    try {
+      await apiCall('/reply-message', { messageId, text });
+      return {
+        content: [{ type: 'text', text: `Reply sent for message ${messageId}.` }],
+      };
+    } catch (e) {
+      return {
+        content: [{ type: 'text', text: `Reply failed: ${e.message}` }],
+        isError: true,
+      };
+    }
   },
 );
 
