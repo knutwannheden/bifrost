@@ -46,7 +46,8 @@ export function markIdle(taskId: string): void {
   const restore = pendingRestores.get(taskId);
   if (restore) {
     pendingRestores.delete(taskId);
-    writeToSession(taskId, restore.savedText);
+    // Convert \n to \r so the TUI interprets them as Enter keypresses
+    writeToSession(taskId, restore.savedText.replace(/\n/g, '\r'));
   }
 
   // Drain queue — send next queued prompt
@@ -91,6 +92,10 @@ async function scrapePartialPrompt(taskId: string): Promise<string> {
   });
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function doSendPrompt(text: string, taskId: string): Promise<SendPromptResult> {
   // Scrape any partial prompt the user typed
   const savedText = await scrapePartialPrompt(taskId);
@@ -100,8 +105,26 @@ async function doSendPrompt(text: string, taskId: string): Promise<SendPromptRes
     pendingRestores.set(taskId, { savedText });
   }
 
-  // Clear line + send prompt
-  writeToSession(taskId, `\x15${text}\r`);
+  // Clear any existing input regardless of cursor position.
+  // Option+Backspace (\x1b\x7f) erases one word backward per press.
+  // Ctrl+K (\x0b) kills forward to end of line per press.
+  // Use word count for backward (+ padding) and line count for forward.
+  if (savedText) {
+    const lines = savedText.split('\n');
+    const wordCount = savedText.split(/\s+/).filter(Boolean).length;
+    // Backward: one per word + one per line boundary for safety
+    for (let i = 0; i < wordCount + lines.length; i++) {
+      writeToSession(taskId, '\x1b\x7f');
+      await sleep(10);
+    }
+    // Forward: kill remaining content after cursor
+    for (let i = 0; i < lines.length; i++) {
+      writeToSession(taskId, '\x0b');
+      await sleep(10);
+    }
+  }
+
+  writeToSession(taskId, `${text}\r`);
 
   return { ok: true };
 }

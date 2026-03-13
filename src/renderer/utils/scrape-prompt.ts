@@ -36,18 +36,19 @@ export function scrapePartialPrompt(taskId: string): string {
     }
     if (!hasSeparatorAbove) continue;
 
-    // Extract text after ❯ (skip the space after it)
-    let userText = text.slice(promptIdx + 1);
-    if (userText.startsWith(' ')) userText = userText.slice(1);
+    // Extract text after "❯" — trim leading/trailing whitespace (prompt padding + cursor)
+    let userText = text.slice(promptIdx + 1).trim();
 
     // Also collect any continuation lines (multi-line input)
+    // Continuation lines are indented with 2 spaces by the TUI
     for (let cy = y + 1; cy < totalLines; cy++) {
       const cLine = buffer.getLine(cy);
       if (!cLine) break;
       const cText = cLine.translateToString(true);
       // Stop at separator line or status bar
       if (cText.includes('───') || cText.includes('bypass permissions')) break;
-      userText += `\n${cText}`;
+      const stripped = cText.startsWith('  ') ? cText.slice(2) : cText;
+      userText += `\n${stripped}`;
     }
 
     return userText.trimEnd();
