@@ -113,7 +113,7 @@ export default function TaskTab({
       <button
         ref={buttonRef}
         draggable
-        className={`group relative flex items-center gap-1.5 px-3 h-full whitespace-nowrap overflow-hidden max-w-[220px] transition-colors ${
+        className={`group relative flex items-center gap-1.5 px-5 h-full whitespace-nowrap overflow-hidden max-w-[280px] transition-colors ${
           isActive
             ? 'bg-surface-alt border-b-2 border-accent text-primary'
             : 'bg-transparent hover:bg-surface-alt/50 text-secondary'

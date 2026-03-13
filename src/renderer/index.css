@@ -130,16 +130,16 @@ body {
 
 /* Activity sweep animation for task tabs */
 .activity-sweep {
-  background: linear-gradient(90deg, transparent 0%, transparent 30%, #22c55e 50%, transparent 70%, transparent 100%);
+  background: linear-gradient(90deg, transparent 40%, #22c55e 50%, transparent 60%);
   background-size: 300% 100%;
   animation: sweep 5s ease-in-out infinite;
 }
 
 @keyframes sweep {
   0% {
-    background-position: 200% 0;
+    background-position: 100% 0;
   }
   100% {
-    background-position: -200% 0;
+    background-position: 0% 0;
   }
 }

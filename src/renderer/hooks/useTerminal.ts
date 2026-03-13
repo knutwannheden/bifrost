@@ -7,6 +7,7 @@ import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
 import { resolveTerminalTheme } from '../terminal-themes';
+import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
 import { isMac, isModKey } from '../utils/platform';
 
 // Global registry so keyboard shortcuts can access terminal instances
@@ -143,11 +144,20 @@ export function useTerminal(
         }
       }
       // Option+Left/Right: word navigation (ESC b / ESC f)
+      // Option+/: hippie-expand (dabbrev-expand)
       if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           if (e.type === 'keydown') {
             const seq = e.key === 'ArrowLeft' ? '\x1bb' : '\x1bf';
             window.bifrost.writeToSession(sessionId!, seq);
+          }
+          return false;
+        }
+        if (e.code === 'Slash') {
+          // Prevent macOS from generating the composed '÷' character
+          e.preventDefault();
+          if (e.type === 'keydown') {
+            hippieExpand(terminal, sessionId!);
           }
           return false;
         }
@@ -173,6 +183,7 @@ export function useTerminal(
 
     // Send keystrokes to session
     terminal.onData((data) => {
+      resetHippieState();
       window.bifrost.writeToSession(sessionId, data);
     });
 
