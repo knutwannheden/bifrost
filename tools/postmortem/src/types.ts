@@ -52,33 +52,22 @@ export interface DiffFile {
 
 /** All computed session metrics */
 export interface SessionMetrics {
-  // --- Diff-dependent metrics (NaN when no diff) ---
-  /** Cost-weighted tokens / total diff lines changed */
+  // --- Bucketing metric (diff-dependent, NaN when no diff) ---
+  /** Cost-weighted tokens / total diff lines changed. Used for tier classification. */
   costPerDiffLine: number;
-  /** Fraction of session elapsed before first touch of a diff-relevant file */
-  timeToFirstCorrectFile: number;
-  /** Navigation tool calls before first diff-relevant mutation */
-  navigationOverhead: number;
-  /** Fraction of mutated files not in the final diff */
-  mutationDiscoveryWaste: number;
 
-  // --- Always-available metrics ---
+  // --- Clustering dimensions (7 metrics selected via CV + correlation analysis) ---
+
+  /** Fraction of session elapsed before first touch of a diff-relevant file (NaN when no diff/mutations) */
+  timeToFirstCorrectFile: number;
   /** Writes to the same file without intervening test or cross-file mutation */
   aimlessBacktracks: number;
   /** Per-file backtrack counts, sorted descending */
   backtrackDetail: BacktrackEntry[];
   /** Number of red-to-green test transitions */
   testCycleCount: number;
-  /** Highest single-turn input_tokens / context window size */
-  contextPressurePeak: number;
-
-  // --- New: always-available behavioral metrics ---
   /** Fraction of edited files that were not read first */
   editWithoutReadRate: number;
-  /** Avg number of times each read file is re-read (1.0 = no re-reads) */
-  fileRereadRatio: number;
-  /** Fraction of edit tool calls immediately followed by another edit (no test/read between) */
-  editEditChainRate: number;
   /** Human prompts per 100 tool calls (steering frequency) */
   humanCorrectionDensity: number;
   /** Tool calls that returned errors / total tool calls */

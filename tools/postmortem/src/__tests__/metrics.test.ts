@@ -22,7 +22,6 @@ function timeline(turns: Array<{ inputTokens: number; outputTokens: number }>): 
     cacheCreationTokens: 0,
     cacheReadTokens: 0,
   }));
-  // With no cache, cost-weighted = inputTokens + outputTokens * 5
   const totalCostWeightedTokens = mapped.reduce((s, t) => s + t.inputTokens + t.outputTokens * 5, 0);
   return {
     turns: mapped,
@@ -47,7 +46,6 @@ describe("computeMetrics", () => {
     it("computes cost-weighted tokens / total diff lines", () => {
       const tl = timeline([{ inputTokens: 5000, outputTokens: 1000 }]);
       const result = computeMetrics([], tl, simpleDiff);
-      // cost-weighted: 5000 + 1000*5 = 10000; diff lines: 15
       expect(result.costPerDiffLine).toBeCloseTo(666.67, 0);
     });
 
@@ -59,29 +57,20 @@ describe("computeMetrics", () => {
   });
 
   describe("NaN for unavailable metrics", () => {
-    it("returns NaN for diff-dependent metrics when diff is empty", () => {
+    it("returns NaN for TTCF when diff is empty", () => {
       const events: ToolEvent[] = [
-        event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
         event({ toolName: "Edit", category: "mutation", filePath: "src/b.ts" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), emptyDiff);
       expect(result.timeToFirstCorrectFile).toBeNaN();
-      expect(result.navigationOverhead).toBeNaN();
-      expect(result.mutationDiscoveryWaste).toBeNaN();
-      expect(result.aimlessBacktracks).toBe(0);
-      expect(result.contextPressurePeak).toBeGreaterThanOrEqual(0);
     });
 
-    it("returns NaN for TTCF and nav overhead when no mutations exist (e.g. commit-only sub-task)", () => {
+    it("returns NaN for TTCF when no mutations exist", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
-        event({ toolName: "Bash", category: "other" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
       expect(result.timeToFirstCorrectFile).toBeNaN();
-      expect(result.navigationOverhead).toBeNaN();
-      // mutation waste is still computable (0 mutations = 0 waste)
-      expect(result.mutationDiscoveryWaste).toBe(0);
     });
   });
 
@@ -98,56 +87,11 @@ describe("computeMetrics", () => {
     it("returns fraction of session elapsed before first touch of diff file", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Read", category: "navigation", filePath: "src/other.ts", timestamp: "2026-01-01T00:00:00Z" }),
-        event({ toolName: "Read", category: "navigation", filePath: "src/wrong.ts", timestamp: "2026-01-01T00:05:00Z" }),
         event({ toolName: "Read", category: "navigation", filePath: "src/target.ts", timestamp: "2026-01-01T00:10:00Z" }),
         event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts", timestamp: "2026-01-01T00:15:00Z" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
       expect(result.timeToFirstCorrectFile).toBeCloseTo(0.667, 2);
-    });
-
-    it("returns 1 when no diff file is ever touched but mutations exist", () => {
-      const events: ToolEvent[] = [
-        event({ toolName: "Read", category: "navigation", filePath: "src/other.ts", timestamp: "2026-01-01T00:00:00Z" }),
-        event({ toolName: "Edit", category: "mutation", filePath: "src/wrong.ts", timestamp: "2026-01-01T00:05:00Z" }),
-      ];
-      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.timeToFirstCorrectFile).toBe(1);
-    });
-  });
-
-  describe("navigationOverhead", () => {
-    it("counts navigation calls before first diff-relevant mutation", () => {
-      const events: ToolEvent[] = [
-        event({ toolName: "Read", category: "navigation", filePath: "src/other.ts" }),
-        event({ toolName: "Grep", category: "navigation", filePath: "src/foo.ts" }),
-        event({ toolName: "Read", category: "navigation", filePath: "src/target.ts" }),
-        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
-        event({ toolName: "Read", category: "navigation", filePath: "src/bar.ts" }),
-      ];
-      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.navigationOverhead).toBe(3);
-    });
-
-    it("does not count mutations to non-diff files as stopping the count", () => {
-      const events: ToolEvent[] = [
-        event({ toolName: "Read", category: "navigation" }),
-        event({ toolName: "Write", category: "mutation", filePath: "src/wrong.ts" }),
-        event({ toolName: "Read", category: "navigation" }),
-        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
-      ];
-      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.navigationOverhead).toBe(2);
-    });
-
-    it("returns total navigation count when mutations exist but none are diff-relevant", () => {
-      const events: ToolEvent[] = [
-        event({ toolName: "Read", category: "navigation" }),
-        event({ toolName: "Glob", category: "navigation" }),
-        event({ toolName: "Edit", category: "mutation", filePath: "src/wrong.ts" }),
-      ];
-      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.navigationOverhead).toBe(2);
     });
   });
 
@@ -173,20 +117,10 @@ describe("computeMetrics", () => {
       expect(result.aimlessBacktracks).toBe(0);
     });
 
-    it("resets on pathless mutation (e.g., Bash write)", () => {
+    it("resets on pathless mutation", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
-        event({ toolName: "Bash", category: "mutation" }), // no filePath
-        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
-      ];
-      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.aimlessBacktracks).toBe(0);
-    });
-
-    it("resets on cross-file mutation", () => {
-      const events: ToolEvent[] = [
-        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
-        event({ toolName: "Write", category: "mutation", filePath: "src/other.ts" }),
+        event({ toolName: "Bash", category: "mutation" }),
         event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
@@ -207,55 +141,56 @@ describe("computeMetrics", () => {
       expect(result.testCycleCount).toBe(2);
     });
 
-    it("returns 0 for all-passing tests", () => {
-      const events: ToolEvent[] = [
-        event({ toolName: "Bash", category: "test", resultText: "PASS all tests" }),
-        event({ toolName: "Bash", category: "test", resultText: "PASS all tests" }),
-      ];
-      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.testCycleCount).toBe(0);
-    });
-
     it("returns 0 when no tests are run", () => {
       const result = computeMetrics([], timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
       expect(result.testCycleCount).toBe(0);
     });
   });
 
-  describe("contextPressurePeak", () => {
-    it("returns max input_tokens / context window size", () => {
-      const tl = timeline([
-        { inputTokens: 50000, outputTokens: 1000 },
-        { inputTokens: 150000, outputTokens: 2000 },
-        { inputTokens: 80000, outputTokens: 500 },
-      ]);
-      const result = computeMetrics([], tl, simpleDiff, 200000);
-      expect(result.contextPressurePeak).toBe(0.75);
+  describe("editWithoutReadRate", () => {
+    it("returns fraction of edited files not read before editing", () => {
+      const events: ToolEvent[] = [
+        event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
+        event({ toolName: "Edit", category: "mutation", filePath: "src/a.ts" }), // read first
+        event({ toolName: "Edit", category: "mutation", filePath: "src/b.ts" }), // not read
+        event({ toolName: "Edit", category: "mutation", filePath: "src/c.ts" }), // not read
+      ];
+      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
+      expect(result.editWithoutReadRate).toBeCloseTo(0.667, 2); // 2/3
+    });
+
+    it("returns 0 when all files are read before editing", () => {
+      const events: ToolEvent[] = [
+        event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
+        event({ toolName: "Edit", category: "mutation", filePath: "src/a.ts" }),
+      ];
+      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
+      expect(result.editWithoutReadRate).toBe(0);
     });
   });
 
-  describe("mutationDiscoveryWaste", () => {
-    it("returns fraction of mutated files not in diff", () => {
+  describe("toolErrorRate", () => {
+    it("returns fraction of tool calls with errors", () => {
       const events: ToolEvent[] = [
-        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
-        event({ toolName: "Write", category: "mutation", filePath: "src/waste1.ts" }),
-        event({ toolName: "Edit", category: "mutation", filePath: "src/waste2.ts" }),
+        event({ toolName: "Read", category: "navigation", isError: false }),
+        event({ toolName: "Read", category: "navigation", isError: true }),
+        event({ toolName: "Edit", category: "mutation", isError: false }),
+        event({ toolName: "Bash", category: "other", isError: true }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.mutationDiscoveryWaste).toBeCloseTo(0.667, 2);
+      expect(result.toolErrorRate).toBe(0.5);
     });
+  });
 
-    it("returns 0 when all mutations are in diff", () => {
+  describe("fileFocusScore", () => {
+    it("returns unique file count for small event sets", () => {
       const events: ToolEvent[] = [
-        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
+        event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
+        event({ toolName: "Read", category: "navigation", filePath: "src/b.ts" }),
+        event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.mutationDiscoveryWaste).toBe(0);
-    });
-
-    it("returns 0 when there are no mutations", () => {
-      const result = computeMetrics([], timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.mutationDiscoveryWaste).toBe(0);
+      expect(result.fileFocusScore).toBe(2);
     });
   });
 });

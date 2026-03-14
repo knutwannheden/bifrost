@@ -5,33 +5,24 @@ interface ThresholdDef {
   warn: number;
   critical: number;
   recommendation: string;
-  /** Alternative recommendation when no tests were observed in the session */
   noTestRecommendation?: string;
 }
 
-// Thresholds calibrated against 20 real sessions (2026-03-14 batch analysis).
-// See /private/tmp/claude/postmortem-batch-stats.md for distribution data.
+// Thresholds calibrated against 30 real sessions (2026-03-14 CV + correlation analysis).
+// Only metrics surviving the CV > 0.3 and |r| < 0.7 filters have thresholds.
 const THRESHOLDS: ThresholdDef[] = [
   {
     metric: "timeToFirstCorrectFile",
     warn: 0.3,
     critical: 0.5,
-    // Low signal: max observed 0.029 across 10 sessions with diffs.
-    // Claude finds target files quickly. Keeping for edge cases.
+    // CV=2.16. Discovery phase. High variance but rarely triggers (Claude finds files fast).
     recommendation: "Inject a file map, tree output, or explicit file targets into CLAUDE.md or the prompt.",
-  },
-  {
-    metric: "navigationOverhead",
-    warn: 10,
-    critical: 20,
-    // Good discrimination: 40% ok, 40% warn, 20% critical. Median: 13.5.
-    recommendation: "List target files in the prompt. Use .claude/rules/ to describe project structure.",
   },
   {
     metric: "aimlessBacktracks",
     warn: 40,
     critical: 80,
-    // Recalibrated from 2/4. Observed range: 13-393, median 55.5, P25=42, P75=75.
+    // CV=0.93. Iteration phase. Observed range: 13-393, median 55.5.
     recommendation: 'Add "run tests after each file change" to CLAUDE.md rules.',
     noTestRecommendation: "Add a verification step (lint, build, or manual check) after each file change. Break large edits into smaller, validated steps.",
   },
@@ -39,38 +30,48 @@ const THRESHOLDS: ThresholdDef[] = [
     metric: "testCycleCount",
     warn: 3,
     critical: 6,
-    // Well-calibrated: 60% ok, 15% warn, 25% critical.
+    // CV=2.03. Iteration phase. 60% ok, 15% warn, 25% critical.
     recommendation: "Include expected behavior specs. Provide failing test output upfront.",
   },
   {
-    metric: "contextPressurePeak",
-    warn: 0.85,
-    critical: 0.95,
-    // Recalibrated from 0.7/0.9. Baseline clusters at ~0.835 (CV=0.04).
-    // Only flags sessions with genuinely elevated context pressure.
-    recommendation: "Decompose into smaller tasks. Use /compact proactively. Trim CLAUDE.md.",
+    metric: "editWithoutReadRate",
+    warn: 0.3,
+    critical: 0.6,
+    // CV=0.95. Iteration phase. Mean 0.21, range 0-0.73.
+    recommendation: "Agent is editing files without reading them first. Add 'always read before editing' to CLAUDE.md.",
   },
   {
-    metric: "mutationDiscoveryWaste",
-    warn: 0.4,
-    critical: 0.7,
-    // Good discrimination: 70% ok, 20% warn, 10% critical.
-    recommendation: "Narrow task scope. Provide explicit file targets.",
+    metric: "humanCorrectionDensity",
+    warn: 15,
+    critical: 25,
+    // CV=0.61. Quality phase. Mean 9.6, range ~1-25.
+    recommendation: "Agent needs frequent human steering. Provide clearer specs, break into smaller tasks.",
+  },
+  {
+    metric: "toolErrorRate",
+    warn: 0.05,
+    critical: 0.1,
+    // CV=0.61. Quality phase. Mean 0.042, range 0-0.1.
+    recommendation: "High tool error rate. Check for path issues, missing permissions, or environment problems.",
+  },
+  {
+    metric: "fileFocusScore",
+    warn: 20,
+    critical: 30,
+    // CV=0.36. Focus phase. Mean 17.4, range 5-30.
+    recommendation: "Agent is scattered across too many files. Narrow the task scope or provide explicit file targets.",
   },
 ];
 
-// Calibrated against 10 sessions with diffs. Median cost: 6,010; P25: 2,679; P75: 10,641.
-// "efficient" captures sessions below P25; "expensive" above P75.
+// Calibrated against 16 sessions with diffs. Median cost: 6,010; P25: 2,679; P75: 10,641.
 const COST_THRESHOLDS = { efficient: 2500, moderate: 10000 };
 
 /**
  * Classify a session into a cost tier + dominant waste type.
- * Pass events to enable context-aware recommendations.
  */
 export function bucketSession(metrics: SessionMetrics, events?: ToolEvent[]): SessionBucket {
   const hasTests = events ? events.some((e) => e.category === "test") : true;
 
-  // NaN cost means no diff — classify by other signals
   if (Number.isNaN(metrics.costPerDiffLine)) {
     return {
       costTier: "moderate",
@@ -90,13 +91,12 @@ export function bucketSession(metrics: SessionMetrics, events?: ToolEvent[]): Se
     return { costTier, dominantWaste: "none", recommendation: "Efficient session. Archive prompt/CLAUDE.md as template." };
   }
 
-  // Find which metric is most above its warn threshold (normalized severity)
   let dominant: keyof SessionMetrics | "none" = "none";
   let maxSeverity = 1;
 
   for (const def of THRESHOLDS) {
     const value = metrics[def.metric];
-    if (Number.isNaN(value)) continue; // skip unavailable metrics
+    if (Number.isNaN(value)) continue;
     const severity = value / def.warn;
     if (severity > maxSeverity) {
       maxSeverity = severity;
@@ -117,7 +117,6 @@ export function bucketSession(metrics: SessionMetrics, events?: ToolEvent[]): Se
 
 /**
  * Flag individual metrics that exceed their warn or critical thresholds.
- * Pass events to enable context-aware recommendations.
  */
 export function flagMetrics(metrics: SessionMetrics, events?: ToolEvent[]): MetricFlag[] {
   const flags: MetricFlag[] = [];
@@ -125,10 +124,9 @@ export function flagMetrics(metrics: SessionMetrics, events?: ToolEvent[]): Metr
 
   for (const def of THRESHOLDS) {
     const value = metrics[def.metric];
-    if (Number.isNaN(value)) continue; // skip unavailable metrics
+    if (Number.isNaN(value)) continue;
 
     let severity: Severity = "ok";
-
     if (value >= def.critical) {
       severity = "critical";
     } else if (value >= def.warn) {
@@ -137,12 +135,7 @@ export function flagMetrics(metrics: SessionMetrics, events?: ToolEvent[]): Metr
 
     if (severity !== "ok") {
       const rec = (!hasTests && def.noTestRecommendation) ? def.noTestRecommendation : def.recommendation;
-      flags.push({
-        metric: def.metric,
-        value,
-        severity,
-        recommendation: rec,
-      });
+      flags.push({ metric: def.metric, value, severity, recommendation: rec });
     }
   }
 

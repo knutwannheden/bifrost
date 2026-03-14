@@ -6,15 +6,10 @@ function baseMetrics(overrides: Partial<SessionMetrics> = {}): SessionMetrics {
   return {
     costPerDiffLine: 100,
     timeToFirstCorrectFile: 0.1,
-    navigationOverhead: 3,
-    mutationDiscoveryWaste: 0.1,
     aimlessBacktracks: 0,
     backtrackDetail: [],
     testCycleCount: 1,
-    contextPressurePeak: 0.3,
     editWithoutReadRate: 0,
-    fileRereadRatio: 1,
-    editEditChainRate: 0,
     humanCorrectionDensity: 5,
     toolErrorRate: 0.01,
     fileFocusScore: 10,
@@ -47,13 +42,13 @@ describe("bucketSession", () => {
     expect(bucket.dominantWaste).toBe("aimlessBacktracks");
   });
 
-  it("classifies expensive session with high context pressure", () => {
+  it("classifies expensive session with high error rate", () => {
     const bucket = bucketSession(baseMetrics({
       costPerDiffLine: 12000,
-      contextPressurePeak: 0.96,
+      toolErrorRate: 0.12,
     }));
     expect(bucket.costTier).toBe("expensive");
-    expect(bucket.dominantWaste).toBe("contextPressurePeak");
+    expect(bucket.dominantWaste).toBe("toolErrorRate");
   });
 
   it("returns none for dominant waste when no metric exceeds warn", () => {
@@ -72,8 +67,6 @@ describe("bucketSession", () => {
     const bucket = bucketSession(baseMetrics({
       costPerDiffLine: 15000,
       timeToFirstCorrectFile: Number.NaN,
-      navigationOverhead: Number.NaN,
-      mutationDiscoveryWaste: Number.NaN,
       aimlessBacktracks: 100,
     }));
     expect(bucket.dominantWaste).toBe("aimlessBacktracks");
@@ -96,68 +89,51 @@ describe("flagMetrics", () => {
 
   it("does not flag moderate backtracks (below warn=40)", () => {
     const flags = flagMetrics(baseMetrics({ aimlessBacktracks: 30 }));
-    const btFlag = flags.find((f) => f.metric === "aimlessBacktracks");
-    expect(btFlag).toBeUndefined();
+    expect(flags.find((f) => f.metric === "aimlessBacktracks")).toBeUndefined();
   });
 
   it("flags high backtracks as warn", () => {
     const flags = flagMetrics(baseMetrics({ aimlessBacktracks: 50 }));
-    const btFlag = flags.find((f) => f.metric === "aimlessBacktracks");
-    expect(btFlag).toBeDefined();
-    expect(btFlag!.severity).toBe("warn");
+    const flag = flags.find((f) => f.metric === "aimlessBacktracks");
+    expect(flag).toBeDefined();
+    expect(flag!.severity).toBe("warn");
   });
 
   it("flags critical backtracks", () => {
     const flags = flagMetrics(baseMetrics({ aimlessBacktracks: 100 }));
-    const btFlag = flags.find((f) => f.metric === "aimlessBacktracks");
-    expect(btFlag).toBeDefined();
-    expect(btFlag!.severity).toBe("critical");
+    const flag = flags.find((f) => f.metric === "aimlessBacktracks");
+    expect(flag!.severity).toBe("critical");
   });
 
   it("flags high TTCF as warn", () => {
     const flags = flagMetrics(baseMetrics({ timeToFirstCorrectFile: 0.35 }));
-    const ttcfFlag = flags.find((f) => f.metric === "timeToFirstCorrectFile");
-    expect(ttcfFlag).toBeDefined();
-    expect(ttcfFlag!.severity).toBe("warn");
+    const flag = flags.find((f) => f.metric === "timeToFirstCorrectFile");
+    expect(flag!.severity).toBe("warn");
   });
 
-  it("flags critical TTCF", () => {
-    const flags = flagMetrics(baseMetrics({ timeToFirstCorrectFile: 0.55 }));
-    const ttcfFlag = flags.find((f) => f.metric === "timeToFirstCorrectFile");
-    expect(ttcfFlag).toBeDefined();
-    expect(ttcfFlag!.severity).toBe("critical");
+  it("flags high edit-without-read as warn", () => {
+    const flags = flagMetrics(baseMetrics({ editWithoutReadRate: 0.4 }));
+    const flag = flags.find((f) => f.metric === "editWithoutReadRate");
+    expect(flag).toBeDefined();
+    expect(flag!.severity).toBe("warn");
   });
 
-  it("does not flag baseline context pressure (0.835)", () => {
-    const flags = flagMetrics(baseMetrics({ contextPressurePeak: 0.835 }));
-    const cpFlag = flags.find((f) => f.metric === "contextPressurePeak");
-    expect(cpFlag).toBeUndefined();
-  });
-
-  it("flags elevated context pressure as warn", () => {
-    const flags = flagMetrics(baseMetrics({ contextPressurePeak: 0.90 }));
-    const cpFlag = flags.find((f) => f.metric === "contextPressurePeak");
-    expect(cpFlag).toBeDefined();
-    expect(cpFlag!.severity).toBe("warn");
+  it("flags high tool error rate as critical", () => {
+    const flags = flagMetrics(baseMetrics({ toolErrorRate: 0.15 }));
+    const flag = flags.find((f) => f.metric === "toolErrorRate");
+    expect(flag!.severity).toBe("critical");
   });
 
   it("skips NaN metrics", () => {
-    const flags = flagMetrics(baseMetrics({
-      timeToFirstCorrectFile: Number.NaN,
-      navigationOverhead: Number.NaN,
-      mutationDiscoveryWaste: Number.NaN,
-    }));
-    const nanMetrics = flags.filter((f) =>
-      f.metric === "timeToFirstCorrectFile" || f.metric === "navigationOverhead" || f.metric === "mutationDiscoveryWaste"
-    );
-    expect(nanMetrics).toHaveLength(0);
+    const flags = flagMetrics(baseMetrics({ timeToFirstCorrectFile: Number.NaN }));
+    expect(flags.find((f) => f.metric === "timeToFirstCorrectFile")).toBeUndefined();
   });
 
   it("flags multiple metrics at once", () => {
     const flags = flagMetrics(baseMetrics({
       timeToFirstCorrectFile: 0.6,
       aimlessBacktracks: 100,
-      contextPressurePeak: 0.96,
+      toolErrorRate: 0.12,
     }));
     expect(flags.length).toBeGreaterThanOrEqual(3);
   });

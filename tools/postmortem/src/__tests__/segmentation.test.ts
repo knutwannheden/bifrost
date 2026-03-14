@@ -134,14 +134,12 @@ describe("segmentSubTasks", () => {
     const result = segmentSubTasks(entries, events, diff);
     expect(result).toHaveLength(2);
 
-    // First sub-task: 2 navigation events, no mutations — targeting metrics are N/A
-    expect(result[0].metrics.navigationOverhead).toBeNaN();
-    expect(result[0].metrics.mutationDiscoveryWaste).toBe(0); // no mutations at all
+    // First sub-task: 2 navigation events, no mutations — TTCF is N/A
+    expect(result[0].metrics.timeToFirstCorrectFile).toBeNaN();
     expect(result[0].tokenTimeline.turns).toHaveLength(2);
 
     // Second sub-task: 1 mutation to diff file
-    expect(result[1].metrics.navigationOverhead).toBe(0);
-    expect(result[1].metrics.mutationDiscoveryWaste).toBe(0);
+    expect(result[1].metrics.timeToFirstCorrectFile).toBe(0); // first event touches diff file
     expect(result[1].tokenTimeline.turns).toHaveLength(1);
   });
 
