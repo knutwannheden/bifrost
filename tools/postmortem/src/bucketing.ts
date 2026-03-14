@@ -59,7 +59,9 @@ const THRESHOLDS: ThresholdDef[] = [
   },
 ];
 
-const COST_THRESHOLDS = { efficient: 500, moderate: 2000 };
+// Calibrated against 10 sessions with diffs. Median cost: 6,010; P25: 2,679; P75: 10,641.
+// "efficient" captures sessions below P25; "expensive" above P75.
+const COST_THRESHOLDS = { efficient: 2500, moderate: 10000 };
 
 /**
  * Classify a session into a cost tier + dominant waste type.

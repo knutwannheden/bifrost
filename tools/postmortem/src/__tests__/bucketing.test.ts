@@ -25,7 +25,7 @@ describe("bucketSession", () => {
 
   it("classifies moderate cost with high TTCF as explorer", () => {
     const bucket = bucketSession(baseMetrics({
-      costPerDiffLine: 1000,
+      costPerDiffLine: 5000,
       timeToFirstCorrectFile: 0.6,
     }));
     expect(bucket.costTier).toBe("moderate");
@@ -34,7 +34,7 @@ describe("bucketSession", () => {
 
   it("classifies expensive session with high backtracks", () => {
     const bucket = bucketSession(baseMetrics({
-      costPerDiffLine: 3000,
+      costPerDiffLine: 15000,
       aimlessBacktracks: 100,
     }));
     expect(bucket.costTier).toBe("expensive");
@@ -43,7 +43,7 @@ describe("bucketSession", () => {
 
   it("classifies expensive session with high context pressure", () => {
     const bucket = bucketSession(baseMetrics({
-      costPerDiffLine: 2500,
+      costPerDiffLine: 12000,
       contextPressurePeak: 0.96,
     }));
     expect(bucket.costTier).toBe("expensive");
@@ -51,7 +51,7 @@ describe("bucketSession", () => {
   });
 
   it("returns none for dominant waste when no metric exceeds warn", () => {
-    const bucket = bucketSession(baseMetrics({ costPerDiffLine: 1500 }));
+    const bucket = bucketSession(baseMetrics({ costPerDiffLine: 5000 }));
     expect(bucket.costTier).toBe("moderate");
     expect(bucket.dominantWaste).toBe("none");
   });
@@ -64,7 +64,7 @@ describe("bucketSession", () => {
 
   it("skips NaN metrics when finding dominant waste", () => {
     const bucket = bucketSession(baseMetrics({
-      costPerDiffLine: 3000,
+      costPerDiffLine: 15000,
       timeToFirstCorrectFile: Number.NaN,
       navigationOverhead: Number.NaN,
       mutationDiscoveryWaste: Number.NaN,
@@ -77,7 +77,7 @@ describe("bucketSession", () => {
     const noTestEvents: ToolEvent[] = [
       { timestamp: "", toolName: "Edit", input: {}, resultText: "", isError: false, category: "mutation" },
     ];
-    const bucket = bucketSession(baseMetrics({ costPerDiffLine: 3000, aimlessBacktracks: 100 }), noTestEvents);
+    const bucket = bucketSession(baseMetrics({ costPerDiffLine: 15000, aimlessBacktracks: 100 }), noTestEvents);
     expect(bucket.recommendation).toContain("verification step");
   });
 });
