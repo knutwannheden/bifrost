@@ -146,7 +146,14 @@ export function extractTokenTimeline(entries: TranscriptEntry[]): TokenTimeline 
   const totalInputTokens = turns.reduce((s, t) => s + t.inputTokens, 0);
   const totalOutputTokens = turns.reduce((s, t) => s + t.outputTokens, 0);
 
-  return { turns, totalInputTokens, totalOutputTokens };
+  // Cost-weighted: approximate relative API cost
+  // Non-cached input: 1x, cache creation: 1.25x, cache read: 0.1x, output: 5x
+  const totalCostWeightedTokens = turns.reduce((s, t) => {
+    const nonCached = t.inputTokens - t.cacheCreationTokens - t.cacheReadTokens;
+    return s + nonCached + t.cacheCreationTokens * 1.25 + t.cacheReadTokens * 0.1 + t.outputTokens * 5;
+  }, 0);
+
+  return { turns, totalInputTokens, totalOutputTokens, totalCostWeightedTokens };
 }
 
 /**

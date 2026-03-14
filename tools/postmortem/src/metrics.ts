@@ -12,23 +12,23 @@ export function computeMetrics(
   contextWindowSize = DEFAULT_CONTEXT_WINDOW,
 ): SessionMetrics {
   const diffFiles = new Set(diff.files.map((f) => f.path));
+  const hasDiff = diffFiles.size > 0;
 
   return {
     costPerDiffLine: computeCostPerDiffLine(tokenTimeline, diff),
-    timeToFirstCorrectFile: computeTimeToFirstCorrectFile(events, diffFiles),
-    navigationOverhead: computeNavigationOverhead(events, diffFiles),
+    timeToFirstCorrectFile: hasDiff ? computeTimeToFirstCorrectFile(events, diffFiles) : Number.NaN,
+    navigationOverhead: hasDiff ? computeNavigationOverhead(events, diffFiles) : Number.NaN,
     aimlessBacktracks: computeAimlessBacktracks(events),
     testCycleCount: computeTestCycleCount(events),
     contextPressurePeak: computeContextPressurePeak(tokenTimeline, contextWindowSize),
-    mutationDiscoveryWaste: computeMutationDiscoveryWaste(events, diffFiles),
+    mutationDiscoveryWaste: hasDiff ? computeMutationDiscoveryWaste(events, diffFiles) : Number.NaN,
   };
 }
 
 function computeCostPerDiffLine(tokenTimeline: TokenTimeline, diff: DiffSummary): number {
-  const totalTokens = tokenTimeline.totalInputTokens + tokenTimeline.totalOutputTokens;
   const totalDiffLines = diff.totalAdded + diff.totalRemoved;
-  if (totalDiffLines === 0) return Number.POSITIVE_INFINITY;
-  return totalTokens / totalDiffLines;
+  if (totalDiffLines === 0) return Number.NaN;
+  return tokenTimeline.totalCostWeightedTokens / totalDiffLines;
 }
 
 function computeTimeToFirstCorrectFile(events: ToolEvent[], diffFiles: Set<string>): number {
@@ -40,7 +40,6 @@ function computeTimeToFirstCorrectFile(events: ToolEvent[], diffFiles: Set<strin
   const sessionDuration = sessionEnd - sessionStart;
 
   if (sessionDuration === 0) {
-    // All events at same timestamp — check if any touches a diff file
     const touchesDiff = events.some((e) => e.filePath && diffFiles.has(e.filePath));
     return touchesDiff ? 0 : 1;
   }
@@ -99,7 +98,6 @@ function computeTestCycleCount(events: ToolEvent[]): number {
     if (failed) {
       inFailure = true;
     } else if (inFailure) {
-      // Transition from red to green
       cycles++;
       inFailure = false;
     }
@@ -109,13 +107,10 @@ function computeTestCycleCount(events: ToolEvent[]): number {
 }
 
 function isTestFailure(event: ToolEvent): boolean {
-  // Use error flag from tool result as primary signal
   if (event.isError) return true;
 
   const text = event.resultText;
-  // Check for pass indicators first
   if (/\b(?:PASS|0 failed|0 errors|all tests passed)\b/i.test(text)) return false;
-  // Check for failure indicators
   if (/\b(?:FAIL|FAILED|Tests failed|FAILURES)\b/.test(text)) return true;
 
   return false;

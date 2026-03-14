@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { bucketSession, flagMetrics } from "../bucketing.js";
-import type { SessionMetrics } from "../types.js";
+import type { SessionMetrics, ToolEvent } from "../types.js";
 
 function baseMetrics(overrides: Partial<SessionMetrics> = {}): SessionMetrics {
   return {
@@ -54,6 +54,31 @@ describe("bucketSession", () => {
     expect(bucket.costTier).toBe("moderate");
     expect(bucket.dominantWaste).toBe("none");
   });
+
+  it("handles NaN cost (empty diff) gracefully", () => {
+    const bucket = bucketSession(baseMetrics({ costPerDiffLine: Number.NaN }));
+    expect(bucket.costTier).toBe("moderate");
+    expect(bucket.recommendation).toContain("No diff available");
+  });
+
+  it("skips NaN metrics when finding dominant waste", () => {
+    const bucket = bucketSession(baseMetrics({
+      costPerDiffLine: 3000,
+      timeToFirstCorrectFile: Number.NaN,
+      navigationOverhead: Number.NaN,
+      mutationDiscoveryWaste: Number.NaN,
+      aimlessBacktracks: 5,
+    }));
+    expect(bucket.dominantWaste).toBe("aimlessBacktracks");
+  });
+
+  it("uses noTestRecommendation when no test events provided", () => {
+    const noTestEvents: ToolEvent[] = [
+      { timestamp: "", toolName: "Edit", input: {}, resultText: "", isError: false, category: "mutation" },
+    ];
+    const bucket = bucketSession(baseMetrics({ costPerDiffLine: 3000, aimlessBacktracks: 5 }), noTestEvents);
+    expect(bucket.recommendation).toContain("verification step");
+  });
 });
 
 describe("flagMetrics", () => {
@@ -74,6 +99,18 @@ describe("flagMetrics", () => {
     const ttcfFlag = flags.find((f) => f.metric === "timeToFirstCorrectFile");
     expect(ttcfFlag).toBeDefined();
     expect(ttcfFlag!.severity).toBe("critical");
+  });
+
+  it("skips NaN metrics", () => {
+    const flags = flagMetrics(baseMetrics({
+      timeToFirstCorrectFile: Number.NaN,
+      navigationOverhead: Number.NaN,
+      mutationDiscoveryWaste: Number.NaN,
+    }));
+    const nanMetrics = flags.filter((f) =>
+      f.metric === "timeToFirstCorrectFile" || f.metric === "navigationOverhead" || f.metric === "mutationDiscoveryWaste"
+    );
+    expect(nanMetrics).toHaveLength(0);
   });
 
   it("flags multiple metrics at once", () => {

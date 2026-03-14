@@ -227,6 +227,10 @@ describe("extractTokenTimeline", () => {
     expect(timeline.turns[1].inputTokens).toBe(8000); // 8000 + 0 + 0
     expect(timeline.totalInputTokens).toBe(13500);
     expect(timeline.totalOutputTokens).toBe(1500);
+    // cost-weighted: nonCached + cache_creation*1.25 + cache_read*0.1 + output*5
+    // Turn 0: 5000 + 200*1.25 + 300*0.1 + 1000*5 = 5000 + 250 + 30 + 5000 = 10280
+    // Turn 1: 8000 + 0 + 0 + 500*5 = 10500
+    expect(timeline.totalCostWeightedTokens).toBe(20780);
   });
 
   it("skips entries without usage", () => {

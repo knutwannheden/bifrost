@@ -26,8 +26,11 @@ export interface TokenTurn {
 /** Token timeline for a session */
 export interface TokenTimeline {
   turns: TokenTurn[];
+  /** Total context fill tokens (input + cache creation + cache read) */
   totalInputTokens: number;
   totalOutputTokens: number;
+  /** Cost-weighted token estimate: non-cached input + cache_creation*1.25 + cache_read*0.1 + output*5 */
+  totalCostWeightedTokens: number;
 }
 
 /** Summary of a parsed unified diff */

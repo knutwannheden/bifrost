@@ -15,16 +15,20 @@ function event(
 }
 
 function timeline(turns: Array<{ inputTokens: number; outputTokens: number }>): TokenTimeline {
+  const mapped = turns.map((t, i) => ({
+    timestamp: `2026-01-01T00:${String(i).padStart(2, "0")}:00Z`,
+    inputTokens: t.inputTokens,
+    outputTokens: t.outputTokens,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+  }));
+  // With no cache, cost-weighted = inputTokens + outputTokens * 5
+  const totalCostWeightedTokens = mapped.reduce((s, t) => s + t.inputTokens + t.outputTokens * 5, 0);
   return {
-    turns: turns.map((t, i) => ({
-      timestamp: `2026-01-01T00:${String(i).padStart(2, "0")}:00Z`,
-      inputTokens: t.inputTokens,
-      outputTokens: t.outputTokens,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
-    })),
+    turns: mapped,
     totalInputTokens: turns.reduce((s, t) => s + t.inputTokens, 0),
     totalOutputTokens: turns.reduce((s, t) => s + t.outputTokens, 0),
+    totalCostWeightedTokens,
   };
 }
 
@@ -36,20 +40,37 @@ const simpleDiff: DiffSummary = {
   ],
 };
 
+const emptyDiff: DiffSummary = { totalAdded: 0, totalRemoved: 0, files: [] };
+
 describe("computeMetrics", () => {
   describe("costPerDiffLine", () => {
-    it("computes total tokens / total diff lines", () => {
+    it("computes cost-weighted tokens / total diff lines", () => {
       const tl = timeline([{ inputTokens: 5000, outputTokens: 1000 }]);
       const result = computeMetrics([], tl, simpleDiff);
-      // (5000 + 1000) / (10 + 5) = 400
-      expect(result.costPerDiffLine).toBe(400);
+      // cost-weighted: 5000 + 1000*5 = 10000; diff lines: 15
+      expect(result.costPerDiffLine).toBeCloseTo(666.67, 0);
     });
 
-    it("returns Infinity for empty diff", () => {
+    it("returns NaN for empty diff", () => {
       const tl = timeline([{ inputTokens: 5000, outputTokens: 1000 }]);
-      const emptyDiff: DiffSummary = { totalAdded: 0, totalRemoved: 0, files: [] };
       const result = computeMetrics([], tl, emptyDiff);
-      expect(result.costPerDiffLine).toBe(Number.POSITIVE_INFINITY);
+      expect(result.costPerDiffLine).toBeNaN();
+    });
+  });
+
+  describe("empty diff returns NaN for diff-dependent metrics", () => {
+    it("returns NaN for timeToFirstCorrectFile, navigationOverhead, mutationDiscoveryWaste", () => {
+      const events: ToolEvent[] = [
+        event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
+        event({ toolName: "Edit", category: "mutation", filePath: "src/b.ts" }),
+      ];
+      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), emptyDiff);
+      expect(result.timeToFirstCorrectFile).toBeNaN();
+      expect(result.navigationOverhead).toBeNaN();
+      expect(result.mutationDiscoveryWaste).toBeNaN();
+      // Non-diff-dependent metrics should still compute
+      expect(result.aimlessBacktracks).toBe(0);
+      expect(result.contextPressurePeak).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -70,7 +91,6 @@ describe("computeMetrics", () => {
         event({ toolName: "Read", category: "navigation", filePath: "src/target.ts", timestamp: "2026-01-01T00:10:00Z" }),
         event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts", timestamp: "2026-01-01T00:15:00Z" }),
       ];
-      // First touch of diff file at 10 min, session spans 0-15 min = 10/15 = 0.667
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
       expect(result.timeToFirstCorrectFile).toBeCloseTo(0.667, 2);
     });
@@ -100,12 +120,12 @@ describe("computeMetrics", () => {
     it("does not count mutations to non-diff files as stopping the count", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Read", category: "navigation" }),
-        event({ toolName: "Write", category: "mutation", filePath: "src/wrong.ts" }), // not in diff
+        event({ toolName: "Write", category: "mutation", filePath: "src/wrong.ts" }),
         event({ toolName: "Read", category: "navigation" }),
-        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }), // in diff
+        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      expect(result.navigationOverhead).toBe(2); // two navigation calls before diff-relevant mutation
+      expect(result.navigationOverhead).toBe(2);
     });
 
     it("returns total navigation count when no diff-relevant mutation exists", () => {
@@ -186,7 +206,7 @@ describe("computeMetrics", () => {
         { inputTokens: 80000, outputTokens: 500 },
       ]);
       const result = computeMetrics([], tl, simpleDiff, 200000);
-      expect(result.contextPressurePeak).toBe(0.75); // 150000/200000
+      expect(result.contextPressurePeak).toBe(0.75);
     });
   });
 
@@ -198,7 +218,6 @@ describe("computeMetrics", () => {
         event({ toolName: "Edit", category: "mutation", filePath: "src/waste2.ts" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
-      // 2 out of 3 mutated files not in diff
       expect(result.mutationDiscoveryWaste).toBeCloseTo(0.667, 2);
     });
 

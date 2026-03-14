@@ -71,14 +71,14 @@ export function formatTextReport(report: SessionReport): string {
   lines.push(`Lines added:   ${ds.totalAdded}`);
   lines.push(`Lines removed: ${ds.totalRemoved}`);
 
-  // Sub-task breakdown (skip empty sub-tasks)
-  const nonEmpty = report.subTasks.filter((st) => st.events.length > 0 || st.tokenTimeline.turns.length > 0);
-  if (nonEmpty.length > 1) {
+  // Sub-task breakdown (skip trivial sub-tasks: <3 events AND <3 turns)
+  const substantial = report.subTasks.filter((st) => st.events.length >= 3 || st.tokenTimeline.turns.length >= 3);
+  if (substantial.length > 1) {
     lines.push("");
-    lines.push(`=== Sub-task Breakdown (${nonEmpty.length} of ${report.subTasks.length}) ===`);
-    for (let i = 0; i < nonEmpty.length; i++) {
+    lines.push(`=== Sub-task Breakdown (${substantial.length} of ${report.subTasks.length}) ===`);
+    for (let i = 0; i < substantial.length; i++) {
       lines.push("");
-      lines.push(formatSubTask(i + 1, nonEmpty[i]));
+      lines.push(formatSubTask(i + 1, substantial[i]));
     }
   }
 
@@ -111,6 +111,7 @@ function formatSubTask(num: number, st: SubTask): string {
 }
 
 function formatValue(metric: string, value: number): string {
+  if (Number.isNaN(value)) return "N/A (no diff)";
   if (value === Number.POSITIVE_INFINITY) return "Infinity";
   if (metric === "timeToFirstCorrectFile" || metric === "contextPressurePeak" || metric === "mutationDiscoveryWaste") {
     return `${(value * 100).toFixed(1)}%`;

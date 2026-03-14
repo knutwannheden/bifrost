@@ -1,10 +1,12 @@
-import type { SessionMetrics, SessionBucket, MetricFlag, Severity, CostTier } from "./types.js";
+import type { SessionMetrics, SessionBucket, MetricFlag, Severity, CostTier, ToolEvent } from "./types.js";
 
 interface ThresholdDef {
   metric: keyof SessionMetrics;
   warn: number;
   critical: number;
   recommendation: string;
+  /** Alternative recommendation when no tests were observed in the session */
+  noTestRecommendation?: string;
 }
 
 const THRESHOLDS: ThresholdDef[] = [
@@ -25,6 +27,7 @@ const THRESHOLDS: ThresholdDef[] = [
     warn: 2,
     critical: 4,
     recommendation: 'Add "run tests after each file change" to CLAUDE.md rules.',
+    noTestRecommendation: "Add a verification step (lint, build, or manual check) after each file change. Break large edits into smaller, validated steps.",
   },
   {
     metric: "testCycleCount",
@@ -50,8 +53,20 @@ const COST_THRESHOLDS = { efficient: 500, moderate: 2000 };
 
 /**
  * Classify a session into a cost tier + dominant waste type.
+ * Pass events to enable context-aware recommendations.
  */
-export function bucketSession(metrics: SessionMetrics): SessionBucket {
+export function bucketSession(metrics: SessionMetrics, events?: ToolEvent[]): SessionBucket {
+  const hasTests = events ? events.some((e) => e.category === "test") : true;
+
+  // NaN cost means no diff — classify by other signals
+  if (Number.isNaN(metrics.costPerDiffLine)) {
+    return {
+      costTier: "moderate",
+      dominantWaste: "none",
+      recommendation: "No diff available — cost efficiency cannot be determined. Review other metrics for waste signals.",
+    };
+  }
+
   const costTier: CostTier =
     metrics.costPerDiffLine < COST_THRESHOLDS.efficient
       ? "efficient"
@@ -65,10 +80,11 @@ export function bucketSession(metrics: SessionMetrics): SessionBucket {
 
   // Find which metric is most above its warn threshold (normalized severity)
   let dominant: keyof SessionMetrics | "none" = "none";
-  let maxSeverity = 1; // must exceed 1 (i.e., exceed warn threshold) to count
+  let maxSeverity = 1;
 
   for (const def of THRESHOLDS) {
     const value = metrics[def.metric];
+    if (Number.isNaN(value)) continue; // skip unavailable metrics
     const severity = value / def.warn;
     if (severity > maxSeverity) {
       maxSeverity = severity;
@@ -76,21 +92,29 @@ export function bucketSession(metrics: SessionMetrics): SessionBucket {
     }
   }
 
-  const rec = dominant === "none"
-    ? "Cost is elevated but no single metric dominates. Review session transcript for unusual patterns."
-    : THRESHOLDS.find((t) => t.metric === dominant)!.recommendation;
+  let rec: string;
+  if (dominant === "none") {
+    rec = "Cost is elevated but no single metric dominates. Review session transcript for unusual patterns.";
+  } else {
+    const def = THRESHOLDS.find((t) => t.metric === dominant)!;
+    rec = (!hasTests && def.noTestRecommendation) ? def.noTestRecommendation : def.recommendation;
+  }
 
   return { costTier, dominantWaste: dominant, recommendation: rec };
 }
 
 /**
  * Flag individual metrics that exceed their warn or critical thresholds.
+ * Pass events to enable context-aware recommendations.
  */
-export function flagMetrics(metrics: SessionMetrics): MetricFlag[] {
+export function flagMetrics(metrics: SessionMetrics, events?: ToolEvent[]): MetricFlag[] {
   const flags: MetricFlag[] = [];
+  const hasTests = events ? events.some((e) => e.category === "test") : true;
 
   for (const def of THRESHOLDS) {
     const value = metrics[def.metric];
+    if (Number.isNaN(value)) continue; // skip unavailable metrics
+
     let severity: Severity = "ok";
 
     if (value >= def.critical) {
@@ -100,11 +124,12 @@ export function flagMetrics(metrics: SessionMetrics): MetricFlag[] {
     }
 
     if (severity !== "ok") {
+      const rec = (!hasTests && def.noTestRecommendation) ? def.noTestRecommendation : def.recommendation;
       flags.push({
         metric: def.metric,
         value,
         severity,
-        recommendation: def.recommendation,
+        recommendation: rec,
       });
     }
   }

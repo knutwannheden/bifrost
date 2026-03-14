@@ -84,8 +84,8 @@ function main() {
 
   // Compute
   const metrics = computeMetrics(events, tokenTimeline, diffSummary, contextWindowSize);
-  const bucket = bucketSession(metrics);
-  const flags = flagMetrics(metrics);
+  const bucket = bucketSession(metrics, events);
+  const flags = flagMetrics(metrics, events);
 
   // Sub-task segmentation
   const subTasks = segmentSubTasks(entries, events, diffSummary, contextWindowSize);

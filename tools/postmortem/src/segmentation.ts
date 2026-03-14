@@ -49,8 +49,8 @@ export function segmentSubTasks(
     const tokenTimeline = extractTokenTimeline(subEntries);
 
     const metrics = computeMetrics(subEvents, tokenTimeline, diff, contextWindowSize);
-    const bucket = bucketSession(metrics);
-    const flags = flagMetrics(metrics);
+    const bucket = bucketSession(metrics, subEvents);
+    const flags = flagMetrics(metrics, subEvents);
 
     subTasks.push({
       promptText: boundary.promptText,
