@@ -26,6 +26,7 @@ import { scanClaudeSessions } from './claude-session-scanner';
 import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
 import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
+import { getCuratorState, initCurator, runCuratorNow } from './curator-service';
 import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
 import { getGitLog } from './git-log-service';
 import { scanRecentRepos } from './history-scanner';
@@ -99,6 +100,46 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
   tasks[idx] = { ...tasks[idx], ...updates };
   saveTasks(tasks);
   return tasks[idx];
+}
+
+export async function archiveTaskCore(
+  taskId: string,
+  devSessions?: Map<string, string>,
+  reviewSessions?: Map<string, string>,
+): Promise<Task> {
+  cancelTaskRequests(taskId);
+  const task = getTask(taskId);
+  stopWatching(taskId);
+  if (devSessions) {
+    const devSessionId = devSessions.get(taskId);
+    if (devSessionId) {
+      killSession(devSessionId);
+      devSessions.delete(taskId);
+    }
+  }
+  if (reviewSessions) {
+    const reviewPtyId = reviewSessions.get(taskId);
+    if (reviewPtyId) {
+      killSession(reviewPtyId);
+      reviewSessions.delete(taskId);
+    }
+  }
+  cancelReview(taskId);
+  if (task.status === 'running') {
+    killSession(taskId);
+  }
+  const archived = updateTask(taskId, {
+    status: 'archived',
+    archivedAt: Date.now(),
+  });
+  if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+    if (repo) {
+      removeWorktree(repo.path, task.worktreePath).catch(() => {});
+    }
+  }
+  return archived;
 }
 
 /**
@@ -427,47 +468,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.ARCHIVE_TASK, async (_event, taskId: string) => {
-    cancelTaskRequests(taskId);
-    const task = getTask(taskId);
-
-    stopWatching(taskId);
-
-    // Kill dev terminal if any
-    const devSessionId = devSessions.get(taskId);
-    if (devSessionId) {
-      killSession(devSessionId);
-      devSessions.delete(taskId);
-    }
-    const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) {
-      killSession(reviewPtyId);
-      reviewSessions.delete(taskId);
-    }
-    cancelReview(taskId);
-
-    // Kill session if still running
-    if (task.status === 'running') {
-      killSession(taskId);
-    }
-
-    // Update status immediately so the UI can hide the tab
-    const archived = updateTask(taskId, {
-      status: 'archived',
-      archivedAt: Date.now(),
-    });
-
-    // Remove worktree in the background (can take several seconds)
-    if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
-      const config = loadConfig();
-      const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-      if (repo) {
-        removeWorktree(repo.path, task.worktreePath).catch(() => {
-          // Worktree may already be removed
-        });
-      }
-    }
-
-    return archived;
+    return archiveTaskCore(taskId, devSessions, reviewSessions);
   });
 
   ipcMain.handle(IPC.IS_WORKTREE_DIRTY, async (_event, taskId: string) => {
@@ -1095,6 +1096,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   };
 
   initSupervisor(mainWindow, supervisorTaskCreator);
+  initCurator(mainWindow);
 
   ipcMain.handle(IPC.SUPERVISOR_GET_STATE, () => getSupervisorState());
   ipcMain.handle(IPC.SUPERVISOR_START, () => startSupervisor());
@@ -1104,6 +1106,20 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.SUPERVISOR_RESUME_ITEM, (_event, itemId: string) => resumeItem(itemId));
   ipcMain.handle(IPC.SUPERVISOR_OPEN_ITEM, (_event, itemId: string) => openItem(itemId));
   ipcMain.handle(IPC.SUPERVISOR_REMOVE_ITEM, (_event, itemId: string) => removeItem(itemId));
+
+  // Curator
+  ipcMain.handle(IPC.CURATOR_GET_STATE, () => getCuratorState());
+  ipcMain.handle(IPC.CURATOR_SET_OUTCOME, (_event, taskId: string, outcome: string, note?: string) => {
+    const task = getTask(taskId);
+    const curation = {
+      ...(task.curation ?? { outcome: 'pending' as const, confidence: 'user' as const, classifiedAt: Date.now() }),
+      userOverride: outcome as import('../shared/types').TaskOutcome,
+      userNote: note,
+      classifiedAt: Date.now(),
+    };
+    return updateTask(taskId, { curation });
+  });
+  ipcMain.handle(IPC.CURATOR_RUN_NOW, () => runCuratorNow());
 
   // Slack
   ipcMain.handle(IPC.SLACK_START_OAUTH, () => startOAuth(mainWindow));

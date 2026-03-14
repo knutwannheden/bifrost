@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { ClaudeSession, DiffStats, Task } from '../../shared/types';
+import type { ClaudeSession, DiffStats, Task, TaskOutcome } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { requestArchive } from '../utils/archive';
 import { formatDate, formatRelative } from '../utils/format-time';
+import { allOutcomes, outcomeBadgeColors, outcomeLabels, taskStatusColor, taskStatusLabel } from '../utils/outcome';
 import { shortPath } from '../utils/paths';
 import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
@@ -20,19 +21,70 @@ import SearchIndicator from './SearchIndicator';
 import SectionHeader from './SectionHeader';
 import Spinner from './Spinner';
 
-const statusLabel: Record<string, string> = {
-  running: 'Running',
-  stopped: 'Stopped',
-  error: 'Error',
-  archived: 'Archived',
-};
+function OutcomeBadge({
+  task,
+  onOverride,
+}: {
+  task: Task;
+  onOverride: (taskId: string, outcome: TaskOutcome) => void;
+}) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-const statusColor: Record<string, string> = {
-  running: 'text-success',
-  stopped: 'text-secondary',
-  error: 'text-danger',
-  archived: 'text-muted',
-};
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [dropdownOpen]);
+
+  const curation = task.curation;
+  if (!curation) return null;
+
+  const displayOutcome = curation.userOverride ?? curation.outcome;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setDropdownOpen(!dropdownOpen);
+        }}
+        className={`px-1.5 py-0.5 text-xs rounded-sm font-medium transition-colors ${outcomeBadgeColors[displayOutcome]}`}
+        title={curation.reason ?? `Outcome: ${displayOutcome}`}
+      >
+        {outcomeLabels[displayOutcome]}
+      </button>
+      {dropdownOpen && (
+        <div
+          className="absolute top-full left-0 mt-1 z-30 bg-surface border border-border-input rounded-sm shadow-lg py-1 min-w-[120px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {allOutcomes.map((o) => (
+            <button
+              key={o}
+              onClick={() => {
+                onOverride(task.id, o);
+                setDropdownOpen(false);
+              }}
+              className={`block w-full text-left px-3 py-1 text-xs transition-colors ${
+                o === displayOutcome
+                  ? 'bg-surface-hover text-primary font-medium'
+                  : 'text-secondary hover:text-primary hover:bg-surface-hover'
+              }`}
+            >
+              {outcomeLabels[o]}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const filters = ['active', 'all', 'archived', 'sessions'] as const;
 type Filter = (typeof filters)[number];
@@ -100,6 +152,7 @@ interface TaskRowProps {
   canArchive: (task: Task) => boolean;
   repoName: (repoId: string) => string;
   shortPath: (cwd: string) => string;
+  onOutcomeOverride: (taskId: string, outcome: TaskOutcome) => void;
 }
 
 function TaskRow({
@@ -124,6 +177,7 @@ function TaskRow({
   canArchive,
   repoName,
   shortPath,
+  onOutcomeOverride,
 }: TaskRowProps) {
   return (
     <div
@@ -164,7 +218,8 @@ function TaskRow({
               <Highlight text={task.name} search={search} />
             </span>
           )}
-          <span className={`text-xs ${statusColor[task.status]}`}>{statusLabel[task.status]}</span>
+          <span className={`text-xs ${taskStatusColor[task.status]}`}>{taskStatusLabel[task.status]}</span>
+          {task.curation && <OutcomeBadge task={task} onOverride={onOutcomeOverride} />}
           {diffStats && <DiffStatsBadge additions={diffStats.additions} deletions={diffStats.deletions} />}
           {task.isExternal && <span className="text-xs text-faint">external</span>}
           {task.inPlace && <span className="text-xs text-faint">in-place</span>}
@@ -468,6 +523,24 @@ export default function TaskHistoryPanel() {
   const canReopen = (task: Task) => task.status === 'archived' || task.status === 'stopped';
   const canArchive = (task: Task) => task.status === 'running' || task.status === 'stopped';
 
+  const handleOutcomeOverride = async (taskId: string, outcome: TaskOutcome) => {
+    try {
+      const updated = await window.bifrost.setCuratorOutcome(taskId, outcome);
+      dispatch({ type: 'UPDATE_TASK', task: updated });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to set outcome');
+    }
+  };
+
+  useEffect(() => {
+    return window.bifrost.onCuratorUpdate((taskId, curation) => {
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (task) {
+        dispatch({ type: 'UPDATE_TASK', task: { ...task, curation } });
+      }
+    });
+  }, [state.tasks, dispatch]);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Don't handle keys while editing a name
     if (editingId) return;
@@ -674,6 +747,7 @@ export default function TaskHistoryPanel() {
                           canArchive={canArchive}
                           repoName={repoName}
                           shortPath={shortPath}
+                          onOutcomeOverride={handleOutcomeOverride}
                         />
                       );
                     })}

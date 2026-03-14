@@ -5,6 +5,7 @@ import type {
   CaptureContextParams,
   ClaudeSession,
   CreateTaskParams,
+  CuratorState,
   DiffResult,
   DiffStats,
   GitLogEntry,
@@ -19,6 +20,8 @@ import type {
   StatsData,
   SupervisorState,
   Task,
+  TaskCuration,
+  TaskOutcome,
   TokenUsageResult,
   TriageEntry,
 } from './types';
@@ -160,6 +163,11 @@ export const IPC = {
   // Prompt sender
   SEND_PROMPT: 'prompt:send',
   SCRAPE_PROMPT_RESPONSE: 'prompt:scrape-response',
+
+  // Curator
+  CURATOR_GET_STATE: 'curator:get-state',
+  CURATOR_SET_OUTCOME: 'curator:set-outcome',
+  CURATOR_RUN_NOW: 'curator:run-now',
 } as const;
 
 // Streaming channels (send/on)
@@ -184,6 +192,7 @@ export const IPC_STREAM = {
   CLAUDE_ACTIVE: 'claude:active',
   SCRAPE_PROMPT_REQUEST: 'prompt:scrape-request',
   TERMINAL_UNLOCK: 'terminal:unlock',
+  CURATOR_UPDATE: 'curator:update',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -365,6 +374,12 @@ export interface BifrostAPI {
   onScrapePromptRequest(callback: (taskId: string, requestId: string) => void): () => void;
   scrapePromptResponse(requestId: string, text: string): Promise<void>;
   onTerminalUnlock(callback: (taskId: string) => void): () => void;
+
+  // Curator
+  getCuratorState(): Promise<CuratorState>;
+  setCuratorOutcome(taskId: string, outcome: TaskOutcome, note?: string): Promise<Task>;
+  runCuratorNow(): Promise<void>;
+  onCuratorUpdate(callback: (taskId: string, curation: TaskCuration) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

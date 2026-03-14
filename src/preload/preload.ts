@@ -264,6 +264,20 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.TERMINAL_UNLOCK, handler);
   },
 
+  // Curator
+  getCuratorState: () => ipcRenderer.invoke(IPC.CURATOR_GET_STATE),
+  setCuratorOutcome: (taskId, outcome, note?) => ipcRenderer.invoke(IPC.CURATOR_SET_OUTCOME, taskId, outcome, note),
+  runCuratorNow: () => ipcRenderer.invoke(IPC.CURATOR_RUN_NOW),
+  onCuratorUpdate: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      taskId: string,
+      curation: import('../shared/types').TaskCuration,
+    ) => callback(taskId, curation);
+    ipcRenderer.on(IPC_STREAM.CURATOR_UPDATE, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.CURATOR_UPDATE, handler);
+  },
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action);

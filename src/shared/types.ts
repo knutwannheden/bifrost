@@ -1,5 +1,33 @@
 export type TaskStatus = 'running' | 'stopped' | 'error' | 'archived';
 
+export type TaskOutcome = 'merged' | 'abandoned' | 'experimental' | 'superseded' | 'pending';
+
+export interface TaskCuration {
+  outcome: TaskOutcome;
+  confidence: 'auto' | 'ai' | 'user';
+  reason?: string;
+  prState?: 'open' | 'closed' | 'merged';
+  branchMerged?: boolean;
+  classifiedAt: number;
+  userOverride?: TaskOutcome;
+  userNote?: string;
+}
+
+export interface CuratorState {
+  lastRunAt: number | null;
+  running: boolean;
+  lastRunResults: CuratorRunResult[];
+}
+
+export interface CuratorRunResult {
+  taskId: string;
+  taskName: string;
+  action: 'auto-archived' | 'classified';
+  outcome?: TaskOutcome;
+  reason?: string;
+  timestamp: number;
+}
+
 export interface Repo {
   id: string;
   name: string;
@@ -31,6 +59,7 @@ export interface Task {
   sessionHistory?: string[];
   /** True while Claude is actively working (writing JSONL output) */
   claudeActive?: boolean;
+  curation?: TaskCuration;
 }
 
 export interface ReviewEntry {
