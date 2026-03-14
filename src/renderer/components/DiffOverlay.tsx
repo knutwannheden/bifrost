@@ -5,6 +5,7 @@ import { getActiveDiffState, useApp } from '../context/AppContext';
 import { useDiff } from '../hooks/useDiff';
 import { useGitLog } from '../hooks/useGitLog';
 import { useInstantSearch } from '../hooks/useInstantSearch';
+import { useSessionMetrics } from '../hooks/useSessionMetrics';
 import { isDarkTheme } from '../hooks/useTheme';
 import { useTokenUsage } from '../hooks/useTokenUsage';
 import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
@@ -22,6 +23,7 @@ import PillToggle, { type PillOption } from './PillToggle';
 import ReviewContent from './ReviewContent';
 import ReviewSidebar from './ReviewSidebar';
 import SearchIndicator from './SearchIndicator';
+import SessionMetricsPanel from './SessionMetricsPanel';
 import Spinner from './Spinner';
 import TokenUsageChart from './TokenUsageChart';
 
@@ -205,6 +207,7 @@ const modeOptions: PillOption<DiffMode>[] = [
   { value: 'activity', label: <ActionLabel text="Tokens" showHint={true} /> },
   { value: 'log', label: <ActionLabel text="Git Log" hintIndex={4} showHint={true} /> },
   { value: 'review', label: <ActionLabel text="Review" showHint={true} /> },
+  { value: 'metrics', label: <ActionLabel text="Metrics" hintIndex={0} showHint={true} /> },
 ];
 
 const statusConfig: Record<DiffFileStatus, { letter: string; color: string }> = {
@@ -864,9 +867,13 @@ export default function DiffOverlay() {
   const isActivity = diffMode === 'activity';
   const isLog = diffMode === 'log';
   const isReview = diffMode === 'review';
+  const isMetrics = diffMode === 'metrics';
 
   // Fetch token usage data for the Tokens tab
   const tokenUsage = useTokenUsage(showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null);
+
+  // Fetch session metrics for the Metrics tab
+  const sessionMetrics = useSessionMetrics(showDiff && isMetrics && state.activeTaskId ? state.activeTaskId : null);
 
   // Fetch git log data at DiffOverlay level for search/navigation
   const gitLog = useGitLog(showDiff && isLog && state.activeTaskId ? state.activeTaskId : null);
@@ -996,7 +1003,7 @@ export default function DiffOverlay() {
       case 'Tab': {
         e.preventDefault();
         e.stopPropagation();
-        const modes: DiffMode[] = ['git', 'activity', 'log', 'review'];
+        const modes: DiffMode[] = ['git', 'activity', 'log', 'review', 'metrics'];
         const curIdx = modes.indexOf(diffMode);
         const step = e.shiftKey ? modes.length - 1 : 1;
         dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + step) % modes.length] });
@@ -1055,6 +1062,10 @@ export default function DiffOverlay() {
             case 'KeyU':
               e.preventDefault();
               dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
+              break;
+            case 'KeyM':
+              e.preventDefault();
+              dispatch({ type: 'SET_DIFF_MODE', mode: 'metrics' });
               break;
             case 'KeyT':
               if (diffMode === 'git') {
@@ -1170,6 +1181,15 @@ export default function DiffOverlay() {
         </div>
       )}
       {state.activeTaskId && isReview && <ReviewPanel taskId={state.activeTaskId} />}
+      {state.activeTaskId && isMetrics && (
+        <div className="flex-1 overflow-auto p-4">
+          <SessionMetricsPanel
+            data={sessionMetrics.data}
+            loading={sessionMetrics.loading}
+            error={sessionMetrics.error}
+          />
+        </div>
+      )}
 
       {!state.activeTaskId && <div className="flex-1 p-4 text-muted">No active task</div>}
     </div>

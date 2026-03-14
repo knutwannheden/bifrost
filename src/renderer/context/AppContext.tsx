@@ -10,7 +10,7 @@ import type {
   TriageEntry,
 } from '../../shared/types';
 
-export type DiffMode = 'git' | 'activity' | 'log' | 'review';
+export type DiffMode = 'git' | 'activity' | 'log' | 'review' | 'metrics';
 export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
 export type PaneTarget = 'claude' | 'dev';
 export type TriageTab = 'new' | 'history';
