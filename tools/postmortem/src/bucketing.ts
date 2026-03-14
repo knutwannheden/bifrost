@@ -9,23 +9,29 @@ interface ThresholdDef {
   noTestRecommendation?: string;
 }
 
+// Thresholds calibrated against 20 real sessions (2026-03-14 batch analysis).
+// See /private/tmp/claude/postmortem-batch-stats.md for distribution data.
 const THRESHOLDS: ThresholdDef[] = [
   {
     metric: "timeToFirstCorrectFile",
     warn: 0.3,
     critical: 0.5,
+    // Low signal: max observed 0.029 across 10 sessions with diffs.
+    // Claude finds target files quickly. Keeping for edge cases.
     recommendation: "Inject a file map, tree output, or explicit file targets into CLAUDE.md or the prompt.",
   },
   {
     metric: "navigationOverhead",
     warn: 10,
     critical: 20,
+    // Good discrimination: 40% ok, 40% warn, 20% critical. Median: 13.5.
     recommendation: "List target files in the prompt. Use .claude/rules/ to describe project structure.",
   },
   {
     metric: "aimlessBacktracks",
-    warn: 2,
-    critical: 4,
+    warn: 40,
+    critical: 80,
+    // Recalibrated from 2/4. Observed range: 13-393, median 55.5, P25=42, P75=75.
     recommendation: 'Add "run tests after each file change" to CLAUDE.md rules.',
     noTestRecommendation: "Add a verification step (lint, build, or manual check) after each file change. Break large edits into smaller, validated steps.",
   },
@@ -33,18 +39,22 @@ const THRESHOLDS: ThresholdDef[] = [
     metric: "testCycleCount",
     warn: 3,
     critical: 6,
+    // Well-calibrated: 60% ok, 15% warn, 25% critical.
     recommendation: "Include expected behavior specs. Provide failing test output upfront.",
   },
   {
     metric: "contextPressurePeak",
-    warn: 0.7,
-    critical: 0.9,
+    warn: 0.85,
+    critical: 0.95,
+    // Recalibrated from 0.7/0.9. Baseline clusters at ~0.835 (CV=0.04).
+    // Only flags sessions with genuinely elevated context pressure.
     recommendation: "Decompose into smaller tasks. Use /compact proactively. Trim CLAUDE.md.",
   },
   {
     metric: "mutationDiscoveryWaste",
     warn: 0.4,
     critical: 0.7,
+    // Good discrimination: 70% ok, 20% warn, 10% critical.
     recommendation: "Narrow task scope. Provide explicit file targets.",
   },
 ];

@@ -35,7 +35,7 @@ describe("bucketSession", () => {
   it("classifies expensive session with high backtracks", () => {
     const bucket = bucketSession(baseMetrics({
       costPerDiffLine: 3000,
-      aimlessBacktracks: 5,
+      aimlessBacktracks: 100,
     }));
     expect(bucket.costTier).toBe("expensive");
     expect(bucket.dominantWaste).toBe("aimlessBacktracks");
@@ -44,7 +44,7 @@ describe("bucketSession", () => {
   it("classifies expensive session with high context pressure", () => {
     const bucket = bucketSession(baseMetrics({
       costPerDiffLine: 2500,
-      contextPressurePeak: 0.95,
+      contextPressurePeak: 0.96,
     }));
     expect(bucket.costTier).toBe("expensive");
     expect(bucket.dominantWaste).toBe("contextPressurePeak");
@@ -68,7 +68,7 @@ describe("bucketSession", () => {
       timeToFirstCorrectFile: Number.NaN,
       navigationOverhead: Number.NaN,
       mutationDiscoveryWaste: Number.NaN,
-      aimlessBacktracks: 5,
+      aimlessBacktracks: 100,
     }));
     expect(bucket.dominantWaste).toBe("aimlessBacktracks");
   });
@@ -77,7 +77,7 @@ describe("bucketSession", () => {
     const noTestEvents: ToolEvent[] = [
       { timestamp: "", toolName: "Edit", input: {}, resultText: "", isError: false, category: "mutation" },
     ];
-    const bucket = bucketSession(baseMetrics({ costPerDiffLine: 3000, aimlessBacktracks: 5 }), noTestEvents);
+    const bucket = bucketSession(baseMetrics({ costPerDiffLine: 3000, aimlessBacktracks: 100 }), noTestEvents);
     expect(bucket.recommendation).toContain("verification step");
   });
 });
@@ -86,6 +86,26 @@ describe("flagMetrics", () => {
   it("returns no flags for healthy metrics", () => {
     const flags = flagMetrics(baseMetrics());
     expect(flags).toHaveLength(0);
+  });
+
+  it("does not flag moderate backtracks (below warn=40)", () => {
+    const flags = flagMetrics(baseMetrics({ aimlessBacktracks: 30 }));
+    const btFlag = flags.find((f) => f.metric === "aimlessBacktracks");
+    expect(btFlag).toBeUndefined();
+  });
+
+  it("flags high backtracks as warn", () => {
+    const flags = flagMetrics(baseMetrics({ aimlessBacktracks: 50 }));
+    const btFlag = flags.find((f) => f.metric === "aimlessBacktracks");
+    expect(btFlag).toBeDefined();
+    expect(btFlag!.severity).toBe("warn");
+  });
+
+  it("flags critical backtracks", () => {
+    const flags = flagMetrics(baseMetrics({ aimlessBacktracks: 100 }));
+    const btFlag = flags.find((f) => f.metric === "aimlessBacktracks");
+    expect(btFlag).toBeDefined();
+    expect(btFlag!.severity).toBe("critical");
   });
 
   it("flags high TTCF as warn", () => {
@@ -100,6 +120,19 @@ describe("flagMetrics", () => {
     const ttcfFlag = flags.find((f) => f.metric === "timeToFirstCorrectFile");
     expect(ttcfFlag).toBeDefined();
     expect(ttcfFlag!.severity).toBe("critical");
+  });
+
+  it("does not flag baseline context pressure (0.835)", () => {
+    const flags = flagMetrics(baseMetrics({ contextPressurePeak: 0.835 }));
+    const cpFlag = flags.find((f) => f.metric === "contextPressurePeak");
+    expect(cpFlag).toBeUndefined();
+  });
+
+  it("flags elevated context pressure as warn", () => {
+    const flags = flagMetrics(baseMetrics({ contextPressurePeak: 0.90 }));
+    const cpFlag = flags.find((f) => f.metric === "contextPressurePeak");
+    expect(cpFlag).toBeDefined();
+    expect(cpFlag!.severity).toBe("warn");
   });
 
   it("skips NaN metrics", () => {
@@ -117,8 +150,8 @@ describe("flagMetrics", () => {
   it("flags multiple metrics at once", () => {
     const flags = flagMetrics(baseMetrics({
       timeToFirstCorrectFile: 0.6,
-      aimlessBacktracks: 5,
-      contextPressurePeak: 0.95,
+      aimlessBacktracks: 100,
+      contextPressurePeak: 0.96,
     }));
     expect(flags.length).toBeGreaterThanOrEqual(3);
   });
