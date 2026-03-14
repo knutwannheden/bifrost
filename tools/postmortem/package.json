@@ -1,0 +1,22 @@
+{
+  "name": "postmortem",
+  "version": "0.1.0",
+  "description": "Postmortem analysis tool for agentic coding sessions",
+  "type": "module",
+  "bin": {
+    "postmortem": "./src/cli.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4",
+    "@types/node": "^22.16.0"
+  },
+  "dependencies": {
+    "minimist": "^1.2.8",
+    "tsx": "^4.20.5"
+  }
+}
