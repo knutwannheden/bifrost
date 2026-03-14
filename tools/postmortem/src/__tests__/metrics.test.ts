@@ -58,8 +58,8 @@ describe("computeMetrics", () => {
     });
   });
 
-  describe("empty diff returns NaN for diff-dependent metrics", () => {
-    it("returns NaN for timeToFirstCorrectFile, navigationOverhead, mutationDiscoveryWaste", () => {
+  describe("NaN for unavailable metrics", () => {
+    it("returns NaN for diff-dependent metrics when diff is empty", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
         event({ toolName: "Edit", category: "mutation", filePath: "src/b.ts" }),
@@ -68,9 +68,20 @@ describe("computeMetrics", () => {
       expect(result.timeToFirstCorrectFile).toBeNaN();
       expect(result.navigationOverhead).toBeNaN();
       expect(result.mutationDiscoveryWaste).toBeNaN();
-      // Non-diff-dependent metrics should still compute
       expect(result.aimlessBacktracks).toBe(0);
       expect(result.contextPressurePeak).toBeGreaterThanOrEqual(0);
+    });
+
+    it("returns NaN for TTCF and nav overhead when no mutations exist (e.g. commit-only sub-task)", () => {
+      const events: ToolEvent[] = [
+        event({ toolName: "Read", category: "navigation", filePath: "src/a.ts" }),
+        event({ toolName: "Bash", category: "other" }),
+      ];
+      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
+      expect(result.timeToFirstCorrectFile).toBeNaN();
+      expect(result.navigationOverhead).toBeNaN();
+      // mutation waste is still computable (0 mutations = 0 waste)
+      expect(result.mutationDiscoveryWaste).toBe(0);
     });
   });
 
@@ -95,9 +106,10 @@ describe("computeMetrics", () => {
       expect(result.timeToFirstCorrectFile).toBeCloseTo(0.667, 2);
     });
 
-    it("returns 1 when no diff file is ever touched", () => {
+    it("returns 1 when no diff file is ever touched but mutations exist", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Read", category: "navigation", filePath: "src/other.ts", timestamp: "2026-01-01T00:00:00Z" }),
+        event({ toolName: "Edit", category: "mutation", filePath: "src/wrong.ts", timestamp: "2026-01-01T00:05:00Z" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
       expect(result.timeToFirstCorrectFile).toBe(1);
@@ -128,10 +140,11 @@ describe("computeMetrics", () => {
       expect(result.navigationOverhead).toBe(2);
     });
 
-    it("returns total navigation count when no diff-relevant mutation exists", () => {
+    it("returns total navigation count when mutations exist but none are diff-relevant", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Read", category: "navigation" }),
         event({ toolName: "Glob", category: "navigation" }),
+        event({ toolName: "Edit", category: "mutation", filePath: "src/wrong.ts" }),
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
       expect(result.navigationOverhead).toBe(2);

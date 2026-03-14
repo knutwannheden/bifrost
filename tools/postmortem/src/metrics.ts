@@ -13,11 +13,16 @@ export function computeMetrics(
 ): SessionMetrics {
   const diffFiles = new Set(diff.files.map((f) => f.path));
   const hasDiff = diffFiles.size > 0;
+  const hasMutations = events.some((e) => e.category === "mutation");
+
+  // TTCF and navigation overhead require both a diff and mutations to be meaningful.
+  // A sub-task with no edits (e.g., "commit and push") has no target file.
+  const canMeasureTargeting = hasDiff && hasMutations;
 
   return {
     costPerDiffLine: computeCostPerDiffLine(tokenTimeline, diff),
-    timeToFirstCorrectFile: hasDiff ? computeTimeToFirstCorrectFile(events, diffFiles) : Number.NaN,
-    navigationOverhead: hasDiff ? computeNavigationOverhead(events, diffFiles) : Number.NaN,
+    timeToFirstCorrectFile: canMeasureTargeting ? computeTimeToFirstCorrectFile(events, diffFiles) : Number.NaN,
+    navigationOverhead: canMeasureTargeting ? computeNavigationOverhead(events, diffFiles) : Number.NaN,
     aimlessBacktracks: computeAimlessBacktracks(events),
     testCycleCount: computeTestCycleCount(events),
     contextPressurePeak: computeContextPressurePeak(tokenTimeline, contextWindowSize),

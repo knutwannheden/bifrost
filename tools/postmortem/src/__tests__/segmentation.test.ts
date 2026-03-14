@@ -134,8 +134,8 @@ describe("segmentSubTasks", () => {
     const result = segmentSubTasks(entries, events, diff);
     expect(result).toHaveLength(2);
 
-    // First sub-task: 2 navigation events, no diff-relevant mutation
-    expect(result[0].metrics.navigationOverhead).toBe(2);
+    // First sub-task: 2 navigation events, no mutations — targeting metrics are N/A
+    expect(result[0].metrics.navigationOverhead).toBeNaN();
     expect(result[0].metrics.mutationDiscoveryWaste).toBe(0); // no mutations at all
     expect(result[0].tokenTimeline.turns).toHaveLength(2);
 
