@@ -71,7 +71,7 @@ function main() {
   );
 
   // Compute metrics using merged data (main + subagents)
-  const metrics = computeMetrics(mergedEvents, mergedTimeline, diffSummary, contextWindowSize);
+  const metrics = computeMetrics(mergedEvents, mergedTimeline, diffSummary, contextWindowSize, entries);
   const bucket = bucketSession(metrics, mergedEvents);
   const flags = flagMetrics(metrics, mergedEvents);
 

@@ -48,7 +48,7 @@ export function segmentSubTasks(
     const subEntries = entries.slice(startIdx, endIdx);
     const tokenTimeline = extractTokenTimeline(subEntries);
 
-    const metrics = computeMetrics(subEvents, tokenTimeline, diff, contextWindowSize);
+    const metrics = computeMetrics(subEvents, tokenTimeline, diff, contextWindowSize, subEntries);
     const bucket = bucketSession(metrics, subEvents);
     const flags = flagMetrics(metrics, subEvents);
 

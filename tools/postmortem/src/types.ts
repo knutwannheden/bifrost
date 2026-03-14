@@ -52,22 +52,39 @@ export interface DiffFile {
 
 /** All computed session metrics */
 export interface SessionMetrics {
-  /** Total tokens (input + output) / total diff lines changed */
+  // --- Diff-dependent metrics (NaN when no diff) ---
+  /** Cost-weighted tokens / total diff lines changed */
   costPerDiffLine: number;
   /** Fraction of session elapsed before first touch of a diff-relevant file */
   timeToFirstCorrectFile: number;
-  /** Number of navigation tool calls before first diff-relevant mutation */
+  /** Navigation tool calls before first diff-relevant mutation */
   navigationOverhead: number;
+  /** Fraction of mutated files not in the final diff */
+  mutationDiscoveryWaste: number;
+
+  // --- Always-available metrics ---
   /** Writes to the same file without intervening test or cross-file mutation */
   aimlessBacktracks: number;
-  /** Per-file backtrack counts, sorted descending. Top thrashing files. */
+  /** Per-file backtrack counts, sorted descending */
   backtrackDetail: BacktrackEntry[];
   /** Number of red-to-green test transitions */
   testCycleCount: number;
   /** Highest single-turn input_tokens / context window size */
   contextPressurePeak: number;
-  /** Fraction of mutated files not in the final diff */
-  mutationDiscoveryWaste: number;
+
+  // --- New: always-available behavioral metrics ---
+  /** Fraction of edited files that were not read first */
+  editWithoutReadRate: number;
+  /** Avg number of times each read file is re-read (1.0 = no re-reads) */
+  fileRereadRatio: number;
+  /** Fraction of edit tool calls immediately followed by another edit (no test/read between) */
+  editEditChainRate: number;
+  /** Human prompts per 100 tool calls (steering frequency) */
+  humanCorrectionDensity: number;
+  /** Tool calls that returned errors / total tool calls */
+  toolErrorRate: number;
+  /** Median unique files touched per sliding window of tool calls */
+  fileFocusScore: number;
 }
 
 /** Per-file backtrack count */

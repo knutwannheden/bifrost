@@ -7,11 +7,17 @@ function baseMetrics(overrides: Partial<SessionMetrics> = {}): SessionMetrics {
     costPerDiffLine: 100,
     timeToFirstCorrectFile: 0.1,
     navigationOverhead: 3,
+    mutationDiscoveryWaste: 0.1,
     aimlessBacktracks: 0,
     backtrackDetail: [],
     testCycleCount: 1,
     contextPressurePeak: 0.3,
-    mutationDiscoveryWaste: 0.1,
+    editWithoutReadRate: 0,
+    fileRereadRatio: 1,
+    editEditChainRate: 0,
+    humanCorrectionDensity: 5,
+    toolErrorRate: 0.01,
+    fileFocusScore: 10,
     ...overrides,
   };
 }

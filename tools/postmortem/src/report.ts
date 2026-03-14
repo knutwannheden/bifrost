@@ -4,10 +4,16 @@ const METRIC_LABELS: Record<string, string> = {
   costPerDiffLine: "Cost per diff line",
   timeToFirstCorrectFile: "Time to first correct file",
   navigationOverhead: "Navigation overhead",
+  mutationDiscoveryWaste: "Mutation discovery waste",
   aimlessBacktracks: "Aimless backtracks",
   testCycleCount: "Test cycle count",
   contextPressurePeak: "Context pressure peak",
-  mutationDiscoveryWaste: "Mutation discovery waste",
+  editWithoutReadRate: "Edit-without-read rate",
+  fileRereadRatio: "File re-read ratio",
+  editEditChainRate: "Edit→edit chain rate",
+  humanCorrectionDensity: "Human correction density",
+  toolErrorRate: "Tool error rate",
+  fileFocusScore: "File focus score",
 };
 
 const SEVERITY_MARKERS: Record<Severity, string> = {
@@ -121,14 +127,28 @@ function formatSubTask(num: number, st: SubTask): string {
   return lines.join("\n");
 }
 
+const PERCENT_METRICS = new Set([
+  "timeToFirstCorrectFile", "contextPressurePeak", "mutationDiscoveryWaste",
+  "editWithoutReadRate", "editEditChainRate", "toolErrorRate",
+]);
+
 function formatValue(metric: string, value: number): string {
   if (Number.isNaN(value)) return "N/A (no diff)";
   if (value === Number.POSITIVE_INFINITY) return "Infinity";
-  if (metric === "timeToFirstCorrectFile" || metric === "contextPressurePeak" || metric === "mutationDiscoveryWaste") {
+  if (PERCENT_METRICS.has(metric)) {
     return `${(value * 100).toFixed(1)}%`;
   }
   if (metric === "costPerDiffLine") {
     return `${value.toFixed(0)} tokens/line`;
+  }
+  if (metric === "fileRereadRatio") {
+    return `${value.toFixed(1)}x`;
+  }
+  if (metric === "humanCorrectionDensity") {
+    return `${value.toFixed(1)} per 100 calls`;
+  }
+  if (metric === "fileFocusScore") {
+    return `${value.toFixed(0)} files/window`;
   }
   return `${value}`;
 }
