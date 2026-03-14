@@ -8,6 +8,7 @@ function baseMetrics(overrides: Partial<SessionMetrics> = {}): SessionMetrics {
     timeToFirstCorrectFile: 0.1,
     navigationOverhead: 3,
     aimlessBacktracks: 0,
+    backtrackDetail: [],
     testCycleCount: 1,
     contextPressurePeak: 0.3,
     mutationDiscoveryWaste: 0.1,

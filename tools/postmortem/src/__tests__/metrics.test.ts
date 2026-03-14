@@ -160,6 +160,7 @@ describe("computeMetrics", () => {
       ];
       const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
       expect(result.aimlessBacktracks).toBe(2);
+      expect(result.backtrackDetail).toEqual([{ filePath: "src/target.ts", count: 2 }]);
     });
 
     it("resets on test event", () => {

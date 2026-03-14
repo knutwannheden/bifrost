@@ -1,4 +1,4 @@
-import type { ToolEvent, TokenTimeline, DiffSummary, SessionMetrics } from "./types.js";
+import type { ToolEvent, TokenTimeline, DiffSummary, SessionMetrics, BacktrackEntry } from "./types.js";
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 
@@ -23,7 +23,7 @@ export function computeMetrics(
     costPerDiffLine: computeCostPerDiffLine(tokenTimeline, diff),
     timeToFirstCorrectFile: canMeasureTargeting ? computeTimeToFirstCorrectFile(events, diffFiles) : Number.NaN,
     navigationOverhead: canMeasureTargeting ? computeNavigationOverhead(events, diffFiles) : Number.NaN,
-    aimlessBacktracks: computeAimlessBacktracks(events),
+    ...computeAimlessBacktracks(events),
     testCycleCount: computeTestCycleCount(events),
     contextPressurePeak: computeContextPressurePeak(tokenTimeline, contextWindowSize),
     mutationDiscoveryWaste: hasDiff ? computeMutationDiscoveryWaste(events, diffFiles) : Number.NaN,
@@ -72,9 +72,10 @@ function computeNavigationOverhead(events: ToolEvent[], diffFiles: Set<string>):
   return navCount;
 }
 
-function computeAimlessBacktracks(events: ToolEvent[]): number {
+function computeAimlessBacktracks(events: ToolEvent[]): { aimlessBacktracks: number; backtrackDetail: BacktrackEntry[] } {
   let backtracks = 0;
   let lastMutatedFile: string | undefined;
+  const perFile = new Map<string, number>();
 
   for (const event of events) {
     if (event.category === "test") {
@@ -84,13 +85,18 @@ function computeAimlessBacktracks(events: ToolEvent[]): number {
     if (event.category === "mutation" && event.filePath) {
       if (lastMutatedFile === event.filePath) {
         backtracks++;
+        perFile.set(event.filePath, (perFile.get(event.filePath) || 0) + 1);
       } else {
         lastMutatedFile = event.filePath;
       }
     }
   }
 
-  return backtracks;
+  const backtrackDetail = Array.from(perFile.entries())
+    .map(([filePath, count]) => ({ filePath, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return { aimlessBacktracks: backtracks, backtrackDetail };
 }
 
 function computeTestCycleCount(events: ToolEvent[]): number {

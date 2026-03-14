@@ -52,6 +52,13 @@ export function formatTextReport(report: SessionReport): string {
       const label = METRIC_LABELS[flag.metric] || flag.metric;
       lines.push(`[${flag.severity.toUpperCase()}] ${label}: ${formatValue(flag.metric, flag.value)}`);
       lines.push(`  -> ${flag.recommendation}`);
+      // Show backtrack detail for aimless backtracks
+      if (flag.metric === "aimlessBacktracks" && report.metrics.backtrackDetail.length > 0) {
+        const top = report.metrics.backtrackDetail.slice(0, 5);
+        for (const entry of top) {
+          lines.push(`     ${entry.filePath} (${entry.count}x)`);
+        }
+      }
     }
     lines.push("");
   }

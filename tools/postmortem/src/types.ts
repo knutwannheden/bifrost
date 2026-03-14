@@ -60,12 +60,20 @@ export interface SessionMetrics {
   navigationOverhead: number;
   /** Writes to the same file without intervening test or cross-file mutation */
   aimlessBacktracks: number;
+  /** Per-file backtrack counts, sorted descending. Top thrashing files. */
+  backtrackDetail: BacktrackEntry[];
   /** Number of red-to-green test transitions */
   testCycleCount: number;
   /** Highest single-turn input_tokens / context window size */
   contextPressurePeak: number;
   /** Fraction of mutated files not in the final diff */
   mutationDiscoveryWaste: number;
+}
+
+/** Per-file backtrack count */
+export interface BacktrackEntry {
+  filePath: string;
+  count: number;
 }
 
 /** Severity level for metric thresholds */
