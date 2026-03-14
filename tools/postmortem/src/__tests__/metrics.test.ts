@@ -173,6 +173,16 @@ describe("computeMetrics", () => {
       expect(result.aimlessBacktracks).toBe(0);
     });
 
+    it("resets on pathless mutation (e.g., Bash write)", () => {
+      const events: ToolEvent[] = [
+        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
+        event({ toolName: "Bash", category: "mutation" }), // no filePath
+        event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),
+      ];
+      const result = computeMetrics(events, timeline([{ inputTokens: 100, outputTokens: 50 }]), simpleDiff);
+      expect(result.aimlessBacktracks).toBe(0);
+    });
+
     it("resets on cross-file mutation", () => {
       const events: ToolEvent[] = [
         event({ toolName: "Edit", category: "mutation", filePath: "src/target.ts" }),

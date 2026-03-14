@@ -109,6 +109,14 @@ export interface SubTask {
   flags: MetricFlag[];
 }
 
+/** Subagent summary included in a session report */
+export interface SubagentSummary {
+  count: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalEvents: number;
+}
+
 /** Report output for a single session */
 export interface SessionReport {
   metrics: SessionMetrics;
@@ -118,6 +126,8 @@ export interface SessionReport {
   diffSummary: DiffSummary;
   /** Per-sub-task breakdown (empty if session has only one human prompt) */
   subTasks: SubTask[];
+  /** Summary of merged subagent data (if any) */
+  subagents: SubagentSummary;
 }
 
 /** A flagged metric with severity and recommendation */

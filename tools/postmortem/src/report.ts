@@ -69,6 +69,10 @@ export function formatTextReport(report: SessionReport): string {
   lines.push(`Total input:  ${tl.totalInputTokens.toLocaleString()}`);
   lines.push(`Total output: ${tl.totalOutputTokens.toLocaleString()}`);
   lines.push(`Turns:        ${tl.turns.length}`);
+  if (report.subagents.count > 0) {
+    const sa = report.subagents;
+    lines.push(`Subagents:    ${sa.count} (${sa.totalEvents} events, ${sa.totalInputTokens.toLocaleString()} in / ${sa.totalOutputTokens.toLocaleString()} out)`);
+  }
   lines.push("");
 
   // Diff summary

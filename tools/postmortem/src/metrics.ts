@@ -82,8 +82,11 @@ function computeAimlessBacktracks(events: ToolEvent[]): { aimlessBacktracks: num
       lastMutatedFile = undefined;
       continue;
     }
-    if (event.category === "mutation" && event.filePath) {
-      if (lastMutatedFile === event.filePath) {
+    if (event.category === "mutation") {
+      if (!event.filePath) {
+        // Pathless mutation (e.g., Bash write command) breaks the backtrack chain
+        lastMutatedFile = undefined;
+      } else if (lastMutatedFile === event.filePath) {
         backtracks++;
         perFile.set(event.filePath, (perFile.get(event.filePath) || 0) + 1);
       } else {
