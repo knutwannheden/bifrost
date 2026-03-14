@@ -15,6 +15,7 @@ import type {
   RecentRepo,
   Repo,
   ReviewEntry,
+  SessionMetricsResult,
   StatsData,
   SupervisorState,
   Task,
@@ -129,6 +130,9 @@ export const IPC = {
 
   // Permission
   RESOLVE_PERMISSION: 'permission:resolve',
+
+  // Session Metrics
+  GET_SESSION_METRICS: 'metrics:get-session',
 
   // Stats
   GET_STATS: 'stats:get',
@@ -315,6 +319,9 @@ export interface BifrostAPI {
   createNote(repoId: string, text: string): Promise<Note>;
   updateNote(repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }): Promise<Note>;
   deleteNote(repoId: string, noteId: string): Promise<void>;
+
+  // Session Metrics
+  getSessionMetrics(taskId: string): Promise<SessionMetricsResult>;
 
   // Stats
   getStats(since?: number): Promise<void>;

@@ -391,6 +391,26 @@ export interface PrerequisiteStatus {
   ollamaModels: { name: string; installed: boolean }[];
 }
 
+// Session metrics (postmortem analysis)
+
+export interface SessionMetricEntry {
+  name: string;
+  label: string;
+  value: number;
+  zScore: number;
+  flag: 'ok' | 'warn' | 'critical';
+}
+
+export interface SessionMetricsResult {
+  metrics: SessionMetricEntry[];
+  cluster: {
+    index: number;
+    label: string;
+    distances: number[];
+  } | null;
+  backtrackDetail: Array<{ filePath: string; count: number }>;
+}
+
 // Agent messaging types
 
 export interface AgentMessage {

@@ -182,6 +182,9 @@ const api: BifrostAPI = {
   updateNote: (repoId, noteId, updates) => ipcRenderer.invoke(IPC.NOTE_UPDATE, repoId, noteId, updates),
   deleteNote: (repoId, noteId) => ipcRenderer.invoke(IPC.NOTE_DELETE, repoId, noteId),
 
+  // Session Metrics
+  getSessionMetrics: (taskId) => ipcRenderer.invoke(IPC.GET_SESSION_METRICS, taskId),
+
   // Stats
   getStats: (since?: number) => ipcRenderer.invoke(IPC.GET_STATS, since),
   onStatsUpdate: (callback) => {
