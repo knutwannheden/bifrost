@@ -7,6 +7,7 @@ import { parseClaudeTranscript, extractToolEvents, extractTokenTimeline } from "
 import { parseDiff } from "./diff-parser.js";
 import { computeMetrics } from "./metrics.js";
 import { bucketSession, flagMetrics } from "./bucketing.js";
+import { segmentSubTasks } from "./segmentation.js";
 import { formatTextReport, formatJsonReport } from "./report.js";
 import type { SessionReport } from "./types.js";
 
@@ -86,12 +87,16 @@ function main() {
   const bucket = bucketSession(metrics);
   const flags = flagMetrics(metrics);
 
+  // Sub-task segmentation
+  const subTasks = segmentSubTasks(entries, events, diffSummary, contextWindowSize);
+
   const report: SessionReport = {
     metrics,
     bucket,
     flags,
     tokenTimeline,
     diffSummary,
+    subTasks,
   };
 
   // Output

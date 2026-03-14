@@ -1,4 +1,4 @@
-import type { SessionReport, MetricFlag, Severity } from "./types.js";
+import type { SessionReport, SessionMetrics, MetricFlag, Severity, SubTask } from "./types.js";
 
 const METRIC_LABELS: Record<string, string> = {
   costPerDiffLine: "Cost per diff line",
@@ -71,6 +71,17 @@ export function formatTextReport(report: SessionReport): string {
   lines.push(`Lines added:   ${ds.totalAdded}`);
   lines.push(`Lines removed: ${ds.totalRemoved}`);
 
+  // Sub-task breakdown (skip empty sub-tasks)
+  const nonEmpty = report.subTasks.filter((st) => st.events.length > 0 || st.tokenTimeline.turns.length > 0);
+  if (nonEmpty.length > 1) {
+    lines.push("");
+    lines.push(`=== Sub-task Breakdown (${nonEmpty.length} of ${report.subTasks.length}) ===`);
+    for (let i = 0; i < nonEmpty.length; i++) {
+      lines.push("");
+      lines.push(formatSubTask(i + 1, nonEmpty[i]));
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -79,6 +90,24 @@ export function formatTextReport(report: SessionReport): string {
  */
 export function formatJsonReport(report: SessionReport): string {
   return JSON.stringify(report, null, 2);
+}
+
+function formatSubTask(num: number, st: SubTask): string {
+  const lines: string[] = [];
+  const prompt = st.promptText.length > 80 ? `${st.promptText.slice(0, 77)}...` : st.promptText;
+  lines.push(`--- Sub-task ${num}: ${prompt} ---`);
+  lines.push(`  Classification: ${st.bucket.costTier.toUpperCase()}${st.bucket.dominantWaste !== "none" ? ` (${METRIC_LABELS[st.bucket.dominantWaste] || st.bucket.dominantWaste})` : ""}`);
+  lines.push(`  Events: ${st.events.length}  Turns: ${st.tokenTimeline.turns.length}  Tokens: ${st.tokenTimeline.totalInputTokens.toLocaleString()} in / ${st.tokenTimeline.totalOutputTokens.toLocaleString()} out`);
+
+  // Compact metrics — only show flagged ones
+  if (st.flags.length > 0) {
+    for (const flag of st.flags) {
+      const label = METRIC_LABELS[flag.metric] || flag.metric;
+      lines.push(`  [${flag.severity.toUpperCase()}] ${label}: ${formatValue(flag.metric, flag.value)}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 function formatValue(metric: string, value: number): string {

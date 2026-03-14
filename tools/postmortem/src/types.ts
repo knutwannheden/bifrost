@@ -78,6 +78,26 @@ export interface SessionBucket {
   recommendation: string;
 }
 
+/** A sub-task within a session, bounded by human prompts */
+export interface SubTask {
+  /** The human prompt that initiated this sub-task */
+  promptText: string;
+  /** Index into the original transcript entries */
+  startIndex: number;
+  /** Exclusive end index */
+  endIndex: number;
+  /** Tool events belonging to this sub-task */
+  events: ToolEvent[];
+  /** Token turns belonging to this sub-task */
+  tokenTimeline: TokenTimeline;
+  /** Computed metrics for this sub-task */
+  metrics: SessionMetrics;
+  /** Bucketing classification for this sub-task */
+  bucket: SessionBucket;
+  /** Flagged metrics for this sub-task */
+  flags: MetricFlag[];
+}
+
 /** Report output for a single session */
 export interface SessionReport {
   metrics: SessionMetrics;
@@ -85,6 +105,8 @@ export interface SessionReport {
   flags: MetricFlag[];
   tokenTimeline: TokenTimeline;
   diffSummary: DiffSummary;
+  /** Per-sub-task breakdown (empty if session has only one human prompt) */
+  subTasks: SubTask[];
 }
 
 /** A flagged metric with severity and recommendation */
