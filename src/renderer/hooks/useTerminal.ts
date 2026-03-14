@@ -239,26 +239,53 @@ export function useTerminal(
     });
 
     // Receive data from session
-    // When user has scrolled up, hold the viewport at the same absolute
-    // line so they can read without the view jumping.  When the viewport
-    // is at the bottom, let xterm auto-scroll to follow new output
-    // (tail -f behaviour).
+    // When the viewport is not at the bottom, prevent xterm's
+    // auto-scroll from jumping away from what the user is reading.
     //
-    // We track scroll lock as a persistent state (`scrollLockY`) rather
-    // than snapshotting per-write, because rapid successive writes can
-    // race: write N auto-scrolls to bottom before its callback restores,
-    // so write N+1's snapshot sees viewportY===baseY and stops locking.
+    // xterm v6 uses an internal ScrollableElement (not native DOM
+    // scroll), so DOM-level scrollTop interception doesn't work.
+    // Instead, save/restore the buffer's ydisp (display offset)
+    // around each write.  Detect user scrolling via the terminal's
+    // onScroll event (fires for both user and programmatic scrolls)
+    // with a wheel-event flag to distinguish the two.
     let hasReceivedData = false;
-    let scrollLockY: number | null = null;
-    let restoringScroll = false;
+    // ydisp to hold (null = follow tail / at bottom)
+    let lockedYdisp: number | null = null;
+    // True while the user is actively scrolling via wheel/trackpad
+    let userScrolling = false;
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
 
-    terminal.onScroll(() => {
-      if (restoringScroll) return;
+    function isAtBottom(): boolean {
       const buf = terminal.buffer.active;
-      if (buf.viewportY >= buf.baseY) {
-        scrollLockY = null;
-      } else if (scrollLockY === null) {
-        scrollLockY = buf.viewportY;
+      return buf.viewportY >= buf.baseY;
+    }
+
+    // Detect user scroll via wheel events on the container
+    const onWheel = () => {
+      userScrolling = true;
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        userScrolling = false;
+        const buf = terminal.buffer.active;
+        if (buf.viewportY >= buf.baseY) {
+          lockedYdisp = null;
+        } else {
+          lockedYdisp = buf.viewportY;
+        }
+      }, 150);
+    };
+    containerRef.current?.addEventListener('wheel', onWheel, { passive: true });
+
+    // When xterm scrolls programmatically (auto-scroll on write),
+    // snap back to locked position.  The onScroll event fires for
+    // all scroll changes (user wheel, programmatic, API calls).
+    terminal.onScroll(() => {
+      if (lockedYdisp === null || userScrolling) return;
+      const buf = terminal.buffer.active;
+      if (buf.viewportY !== lockedYdisp) {
+        // Clamp to valid range (buffer may have been trimmed)
+        const target = Math.min(lockedYdisp, buf.baseY);
+        terminal.scrollToLine(target);
       }
     });
 
@@ -268,19 +295,11 @@ export function useTerminal(
           hasReceivedData = true;
           setLoading(false);
         }
-        if (scrollLockY === null) {
-          const buf = terminal.buffer.active;
-          if (buf.viewportY < buf.baseY) {
-            scrollLockY = buf.viewportY;
-          }
+        // Auto-engage lock if viewport isn't at the bottom
+        if (lockedYdisp === null && !isAtBottom()) {
+          lockedYdisp = terminal.buffer.active.viewportY;
         }
-        terminal.write(data, () => {
-          if (scrollLockY !== null) {
-            restoringScroll = true;
-            terminal.scrollToLine(scrollLockY);
-            restoringScroll = false;
-          }
-        });
+        terminal.write(data);
       }
     });
 
@@ -315,6 +334,8 @@ export function useTerminal(
 
     return () => {
       if (resizeTimer) clearTimeout(resizeTimer);
+      if (scrollTimer) clearTimeout(scrollTimer);
+      containerRef.current?.removeEventListener('wheel', onWheel);
       resizeObserver.disconnect();
       removeDataListener();
       removeExitListener();
