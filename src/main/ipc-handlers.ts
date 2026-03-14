@@ -54,6 +54,7 @@ import {
   resizeSession,
   writeToSession,
 } from './session-manager';
+import { getSessionMetricsData } from './session-metrics';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
 import {
@@ -705,6 +706,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.GET_TOKEN_USAGE, (_event, taskId: string) => {
     const task = getTask(taskId);
     return getTokenUsageData(task.worktreePath, task.sessionId);
+  });
+
+  // Session Metrics
+  ipcMain.handle(IPC.GET_SESSION_METRICS, (_event, taskId: string) => {
+    const task = getTask(taskId);
+    return getSessionMetricsData(task.worktreePath, task.sessionId);
   });
 
   // Terminal title
