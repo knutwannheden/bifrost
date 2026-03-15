@@ -8,7 +8,7 @@ const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
 let db: Database.Database | null = null;
 
-const CURRENT_VERSION = 1;
+const CURRENT_VERSION = 2;
 
 // SQLite schema — TEXT for strings, INTEGER for booleans/timestamps, JSON text for arrays
 const SCHEMA_SQL = `
@@ -69,7 +69,6 @@ CREATE TABLE IF NOT EXISTS activity_entries (
   timestamp         INTEGER NOT NULL,
   type              TEXT NOT NULL,
   file_path         TEXT,
-  diff              TEXT,
   commit_sha        TEXT,
   commit_message    TEXT,
   claude_event_kind TEXT,
@@ -182,7 +181,10 @@ function runMigrations(): void {
     d.prepare('INSERT INTO schema_version VALUES (?)').run(CURRENT_VERSION);
     console.log(`[db] Initialized schema at version ${CURRENT_VERSION}`);
   } else if (row.version < CURRENT_VERSION) {
-    // Future incremental migrations go here
+    if (row.version < 2) {
+      d.exec('ALTER TABLE activity_entries DROP COLUMN diff');
+      console.log('[db] Migration v2: dropped diff column from activity_entries');
+    }
     d.prepare('UPDATE schema_version SET version = ?').run(CURRENT_VERSION);
   }
 }
@@ -297,9 +299,9 @@ function importFromJson(): void {
       try {
         const files = fs.readdirSync(activityDir).filter((f) => f.endsWith('.json'));
         const stmt = d.prepare(
-          `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, diff, commit_sha,
+          `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, commit_sha,
             commit_message, claude_event_kind, claude_text, claude_tool_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         );
         let activityCount = 0;
         for (const file of files) {
@@ -312,7 +314,6 @@ function importFromJson(): void {
               e.timestamp,
               e.type,
               e.filePath ?? null,
-              e.diff ?? null,
               e.commitSha ?? null,
               e.commitMessage ?? null,
               e.claudeEventKind ?? null,

@@ -74,6 +74,7 @@ export const IPC = {
   // Activity Log
   GET_ACTIVITY_LOG: 'activity:get-log',
   CLEAR_ACTIVITY_LOG: 'activity:clear',
+  GET_FILE_DIFF: 'activity:file-diff',
 
   // Token Usage
   GET_TOKEN_USAGE: 'token:get-usage',
@@ -246,6 +247,7 @@ export interface BifrostAPI {
   // Activity Log
   getActivityLog(taskId: string): Promise<ActivityEntry[]>;
   clearActivityLog(taskId: string): Promise<void>;
+  getFileDiff(worktreePath: string, filePath: string): Promise<string>;
   onActivityEntry(callback: (entry: ActivityEntry) => void): () => void;
 
   // Token Usage

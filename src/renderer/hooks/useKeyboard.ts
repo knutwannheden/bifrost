@@ -191,14 +191,20 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
               params = { type: 'activity', content, ...taskMeta };
             } else {
               const entries = await window.bifrost.getActivityLog(activeTask.id);
-              const content = entries
-                .map((e) => {
-                  if (e.type === 'commit') return `[commit] ${e.commitMessage}`;
-                  if (e.type === 'file_change') return `[file] ${e.filePath}\n${e.diff || ''}`;
-                  if (e.type === 'claude_event') return `[${e.claudeEventKind}] ${e.claudeText || ''}`;
-                  return `[${e.type}]`;
-                })
-                .join('\n\n');
+              const parts: string[] = [];
+              for (const e of entries) {
+                if (e.type === 'commit') {
+                  parts.push(`[commit] ${e.commitMessage}`);
+                } else if (e.type === 'file_change' && e.filePath) {
+                  const diff = await window.bifrost.getFileDiff(activeTask.worktreePath, e.filePath);
+                  parts.push(`[file] ${e.filePath}\n${diff}`);
+                } else if (e.type === 'claude_event') {
+                  parts.push(`[${e.claudeEventKind}] ${e.claudeText || ''}`);
+                } else {
+                  parts.push(`[${e.type}]`);
+                }
+              }
+              const content = parts.join('\n\n');
               if (!content.trim()) return;
               params = { type: 'activity', content, ...taskMeta };
             }

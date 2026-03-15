@@ -58,6 +58,7 @@ const api: BifrostAPI = {
   // Activity Log
   getActivityLog: (taskId) => ipcRenderer.invoke(IPC.GET_ACTIVITY_LOG, taskId),
   clearActivityLog: (taskId) => ipcRenderer.invoke(IPC.CLEAR_ACTIVITY_LOG, taskId),
+  getFileDiff: (worktreePath, filePath) => ipcRenderer.invoke(IPC.GET_FILE_DIFF, worktreePath, filePath),
   onActivityEntry: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, entry: import('../shared/types').ActivityEntry) =>
       callback(entry);

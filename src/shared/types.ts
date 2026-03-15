@@ -154,7 +154,6 @@ export interface ActivityEntry {
   timestamp: number;
   type: 'file_change' | 'commit' | 'claude_event';
   filePath?: string;
-  diff?: string;
   commitSha?: string;
   commitMessage?: string;
   // Claude event fields

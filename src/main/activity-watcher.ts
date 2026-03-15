@@ -1,7 +1,5 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import { promisify } from 'node:util';
 import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
@@ -30,7 +28,6 @@ function rowToEntry(row: Row): ActivityEntry {
     type: row.type,
   };
   if (row.file_path != null) entry.filePath = row.file_path;
-  if (row.diff != null) entry.diff = row.diff;
   if (row.commit_sha != null) entry.commitSha = row.commit_sha;
   if (row.commit_message != null) entry.commitMessage = row.commit_message;
   if (row.claude_event_kind != null) entry.claudeEventKind = row.claude_event_kind;
@@ -39,9 +36,9 @@ function rowToEntry(row: Row): ActivityEntry {
   return entry;
 }
 
-const INSERT_SQL = `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, diff, commit_sha,
+const INSERT_SQL = `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, commit_sha,
   commit_message, claude_event_kind, claude_text, claude_tool_name)
- VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function persistEntry(entry: ActivityEntry): void {
   getDb()
@@ -52,7 +49,6 @@ function persistEntry(entry: ActivityEntry): void {
       entry.timestamp,
       entry.type,
       entry.filePath ?? null,
-      entry.diff ?? null,
       entry.commitSha ?? null,
       entry.commitMessage ?? null,
       entry.claudeEventKind ?? null,
@@ -77,7 +73,6 @@ function replacePersistedEntries(taskId: string, entries: ActivityEntry[]): void
         entry.timestamp,
         entry.type,
         entry.filePath ?? null,
-        entry.diff ?? null,
         entry.commitSha ?? null,
         entry.commitMessage ?? null,
         entry.claudeEventKind ?? null,
@@ -115,38 +110,6 @@ async function getHeadSha(worktreePath: string): Promise<string | null> {
     return stdout.trim();
   } catch {
     return null;
-  }
-}
-
-async function getFileDiff(worktreePath: string, filePath: string): Promise<string> {
-  try {
-    // Try tracked file diff first
-    const { stdout } = await execFile('git', ['diff', 'HEAD', '--', filePath], {
-      cwd: worktreePath,
-      maxBuffer: 5 * 1024 * 1024,
-      timeout: GIT_TIMEOUT_MS,
-    });
-    if (stdout) return stdout;
-
-    // Check if untracked (new file)
-    try {
-      await execFile('git', ['ls-files', '--error-unmatch', filePath], {
-        cwd: worktreePath,
-        timeout: GIT_TIMEOUT_MS,
-      });
-      // File is tracked but has no diff — no changes
-      return '';
-    } catch {
-      // File is untracked — generate synthetic diff
-      const fullPath = path.resolve(worktreePath, filePath);
-      if (!fs.existsSync(fullPath)) return '';
-      const content = fs.readFileSync(fullPath, 'utf-8');
-      const lines = content.split('\n');
-      const header = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
-      return `${header + lines.map((l) => `+${l}`).join('\n')}\n`;
-    }
-  } catch {
-    return '';
   }
 }
 
@@ -250,8 +213,6 @@ export function startWatching(
       for (const file of changedFiles) {
         if (!tw.knownFiles.has(file)) {
           tw.knownFiles.add(file);
-          const diff = await getFileDiff(worktreePath, file);
-          if (!diff) continue;
 
           const entry: ActivityEntry = {
             id: randomUUID(),
@@ -259,7 +220,6 @@ export function startWatching(
             timestamp: Date.now(),
             type: 'file_change',
             filePath: file,
-            diff,
           };
           tw.entries.push(entry);
           persistEntry(entry);
@@ -327,4 +287,17 @@ export function clearActivityLog(taskId: string): void {
     tw.entries = [];
   }
   clearPersistedEntries(taskId);
+}
+
+export async function getFileDiffOnDemand(worktreePath: string, filePath: string): Promise<string> {
+  try {
+    const { stdout } = await execFile('git', ['diff', 'HEAD', '--', filePath], {
+      cwd: worktreePath,
+      maxBuffer: 5 * 1024 * 1024,
+      timeout: GIT_TIMEOUT_MS,
+    });
+    return stdout;
+  } catch {
+    return '';
+  }
 }

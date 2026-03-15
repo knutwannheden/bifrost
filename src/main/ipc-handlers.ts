@@ -20,7 +20,14 @@ import type {
   Repo,
   Task,
 } from '../shared/types';
-import { clearActivityLog, getActivityLog, getLastChangedFile, startWatching, stopWatching } from './activity-watcher';
+import {
+  clearActivityLog,
+  getActivityLog,
+  getFileDiffOnDemand,
+  getLastChangedFile,
+  startWatching,
+  stopWatching,
+} from './activity-watcher';
 import { getApiPort, getSessionMtime, isSessionStale } from './bifrost-api';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
@@ -701,6 +708,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.CLEAR_ACTIVITY_LOG, (_event, taskId: string) => {
     clearActivityLog(taskId);
+  });
+
+  ipcMain.handle(IPC.GET_FILE_DIFF, (_event, worktreePath: string, filePath: string) => {
+    return getFileDiffOnDemand(worktreePath, filePath);
   });
 
   // Token Usage
