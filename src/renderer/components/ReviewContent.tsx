@@ -85,7 +85,7 @@ function renderMarkdownLine(
     return (
       <label
         key={lineIndex}
-        className="flex items-start gap-2 py-0.5 cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1"
+        className="flex items-start gap-2 py-0.5 cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1 transition-colors"
         style={{ paddingLeft: indent * 4 }}
       >
         <input

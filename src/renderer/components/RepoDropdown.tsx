@@ -164,7 +164,7 @@ export default function RepoDropdown({
               onMouseDown={() => selectItem(repo.id)}
               onMouseEnter={() => setFocusedIdx(idx)}
               className={`${styles.item} cursor-pointer ${
-                idx === focusedIdx ? 'bg-accent text-white' : 'text-primary hover:bg-surface-hover'
+                idx === focusedIdx ? 'bg-accent text-white' : 'text-primary hover:bg-surface-hover transition-colors'
               }`}
             >
               <div className={styles.name}>{repoDisplayName(repo)}</div>

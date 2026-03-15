@@ -6,6 +6,7 @@ import { resolveKeymap, serializeBinding } from '../shared/keymap';
 import { stopAllWatching } from './activity-watcher';
 import { initApi, startApi, stopApi } from './bifrost-api';
 import { loadConfig } from './config';
+import { closeDatabase, openDatabase } from './db';
 import { ensureHooks } from './integration-installer';
 import { registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
@@ -214,8 +215,11 @@ app.on('ready', async () => {
   // Start HTTP API
   await startApi();
 
+  // Open DuckDB before registering handlers (stores depend on it)
+  await openDatabase();
+
   if (mainWindow) {
-    registerIpcHandlers(mainWindow);
+    await registerIpcHandlers(mainWindow);
     initNotificationService(mainWindow);
     initApi(mainWindow);
     startPolling(mainWindow);
@@ -233,6 +237,7 @@ app.on('before-quit', async () => {
   stopAllWatching();
   killAllSessions();
   await stopApi();
+  closeDatabase();
 });
 
 app.on('will-quit', () => {

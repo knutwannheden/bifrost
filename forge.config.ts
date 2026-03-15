@@ -13,7 +13,7 @@ import fs from 'node:fs';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '**/{node-pty,node-pty/**}',
+      unpack: '**/{node-pty,node-pty/**,@duckdb,@duckdb/**}',
     },
     icon: './assets/icon',
     name: 'Bifrost',
@@ -59,6 +59,13 @@ const config: ForgeConfig = {
         }
       }
 
+      // Copy all @duckdb scoped packages (node-api, node-bindings, platform-specific bindings)
+      const duckdbSrc = path.join(__dirname, 'node_modules', '@duckdb');
+      if (fs.existsSync(duckdbSrc)) {
+        const duckdbDest = path.join(buildPath, 'node_modules', '@duckdb');
+        fs.cpSync(duckdbSrc, duckdbDest, { recursive: true });
+      }
+
       // Copy the Claude Code plugin source so it can be deployed at runtime
       const pluginSrc = path.join(__dirname, 'src', 'claude-plugin');
       const pluginDest = path.join(buildPath, 'claude-plugin');
@@ -71,7 +78,7 @@ const config: ForgeConfig = {
     // node-pty ships with prebuilds for all platforms — skip rebuilding to
     // avoid creating a build/Release that shadows the prebuilds directory
     // and can break when spawn-helper goes missing.
-    ignoreModules: ['node-pty'],
+    ignoreModules: ['node-pty', '@duckdb/node-bindings'],
   },
   makers: [
     new MakerSquirrel({}),

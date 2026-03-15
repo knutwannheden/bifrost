@@ -378,7 +378,7 @@ export default function RepoManager() {
               <button
                 onClick={handleBrowse}
                 tabIndex={-1}
-                className="px-3 py-1.5 bg-surface-hover hover:brightness-110 text-primary text-sm rounded-sm focus:outline-hidden focus:ring-1 focus:ring-accent"
+                className="px-3 py-1.5 bg-surface-hover hover:brightness-110 text-primary text-sm rounded-sm focus:outline-hidden focus:ring-1 focus:ring-accent transition-colors"
               >
                 <ActionLabel text="Browse" showHint={true} />
               </button>

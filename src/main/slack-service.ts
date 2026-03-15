@@ -1,28 +1,20 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import https from 'node:https';
-import os from 'node:os';
-import path from 'node:path';
 import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { loadConfig, saveConfig } from './config';
+import { getDb } from './db';
 
 // --- State persistence ---
-
-const SLACK_STATE_PATH = path.join(os.homedir(), '.bifrost', 'slack.json');
 
 interface SlackState {
   seenReactions: string[]; // "channelId:messageTs:emoji"
 }
 
 function loadSlackState(): SlackState {
-  try {
-    const data = fs.readFileSync(SLACK_STATE_PATH, 'utf-8');
-    const parsed = JSON.parse(data);
-    return { seenReactions: Array.isArray(parsed.seenReactions) ? parsed.seenReactions : [] };
-  } catch {
-    return { seenReactions: [] };
-  }
+  // In-memory cache is populated from DB — return empty on cold start
+  // (startPolling pre-loads via initSlackState)
+  return { seenReactions: [...seenReactionsCache] };
 }
 
 function saveSlackState(state: SlackState): void {
@@ -30,11 +22,27 @@ function saveSlackState(state: SlackState): void {
   if (state.seenReactions.length > 500) {
     state.seenReactions = state.seenReactions.slice(-500);
   }
-  const dir = path.dirname(SLACK_STATE_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  // Update in-memory cache
+  seenReactionsCache = new Set(state.seenReactions);
+  // Persist to DB (fire-and-forget)
+  persistSlackState(state.seenReactions).catch((err) => console.error('[slack] Failed to persist state:', err));
+}
+
+let seenReactionsCache = new Set<string>();
+
+async function initSlackState(): Promise<void> {
+  const reader = await getDb().runAndReadAll('SELECT reaction_key FROM slack_seen_reactions');
+  const rows = reader.getRowObjectsJS();
+  seenReactionsCache = new Set(rows.map((r) => r.reaction_key as string));
+}
+
+async function persistSlackState(reactions: string[]): Promise<void> {
+  const db = getDb();
+  const now = Date.now();
+  await db.run('DELETE FROM slack_seen_reactions');
+  for (const key of reactions) {
+    await db.run('INSERT INTO slack_seen_reactions (reaction_key, seen_at) VALUES (?, ?)', [key, now]);
   }
-  fs.writeFileSync(SLACK_STATE_PATH, JSON.stringify(state, null, 2));
 }
 
 // --- Slack API helpers ---
@@ -200,9 +208,10 @@ export function startPolling(mainWindow: BrowserWindow): void {
     }, nextPollDelay);
   }
 
-  // Run immediately on start, then schedule
+  // Load seen reactions cache from DB, then start polling
   nextPollDelay = POLL_INTERVAL;
-  fetchReactions(mainWindow)
+  initSlackState()
+    .then(() => fetchReactions(mainWindow))
     .catch((err) => console.error('[slack] Initial poll error:', err))
     .then(() => schedulePoll());
 }

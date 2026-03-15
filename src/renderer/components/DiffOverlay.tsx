@@ -360,7 +360,7 @@ function FileRowItem({
       className={`flex items-center gap-2 py-1 cursor-pointer text-xs ${
         isSelected
           ? 'bg-surface-alt/50 border-l-2 border-accent-hover'
-          : 'border-l-2 border-transparent hover:bg-surface'
+          : 'border-l-2 border-transparent hover:bg-surface transition-colors'
       }`}
       style={style}
     >
@@ -415,7 +415,7 @@ function FileTreeItem({
     <>
       {/* Directory row */}
       <div
-        className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-surface text-xs"
+        className="flex items-center gap-1.5 py-0.5 cursor-pointer hover:bg-surface text-xs transition-colors"
         style={{ paddingLeft: depth * 16 + 8 }}
         onClick={() => onToggle(node.path)}
       >

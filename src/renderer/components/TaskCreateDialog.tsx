@@ -486,7 +486,7 @@ export default function TaskCreateDialog() {
                   </p>
                   <button
                     onClick={() => openExistingTask(existingInPlaceTask.id, existingInPlaceTask.status)}
-                    className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap"
+                    className="text-xs text-warning hover:text-warning/70 ml-3 whitespace-nowrap transition-colors"
                   >
                     <ActionLabel text="Open" showHint={true} />
                   </button>
@@ -581,7 +581,9 @@ export default function TaskCreateDialog() {
                             onMouseDown={() => selectBranch(b)}
                             onMouseEnter={() => setBranchFocusedIdx(idx)}
                             className={`px-3 py-1.5 cursor-pointer text-sm ${
-                              idx === branchFocusedIdx ? 'bg-accent text-white' : 'text-primary hover:bg-surface-hover'
+                              idx === branchFocusedIdx
+                                ? 'bg-accent text-white'
+                                : 'text-primary hover:bg-surface-hover transition-colors'
                             }`}
                           >
                             {b}

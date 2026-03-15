@@ -1,78 +1,90 @@
 import { randomUUID } from 'node:crypto';
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import type { Note } from '../shared/types';
+import { getDb } from './db';
 
-const NOTES_DIR = path.join(os.homedir(), '.bifrost', 'notes');
+// biome-ignore lint/suspicious/noExplicitAny: row objects from DuckDB have dynamic fields
+type Row = Record<string, any>;
 
-// In-memory cache keyed by repoId, lazy-loaded from disk
+function rowToNote(row: Row): Note {
+  return {
+    id: row.id,
+    text: row.text,
+    createdAt: Number(row.created_at),
+    addressed: row.addressed ?? false,
+  };
+}
+
+// In-memory cache keyed by repoId, eagerly loaded from DB
 const cache = new Map<string, Note[]>();
 
-function notesPath(repoId: string): string {
-  return path.join(NOTES_DIR, `${repoId}.json`);
-}
-
-function load(repoId: string): Note[] {
-  const cached = cache.get(repoId);
-  if (cached) return cached;
-  const filePath = notesPath(repoId);
-  if (!fs.existsSync(filePath)) {
-    cache.set(repoId, []);
-    return [];
-  }
-  try {
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    const notes: Note[] = JSON.parse(raw);
-    cache.set(repoId, notes);
-    return notes;
-  } catch {
-    cache.set(repoId, []);
-    return [];
+/** Pre-load all notes from DB into cache. Call during startup. */
+export async function initNoteStore(): Promise<void> {
+  const reader = await getDb().runAndReadAll('SELECT * FROM notes ORDER BY created_at');
+  const rows = reader.getRowObjectsJS();
+  cache.clear();
+  for (const row of rows) {
+    const repoId = row.repo_id as string;
+    const note = rowToNote(row);
+    const existing = cache.get(repoId);
+    if (existing) {
+      existing.push(note);
+    } else {
+      cache.set(repoId, [note]);
+    }
   }
 }
 
-function save(repoId: string, notes: Note[]): void {
-  if (!fs.existsSync(NOTES_DIR)) {
-    fs.mkdirSync(NOTES_DIR, { recursive: true });
-  }
-  const filePath = notesPath(repoId);
-  const tmp = `${filePath}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(notes, null, 2), 'utf-8');
-  fs.renameSync(tmp, filePath);
-  cache.set(repoId, notes);
+function persistNote(repoId: string, note: Note): void {
+  getDb()
+    .run('INSERT OR REPLACE INTO notes (id, repo_id, text, created_at, addressed) VALUES (?, ?, ?, ?, ?)', [
+      note.id,
+      repoId,
+      note.text,
+      note.createdAt,
+      note.addressed,
+    ])
+    .catch((err) => console.error('[note-store] Failed to persist note:', err));
+}
+
+function removeNote(noteId: string): void {
+  getDb()
+    .run('DELETE FROM notes WHERE id = ?', [noteId])
+    .catch((err) => console.error('[note-store] Failed to delete note:', err));
 }
 
 export function listNotes(repoId: string): Note[] {
-  return load(repoId);
+  return cache.get(repoId) ?? [];
 }
 
 export function createNote(repoId: string, text: string): Note {
-  const notes = load(repoId);
   const note: Note = {
     id: randomUUID(),
     text,
     createdAt: Date.now(),
     addressed: false,
   };
+  const notes = cache.get(repoId) ?? [];
   notes.push(note);
-  save(repoId, notes);
+  cache.set(repoId, notes);
+  persistNote(repoId, note);
   return note;
 }
 
 export function updateNote(repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }): Note {
-  const notes = load(repoId);
+  const notes = cache.get(repoId) ?? [];
   const idx = notes.findIndex((n) => n.id === noteId);
   if (idx === -1) throw new Error(`Note not found: ${noteId}`);
   notes[idx] = { ...notes[idx], ...updates };
-  save(repoId, notes);
+  cache.set(repoId, notes);
+  persistNote(repoId, notes[idx]);
   return notes[idx];
 }
 
 export function deleteNote(repoId: string, noteId: string): void {
-  const notes = load(repoId);
+  const notes = cache.get(repoId) ?? [];
   const filtered = notes.filter((n) => n.id !== noteId);
   if (filtered.length !== notes.length) {
-    save(repoId, filtered);
+    cache.set(repoId, filtered);
+    removeNote(noteId);
   }
 }

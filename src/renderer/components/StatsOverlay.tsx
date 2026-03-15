@@ -101,7 +101,7 @@ function OutputChart({ entries, done }: { entries: ContextRotEntry[]; done: bool
         return (
           <div
             key={entry.name}
-            className="cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1"
+            className="cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1 transition-colors"
             onClick={() => toggle(entry.name)}
           >
             <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ function EscalationTable({ entries, done }: { entries: EscalationEntry[]; done: 
         return (
           <div
             key={entry.command}
-            className="cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1"
+            className="cursor-pointer hover:bg-surface-alt/30 rounded-sm px-1 -mx-1 transition-colors"
             onClick={() => toggle(entry.command)}
           >
             <div className="flex items-center gap-2 py-0.5">

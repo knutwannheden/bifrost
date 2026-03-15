@@ -665,7 +665,7 @@ export default function TaskHistoryPanel() {
             </PrimaryButton>
             <button
               onClick={() => setBranchConfirm(null)}
-              className="px-2 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded-sm"
+              className="px-2 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded-sm transition-colors"
             >
               Cancel
             </button>

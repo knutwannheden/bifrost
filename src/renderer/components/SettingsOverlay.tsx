@@ -166,7 +166,7 @@ function buildSettings(): SettingDef[] {
                 onChange={() => update({ permissionMode: opt.value })}
                 className="mt-0.5 accent-accent"
               />
-              <span className="text-sm text-secondary group-hover:text-primary">
+              <span className="text-sm text-secondary group-hover:text-primary transition-colors">
                 {opt.label}
                 {opt.desc && <span className="text-muted"> — {opt.desc}</span>}
               </span>
@@ -603,7 +603,7 @@ export default function SettingsOverlay() {
                 className={`w-full text-left px-4 py-1.5 text-sm ${
                   activeCategory === cat
                     ? 'text-accent-hover bg-surface-alt/50'
-                    : 'text-secondary hover:text-primary hover:bg-surface-alt/30'
+                    : 'text-secondary hover:text-primary hover:bg-surface-alt/30 transition-colors'
                 }`}
               >
                 {cat}
@@ -631,7 +631,9 @@ export default function SettingsOverlay() {
                           <label className="text-sm text-secondary flex items-center gap-1.5">
                             <Highlight text={setting.label} search={search} />
                             {setting.tooltip && (
-                              <span className="text-faint hover:text-secondary cursor-help text-xs">&#9432;</span>
+                              <span className="text-faint hover:text-secondary cursor-help text-xs transition-colors">
+                                &#9432;
+                              </span>
                             )}
                           </label>
                           {setting.description && (

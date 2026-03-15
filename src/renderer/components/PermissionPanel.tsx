@@ -152,7 +152,7 @@ export default function PermissionPanel() {
                 className={`w-full text-left px-2 py-1 rounded text-xs ${
                   i === selectedRule
                     ? 'bg-accent/30 text-accent-hover border border-accent-muted'
-                    : 'text-secondary hover:bg-surface-alt'
+                    : 'text-secondary hover:bg-surface-alt transition-colors'
                 }`}
               >
                 <span>{opt.label}</span>

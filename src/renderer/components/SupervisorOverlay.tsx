@@ -49,7 +49,7 @@ function ItemRow({
 }) {
   return (
     <div
-      className={`flex items-start gap-2 px-3 py-2 rounded-sm group ${focused ? 'bg-surface-alt/50' : 'hover:bg-surface-alt/50'}`}
+      className={`flex items-start gap-2 px-3 py-2 rounded-sm group transition-colors ${focused ? 'bg-surface-alt/50' : 'hover:bg-surface-alt/50'}`}
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
@@ -206,7 +206,7 @@ function SupervisorTab({
             svState?.running
               ? 'bg-danger/20 text-danger hover:bg-danger/30'
               : 'bg-success/20 text-success hover:bg-success/30'
-          }`}
+          } transition-colors`}
         >
           <ActionLabel text={svState?.running ? 'Stop' : 'Start'} showHint={true} />
         </button>

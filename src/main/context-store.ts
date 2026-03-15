@@ -2,29 +2,80 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { CaptureContextParams, ContextEntry, TranscriptContext } from '../shared/types';
+import { getDb } from './db';
 
 const MAX_ENTRIES = 200;
 const TTL_MS = 60 * 60 * 1000; // 1 hour
 const MAX_CONTENT_SIZE = 100 * 1024; // 100KB
 
-const BIFROST_DIR = path.join(os.homedir(), '.bifrost', 'tasks');
-
 let nextId = 1;
 const entries = new Map<number, ContextEntry>();
 
-function contextsPath(taskId: string): string {
-  return path.join(BIFROST_DIR, taskId, 'contexts.jsonl');
+// biome-ignore lint/suspicious/noExplicitAny: row objects from DuckDB have dynamic fields
+type Row = Record<string, any>;
+
+function rowToEntry(row: Row): ContextEntry {
+  const base = {
+    id: Number(row.id),
+    taskId: row.task_id,
+    taskName: row.task_name,
+    capturedAt: Number(row.captured_at),
+  };
+
+  switch (row.type) {
+    case 'terminal':
+      return { ...base, type: 'terminal', content: row.content, hasSelection: row.has_selection ?? false };
+    case 'diff':
+      return { ...base, type: 'diff', content: row.content };
+    case 'activity':
+      return { ...base, type: 'activity', content: row.content };
+    case 'transcript': {
+      const entry: TranscriptContext = {
+        ...base,
+        type: 'transcript',
+        content: row.content,
+        jsonlPath: row.jsonl_path,
+        lineNumber: Number(row.line_number),
+        uuid: row.uuid,
+      };
+      if (row.selected_text != null) entry.selectedText = row.selected_text;
+      if (row.selection_start != null) entry.selectionStart = Number(row.selection_start);
+      if (row.selection_end != null) entry.selectionEnd = Number(row.selection_end);
+      if (row.resolved_content != null) entry.resolvedContent = row.resolved_content;
+      return entry;
+    }
+    default:
+      return { ...base, type: 'diff', content: row.content };
+  }
 }
 
-function ensureDir(filePath: string): void {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-function appendToJsonl(entry: ContextEntry): void {
-  const filePath = contextsPath(entry.taskId);
-  ensureDir(filePath);
-  fs.appendFileSync(filePath, `${JSON.stringify(entry)}\n`);
+function persistEntry(entry: ContextEntry): void {
+  const transcript = entry.type === 'transcript' ? (entry as TranscriptContext) : null;
+  getDb()
+    .run(
+      `INSERT OR REPLACE INTO context_entries (id, task_id, task_name, type, content, captured_at,
+        has_selection, jsonl_path, line_number, uuid, selected_text, selection_start, selection_end, resolved_content)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.id,
+        entry.taskId,
+        entry.taskName,
+        entry.type,
+        entry.type === 'terminal' || entry.type === 'diff' || entry.type === 'activity' || entry.type === 'transcript'
+          ? (entry as { content: string }).content
+          : '',
+        entry.capturedAt,
+        entry.type === 'terminal' ? (entry as { hasSelection: boolean }).hasSelection : null,
+        transcript?.jsonlPath ?? null,
+        transcript?.lineNumber ?? null,
+        transcript?.uuid ?? null,
+        transcript?.selectedText ?? null,
+        transcript?.selectionStart ?? null,
+        transcript?.selectionEnd ?? null,
+        transcript?.resolvedContent ?? null,
+      ],
+    )
+    .catch((err) => console.error('[context-store] Failed to persist entry:', err));
 }
 
 function truncateContent(content: string): string {
@@ -75,7 +126,7 @@ export function store(params: CaptureContextParams): number {
   }
 
   entries.set(id, entry);
-  appendToJsonl(entry);
+  persistEntry(entry);
 
   // Evict oldest if over limit
   while (entries.size > MAX_ENTRIES) {
@@ -232,30 +283,23 @@ function fuzzyContains(text: string, searchText: string): boolean {
 }
 
 export function loadPersistedContexts(): void {
-  if (!fs.existsSync(BIFROST_DIR)) return;
-
-  try {
-    const taskDirs = fs.readdirSync(BIFROST_DIR);
-    for (const taskDir of taskDirs) {
-      const filePath = path.join(BIFROST_DIR, taskDir, 'contexts.jsonl');
-      if (!fs.existsSync(filePath)) continue;
-
-      const data = fs.readFileSync(filePath, 'utf-8');
-      for (const line of data.split('\n')) {
-        if (!line.trim()) continue;
-        try {
-          const entry = JSON.parse(line) as ContextEntry;
-          // Only load non-expired entries
-          if (Date.now() - entry.capturedAt <= TTL_MS) {
-            entries.set(entry.id, entry);
-            if (entry.id >= nextId) nextId = entry.id + 1;
-          }
-        } catch {}
+  const now = Date.now();
+  getDb()
+    .runAndReadAll('SELECT * FROM context_entries WHERE captured_at > ?', [now - TTL_MS])
+    .then((reader) => {
+      const rows = reader.getRowObjectsJS();
+      for (const row of rows) {
+        const entry = rowToEntry(row);
+        entries.set(entry.id, entry);
+        if (entry.id >= nextId) nextId = entry.id + 1;
       }
-    }
-  } catch {
-    // Best effort
-  }
+    })
+    .catch((err) => console.error('[context-store] Failed to load persisted contexts:', err));
+
+  // Clean up expired entries in DB
+  getDb()
+    .run('DELETE FROM context_entries WHERE captured_at < ?', [now - TTL_MS])
+    .catch((err) => console.error('[context-store] Failed to clean expired entries:', err));
 }
 
 function cleanup(): void {

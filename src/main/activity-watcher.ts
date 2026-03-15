@@ -1,7 +1,6 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { BrowserWindow } from 'electron';
@@ -13,13 +12,89 @@ import {
   startClaudeWatching,
   stopClaudeWatching,
 } from './claude-watcher';
+import { getDb } from './db';
 
 const execFile = promisify(execFileCb);
 
-const ACTIVITY_DIR = path.join(os.homedir(), '.bifrost', 'activity');
 const POLL_INTERVAL_MS = 2000;
 
 const GIT_TIMEOUT_MS = 10000;
+
+// biome-ignore lint/suspicious/noExplicitAny: row objects from DuckDB have dynamic fields
+type Row = Record<string, any>;
+
+function rowToEntry(row: Row): ActivityEntry {
+  const entry: ActivityEntry = {
+    id: row.id,
+    taskId: row.task_id,
+    timestamp: Number(row.timestamp),
+    type: row.type,
+  };
+  if (row.file_path != null) entry.filePath = row.file_path;
+  if (row.diff != null) entry.diff = row.diff;
+  if (row.commit_sha != null) entry.commitSha = row.commit_sha;
+  if (row.commit_message != null) entry.commitMessage = row.commit_message;
+  if (row.claude_event_kind != null) entry.claudeEventKind = row.claude_event_kind;
+  if (row.claude_text != null) entry.claudeText = row.claude_text;
+  if (row.claude_tool_name != null) entry.claudeToolName = row.claude_tool_name;
+  return entry;
+}
+
+function persistEntry(entry: ActivityEntry): void {
+  getDb()
+    .run(
+      `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, diff, commit_sha,
+        commit_message, claude_event_kind, claude_text, claude_tool_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.id,
+        entry.taskId,
+        entry.timestamp,
+        entry.type,
+        entry.filePath ?? null,
+        entry.diff ?? null,
+        entry.commitSha ?? null,
+        entry.commitMessage ?? null,
+        entry.claudeEventKind ?? null,
+        entry.claudeText ?? null,
+        entry.claudeToolName ?? null,
+      ],
+    )
+    .catch((err) => console.error('[activity-watcher] Failed to persist entry:', err));
+}
+
+function clearPersistedEntries(taskId: string): void {
+  getDb()
+    .run('DELETE FROM activity_entries WHERE task_id = ?', [taskId])
+    .catch((err) => console.error('[activity-watcher] Failed to clear entries:', err));
+}
+
+function replacePersistedEntries(taskId: string, entries: ActivityEntry[]): void {
+  (async () => {
+    const db = getDb();
+    await db.run('DELETE FROM activity_entries WHERE task_id = ?', [taskId]);
+    for (const entry of entries) {
+      await db.run(
+        `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, diff, commit_sha,
+          commit_message, claude_event_kind, claude_text, claude_tool_name)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          entry.id,
+          entry.taskId,
+          entry.timestamp,
+          entry.type,
+          entry.filePath ?? null,
+          entry.diff ?? null,
+          entry.commitSha ?? null,
+          entry.commitMessage ?? null,
+          entry.claudeEventKind ?? null,
+          entry.claudeText ?? null,
+          entry.claudeToolName ?? null,
+        ],
+      );
+    }
+  })().catch((err) => console.error('[activity-watcher] Failed to replace entries:', err));
+}
 
 interface TaskWatcher {
   pollTimer: ReturnType<typeof setInterval>;
@@ -31,29 +106,11 @@ interface TaskWatcher {
 
 const watchers = new Map<string, TaskWatcher>();
 
-function ensureActivityDir(): void {
-  if (!fs.existsSync(ACTIVITY_DIR)) {
-    fs.mkdirSync(ACTIVITY_DIR, { recursive: true });
-  }
-}
-
-function activityFilePath(taskId: string): string {
-  return path.join(ACTIVITY_DIR, `${taskId}.json`);
-}
-
-function loadEntries(taskId: string): ActivityEntry[] {
-  const filePath = activityFilePath(taskId);
-  if (!fs.existsSync(filePath)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  } catch {
-    return [];
-  }
-}
-
-function saveEntries(taskId: string, entries: ActivityEntry[]): void {
-  ensureActivityDir();
-  fs.writeFileSync(activityFilePath(taskId), JSON.stringify(entries, null, 2));
+async function loadEntriesAsync(taskId: string): Promise<ActivityEntry[]> {
+  const reader = await getDb().runAndReadAll('SELECT * FROM activity_entries WHERE task_id = ? ORDER BY timestamp', [
+    taskId,
+  ]);
+  return reader.getRowObjectsJS().map(rowToEntry);
 }
 
 async function getHeadSha(worktreePath: string): Promise<string | null> {
@@ -139,23 +196,24 @@ export function startWatching(
   // Stop any existing watcher for this task
   stopWatching(taskId);
 
-  const entries = loadEntries(taskId);
-
   const tw: TaskWatcher = {
     pollTimer: null as unknown as ReturnType<typeof setInterval>,
-    entries,
+    entries: [],
     headSha: null,
     knownFiles: new Set<string>(),
     polling: false,
   };
 
-  // Get initial HEAD SHA and file state before starting the poll loop
-  Promise.all([getHeadSha(worktreePath), getChangedFiles(worktreePath)]).then(([sha, files]) => {
-    tw.headSha = sha;
-    for (const f of files) {
-      tw.knownFiles.add(f);
-    }
-  });
+  // Load persisted entries and initial git state before starting the poll loop
+  Promise.all([loadEntriesAsync(taskId), getHeadSha(worktreePath), getChangedFiles(worktreePath)]).then(
+    ([entries, sha, files]) => {
+      tw.entries = entries;
+      tw.headSha = sha;
+      for (const f of files) {
+        tw.knownFiles.add(f);
+      }
+    },
+  );
 
   const poll = async () => {
     if (tw.polling) return; // Previous poll still running — skip this cycle
@@ -176,7 +234,8 @@ export function startWatching(
         tw.entries = [commitEntry];
         tw.headSha = currentSha;
         tw.knownFiles.clear();
-        saveEntries(taskId, tw.entries);
+        // Replace all entries with just the commit entry
+        replacePersistedEntries(taskId, tw.entries);
         mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
         return;
       }
@@ -211,7 +270,8 @@ export function startWatching(
             diff,
           };
           tw.entries.push(entry);
-          saveEntries(taskId, tw.entries);
+          // Incremental insert — no full rewrite
+          persistEntry(entry);
           mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
         }
       }
@@ -245,9 +305,10 @@ export function stopAllWatching(): void {
   }
 }
 
-export function getActivityLog(taskId: string, worktreePath: string): ActivityEntry[] {
+export async function getActivityLog(taskId: string, worktreePath: string): Promise<ActivityEntry[]> {
   const tw = watchers.get(taskId);
-  const fileEntries = tw ? tw.entries : loadEntries(taskId);
+  // Use in-memory entries from watcher, or load from DB for cold reads
+  const fileEntries = tw ? tw.entries : await loadEntriesAsync(taskId);
 
   // Also include recent Claude JSONL entries (read directly from source)
   const claudeEntries = getRecentClaudeEntries(taskId, worktreePath);
@@ -260,7 +321,7 @@ export function getActivityLog(taskId: string, worktreePath: string): ActivityEn
 
 export function getLastChangedFile(taskId: string): string | null {
   const tw = watchers.get(taskId);
-  const entries = tw ? tw.entries : loadEntries(taskId);
+  const entries = tw ? tw.entries : [];
   for (let i = entries.length - 1; i >= 0; i--) {
     const filePath = entries[i].filePath;
     if (entries[i].type === 'file_change' && filePath) {
@@ -275,5 +336,5 @@ export function clearActivityLog(taskId: string): void {
   if (tw) {
     tw.entries = [];
   }
-  saveEntries(taskId, []);
+  clearPersistedEntries(taskId);
 }
