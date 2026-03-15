@@ -53,6 +53,12 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `worktree-manager.ts` | Creates/removes git worktrees for tasks |
 | `bifrost-api.ts` | HTTP API for MCP server integration |
 | `claude-session-scanner.ts` | Discovers external Claude Code sessions for resumption |
+| `curator-service.ts` | Background task outcome tracking and auto-archiving |
+| `supervisor-service.ts` | Batch processing of notes across repos |
+| `triage-service.ts` | AI-powered prompt triage into tasks |
+| `prompt-sender.ts` | Programmatic prompt injection into running sessions |
+| `permission-manager.ts` | Approval flow for tool use in managed-permissions mode |
+| `session-metrics.ts` | Postmortem session analysis (token waste, backtracking) |
 
 ### Key Renderer Modules
 
@@ -81,6 +87,10 @@ Biome is used for linting and formatting (`biome.json`). A11y rules are disabled
 ## Native Module Note
 
 `node-pty` is a native module. The `forge.config.ts` has a `packageAfterCopy` hook to copy it into builds and asar unpack config. Don't import `node:os` in preload — Vite doesn't externalize it; use `process.env` instead.
+
+## Vite HMR
+
+HMR is disabled in `vite.renderer.config.mts` (`hmr: false`). Do not re-enable — it causes terminal components to remount after ~30s of inactivity, clearing the active terminal.
 
 ## Renderer UI Conventions
 
@@ -125,3 +135,10 @@ Use existing components instead of reimplementing patterns:
 - `Spinner` — loading indicator (sm/md sizes)
 - `FlaskIcon` — experimental feature indicator
 - `useInstantSearch` hook — type-to-filter with Backspace/Esc handling
+- `OverlayHeader` — standard overlay header with title + close button
+- `OverlayFooter` — standard overlay footer with border
+- `CloseButton` — × close button with hover state
+- `FormInput` — styled text input with focus ring
+- `FormTextarea` — styled textarea with focus ring
+- `PrimaryButton` — accent-colored action button (sm/md sizes)
+- `SectionHeader` — uppercase tracking-wider section label
