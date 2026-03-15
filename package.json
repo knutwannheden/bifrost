@@ -31,6 +31,7 @@
     "@electron-forge/plugin-vite": "^7.11.1",
     "@electron/fuses": "^1.8.0",
     "@tailwindcss/vite": "^4.2.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/electron-squirrel-startup": "^1.0.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
@@ -42,13 +43,13 @@
     "vite": "^7.3.1"
   },
   "dependencies": {
-    "@duckdb/node-api": "^1.5.0-r.1",
     "@xterm/addon-fit": "^0.12.0-beta.180",
     "@xterm/addon-ligatures": "^0.11.0-beta.180",
     "@xterm/addon-search": "^0.17.0-beta.180",
     "@xterm/addon-web-links": "^0.13.0-beta.180",
     "@xterm/addon-webgl": "^0.20.0-beta.179",
     "@xterm/xterm": "^6.1.0-beta.180",
+    "better-sqlite3": "^12.8.0",
     "electron-squirrel-startup": "^1.0.1",
     "node-pty": "^1.2.0-beta.11",
     "react": "^19.2.4",

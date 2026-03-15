@@ -371,7 +371,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       try {
         const task = getTask(targetId);
-        const entries = await getActivityLog(targetId, task.worktreePath);
+        const entries = getActivityLog(targetId, task.worktreePath);
         jsonResponse(res, { entries: entries.slice(-limit) });
       } catch (e) {
         errorResponse(res, (e as Error).message, 404);

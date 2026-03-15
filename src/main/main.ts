@@ -215,11 +215,11 @@ app.on('ready', async () => {
   // Start HTTP API
   await startApi();
 
-  // Open DuckDB before registering handlers (stores depend on it)
-  await openDatabase();
+  // Open SQLite DB before registering handlers (stores depend on it)
+  openDatabase();
 
   if (mainWindow) {
-    await registerIpcHandlers(mainWindow);
+    registerIpcHandlers(mainWindow);
     initNotificationService(mainWindow);
     initApi(mainWindow);
     startPolling(mainWindow);

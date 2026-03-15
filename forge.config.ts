@@ -13,7 +13,7 @@ import fs from 'node:fs';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '**/{node-pty,node-pty/**,@duckdb,@duckdb/**}',
+      unpack: '**/{node-pty,node-pty/**,better-sqlite3,better-sqlite3/**}',
     },
     icon: './assets/icon',
     name: 'Bifrost',
@@ -50,20 +50,13 @@ const config: ForgeConfig = {
     },
     // Copy native modules and plugin source into the packaged app
     packageAfterCopy: async (_config, buildPath) => {
-      const nativeModules = ['node-pty', 'nan', 'node-addon-api'];
+      const nativeModules = ['node-pty', 'nan', 'node-addon-api', 'better-sqlite3'];
       for (const mod of nativeModules) {
         const src = path.join(__dirname, 'node_modules', mod);
         const dest = path.join(buildPath, 'node_modules', mod);
         if (fs.existsSync(src)) {
           fs.cpSync(src, dest, { recursive: true });
         }
-      }
-
-      // Copy all @duckdb scoped packages (node-api, node-bindings, platform-specific bindings)
-      const duckdbSrc = path.join(__dirname, 'node_modules', '@duckdb');
-      if (fs.existsSync(duckdbSrc)) {
-        const duckdbDest = path.join(buildPath, 'node_modules', '@duckdb');
-        fs.cpSync(duckdbSrc, duckdbDest, { recursive: true });
       }
 
       // Copy the Claude Code plugin source so it can be deployed at runtime
@@ -78,7 +71,7 @@ const config: ForgeConfig = {
     // node-pty ships with prebuilds for all platforms — skip rebuilding to
     // avoid creating a build/Release that shadows the prebuilds directory
     // and can break when spawn-helper goes missing.
-    ignoreModules: ['node-pty', '@duckdb/node-bindings'],
+    ignoreModules: ['node-pty'],
   },
   makers: [
     new MakerSquirrel({}),

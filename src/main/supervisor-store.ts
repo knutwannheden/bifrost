@@ -1,7 +1,7 @@
 import type { SupervisorItem, SupervisorState } from '../shared/types';
 import { getDb } from './db';
 
-// biome-ignore lint/suspicious/noExplicitAny: row objects from DuckDB have dynamic fields
+// biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
 type Row = Record<string, any>;
 
 function rowToItem(row: Row): SupervisorItem {
@@ -13,76 +13,44 @@ function rowToItem(row: Row): SupervisorItem {
     status: row.status,
     name: row.name,
     branch: row.branch,
-    createdAt: Number(row.created_at),
+    createdAt: row.created_at,
   };
   if (row.worktree_path != null) item.worktreePath = row.worktree_path;
   if (row.error_message != null) item.errorMessage = row.error_message;
-  if (row.started_at != null) item.startedAt = Number(row.started_at);
-  if (row.completed_at != null) item.completedAt = Number(row.completed_at);
+  if (row.started_at != null) item.startedAt = row.started_at;
+  if (row.completed_at != null) item.completedAt = row.completed_at;
   if (row.opened_as_task_id != null) item.openedAsTaskId = row.opened_as_task_id;
   return item;
 }
 
-const DEFAULT_STATE: SupervisorState = {
-  running: false,
-  concurrency: 2,
-  items: [],
-};
-
-// In-memory cache, eagerly loaded
-let cachedState: SupervisorState | null = null;
-
-/** Pre-load supervisor state from DB. Call during startup. */
-export async function initSupervisorStore(): Promise<void> {
-  const db = getDb();
-
-  // Load scalar state
-  const stateReader = await db.runAndReadAll("SELECT * FROM supervisor_state WHERE key = 'state'");
-  const stateRows = stateReader.getRowObjectsJS();
-
-  let running = false;
-  let concurrency = 2;
-  if (stateRows.length > 0) {
-    running = Boolean(stateRows[0].running ?? false);
-    concurrency = Number(stateRows[0].concurrency ?? 2);
-  }
-
-  // Load items
-  const itemsReader = await db.runAndReadAll('SELECT * FROM supervisor_items ORDER BY created_at');
-  const items = itemsReader.getRowObjectsJS().map(rowToItem);
-
-  cachedState = { running, concurrency, items };
-}
-
 export function loadSupervisorState(): SupervisorState {
-  if (cachedState) return cachedState;
-  // If not yet initialized, return default (shouldn't happen if initSupervisorStore is called on startup)
-  return { ...DEFAULT_STATE, items: [] };
+  const d = getDb();
+  const stateRow = d.prepare("SELECT * FROM supervisor_state WHERE key = 'state'").get() as Row | undefined;
+  const items = d.prepare('SELECT * FROM supervisor_items ORDER BY created_at').all().map(rowToItem);
+
+  return {
+    running: stateRow ? !!stateRow.running : false,
+    concurrency: stateRow ? stateRow.concurrency : 2,
+    items,
+  };
 }
 
 export function saveSupervisorState(state: SupervisorState): void {
-  cachedState = state;
-  // Fire-and-forget async persistence
-  persistState(state).catch((err) => console.error('[supervisor-store] Failed to persist state:', err));
-}
+  const d = getDb();
+  const save = d.transaction(() => {
+    d.prepare("INSERT OR REPLACE INTO supervisor_state (key, running, concurrency) VALUES ('state', ?, ?)").run(
+      state.running ? 1 : 0,
+      state.concurrency,
+    );
 
-async function persistState(state: SupervisorState): Promise<void> {
-  const db = getDb();
-
-  // Upsert scalar state
-  await db.run("INSERT OR REPLACE INTO supervisor_state (key, running, concurrency) VALUES ('state', ?, ?)", [
-    state.running,
-    state.concurrency,
-  ]);
-
-  // Replace all items
-  await db.run('DELETE FROM supervisor_items');
-  for (const item of state.items) {
-    await db.run(
+    d.prepare('DELETE FROM supervisor_items').run();
+    const stmt = d.prepare(
       `INSERT INTO supervisor_items (id, note_id, repo_id, note_text, status, name, branch,
         worktree_path, error_message, created_at, started_at, completed_at, opened_as_task_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+    );
+    for (const item of state.items) {
+      stmt.run(
         item.id,
         item.noteId,
         item.repoId,
@@ -96,7 +64,8 @@ async function persistState(state: SupervisorState): Promise<void> {
         item.startedAt ?? null,
         item.completedAt ?? null,
         item.openedAsTaskId ?? null,
-      ],
-    );
-  }
+      );
+    }
+  });
+  save();
 }

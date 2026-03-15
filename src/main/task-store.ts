@@ -1,8 +1,7 @@
-import { type DuckDBValue, listValue } from '@duckdb/node-api';
 import type { Task, TaskCuration, TaskOutcome } from '../shared/types';
 import { getDb } from './db';
 
-// biome-ignore lint/suspicious/noExplicitAny: row objects from DuckDB have dynamic fields
+// biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
 type Row = Record<string, any>;
 
 function rowToTask(row: Row): Task {
@@ -13,64 +12,34 @@ function rowToTask(row: Row): Task {
     branch: row.branch,
     worktreePath: row.worktree_path,
     status: row.status,
-    hasUnread: row.has_unread ?? false,
-    createdAt: Number(row.created_at),
+    hasUnread: !!row.has_unread,
+    createdAt: row.created_at,
   };
 
   if (row.session_id != null) task.sessionId = row.session_id;
-  if (row.archived_at != null) task.archivedAt = Number(row.archived_at);
+  if (row.archived_at != null) task.archivedAt = row.archived_at;
   if (row.terminal_title != null) task.terminalTitle = row.terminal_title;
   if (row.summary != null) task.summary = row.summary;
   if (row.is_external) task.isExternal = true;
   if (row.in_place) task.inPlace = true;
-  if (row.session_history != null) task.sessionHistory = row.session_history;
+  if (row.session_history != null) task.sessionHistory = JSON.parse(row.session_history);
   if (row.claude_active) task.claudeActive = true;
 
-  // Reconstitute TaskCuration from flattened cur_* columns
   if (row.cur_outcome != null) {
     const curation: TaskCuration = {
       outcome: row.cur_outcome as TaskOutcome,
       confidence: row.cur_confidence ?? 'auto',
-      classifiedAt: Number(row.cur_classified_at ?? 0),
+      classifiedAt: row.cur_classified_at ?? 0,
     };
     if (row.cur_reason != null) curation.reason = row.cur_reason;
     if (row.cur_pr_state != null) curation.prState = row.cur_pr_state;
-    if (row.cur_branch_merged != null) curation.branchMerged = row.cur_branch_merged;
+    if (row.cur_branch_merged != null) curation.branchMerged = !!row.cur_branch_merged;
     if (row.cur_user_override != null) curation.userOverride = row.cur_user_override as TaskOutcome;
     if (row.cur_user_note != null) curation.userNote = row.cur_user_note;
     task.curation = curation;
   }
 
   return task;
-}
-
-function taskValues(t: Task): DuckDBValue[] {
-  return [
-    t.id,
-    t.name,
-    t.repoId,
-    t.branch ?? '',
-    t.worktreePath,
-    t.sessionId ?? null,
-    t.status,
-    t.hasUnread ?? false,
-    t.createdAt,
-    t.archivedAt ?? null,
-    t.terminalTitle ?? null,
-    t.summary ?? null,
-    t.isExternal ?? false,
-    t.inPlace ?? false,
-    t.sessionHistory ? listValue(t.sessionHistory) : null,
-    t.claudeActive ?? false,
-    t.curation?.outcome ?? null,
-    t.curation?.confidence ?? null,
-    t.curation?.reason ?? null,
-    t.curation?.prState ?? null,
-    t.curation?.branchMerged ?? null,
-    t.curation?.classifiedAt ?? null,
-    t.curation?.userOverride ?? null,
-    t.curation?.userNote ?? null,
-  ];
 }
 
 const UPSERT_SQL = `INSERT OR REPLACE INTO tasks (
@@ -80,21 +49,48 @@ const UPSERT_SQL = `INSERT OR REPLACE INTO tasks (
   cur_pr_state, cur_branch_merged, cur_classified_at, cur_user_override, cur_user_note
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-export async function loadTasks(): Promise<Task[]> {
-  const reader = await getDb().runAndReadAll('SELECT * FROM tasks ORDER BY created_at');
-  const rows = reader.getRowObjectsJS();
+function taskParams(t: Task) {
+  return [
+    t.id,
+    t.name,
+    t.repoId,
+    t.branch ?? '',
+    t.worktreePath,
+    t.sessionId ?? null,
+    t.status,
+    t.hasUnread ? 1 : 0,
+    t.createdAt,
+    t.archivedAt ?? null,
+    t.terminalTitle ?? null,
+    t.summary ?? null,
+    t.isExternal ? 1 : 0,
+    t.inPlace ? 1 : 0,
+    t.sessionHistory ? JSON.stringify(t.sessionHistory) : null,
+    t.claudeActive ? 1 : 0,
+    t.curation?.outcome ?? null,
+    t.curation?.confidence ?? null,
+    t.curation?.reason ?? null,
+    t.curation?.prState ?? null,
+    t.curation?.branchMerged != null ? (t.curation.branchMerged ? 1 : 0) : null,
+    t.curation?.classifiedAt ?? null,
+    t.curation?.userOverride ?? null,
+    t.curation?.userNote ?? null,
+  ];
+}
+
+export function loadTasks(): Task[] {
+  const rows = getDb().prepare('SELECT * FROM tasks ORDER BY created_at').all();
   return rows.map(rowToTask);
 }
 
 export function saveTasks(tasks: Task[]): void {
-  // Fire-and-forget async persistence — in-memory array in ipc-handlers is the source of truth
-  saveTasksAsync(tasks).catch((err) => console.error('[task-store] Failed to persist tasks:', err));
-}
-
-async function saveTasksAsync(tasks: Task[]): Promise<void> {
-  const db = getDb();
-  await db.run('DELETE FROM tasks');
-  for (const t of tasks) {
-    await db.run(UPSERT_SQL, taskValues(t));
-  }
+  const d = getDb();
+  const save = d.transaction(() => {
+    d.prepare('DELETE FROM tasks').run();
+    const stmt = d.prepare(UPSERT_SQL);
+    for (const t of tasks) {
+      stmt.run(...taskParams(t));
+    }
+  });
+  save();
 }

@@ -32,7 +32,7 @@ import { getGitLog } from './git-log-service';
 import { scanRecentRepos } from './history-scanner';
 import { openFileInIde, openInIde } from './ide-launcher';
 import { checkIntegration, installIntegration } from './integration-installer';
-import { createNote, deleteNote, initNoteStore, listNotes, updateNote } from './note-store';
+import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { setActiveTaskId } from './notification-service';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
 import { handleScrapeResponse, sendPrompt } from './prompt-sender';
@@ -69,11 +69,10 @@ import {
   startSupervisor,
   stopSupervisor,
 } from './supervisor-service';
-import { initSupervisorStore } from './supervisor-store';
 import { loadTasks, saveTasks } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
 import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
-import { deleteTriage as deleteTriageEntry, initTriageStore, listTriages } from './triage-store';
+import { deleteTriage as deleteTriageEntry, listTriages } from './triage-store';
 import { createWorktree, createWorktreeFromPr, removeWorktree, restoreWorktree } from './worktree-manager';
 
 // In-memory task list, synced to disk
@@ -320,15 +319,12 @@ export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): v
   startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
 }
 
-export async function registerIpcHandlers(mainWindow: BrowserWindow): Promise<void> {
-  // Load persisted context entries from disk
+export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+  // Load persisted context entries from DB
   loadPersistedContexts();
 
-  // Load persisted data from DuckDB
-  await Promise.all([initTriageStore(), initNoteStore(), initSupervisorStore()]);
-
   // Load persisted tasks on startup, restore sessions for previously-running tasks
-  const persisted = await loadTasks();
+  const persisted = loadTasks();
   const tasksToRestore = persisted.filter((t) => t.status === 'running');
 
   tasks = persisted.map((t) => (t.status === 'running' ? { ...t, status: 'stopped' as const } : t));
@@ -698,7 +694,7 @@ export async function registerIpcHandlers(mainWindow: BrowserWindow): Promise<vo
   });
 
   // Activity Log
-  ipcMain.handle(IPC.GET_ACTIVITY_LOG, async (_event, taskId: string) => {
+  ipcMain.handle(IPC.GET_ACTIVITY_LOG, (_event, taskId: string) => {
     const task = getTask(taskId);
     return getActivityLog(taskId, task.worktreePath);
   });

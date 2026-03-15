@@ -12,9 +12,8 @@ interface SlackState {
 }
 
 function loadSlackState(): SlackState {
-  // In-memory cache is populated from DB — return empty on cold start
-  // (startPolling pre-loads via initSlackState)
-  return { seenReactions: [...seenReactionsCache] };
+  const rows = getDb().prepare('SELECT reaction_key FROM slack_seen_reactions').all() as { reaction_key: string }[];
+  return { seenReactions: rows.map((r) => r.reaction_key) };
 }
 
 function saveSlackState(state: SlackState): void {
@@ -22,27 +21,16 @@ function saveSlackState(state: SlackState): void {
   if (state.seenReactions.length > 500) {
     state.seenReactions = state.seenReactions.slice(-500);
   }
-  // Update in-memory cache
-  seenReactionsCache = new Set(state.seenReactions);
-  // Persist to DB (fire-and-forget)
-  persistSlackState(state.seenReactions).catch((err) => console.error('[slack] Failed to persist state:', err));
-}
-
-let seenReactionsCache = new Set<string>();
-
-async function initSlackState(): Promise<void> {
-  const reader = await getDb().runAndReadAll('SELECT reaction_key FROM slack_seen_reactions');
-  const rows = reader.getRowObjectsJS();
-  seenReactionsCache = new Set(rows.map((r) => r.reaction_key as string));
-}
-
-async function persistSlackState(reactions: string[]): Promise<void> {
-  const db = getDb();
-  const now = Date.now();
-  await db.run('DELETE FROM slack_seen_reactions');
-  for (const key of reactions) {
-    await db.run('INSERT INTO slack_seen_reactions (reaction_key, seen_at) VALUES (?, ?)', [key, now]);
-  }
+  const d = getDb();
+  const save = d.transaction(() => {
+    const now = Date.now();
+    d.prepare('DELETE FROM slack_seen_reactions').run();
+    const stmt = d.prepare('INSERT INTO slack_seen_reactions (reaction_key, seen_at) VALUES (?, ?)');
+    for (const key of state.seenReactions) {
+      stmt.run(key, now);
+    }
+  });
+  save();
 }
 
 // --- Slack API helpers ---
@@ -208,10 +196,9 @@ export function startPolling(mainWindow: BrowserWindow): void {
     }, nextPollDelay);
   }
 
-  // Load seen reactions cache from DB, then start polling
+  // Run immediately on start, then schedule
   nextPollDelay = POLL_INTERVAL;
-  initSlackState()
-    .then(() => fetchReactions(mainWindow))
+  fetchReactions(mainWindow)
     .catch((err) => console.error('[slack] Initial poll error:', err))
     .then(() => schedulePoll());
 }

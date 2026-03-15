@@ -11,20 +11,20 @@ const MAX_CONTENT_SIZE = 100 * 1024; // 100KB
 let nextId = 1;
 const entries = new Map<number, ContextEntry>();
 
-// biome-ignore lint/suspicious/noExplicitAny: row objects from DuckDB have dynamic fields
+// biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
 type Row = Record<string, any>;
 
 function rowToEntry(row: Row): ContextEntry {
   const base = {
-    id: Number(row.id),
+    id: row.id,
     taskId: row.task_id,
     taskName: row.task_name,
-    capturedAt: Number(row.captured_at),
+    capturedAt: row.captured_at,
   };
 
   switch (row.type) {
     case 'terminal':
-      return { ...base, type: 'terminal', content: row.content, hasSelection: row.has_selection ?? false };
+      return { ...base, type: 'terminal', content: row.content, hasSelection: !!row.has_selection };
     case 'diff':
       return { ...base, type: 'diff', content: row.content };
     case 'activity':
@@ -35,12 +35,12 @@ function rowToEntry(row: Row): ContextEntry {
         type: 'transcript',
         content: row.content,
         jsonlPath: row.jsonl_path,
-        lineNumber: Number(row.line_number),
+        lineNumber: row.line_number,
         uuid: row.uuid,
       };
       if (row.selected_text != null) entry.selectedText = row.selected_text;
-      if (row.selection_start != null) entry.selectionStart = Number(row.selection_start);
-      if (row.selection_end != null) entry.selectionEnd = Number(row.selection_end);
+      if (row.selection_start != null) entry.selectionStart = row.selection_start;
+      if (row.selection_end != null) entry.selectionEnd = row.selection_end;
       if (row.resolved_content != null) entry.resolvedContent = row.resolved_content;
       return entry;
     }
@@ -52,30 +52,27 @@ function rowToEntry(row: Row): ContextEntry {
 function persistEntry(entry: ContextEntry): void {
   const transcript = entry.type === 'transcript' ? (entry as TranscriptContext) : null;
   getDb()
-    .run(
+    .prepare(
       `INSERT OR REPLACE INTO context_entries (id, task_id, task_name, type, content, captured_at,
-        has_selection, jsonl_path, line_number, uuid, selected_text, selection_start, selection_end, resolved_content)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        entry.id,
-        entry.taskId,
-        entry.taskName,
-        entry.type,
-        entry.type === 'terminal' || entry.type === 'diff' || entry.type === 'activity' || entry.type === 'transcript'
-          ? (entry as { content: string }).content
-          : '',
-        entry.capturedAt,
-        entry.type === 'terminal' ? (entry as { hasSelection: boolean }).hasSelection : null,
-        transcript?.jsonlPath ?? null,
-        transcript?.lineNumber ?? null,
-        transcript?.uuid ?? null,
-        transcript?.selectedText ?? null,
-        transcript?.selectionStart ?? null,
-        transcript?.selectionEnd ?? null,
-        transcript?.resolvedContent ?? null,
-      ],
+      has_selection, jsonl_path, line_number, uuid, selected_text, selection_start, selection_end, resolved_content)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .catch((err) => console.error('[context-store] Failed to persist entry:', err));
+    .run(
+      entry.id,
+      entry.taskId,
+      entry.taskName,
+      entry.type,
+      (entry as { content: string }).content,
+      entry.capturedAt,
+      entry.type === 'terminal' ? ((entry as { hasSelection: boolean }).hasSelection ? 1 : 0) : null,
+      transcript?.jsonlPath ?? null,
+      transcript?.lineNumber ?? null,
+      transcript?.uuid ?? null,
+      transcript?.selectedText ?? null,
+      transcript?.selectionStart ?? null,
+      transcript?.selectionEnd ?? null,
+      transcript?.resolvedContent ?? null,
+    );
 }
 
 function truncateContent(content: string): string {
@@ -284,22 +281,19 @@ function fuzzyContains(text: string, searchText: string): boolean {
 
 export function loadPersistedContexts(): void {
   const now = Date.now();
-  getDb()
-    .runAndReadAll('SELECT * FROM context_entries WHERE captured_at > ?', [now - TTL_MS])
-    .then((reader) => {
-      const rows = reader.getRowObjectsJS();
-      for (const row of rows) {
-        const entry = rowToEntry(row);
-        entries.set(entry.id, entry);
-        if (entry.id >= nextId) nextId = entry.id + 1;
-      }
-    })
-    .catch((err) => console.error('[context-store] Failed to load persisted contexts:', err));
+  const rows = getDb()
+    .prepare('SELECT * FROM context_entries WHERE captured_at > ?')
+    .all(now - TTL_MS);
+  for (const row of rows) {
+    const entry = rowToEntry(row);
+    entries.set(entry.id, entry);
+    if (entry.id >= nextId) nextId = entry.id + 1;
+  }
 
   // Clean up expired entries in DB
   getDb()
-    .run('DELETE FROM context_entries WHERE captured_at < ?', [now - TTL_MS])
-    .catch((err) => console.error('[context-store] Failed to clean expired entries:', err));
+    .prepare('DELETE FROM context_entries WHERE captured_at < ?')
+    .run(now - TTL_MS);
 }
 
 function cleanup(): void {

@@ -17,17 +17,16 @@ import { getDb } from './db';
 const execFile = promisify(execFileCb);
 
 const POLL_INTERVAL_MS = 2000;
-
 const GIT_TIMEOUT_MS = 10000;
 
-// biome-ignore lint/suspicious/noExplicitAny: row objects from DuckDB have dynamic fields
+// biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
 type Row = Record<string, any>;
 
 function rowToEntry(row: Row): ActivityEntry {
   const entry: ActivityEntry = {
     id: row.id,
     taskId: row.task_id,
-    timestamp: Number(row.timestamp),
+    timestamp: row.timestamp,
     type: row.type,
   };
   if (row.file_path != null) entry.filePath = row.file_path;
@@ -40,13 +39,39 @@ function rowToEntry(row: Row): ActivityEntry {
   return entry;
 }
 
+const INSERT_SQL = `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, diff, commit_sha,
+  commit_message, claude_event_kind, claude_text, claude_tool_name)
+ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+
 function persistEntry(entry: ActivityEntry): void {
   getDb()
+    .prepare(INSERT_SQL)
     .run(
-      `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, diff, commit_sha,
-        commit_message, claude_event_kind, claude_text, claude_tool_name)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+      entry.id,
+      entry.taskId,
+      entry.timestamp,
+      entry.type,
+      entry.filePath ?? null,
+      entry.diff ?? null,
+      entry.commitSha ?? null,
+      entry.commitMessage ?? null,
+      entry.claudeEventKind ?? null,
+      entry.claudeText ?? null,
+      entry.claudeToolName ?? null,
+    );
+}
+
+function clearPersistedEntries(taskId: string): void {
+  getDb().prepare('DELETE FROM activity_entries WHERE task_id = ?').run(taskId);
+}
+
+function replacePersistedEntries(taskId: string, entries: ActivityEntry[]): void {
+  const d = getDb();
+  const replace = d.transaction(() => {
+    d.prepare('DELETE FROM activity_entries WHERE task_id = ?').run(taskId);
+    const stmt = d.prepare(INSERT_SQL);
+    for (const entry of entries) {
+      stmt.run(
         entry.id,
         entry.taskId,
         entry.timestamp,
@@ -58,42 +83,17 @@ function persistEntry(entry: ActivityEntry): void {
         entry.claudeEventKind ?? null,
         entry.claudeText ?? null,
         entry.claudeToolName ?? null,
-      ],
-    )
-    .catch((err) => console.error('[activity-watcher] Failed to persist entry:', err));
-}
-
-function clearPersistedEntries(taskId: string): void {
-  getDb()
-    .run('DELETE FROM activity_entries WHERE task_id = ?', [taskId])
-    .catch((err) => console.error('[activity-watcher] Failed to clear entries:', err));
-}
-
-function replacePersistedEntries(taskId: string, entries: ActivityEntry[]): void {
-  (async () => {
-    const db = getDb();
-    await db.run('DELETE FROM activity_entries WHERE task_id = ?', [taskId]);
-    for (const entry of entries) {
-      await db.run(
-        `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, diff, commit_sha,
-          commit_message, claude_event_kind, claude_text, claude_tool_name)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          entry.id,
-          entry.taskId,
-          entry.timestamp,
-          entry.type,
-          entry.filePath ?? null,
-          entry.diff ?? null,
-          entry.commitSha ?? null,
-          entry.commitMessage ?? null,
-          entry.claudeEventKind ?? null,
-          entry.claudeText ?? null,
-          entry.claudeToolName ?? null,
-        ],
       );
     }
-  })().catch((err) => console.error('[activity-watcher] Failed to replace entries:', err));
+  });
+  replace();
+}
+
+function loadEntries(taskId: string): ActivityEntry[] {
+  return getDb()
+    .prepare('SELECT * FROM activity_entries WHERE task_id = ? ORDER BY timestamp')
+    .all(taskId)
+    .map(rowToEntry);
 }
 
 interface TaskWatcher {
@@ -105,13 +105,6 @@ interface TaskWatcher {
 }
 
 const watchers = new Map<string, TaskWatcher>();
-
-async function loadEntriesAsync(taskId: string): Promise<ActivityEntry[]> {
-  const reader = await getDb().runAndReadAll('SELECT * FROM activity_entries WHERE task_id = ? ORDER BY timestamp', [
-    taskId,
-  ]);
-  return reader.getRowObjectsJS().map(rowToEntry);
-}
 
 async function getHeadSha(worktreePath: string): Promise<string | null> {
   try {
@@ -196,24 +189,24 @@ export function startWatching(
   // Stop any existing watcher for this task
   stopWatching(taskId);
 
+  // Load persisted entries synchronously
+  const entries = loadEntries(taskId);
+
   const tw: TaskWatcher = {
     pollTimer: null as unknown as ReturnType<typeof setInterval>,
-    entries: [],
+    entries,
     headSha: null,
     knownFiles: new Set<string>(),
     polling: false,
   };
 
-  // Load persisted entries and initial git state before starting the poll loop
-  Promise.all([loadEntriesAsync(taskId), getHeadSha(worktreePath), getChangedFiles(worktreePath)]).then(
-    ([entries, sha, files]) => {
-      tw.entries = entries;
-      tw.headSha = sha;
-      for (const f of files) {
-        tw.knownFiles.add(f);
-      }
-    },
-  );
+  // Get initial HEAD SHA and file state before starting the poll loop
+  Promise.all([getHeadSha(worktreePath), getChangedFiles(worktreePath)]).then(([sha, files]) => {
+    tw.headSha = sha;
+    for (const f of files) {
+      tw.knownFiles.add(f);
+    }
+  });
 
   const poll = async () => {
     if (tw.polling) return; // Previous poll still running — skip this cycle
@@ -234,7 +227,6 @@ export function startWatching(
         tw.entries = [commitEntry];
         tw.headSha = currentSha;
         tw.knownFiles.clear();
-        // Replace all entries with just the commit entry
         replacePersistedEntries(taskId, tw.entries);
         mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
         return;
@@ -270,7 +262,6 @@ export function startWatching(
             diff,
           };
           tw.entries.push(entry);
-          // Incremental insert — no full rewrite
           persistEntry(entry);
           mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
         }
@@ -305,10 +296,9 @@ export function stopAllWatching(): void {
   }
 }
 
-export async function getActivityLog(taskId: string, worktreePath: string): Promise<ActivityEntry[]> {
+export function getActivityLog(taskId: string, worktreePath: string): ActivityEntry[] {
   const tw = watchers.get(taskId);
-  // Use in-memory entries from watcher, or load from DB for cold reads
-  const fileEntries = tw ? tw.entries : await loadEntriesAsync(taskId);
+  const fileEntries = tw ? tw.entries : loadEntries(taskId);
 
   // Also include recent Claude JSONL entries (read directly from source)
   const claudeEntries = getRecentClaudeEntries(taskId, worktreePath);
@@ -321,7 +311,7 @@ export async function getActivityLog(taskId: string, worktreePath: string): Prom
 
 export function getLastChangedFile(taskId: string): string | null {
   const tw = watchers.get(taskId);
-  const entries = tw ? tw.entries : [];
+  const entries = tw ? tw.entries : loadEntries(taskId);
   for (let i = entries.length - 1; i >= 0; i--) {
     const filePath = entries[i].filePath;
     if (entries[i].type === 'file_change' && filePath) {
