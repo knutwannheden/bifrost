@@ -7,6 +7,7 @@ import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
 import NotesOverlay from './components/NotesOverlay';
 import NotificationPopover from './components/NotificationPopover';
 import PermissionPanel from './components/PermissionPanel';
+import PrimaryButton from './components/PrimaryButton';
 import RepoManager from './components/RepoManager';
 import RightIconBar from './components/RightIconBar';
 import SettingsOverlay from './components/SettingsOverlay';
@@ -585,13 +586,9 @@ export default function App() {
               </p>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-faint flex-1">Esc cancel</span>
-                <button
-                  autoFocus
-                  onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })}
-                  className="px-4 py-1.5 text-sm bg-accent hover:bg-accent-hover text-white rounded-sm transition-colors"
-                >
+                <PrimaryButton autoFocus onClick={() => dispatch({ type: 'HIDE_ARCHIVE_CONFIRM' })} className="px-4">
                   <ActionLabel text="Cancel" showHint />
-                </button>
+                </PrimaryButton>
                 <button
                   onClick={() => {
                     const { taskId } = state.archiveConfirm!;
@@ -613,16 +610,17 @@ export default function App() {
             <div className="flex items-center gap-3">
               <SimpleMarkdown text={state.toast} />
               {state.toastAction?.map((a, i) => (
-                <button
+                <PrimaryButton
                   key={i}
+                  size="sm"
                   onClick={() => {
                     a.callback();
                     dispatch({ type: 'HIDE_TOAST' });
                   }}
-                  className="shrink-0 px-2.5 py-1 bg-accent hover:bg-accent-hover text-white text-xs rounded-sm transition-colors"
+                  className="shrink-0"
                 >
                   <ActionLabel text={a.label} showHint={true} />
-                </button>
+                </PrimaryButton>
               ))}
             </div>
             {state.toastHint && <div className="text-right text-xs text-faint mt-1">{state.toastHint}</div>}

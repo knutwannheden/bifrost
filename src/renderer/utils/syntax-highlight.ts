@@ -111,7 +111,7 @@ export interface HighlightedToken {
   color: string;
 }
 
-const FALLBACK_DARK = '#e2e8f0';
+const FALLBACK_DARK = '#f8f8f2'; /* Dracula Foreground */
 const FALLBACK_LIGHT = '#24292e';
 
 export async function highlightLines(

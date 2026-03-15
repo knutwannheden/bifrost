@@ -93,11 +93,7 @@ export default function TerminalPane({
 
   return (
     <div
-      className="w-full h-full relative"
-      style={{
-        backgroundColor: 'var(--color-app)',
-        borderTop: focused ? '2px solid var(--color-accent-hover)' : '2px solid transparent',
-      }}
+      className={`w-full h-full relative bg-app border-t-2 ${focused ? 'border-accent-hover' : 'border-transparent'}`}
       onMouseDown={onFocusRequest}
     >
       {showSearch && <TerminalSearchBar sessionId={sessionId} onClose={handleSearchClose} />}

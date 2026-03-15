@@ -202,14 +202,17 @@ async function classifyTask(task: Task): Promise<CuratorRunResult | null> {
 }
 
 let _ghAvailable: boolean | null = null;
+let _ghCheckedAt = 0;
+const GH_CACHE_MS = 5 * 60 * 1000;
 
 async function isGhAvailable(): Promise<boolean> {
-  if (_ghAvailable !== null) return _ghAvailable;
+  if (_ghAvailable !== null && Date.now() - _ghCheckedAt < GH_CACHE_MS) return _ghAvailable;
   try {
     await execFile('gh', ['--version'], { timeout: 5000 });
     _ghAvailable = true;
   } catch {
     _ghAvailable = false;
   }
+  _ghCheckedAt = Date.now();
   return _ghAvailable;
 }

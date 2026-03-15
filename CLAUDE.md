@@ -139,6 +139,7 @@ Use existing components instead of reimplementing patterns:
 - `OverlayFooter` — standard overlay footer with border
 - `CloseButton` — × close button with hover state
 - `FormInput` — styled text input with focus ring
+- `FormSelect` — styled select dropdown with focus ring
 - `FormTextarea` — styled textarea with focus ring
 - `PrimaryButton` — accent-colored action button (sm/md sizes)
 - `SectionHeader` — uppercase tracking-wider section label

@@ -575,15 +575,9 @@ export default function ReviewContent({
               rows={5}
             />
           </div>
-          <button
-            onClick={handleRunReview}
-            disabled={!canRunReview}
-            className={`px-3 py-1.5 rounded text-sm transition-colors ${
-              canRunReview ? 'bg-accent hover:bg-accent-hover text-white' : 'bg-surface text-faint cursor-not-allowed'
-            }`}
-          >
+          <PrimaryButton onClick={handleRunReview} disabled={!canRunReview}>
             Run Review
-          </button>
+          </PrimaryButton>
           {canRunReview ? (
             <span className="text-xs text-faint">
               <Kbd>Enter</Kbd> to run
@@ -675,9 +669,13 @@ export default function ReviewContent({
           {lines.map((line, i) => renderMarkdownLine(line, i, checkedLines, handleToggle))}
         </div>
         <div className="flex items-center gap-3 px-4 py-3 border-t border-border-default shrink-0">
-          <PrimaryButton size="sm" onClick={handleCopyPrompt} disabled={!hasChecked}>
+          <button
+            onClick={handleCopyPrompt}
+            disabled={!hasChecked}
+            className="px-2 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-alt rounded-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
             Copy Prompt
-          </PrimaryButton>
+          </button>
           {hasReviewSession && !showDiscussion && (
             <PrimaryButton size="sm" onClick={handleDiscuss}>
               Discuss

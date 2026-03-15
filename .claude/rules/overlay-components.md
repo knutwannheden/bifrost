@@ -6,4 +6,5 @@ When creating or modifying overlay components (files matching `*Overlay.tsx`, `*
 - Backdrop: `absolute inset-0 z-20 bg-overlay focus:outline-hidden`
 - Inner panel: `bg-surface rounded-lg border border-border-input shadow-xl`
 - Use `PillToggle` for filter tabs, `SectionHeader` for group labels
-- Use `FormInput`/`FormTextarea` for inputs, `PrimaryButton` for primary actions
+- Use `FormInput`/`FormSelect`/`FormTextarea` for inputs, `PrimaryButton` for primary actions
+- Use semantic color tokens (`text-success`, `text-danger`, `text-warning`, `bg-warning/20`) — never raw Tailwind colors (`text-green-400`, `bg-amber-500/20`)

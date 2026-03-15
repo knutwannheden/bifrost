@@ -215,7 +215,7 @@ function SupervisorTab({
       {/* Body */}
       <div className="overflow-y-auto flex-1 min-h-0 p-2">
         {!svState || svState.items.length === 0 ? (
-          <div className="px-2 py-8 text-sm text-muted text-center">
+          <div className="text-sm text-muted text-center py-4">
             {svState?.running ? 'No notes found across repos' : 'Press Start to queue notes for processing'}
           </div>
         ) : (
@@ -380,21 +380,31 @@ function CuratorTab({
   tasks,
   repoMap,
   dispatch,
+  focusedIdx,
+  onFilteredCount,
 }: {
   tasks: Task[];
   repoMap: Map<string, string>;
   dispatch: ReturnType<typeof useApp>['dispatch'];
+  focusedIdx: number;
+  onFilteredCount: (count: number) => void;
 }) {
   const [curatorFilter, setCuratorFilter] = useState<CuratorFilter>('unclassified');
   const [curState, setCurState] = useState<CuratorState | null>(null);
-  const [focusedIdx] = useState(0);
 
   useEffect(() => {
     window.bifrost.getCuratorState().then(setCurState);
+    const unsub = window.bifrost.onCuratorUpdate((_taskId, _curation) => {
+      // Refresh curator state when any task is curated
+      window.bifrost.getCuratorState().then(setCurState);
+    });
+    return unsub;
   }, []);
 
-  const handleRunNow = () => {
-    window.bifrost.runCuratorNow();
+  const handleRunNow = async () => {
+    await window.bifrost.runCuratorNow();
+    const fresh = await window.bifrost.getCuratorState();
+    setCurState(fresh);
   };
 
   const handleOutcome = async (taskId: string, outcome: TaskOutcome) => {
@@ -415,6 +425,7 @@ function CuratorTab({
         dispatch({ type: 'SET_ACTIVE_TASK', taskId: updated.id });
       });
     }
+    dispatch({ type: 'TOGGLE_SUPERVISOR' });
   };
 
   const curatable = tasks.filter((t) => t.status === 'stopped' || t.status === 'archived');
@@ -424,6 +435,11 @@ function CuratorTab({
     if (curatorFilter === 'pending') return outcome === 'pending';
     return true;
   });
+
+  // Report filtered count to parent for keyboard navigation
+  useEffect(() => {
+    onFilteredCount(filtered.length);
+  }, [filtered.length, onFilteredCount]);
 
   const unclassifiedCount = curatable.filter((t) => getTaskOutcome(t) === 'unclassified').length;
   const pendingCount = curatable.filter((t) => getTaskOutcome(t) === 'pending').length;
@@ -458,7 +474,7 @@ function CuratorTab({
       {/* Task list */}
       <div className="overflow-y-auto flex-1 min-h-0 p-4 space-y-2">
         {filtered.length === 0 ? (
-          <div className="px-2 py-8 text-sm text-muted text-center">
+          <div className="text-sm text-muted text-center py-4">
             {curatorFilter === 'unclassified'
               ? 'No unclassified tasks. All tasks have been curated.'
               : curatorFilter === 'pending'
@@ -501,6 +517,8 @@ export default function SupervisorOverlay() {
   const [tab, setTab] = useState<Tab>('supervisor');
   const [svState, setSvState] = useState<SupervisorState | null>(null);
   const [svFocusedIdx, setSvFocusedIdx] = useState(-1);
+  const [curFocusedIdx, setCurFocusedIdx] = useState(0);
+  const curFilteredCountRef = useRef(0);
 
   const panelRef = useRef<HTMLDivElement>(null);
   const close = () => dispatch({ type: 'TOGGLE_SUPERVISOR' });
@@ -601,6 +619,20 @@ export default function SupervisorOverlay() {
         }
       }
     }
+
+    if (tab === 'curator') {
+      const count = curFilteredCountRef.current;
+      if (e.key === 'ArrowDown' && count > 0) {
+        e.preventDefault();
+        setCurFocusedIdx((i) => (i < count - 1 ? i + 1 : 0));
+        return;
+      }
+      if (e.key === 'ArrowUp' && count > 0) {
+        e.preventDefault();
+        setCurFocusedIdx((i) => (i > 0 ? i - 1 : count - 1));
+        return;
+      }
+    }
   };
 
   return (
@@ -632,7 +664,15 @@ export default function SupervisorOverlay() {
             focusedIdx={svFocusedIdx}
           />
         ) : (
-          <CuratorTab tasks={appState.tasks} repoMap={repoMap} dispatch={dispatch} />
+          <CuratorTab
+            tasks={appState.tasks}
+            repoMap={repoMap}
+            dispatch={dispatch}
+            focusedIdx={curFocusedIdx}
+            onFilteredCount={(count) => {
+              curFilteredCountRef.current = count;
+            }}
+          />
         )}
 
         {/* Footer */}
@@ -640,11 +680,11 @@ export default function SupervisorOverlay() {
           <span className="text-xs text-faint">
             {tab === 'supervisor' ? (
               <>
-                &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop &middot; Tab switch tab
-                &middot; Esc close
+                &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop &middot; {altSymbol}+/&minus;
+                concurrency &middot; Tab switch tab &middot; Esc close
               </>
             ) : (
-              <>Tab switch tab &middot; Esc close</>
+              <>&uarr;&darr; navigate &middot; Tab switch tab &middot; Esc close</>
             )}
           </span>
         </OverlayFooter>

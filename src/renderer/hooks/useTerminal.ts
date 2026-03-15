@@ -274,7 +274,7 @@ export function useTerminal(
         }
       }, 150);
     };
-    containerRef.current?.addEventListener('wheel', onWheel, { passive: true });
+    containerRef.current?.addEventListener('wheel', onWheel, { passive: true, capture: true });
 
     // When xterm scrolls programmatically (auto-scroll on write),
     // snap back to locked position.  The onScroll event fires for
@@ -335,7 +335,7 @@ export function useTerminal(
     return () => {
       if (resizeTimer) clearTimeout(resizeTimer);
       if (scrollTimer) clearTimeout(scrollTimer);
-      containerRef.current?.removeEventListener('wheel', onWheel);
+      containerRef.current?.removeEventListener('wheel', onWheel, { capture: true });
       resizeObserver.disconnect();
       removeDataListener();
       removeExitListener();

@@ -11,6 +11,7 @@ import FormInput from './FormInput';
 import Highlight from './Highlight';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
+import PrimaryButton from './PrimaryButton';
 import SearchIndicator from './SearchIndicator';
 
 export default function RepoManager() {
@@ -381,14 +382,9 @@ export default function RepoManager() {
               >
                 <ActionLabel text="Browse" showHint={true} />
               </button>
-              <button
-                onClick={handleAddLocal}
-                disabled={!localPath.trim()}
-                tabIndex={-1}
-                className="px-3 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm rounded-sm focus:outline-hidden focus:ring-2 focus:ring-accent transition-colors"
-              >
+              <PrimaryButton onClick={handleAddLocal} disabled={!localPath.trim()} tabIndex={-1}>
                 <ActionLabel text="Add" showHint={!!localPath.trim()} />
-              </button>
+              </PrimaryButton>
             </div>
             {error && <p className="mt-1 text-xs text-danger">{error}</p>}
           </div>

@@ -7,11 +7,13 @@ import { TERMINAL_THEME_NAMES } from '../terminal-themes';
 import { modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import FormInput from './FormInput';
+import FormSelect from './FormSelect';
 import FormTextarea from './FormTextarea';
 import Highlight from './Highlight';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
 import PillToggle from './PillToggle';
+import PrimaryButton from './PrimaryButton';
 import SectionHeader from './SectionHeader';
 
 interface SettingDef {
@@ -50,17 +52,17 @@ function buildSettings(): SettingDef[] {
       label: 'Terminal Theme',
       tooltip: 'Color scheme for xterm.js terminals. Independent of the UI theme.',
       render: (config, update) => (
-        <select
+        <FormSelect
           value={config.terminalTheme}
           onChange={(e) => update({ terminalTheme: e.target.value })}
-          className="bg-surface-alt border border-border-input rounded-sm px-2 py-1 text-sm text-primary focus:outline-hidden focus:border-accent focus:ring-1 focus:ring-accent"
+          className="px-2 py-1"
         >
           {TERMINAL_THEME_NAMES.map((name) => (
             <option key={name} value={name}>
               {name}
             </option>
           ))}
-        </select>
+        </FormSelect>
       ),
     },
     {
@@ -92,10 +94,10 @@ function buildSettings(): SettingDef[] {
       label: 'Font Family',
       tooltip: 'Monospace font used in terminals. Nerd Font variants include icons used by many CLI tools.',
       render: (config, update) => (
-        <select
+        <FormSelect
           value={config.fontFamily}
           onChange={(e) => update({ fontFamily: e.target.value })}
-          className="bg-surface-alt border border-border-input rounded-sm px-2 py-1 text-sm text-primary focus:outline-hidden focus:border-accent focus:ring-1 focus:ring-accent"
+          className="px-2 py-1"
         >
           {[
             { label: 'MesloLGS NF', value: 'MesloLGS NF' },
@@ -109,7 +111,7 @@ function buildSettings(): SettingDef[] {
               {opt.label}
             </option>
           ))}
-        </select>
+        </FormSelect>
       ),
     },
     {
@@ -334,7 +336,8 @@ function buildSettings(): SettingDef[] {
           );
         }
         return (
-          <button
+          <PrimaryButton
+            size="sm"
             onClick={async () => {
               try {
                 await window.bifrost.startSlackOAuth();
@@ -345,10 +348,9 @@ function buildSettings(): SettingDef[] {
               }
             }}
             disabled={!config.slack?.clientId || !config.slack?.clientSecret}
-            className="px-3 py-1 text-xs rounded-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             Connect to Slack
-          </button>
+          </PrimaryButton>
         );
       },
     },

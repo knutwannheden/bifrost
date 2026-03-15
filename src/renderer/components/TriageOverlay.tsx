@@ -10,6 +10,7 @@ import ActionLabel from './ActionLabel';
 import FormTextarea from './FormTextarea';
 import Highlight from './Highlight';
 import OverlayFooter from './OverlayFooter';
+import OverlayHeader from './OverlayHeader';
 import PillToggle from './PillToggle';
 import PrimaryButton from './PrimaryButton';
 import SearchIndicator from './SearchIndicator';
@@ -53,9 +54,7 @@ function TriageCard({
           </button>
           <span className="text-xs text-secondary truncate flex-1">{item.prompt}</span>
           {item.waiting && (
-            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded-sm">
-              Waiting
-            </span>
+            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-warning/20 text-warning rounded-sm">Waiting</span>
           )}
         </div>
         <div className="flex-1 min-h-0">
@@ -71,13 +70,11 @@ function TriageCard({
     <div className="border border-border-default rounded-lg bg-surface-alt p-3">
       <div className="flex items-center gap-2 mb-2">
         {item.status === 'running' && <Spinner size="sm" />}
-        {item.status === 'done' && <span className="text-green-400 text-xs">✓</span>}
+        {item.status === 'done' && <span className="text-success text-xs">✓</span>}
         {item.status === 'error' && <span className="text-danger text-xs">✗</span>}
         <span className="text-xs text-primary truncate flex-1">{item.prompt}</span>
         {item.waiting && (
-          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-500/20 text-amber-400 rounded-sm">
-            Waiting
-          </span>
+          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-warning/20 text-warning rounded-sm">Waiting</span>
         )}
       </div>
       {lastActivity && <div className="text-xs text-muted truncate mb-2">{lastActivity}</div>}
@@ -104,7 +101,7 @@ function TriageCard({
 function HistoryRow({ entry, search }: { entry: TriageEntry; search: string }) {
   const statusColor =
     entry.status === 'done'
-      ? 'text-green-400'
+      ? 'text-success'
       : entry.status === 'error'
         ? 'text-danger'
         : entry.status === 'cancelled'
@@ -292,22 +289,16 @@ export default function TriageOverlay() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold text-primary">Triage</h2>
-            <PillToggle
-              options={tabOptions}
-              value={state.triageTab}
-              onChange={(tab) => {
-                dispatch({ type: 'SET_TRIAGE_TAB', tab });
-                clearSearch();
-              }}
-            />
-          </div>
-          <button onClick={close} className="text-secondary hover:text-primary text-lg leading-none transition-colors">
-            ×
-          </button>
-        </div>
+        <OverlayHeader title="Triage" onClose={close}>
+          <PillToggle
+            options={tabOptions}
+            value={state.triageTab}
+            onChange={(tab) => {
+              dispatch({ type: 'SET_TRIAGE_TAB', tab });
+              clearSearch();
+            }}
+          />
+        </OverlayHeader>
 
         {/* Content */}
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -344,7 +335,7 @@ export default function TriageOverlay() {
               {/* Running triages */}
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
                 {triageEntries.length === 0 && !hasRunning && (
-                  <div className="text-xs text-muted text-center py-8">
+                  <div className="text-sm text-muted text-center py-4">
                     No active triages. Enter a URL or prompt above to start.
                   </div>
                 )}
@@ -376,7 +367,7 @@ export default function TriageOverlay() {
               )}
               <div className="flex-1 min-h-0 overflow-y-auto p-2">
                 {filteredHistory.length === 0 ? (
-                  <div className="text-xs text-muted text-center py-8">
+                  <div className="text-sm text-muted text-center py-4">
                     {state.triageHistory.length === 0 ? 'No triage history yet.' : 'No matches.'}
                   </div>
                 ) : (

@@ -8,42 +8,47 @@
  * these to Tailwind utilities, giving us classes like bg-app,
  * text-primary, border-default, etc.
  *
+ * Dark theme (default) is based on the Dracula palette:
+ *   Background #282a36 · Current Line #44475a · Foreground #f8f8f2
+ *   Comment #6272a4 · Purple #bd93f9 · Green #50fa7b
+ *   Red #ff5555 · Orange #ffb86c · Yellow #f1fa8c · Cyan #8be9fd
+ *
  * To create a new theme: duplicate the :root block, change the values,
  * and apply it via a class or media query on <html>.
  */
 :root {
-  /* ── Backgrounds ────────────────────────────────────────────── */
-  --color-app: #282a36; /* body / app background (Dracula BG) */
-  --color-surface: #1e293b; /* panels, overlays (≈ slate-800) */
-  --color-surface-alt: #334155; /* inputs, secondary surfaces (≈ slate-700) */
-  --color-surface-hover: #475569; /* hovered rows, buttons (≈ slate-600) */
-  --color-overlay: rgba(0, 0, 0, 0.3); /* modal backdrop */
+  /* ── Backgrounds (Dracula) ──────────────────────────────────── */
+  --color-app: #282a36; /* Dracula Background */
+  --color-surface: #21222c; /* Dracula darker panel variant */
+  --color-surface-alt: #343746; /* between Background and Current Line */
+  --color-surface-hover: #44475a; /* Dracula Current Line */
+  --color-overlay: rgba(0, 0, 0, 0.4); /* modal backdrop */
 
-  /* ── Text ───────────────────────────────────────────────────── */
-  --color-text-primary: #e2e8f0; /* main text (≈ slate-200) */
-  --color-text-secondary: #94a3b8; /* labels, hints (≈ slate-400) */
-  --color-text-muted: #64748b; /* disabled, timestamps (≈ slate-500) */
-  --color-text-faint: #475569; /* very subtle (≈ slate-600) */
+  /* ── Text (Dracula) ────────────────────────────────────────── */
+  --color-text-primary: #f8f8f2; /* Dracula Foreground */
+  --color-text-secondary: #bfc7d5; /* lightened Comment */
+  --color-text-muted: #6272a4; /* Dracula Comment */
+  --color-text-faint: #44475a; /* Dracula Current Line */
 
-  /* ── Borders ────────────────────────────────────────────────── */
-  --color-border: #334155; /* dividers, separators (≈ slate-700) */
-  --color-border-input: #475569; /* input borders (≈ slate-600) */
+  /* ── Borders (Dracula) ─────────────────────────────────────── */
+  --color-border: #343746; /* subtle divider */
+  --color-border-input: #6272a4; /* Dracula Comment */
 
-  /* ── Accent ─────────────────────────────────────────────────── */
-  --color-accent: #2563eb; /* primary buttons (≈ blue-600) */
-  --color-accent-hover: #3b82f6; /* button hover (≈ blue-500) */
-  --color-accent-muted: rgba(59, 130, 246, 0.5); /* focus rings */
+  /* ── Accent (Dracula Purple) ───────────────────────────────── */
+  --color-accent: #7c3aed; /* deep purple (white-text contrast) */
+  --color-accent-hover: #bd93f9; /* Dracula Purple */
+  --color-accent-muted: rgba(189, 147, 249, 0.4); /* Dracula Purple/40 */
 
-  /* ── Status ─────────────────────────────────────────────────── */
-  --color-success: #4ade80; /* green-400 */
-  --color-danger: #f87171; /* red-400 */
-  --color-warning: #fbbf24; /* amber-400 */
+  /* ── Status (Dracula) ──────────────────────────────────────── */
+  --color-success: #50fa7b; /* Dracula Green */
+  --color-danger: #ff5555; /* Dracula Red */
+  --color-warning: #ffb86c; /* Dracula Orange */
 
   /* ── Special ────────────────────────────────────────────────── */
-  --color-highlight: rgba(234, 179, 8, 0.3); /* search match (≈ yellow-500/30) */
+  --color-highlight: rgba(241, 250, 140, 0.3); /* Dracula Yellow/30 */
 
   /* ── Diff ─────────────────────────────────────────────────── */
-  --color-diff-add: #1a3a1a;
+  --color-diff-add: #1a3a2a;
   --color-diff-remove: #3a1a1a;
 }
 
@@ -130,7 +135,7 @@ body {
 
 /* Activity sweep animation for task tabs */
 .activity-sweep {
-  background: linear-gradient(90deg, transparent 40%, #22c55e 50%, transparent 60%);
+  background: linear-gradient(90deg, transparent 40%, var(--color-success) 50%, transparent 60%);
   background-size: 300% 100%;
   animation: sweep 5s ease-in-out infinite;
 }

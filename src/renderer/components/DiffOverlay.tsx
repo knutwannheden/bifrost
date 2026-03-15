@@ -34,7 +34,7 @@ interface HighlightedFile {
 }
 
 function plainTokens(lines: DiffLine[]): HighlightedToken[][] {
-  const color = isDarkTheme() ? '#e2e8f0' : '#24292e';
+  const color = isDarkTheme() ? '#f8f8f2' : '#24292e';
   return lines.map((l) => [{ content: l.content, color }]);
 }
 
@@ -103,7 +103,7 @@ function FileSection({ data }: { data: HighlightedFile }) {
                     key={`${hi}-${li}`}
                     line={line}
                     tokens={
-                      tokensByLine[idx] ?? [{ content: line.content, color: isDarkTheme() ? '#e2e8f0' : '#24292e' }]
+                      tokensByLine[idx] ?? [{ content: line.content, color: isDarkTheme() ? '#f8f8f2' : '#24292e' }]
                     }
                   />
                 );
@@ -707,7 +707,7 @@ function GitDiffContent({
     return (
       <div className="flex-1 flex flex-col">
         <ScopeToggle scope={scope} onChange={onSetScope} />
-        <div className="text-muted p-4">No changes</div>
+        <div className="text-sm text-muted text-center py-4">No changes</div>
       </div>
     );
   }
@@ -1088,8 +1088,7 @@ export default function DiffOverlay() {
   return (
     <div
       ref={containerRef}
-      className="absolute inset-0 z-30 flex flex-col focus:outline-hidden"
-      style={{ backgroundColor: 'var(--color-app)' }}
+      className="absolute inset-0 z-30 flex flex-col bg-app focus:outline-hidden"
       tabIndex={-1}
       onKeyDown={handleKeyDown}
     >
@@ -1191,7 +1190,7 @@ export default function DiffOverlay() {
         </div>
       )}
 
-      {!state.activeTaskId && <div className="flex-1 p-4 text-muted">No active task</div>}
+      {!state.activeTaskId && <div className="flex-1 text-sm text-muted text-center py-4">No active task</div>}
     </div>
   );
 }

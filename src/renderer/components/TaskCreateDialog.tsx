@@ -8,6 +8,7 @@ import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import FormInput from './FormInput';
 import FormTextarea from './FormTextarea';
+import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
 import PrimaryButton from './PrimaryButton';
 import RepoDropdown from './RepoDropdown';
@@ -378,7 +379,7 @@ export default function TaskCreateDialog() {
                   setPrBanner(null);
                   setPrInfo(null);
                 }}
-                className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap"
+                className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap transition-colors"
               >
                 Ignore
               </button>
@@ -391,7 +392,7 @@ export default function TaskCreateDialog() {
               <p className="text-xs text-accent-hover truncate">Slack message detected</p>
               <button
                 onClick={() => setSlackUrl(null)}
-                className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap"
+                className="text-xs text-accent-hover hover:brightness-125 ml-3 whitespace-nowrap transition-colors"
               >
                 Ignore
               </button>
@@ -618,7 +619,11 @@ export default function TaskCreateDialog() {
 
         {/* Footer */}
         {state.repos.length > 0 && (
-          <div className="flex items-center gap-2 px-4 pb-3 pt-2 border-t border-border-default">
+          <OverlayFooter className="flex items-center gap-2">
+            <span className="text-xs text-faint">
+              {altSymbol}R repo &middot; {altSymbol}N name &middot; {altSymbol}B branch &middot; {altSymbol}P prompt
+              &middot; Enter create
+            </span>
             <span className="flex-1" />
             <PrimaryButton
               ref={createRef}
@@ -628,7 +633,7 @@ export default function TaskCreateDialog() {
             >
               {loading ? 'Creating...' : <ActionLabel text="Create" showHint={!loading} />}
             </PrimaryButton>
-          </div>
+          </OverlayFooter>
         )}
       </div>
     </div>
