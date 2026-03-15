@@ -4,7 +4,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost');
-const DB_PATH = path.join(BIFROST_DIR, 'bifrost.duckdb');
+const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
 let db: Database.Database | null = null;
 
