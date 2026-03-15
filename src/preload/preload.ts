@@ -229,6 +229,7 @@ const api: BifrostAPI = {
   cancelTriage: (triageId) => ipcRenderer.invoke(IPC.CANCEL_TRIAGE, triageId),
   listTriages: () => ipcRenderer.invoke(IPC.LIST_TRIAGES),
   deleteTriage: (triageId) => ipcRenderer.invoke(IPC.DELETE_TRIAGE, triageId),
+  enterTriage: (triageId) => ipcRenderer.invoke(IPC.ENTER_TRIAGE, triageId),
   onTriageActivity: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, triageId: string, activity: string) =>
       callback(triageId, activity);

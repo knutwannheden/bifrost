@@ -97,30 +97,63 @@ function TriageCard({
   );
 }
 
-/** A history row for completed triages. */
-function HistoryRow({ entry, search }: { entry: TriageEntry; search: string }) {
-  const statusColor =
-    entry.status === 'done'
-      ? 'text-success'
-      : entry.status === 'error'
-        ? 'text-danger'
-        : entry.status === 'cancelled'
-          ? 'text-muted'
-          : 'text-accent';
+const statusConfig = {
+  done: { icon: '✓', color: 'text-success', label: 'Completed' },
+  error: { icon: '✗', color: 'text-danger', label: 'Error' },
+  cancelled: { icon: '—', color: 'text-muted', label: 'Cancelled' },
+  running: { icon: '…', color: 'text-accent', label: 'Running' },
+} as const;
 
-  const statusLabel =
-    entry.status === 'done' ? '✓' : entry.status === 'error' ? '✗' : entry.status === 'cancelled' ? '—' : '…';
+/** A history row for completed triages — richer than just a checkmark. */
+function HistoryRow({
+  entry,
+  search,
+  focused,
+  onEnter,
+  taskNames,
+}: {
+  entry: TriageEntry;
+  search: string;
+  focused: boolean;
+  onEnter: (entry: TriageEntry) => void;
+  taskNames: Map<string, string>;
+}) {
+  const cfg = statusConfig[entry.status] ?? statusConfig.done;
+  const taskLabels = entry.taskIds?.map((id) => taskNames.get(id) ?? id.slice(0, 8)).filter(Boolean);
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2 hover:bg-surface-hover transition-colors rounded-sm">
-      <span className={`text-xs ${statusColor} w-4 text-center`}>{statusLabel}</span>
-      <span className="text-xs text-primary truncate flex-1">
-        <Highlight text={entry.prompt} search={search} />
-      </span>
-      {entry.taskIds && entry.taskIds.length > 0 && (
-        <span className="text-[10px] text-muted">{entry.taskIds.length} task(s)</span>
+    <div
+      className={`px-3 py-2 rounded-sm cursor-default transition-colors ${
+        focused
+          ? 'bg-surface-alt border-l-2 border-accent-hover'
+          : 'border-l-2 border-transparent hover:bg-surface-hover'
+      }`}
+      onClick={() => onEnter(entry)}
+    >
+      <div className="flex items-center gap-2">
+        <span className={`text-xs ${cfg.color} w-4 text-center shrink-0`}>{cfg.icon}</span>
+        <span className="text-xs text-primary truncate flex-1">
+          <Highlight text={entry.prompt} search={search} />
+        </span>
+        <span className="text-xs text-muted shrink-0">{formatTime(entry.createdAt)}</span>
+      </div>
+      {/* Summary or last activity */}
+      {(entry.summary || entry.lastActivity) && (
+        <div className="ml-6 mt-1 text-[11px] text-muted line-clamp-2">
+          <Highlight text={entry.summary ?? entry.lastActivity ?? ''} search={search} />
+        </div>
       )}
-      <span className="text-xs text-muted shrink-0">{formatTime(entry.createdAt)}</span>
+      {/* Task links */}
+      {(taskLabels?.length || entry.claudeSessionId) && (
+        <div className="ml-6 mt-1 flex items-center gap-3 text-[11px]">
+          {taskLabels && taskLabels.length > 0 && <span className="text-secondary">→ {taskLabels.join(', ')}</span>}
+          {entry.claudeSessionId && (
+            <span className="text-faint" title="Press Enter to review session">
+              ◉ session
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -129,13 +162,20 @@ export default function TriageOverlay() {
   const { state, dispatch } = useApp();
   const panelRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const historyItemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [interactiveId, setInteractiveId] = useState<string | null>(null);
+  const [historyPtySessionId, setHistoryPtySessionId] = useState<string | null>(null);
+  const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
   const [altHeld, setAltHeld] = useState(false);
+  const [historyFocusedIdx, setHistoryFocusedIdx] = useState(0);
 
   const { search, searchVisible, handleSearchKey, clearSearch } = useInstantSearch();
 
   const triageEntries = Object.entries(state.triages);
   const hasRunning = triageEntries.some(([, t]) => t.status === 'running');
+
+  // Build task name lookup from app state
+  const taskNames = new Map(state.tasks.map((t) => [t.id, t.name]));
 
   // Load history when History tab is selected
   useEffect(() => {
@@ -149,12 +189,17 @@ export default function TriageOverlay() {
   useOverlayFocus(panelRef);
 
   const close = useCallback(() => {
+    if (historyPtySessionId) {
+      setHistoryPtySessionId(null);
+      setHistoryEntryId(null);
+      return;
+    }
     if (interactiveId) {
       setInteractiveId(null);
       return;
     }
     dispatch({ type: 'CLOSE_TRIAGE' });
-  }, [interactiveId, dispatch]);
+  }, [interactiveId, historyPtySessionId, dispatch]);
 
   const handleStart = useCallback(async () => {
     const prompt = state.triageDraftPrompt.trim();
@@ -191,6 +236,15 @@ export default function TriageOverlay() {
     setInteractiveId(null);
   }, []);
 
+  const handleHistoryEnter = useCallback(async (entry: TriageEntry) => {
+    if (!entry.claudeSessionId) return;
+    const result = await window.bifrost.enterTriage(entry.id);
+    if (result) {
+      setHistoryPtySessionId(result.ptySessionId);
+      setHistoryEntryId(entry.id);
+    }
+  }, []);
+
   // Track Alt key
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -207,9 +261,31 @@ export default function TriageOverlay() {
     };
   }, []);
 
+  // Reset history focus when search changes
+  useEffect(() => {
+    setHistoryFocusedIdx(0);
+  }, [search]);
+
+  // Scroll focused history item into view
+  useEffect(() => {
+    historyItemRefs.current[historyFocusedIdx]?.scrollIntoView({ block: 'nearest' });
+  }, [historyFocusedIdx]);
+
+  // Filter history by search
+  const filteredHistory = search
+    ? state.triageHistory.filter((h) => h.prompt.toLowerCase().includes(search.toLowerCase()))
+    : state.triageHistory;
+
+  // Clamp focus when list shrinks
+  useEffect(() => {
+    if (historyFocusedIdx >= filteredHistory.length && filteredHistory.length > 0) {
+      setHistoryFocusedIdx(filteredHistory.length - 1);
+    }
+  }, [filteredHistory.length, historyFocusedIdx]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // Esc to close
+      // Esc to close / go back
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
@@ -217,18 +293,35 @@ export default function TriageOverlay() {
         return;
       }
 
-      // In interactive mode, only handle Alt+B for back (use e.code since Alt produces special chars on macOS)
-      if (interactiveId) {
+      // In interactive mode (new tab or history), only handle Alt+B for back
+      if (interactiveId || historyPtySessionId) {
         if (e.altKey && e.code === 'KeyB') {
           e.preventDefault();
-          setInteractiveId(null);
+          close();
         }
         return;
       }
 
-      // History tab: handle instant search keys
+      // History tab: handle instant search keys and navigation
       if (state.triageTab === 'history') {
         if (handleSearchKey(e)) return;
+
+        if (e.key === 'ArrowDown' && filteredHistory.length > 0) {
+          e.preventDefault();
+          setHistoryFocusedIdx((i) => (i < filteredHistory.length - 1 ? i + 1 : 0));
+          return;
+        }
+        if (e.key === 'ArrowUp' && filteredHistory.length > 0) {
+          e.preventDefault();
+          setHistoryFocusedIdx((i) => (i > 0 ? i - 1 : filteredHistory.length - 1));
+          return;
+        }
+        if (e.key === 'Enter' && filteredHistory.length > 0) {
+          e.preventDefault();
+          const entry = filteredHistory[historyFocusedIdx];
+          if (entry?.claudeSessionId) handleHistoryEnter(entry);
+          return;
+        }
       }
 
       // Alt+letter shortcuts (use e.code since Alt produces special chars on macOS)
@@ -261,20 +354,34 @@ export default function TriageOverlay() {
         }
       }
 
-      // Enter to start when textarea not focused
-      if (e.key === 'Enter' && !e.shiftKey && document.activeElement !== textareaRef.current) {
+      // Enter to start when textarea not focused (New tab)
+      if (
+        state.triageTab === 'new' &&
+        e.key === 'Enter' &&
+        !e.shiftKey &&
+        document.activeElement !== textareaRef.current
+      ) {
         e.preventDefault();
         handleStart();
         return;
       }
     },
-    [close, interactiveId, state.triageTab, handleSearchKey, handleStart, dispatch],
+    [
+      close,
+      interactiveId,
+      historyPtySessionId,
+      state.triageTab,
+      handleSearchKey,
+      handleStart,
+      handleHistoryEnter,
+      filteredHistory,
+      historyFocusedIdx,
+      dispatch,
+    ],
   );
 
-  // Filter history by search
-  const filteredHistory = search
-    ? state.triageHistory.filter((h) => h.prompt.toLowerCase().includes(search.toLowerCase()))
-    : state.triageHistory;
+  // Find the entry for the interactive history view
+  const historyEntry = historyEntryId ? state.triageHistory.find((e) => e.id === historyEntryId) : null;
 
   return (
     <div
@@ -296,6 +403,8 @@ export default function TriageOverlay() {
             onChange={(tab) => {
               dispatch({ type: 'SET_TRIAGE_TAB', tab });
               clearSearch();
+              setHistoryPtySessionId(null);
+              setHistoryEntryId(null);
             }}
           />
         </OverlayHeader>
@@ -353,8 +462,24 @@ export default function TriageOverlay() {
                 ))}
               </div>
             </div>
+          ) : historyPtySessionId ? (
+            /* History interactive view — showing a resumed triage session */
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-border-default">
+                <button
+                  onClick={() => close()}
+                  className="px-2 py-0.5 text-xs text-secondary hover:text-primary transition-colors"
+                >
+                  <ActionLabel text="Back" hintIndex={0} showHint={altHeld} />
+                </button>
+                <span className="text-xs text-secondary truncate flex-1">{historyEntry?.prompt}</span>
+              </div>
+              <div className="flex-1 min-h-0">
+                <TerminalPane sessionId={historyPtySessionId} active focused hideCursor={false} />
+              </div>
+            </div>
           ) : (
-            /* History tab */
+            /* History tab — list view */
             <div className="flex-1 min-h-0 flex flex-col">
               {searchVisible && (
                 <div className="px-4 pt-3">
@@ -371,7 +496,23 @@ export default function TriageOverlay() {
                     {state.triageHistory.length === 0 ? 'No triage history yet.' : 'No matches.'}
                   </div>
                 ) : (
-                  filteredHistory.map((entry) => <HistoryRow key={entry.id} entry={entry} search={search} />)
+                  filteredHistory.map((entry, idx) => (
+                    <div
+                      key={entry.id}
+                      ref={(el) => {
+                        historyItemRefs.current[idx] = el;
+                      }}
+                      onMouseEnter={() => setHistoryFocusedIdx(idx)}
+                    >
+                      <HistoryRow
+                        entry={entry}
+                        search={search}
+                        focused={idx === historyFocusedIdx}
+                        onEnter={handleHistoryEnter}
+                        taskNames={taskNames}
+                      />
+                    </div>
+                  ))
                 )}
               </div>
             </div>
@@ -381,7 +522,7 @@ export default function TriageOverlay() {
         {/* Footer */}
         <OverlayFooter>
           <div className="text-xs text-faint flex items-center gap-3">
-            {interactiveId ? (
+            {interactiveId || historyPtySessionId ? (
               <>
                 <span>{altSymbol}B back</span>
                 <span>Esc back</span>
@@ -397,6 +538,13 @@ export default function TriageOverlay() {
                         <span>{altSymbol}C cancel</span>
                       </>
                     )}
+                  </>
+                )}
+                {state.triageTab === 'history' && (
+                  <>
+                    <span>&uarr;&darr; navigate</span>
+                    <span>Enter open</span>
+                    <span>type to search</span>
                   </>
                 )}
                 <span>

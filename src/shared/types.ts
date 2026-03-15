@@ -399,6 +399,10 @@ export interface TriageEntry {
   taskIds?: string[];
   /** Last activity text from the Claude session */
   lastActivity?: string;
+  /** Final assistant text summary captured on completion */
+  summary?: string;
+  /** Claude session ID for resuming the conversation */
+  claudeSessionId?: string;
 }
 
 export interface SlackConfig {

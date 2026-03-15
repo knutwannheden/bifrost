@@ -71,7 +71,7 @@ import {
 } from './supervisor-service';
 import { loadTasks, saveTasks } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
-import { cancelTriage, startTriage } from './triage-service';
+import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
 import { deleteTriage as deleteTriageEntry, listTriages } from './triage-store';
 import { createWorktree, createWorktreeFromPr, removeWorktree, restoreWorktree } from './worktree-manager';
 
@@ -1097,6 +1097,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   initSupervisor(mainWindow, supervisorTaskCreator);
   initCurator(mainWindow);
+  backfillTriageHistory();
 
   ipcMain.handle(IPC.SUPERVISOR_GET_STATE, () => getSupervisorState());
   ipcMain.handle(IPC.SUPERVISOR_START, () => startSupervisor());
@@ -1137,6 +1138,9 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
   ipcMain.handle(IPC.DELETE_TRIAGE, (_event, triageId: string) => {
     deleteTriageEntry(triageId);
+  });
+  ipcMain.handle(IPC.ENTER_TRIAGE, (_event, triageId: string) => {
+    return enterTriage(triageId, mainWindow);
   });
 
   // Prompt sender

@@ -159,6 +159,7 @@ export const IPC = {
   CANCEL_TRIAGE: 'triage:cancel',
   LIST_TRIAGES: 'triage:list',
   DELETE_TRIAGE: 'triage:delete',
+  ENTER_TRIAGE: 'triage:enter',
 
   // Prompt sender
   SEND_PROMPT: 'prompt:send',
@@ -359,6 +360,7 @@ export interface BifrostAPI {
   cancelTriage(triageId: string): Promise<void>;
   listTriages(): Promise<TriageEntry[]>;
   deleteTriage(triageId: string): Promise<void>;
+  enterTriage(triageId: string): Promise<{ ptySessionId: string } | null>;
   onTriageActivity(callback: (triageId: string, activity: string) => void): () => void;
   onTriageWaiting(callback: (triageId: string, message: string) => void): () => void;
 
