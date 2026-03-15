@@ -4,6 +4,7 @@ import type { TriageItem, TriageTab } from '../context/AppContext';
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
+import { type TabDef, useTabMnemonics } from '../hooks/useTabMnemonics';
 import { formatTime } from '../utils/format-time';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
@@ -17,7 +18,7 @@ import SearchIndicator from './SearchIndicator';
 import Spinner from './Spinner';
 import TerminalPane from './TerminalPane';
 
-const tabOptions: { value: TriageTab; label: string }[] = [
+const TAB_DEFS: TabDef<TriageTab>[] = [
   { value: 'new', label: 'New' },
   { value: 'history', label: 'History' },
 ];
@@ -166,6 +167,9 @@ export default function TriageOverlay() {
   const [interactiveId, setInteractiveId] = useState<string | null>(null);
   const [historyPtySessionId, setHistoryPtySessionId] = useState<string | null>(null);
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
+  const { options: tabOptions, handleTabKey } = useTabMnemonics(TAB_DEFS, (tab) =>
+    dispatch({ type: 'SET_TRIAGE_TAB', tab }),
+  );
   const [altHeld, setAltHeld] = useState(false);
   const [historyFocusedIdx, setHistoryFocusedIdx] = useState(0);
 
@@ -324,6 +328,8 @@ export default function TriageOverlay() {
         }
       }
 
+      if (handleTabKey(e)) return;
+
       // Alt+letter shortcuts (use e.code since Alt produces special chars on macOS)
       if (e.altKey) {
         switch (e.code) {
@@ -343,14 +349,6 @@ export default function TriageOverlay() {
             if (running) handleCancel(running[0]);
             return;
           }
-          case 'KeyN':
-            e.preventDefault();
-            dispatch({ type: 'SET_TRIAGE_TAB', tab: 'new' });
-            return;
-          case 'KeyH':
-            e.preventDefault();
-            dispatch({ type: 'SET_TRIAGE_TAB', tab: 'history' });
-            return;
         }
       }
 
@@ -372,6 +370,7 @@ export default function TriageOverlay() {
       historyPtySessionId,
       state.triageTab,
       handleSearchKey,
+      handleTabKey,
       handleStart,
       handleHistoryEnter,
       filteredHistory,

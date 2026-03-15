@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { ContextRotEntry, EscalationEntry, StatsData } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
+import { useTabMnemonics } from '../hooks/useTabMnemonics';
+import { altSymbol } from '../utils/platform';
 import FlaskIcon from './FlaskIcon';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
@@ -210,6 +212,14 @@ export default function StatsOverlay() {
   const [data, setData] = useState<StatsData>(emptyStats);
   const [done, setDone] = useState(false);
 
+  const visibleTabs = TABS.filter((tab) => !tab.experimental || experimental);
+  const tabDefs = visibleTabs.map((tab) => ({
+    value: tab.id,
+    label: tab.label,
+    suffix: tab.experimental ? <FlaskIcon /> : undefined,
+  }));
+  const { options: tabOptions, handleTabKey } = useTabMnemonics(tabDefs, setActiveTab);
+
   useOverlayFocus(containerRef);
 
   useEffect(() => {
@@ -230,14 +240,7 @@ export default function StatsOverlay() {
       return;
     }
 
-    // Tab/Shift+Tab: cycle through tabs
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const curIdx = visibleTabs.findIndex((t) => t.id === activeTab);
-      const step = e.shiftKey ? visibleTabs.length - 1 : 1;
-      setActiveTab(visibleTabs[(curIdx + step) % visibleTabs.length].id);
-      return;
-    }
+    if (handleTabKey(e)) return;
 
     // Arrow Left/Right: cycle time ranges
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -249,7 +252,6 @@ export default function StatsOverlay() {
     }
   };
 
-  const visibleTabs = TABS.filter((tab) => !tab.experimental || experimental);
   const barEntries = getTabEntries(data, activeTab);
 
   return (
@@ -267,19 +269,7 @@ export default function StatsOverlay() {
         {/* Header */}
         <OverlayHeader title="Stats" onClose={close}>
           <div className="flex items-center gap-1">
-            <PillToggle
-              options={visibleTabs.map((tab) => ({
-                value: tab.id,
-                label: (
-                  <>
-                    {tab.label}
-                    {tab.experimental && <FlaskIcon />}
-                  </>
-                ),
-              }))}
-              value={activeTab}
-              onChange={(v) => setActiveTab(v)}
-            />
+            <PillToggle options={tabOptions} value={activeTab} onChange={(v) => setActiveTab(v)} />
             {!done && <Spinner size="sm" className="ml-2" />}
           </div>
           <div className="bg-surface-alt/50 rounded-sm px-0.5 py-0.5">
@@ -301,7 +291,8 @@ export default function StatsOverlay() {
         {/* Footer */}
         <OverlayFooter>
           <span className="text-xs text-faint">
-            Tab/&#8679;Tab tabs &middot; &larr;&rarr; time range &middot; Esc close
+            {altSymbol}S/{altSymbol}T/{altSymbol}B/{altSymbol}O/{altSymbol}E tabs &middot; &larr;&rarr; time range
+            &middot; Esc close
           </span>
         </OverlayFooter>
       </div>

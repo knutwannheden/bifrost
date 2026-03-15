@@ -9,6 +9,7 @@ import type {
 } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
+import { type TabDef, useTabMnemonics } from '../hooks/useTabMnemonics';
 import { formatDate, formatRelative, formatTime } from '../utils/format-time';
 import {
   allOutcomes,
@@ -23,14 +24,14 @@ import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import CloseButton from './CloseButton';
 import OverlayFooter from './OverlayFooter';
-import PillToggle, { type PillOption } from './PillToggle';
+import PillToggle from './PillToggle';
 import SectionHeader from './SectionHeader';
 import Spinner from './Spinner';
 
 type Tab = 'supervisor' | 'curator';
 
-const tabOptions: PillOption<Tab>[] = [
-  { value: 'supervisor', label: 'Supervisor' },
+const TAB_DEFS: TabDef<Tab>[] = [
+  { value: 'supervisor', label: 'Supervisor', hintIndex: 1 },
   { value: 'curator', label: 'Curator' },
 ];
 
@@ -515,6 +516,7 @@ function CuratorTab({
 export default function SupervisorOverlay() {
   const { state: appState, dispatch } = useApp();
   const [tab, setTab] = useState<Tab>('supervisor');
+  const { options: tabOptions, handleTabKey } = useTabMnemonics(TAB_DEFS, setTab);
   const [svState, setSvState] = useState<SupervisorState | null>(null);
   const [svFocusedIdx, setSvFocusedIdx] = useState(-1);
   const [curFocusedIdx, setCurFocusedIdx] = useState(0);
@@ -566,14 +568,7 @@ export default function SupervisorOverlay() {
       return;
     }
 
-    // Tab switching
-    if (e.key === 'Tab' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      if (e.key === 'Tab' || ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.altKey)) {
-        e.preventDefault();
-        setTab((t) => (t === 'supervisor' ? 'curator' : 'supervisor'));
-        return;
-      }
-    }
+    if (handleTabKey(e)) return;
 
     if (tab === 'supervisor') {
       // Arrow Up/Down: navigate items
@@ -681,10 +676,12 @@ export default function SupervisorOverlay() {
             {tab === 'supervisor' ? (
               <>
                 &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop &middot; {altSymbol}+/&minus;
-                concurrency &middot; Tab switch tab &middot; Esc close
+                concurrency &middot; {altSymbol}U/{altSymbol}C tabs &middot; Esc close
               </>
             ) : (
-              <>&uarr;&darr; navigate &middot; Tab switch tab &middot; Esc close</>
+              <>
+                &uarr;&darr; navigate &middot; {altSymbol}U/{altSymbol}C tabs &middot; Esc close
+              </>
             )}
           </span>
         </OverlayFooter>

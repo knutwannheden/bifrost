@@ -3,6 +3,7 @@ import type { ClaudeSession, DiffStats, Task, TaskOutcome } from '../../shared/t
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
+import { type TabDef, useTabMnemonics } from '../hooks/useTabMnemonics';
 import { requestArchive } from '../utils/archive';
 import { formatDate, formatRelative } from '../utils/format-time';
 import { allOutcomes, outcomeBadgeColors, outcomeLabels, taskStatusColor, taskStatusLabel } from '../utils/outcome';
@@ -15,7 +16,7 @@ import FormInput from './FormInput';
 import Highlight from './Highlight';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
-import PillToggle, { type PillOption } from './PillToggle';
+import PillToggle from './PillToggle';
 import PrimaryButton from './PrimaryButton';
 import SearchIndicator from './SearchIndicator';
 import SectionHeader from './SectionHeader';
@@ -89,10 +90,12 @@ function OutcomeBadge({
 const filters = ['active', 'all', 'archived', 'sessions'] as const;
 type Filter = (typeof filters)[number];
 
-const filterOptions: PillOption<Filter>[] = filters.map((f) => ({
-  value: f,
-  label: f === 'sessions' ? 'Sessions' : f.charAt(0).toUpperCase() + f.slice(1),
-}));
+const FILTER_TABS: TabDef<Filter>[] = [
+  { value: 'active', label: 'Active', hintIndex: 2 },
+  { value: 'all', label: 'All', hintIndex: 1 },
+  { value: 'archived', label: 'Archived', hintIndex: 2 },
+  { value: 'sessions', label: 'Sessions' },
+];
 
 const TIME_BUCKETS = [
   'Last 10 minutes',
@@ -307,6 +310,7 @@ function TaskRow({
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
   const [filter, setFilter] = useState<Filter>('active');
+  const { options: filterOptions, handleTabKey: handleFilterKey } = useTabMnemonics(FILTER_TABS, setFilter);
   const { search, searchVisible, handleSearchKey } = useInstantSearch();
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -546,6 +550,7 @@ export default function TaskHistoryPanel() {
     if (editingId) return;
 
     if (handleSearchKey(e)) return;
+    if (handleFilterKey(e)) return;
 
     switch (e.key) {
       case 'Escape':
@@ -563,16 +568,6 @@ export default function TaskHistoryPanel() {
         e.preventDefault();
         setFocusedIdx((i) => Math.min(listLength - 1, i + 1));
         break;
-
-      case 'Tab':
-      case 'ArrowLeft':
-      case 'ArrowRight': {
-        e.preventDefault();
-        const forward = e.key === 'ArrowRight' || (e.key === 'Tab' && !e.shiftKey);
-        const idx = filters.indexOf(filter);
-        setFilter(filters[forward ? (idx < filters.length - 1 ? idx + 1 : 0) : idx > 0 ? idx - 1 : filters.length - 1]);
-        break;
-      }
 
       case 'Enter':
         e.preventDefault();
@@ -761,8 +756,8 @@ export default function TaskHistoryPanel() {
         {/* Footer */}
         <OverlayFooter>
           <span className="text-xs text-faint">
-            Tab/&larr;&rarr; tabs &middot; &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'}{' '}
-            &middot;{' '}
+            {altSymbol}T/{altSymbol}L/{altSymbol}C/{altSymbol}S tabs &middot; &uarr;&darr; navigate &middot; Enter{' '}
+            {isSessionsMode ? 'resume' : 'open'} &middot;{' '}
             {!isSessionsMode && (
               <>
                 F2 rename &middot; {altSymbol}O/{altSymbol}A/{altSymbol}D actions &middot;{' '}

@@ -6,16 +6,16 @@ import { useDiff } from '../hooks/useDiff';
 import { useGitLog } from '../hooks/useGitLog';
 import { useInstantSearch } from '../hooks/useInstantSearch';
 import { useSessionMetrics } from '../hooks/useSessionMetrics';
+import { type TabDef, useTabMnemonics } from '../hooks/useTabMnemonics';
 import { isDarkTheme } from '../hooks/useTheme';
 import { useTokenUsage } from '../hooks/useTokenUsage';
 import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
 import { diffFileStats, extFromPath, parseDiff } from '../utils/diff-parser';
 import { formatRelative } from '../utils/format-time';
-import { isModKey } from '../utils/platform';
+import { altSymbol, isModKey } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { highlightLines } from '../utils/syntax-highlight';
-import ActionLabel from './ActionLabel';
 import CloseButton from './CloseButton';
 import DiffStatsBadge from './DiffStatsBadge';
 import Highlight from './Highlight';
@@ -202,12 +202,12 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
   );
 }
 
-const modeOptions: PillOption<DiffMode>[] = [
-  { value: 'git', label: <ActionLabel text="Git Diff" showHint={true} /> },
-  { value: 'activity', label: <ActionLabel text="Tokens" showHint={true} /> },
-  { value: 'log', label: <ActionLabel text="Git Log" hintIndex={4} showHint={true} /> },
-  { value: 'review', label: <ActionLabel text="Review" showHint={true} /> },
-  { value: 'metrics', label: <ActionLabel text="Metrics" hintIndex={0} showHint={true} /> },
+const MODE_TABS: TabDef<DiffMode>[] = [
+  { value: 'git', label: 'Git Diff' },
+  { value: 'activity', label: 'Tokens' },
+  { value: 'log', label: 'Git Log', hintIndex: 4 },
+  { value: 'review', label: 'Review' },
+  { value: 'metrics', label: 'Metrics' },
 ];
 
 const statusConfig: Record<DiffFileStatus, { letter: string; color: string }> = {
@@ -600,15 +600,10 @@ function FileListSidebar({
 
 type DiffScope = 'working' | 'all';
 
-const scopeLabels: Record<DiffScope, { text: string; hintIndex: number }> = {
-  working: { text: 'Working tree', hintIndex: 8 },
-  all: { text: 'All changes', hintIndex: 4 },
-};
-
-const scopeOptions: PillOption<DiffScope>[] = (['working', 'all'] as const).map((s) => ({
-  value: s,
-  label: <ActionLabel text={scopeLabels[s].text} hintIndex={scopeLabels[s].hintIndex} showHint={true} />,
-}));
+const scopeOptions: PillOption<DiffScope>[] = [
+  { value: 'working', label: 'Working tree' },
+  { value: 'all', label: 'All changes' },
+];
 
 function ScopeToggle({ scope, onChange }: { scope: DiffScope; onChange: (s: DiffScope) => void }) {
   return (
@@ -858,6 +853,9 @@ export default function DiffOverlay() {
   const gitFilesRef = useRef<DiffFile[]>([]);
 
   const { search, searchVisible, handleSearchKey, clearSearch } = useInstantSearch();
+  const { options: modeOptions, handleTabKey: handleModeKey } = useTabMnemonics(MODE_TABS, (m) =>
+    dispatch({ type: 'SET_DIFF_MODE', mode: m }),
+  );
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [gitFileIdx, setGitFileIdx] = useState(0);
   const [gitFileCount, setGitFileCount] = useState(0);
@@ -992,6 +990,7 @@ export default function DiffOverlay() {
     }
 
     if (handleSearchKey(e)) return;
+    if (handleModeKey(e)) return;
 
     switch (e.key) {
       case 'Escape':
@@ -999,16 +998,6 @@ export default function DiffOverlay() {
         e.stopPropagation();
         dispatch({ type: 'TOGGLE_DIFF' });
         break;
-
-      case 'Tab': {
-        e.preventDefault();
-        e.stopPropagation();
-        const modes: DiffMode[] = ['git', 'activity', 'log', 'review', 'metrics'];
-        const curIdx = modes.indexOf(diffMode);
-        const step = e.shiftKey ? modes.length - 1 : 1;
-        dispatch({ type: 'SET_DIFF_MODE', mode: modes[(curIdx + step) % modes.length] });
-        break;
-      }
 
       case 'ArrowUp':
         e.preventDefault();
@@ -1042,46 +1031,6 @@ export default function DiffOverlay() {
           setDiffScope(e.key === 'ArrowLeft' ? 'working' : 'all');
         }
         break;
-
-      default:
-        // Alt+letter shortcuts
-        if (e.altKey) {
-          switch (e.code) {
-            case 'KeyG':
-              e.preventDefault();
-              dispatch({ type: 'SET_DIFF_MODE', mode: 'git' });
-              break;
-            case 'KeyA':
-              e.preventDefault();
-              dispatch({ type: 'SET_DIFF_MODE', mode: 'activity' });
-              break;
-            case 'KeyL':
-              e.preventDefault();
-              dispatch({ type: 'SET_DIFF_MODE', mode: 'log' });
-              break;
-            case 'KeyU':
-              e.preventDefault();
-              dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
-              break;
-            case 'KeyM':
-              e.preventDefault();
-              dispatch({ type: 'SET_DIFF_MODE', mode: 'metrics' });
-              break;
-            case 'KeyT':
-              if (diffMode === 'git') {
-                e.preventDefault();
-                setDiffScope('working');
-              }
-              break;
-            case 'KeyC':
-              if (diffMode === 'git') {
-                e.preventDefault();
-                setDiffScope('all');
-              }
-              break;
-          }
-        }
-        break;
     }
   };
 
@@ -1103,7 +1052,8 @@ export default function DiffOverlay() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; Tab/&#8679;Tab cycle &middot; type to search &middot; Esc close
+            &uarr;&darr; navigate &middot; {altSymbol}G/{altSymbol}T/{altSymbol}L/{altSymbol}R/{altSymbol}M tabs
+            &middot; type to search &middot; Esc close
           </span>
           <CloseButton onClick={() => dispatch({ type: 'TOGGLE_DIFF' })} />
         </div>
