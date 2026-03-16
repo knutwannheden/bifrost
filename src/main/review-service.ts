@@ -106,6 +106,7 @@ export function migrateIfNeeded(taskId: string, legacySessionId?: string): Revie
 
 const runningReviews = new Map<string, string>(); // taskId -> ptySessionId
 const cancelledReviews = new Set<string>();
+const reviewGeneration = new Map<string, number>(); // taskId -> generation counter
 
 // --- Public API ---
 
@@ -142,6 +143,8 @@ export async function runReview(
   prompt += `\n\nWrite the review document to: ${reviewFilePath}\nIf later resumed for discussion and asked to update the review, write changes to that same file.`;
 
   const ptySessionId = `${taskId}-review`;
+  const gen = (reviewGeneration.get(taskId) ?? 0) + 1;
+  reviewGeneration.set(taskId, gen);
   killSession(ptySessionId);
 
   const extraEnv: Record<string, string> = {
@@ -184,6 +187,13 @@ export async function runReview(
         if (settled) return false;
         settled = true;
         clearTimeout(timeout);
+
+        // If a newer review replaced us, don't touch shared state
+        if (reviewGeneration.get(taskId) !== gen) {
+          reject(new Error('Review superseded'));
+          return false;
+        }
+
         runningReviews.delete(taskId);
         stopReviewActivityWatch(taskId);
 

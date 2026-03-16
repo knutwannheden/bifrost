@@ -54,6 +54,7 @@ const api: BifrostAPI = {
 
   // Shell
   openUrl: (url) => ipcRenderer.invoke(IPC.OPEN_URL, url),
+  openInTerminal: (dirPath) => ipcRenderer.invoke(IPC.OPEN_IN_TERMINAL, dirPath),
 
   // Activity Log
   getActivityLog: (taskId) => ipcRenderer.invoke(IPC.GET_ACTIVITY_LOG, taskId),

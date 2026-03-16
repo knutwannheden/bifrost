@@ -70,6 +70,7 @@ export const IPC = {
 
   // Shell
   OPEN_URL: 'shell:open-url',
+  OPEN_IN_TERMINAL: 'shell:open-in-terminal',
 
   // Activity Log
   GET_ACTIVITY_LOG: 'activity:get-log',
@@ -243,6 +244,7 @@ export interface BifrostAPI {
 
   // Shell
   openUrl(url: string): Promise<void>;
+  openInTerminal(dirPath: string): Promise<void>;
 
   // Activity Log
   getActivityLog(taskId: string): Promise<ActivityEntry[]>;

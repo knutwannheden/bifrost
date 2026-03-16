@@ -88,6 +88,7 @@ export interface ClaudeSession {
 export interface BifrostConfig {
   repos: Repo[];
   ide: 'code' | 'idea' | 'zed';
+  terminal: 'Terminal' | 'iTerm' | 'Ghostty' | 'Warp';
   fontSize: number;
   fontFamily: string;
   fontWeight: number;
@@ -350,6 +351,7 @@ export interface SupervisorState {
 export const DEFAULT_CONFIG: BifrostConfig = {
   repos: [],
   ide: 'code',
+  terminal: 'Terminal',
   fontSize: 14,
   fontFamily: 'MesloLGS NF',
   fontWeight: 300,

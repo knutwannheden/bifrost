@@ -691,6 +691,38 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return shell.openExternal(url);
   });
 
+  ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, dirPath: string) => {
+    const config = loadConfig();
+    const terminal = config.terminal ?? 'Terminal';
+    const escaped = dirPath.replace(/'/g, "'\\''");
+    let script: string;
+    switch (terminal) {
+      case 'iTerm':
+        script = `tell application "iTerm"
+  activate
+  create window with default profile command "/bin/zsh"
+  tell current session of current window
+    write text "cd '${escaped}'"
+  end tell
+end tell`;
+        break;
+      case 'Ghostty':
+        script = `do shell script "open -a Ghostty '${escaped}'"`;
+        break;
+      case 'Warp':
+        script = `do shell script "open -a Warp '${escaped}'"`;
+        break;
+      default:
+        script = `tell application "Terminal"
+  activate
+  do script "cd '${escaped}'"
+end tell`;
+    }
+    await execFile('osascript', ['-e', script]).catch(() => {
+      shell.showItemInFolder(dirPath);
+    });
+  });
+
   // IDE
   ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string, filePath?: string, line?: number) => {
     return openInIde(worktreePath, undefined, filePath, line);

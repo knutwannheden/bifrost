@@ -42,7 +42,13 @@ Each line is a JSON object with a "type" field:
 
 The input contains the first few and last few user/assistant exchanges to give you both the initial intent and the current state of the work.
 
-Output exactly two short plain-text sentences on a single line, no markdown, no bullet points, no numbering. The first sentence should capture the goal or intent. The second should describe the current focus or state of the work. Start with an action verb (e.g. "Implementing...", "Fixing...", "Investigating..."). Do not start with "A Claude Code session", "The user", or similar filler.`;
+Output exactly two short plain-text sentences on a single line, no markdown, no bullet points, no numbering. The first sentence should capture the goal or intent. The second should describe the current focus or state of the work. Start with an action verb (e.g. "Implementing...", "Fixing...", "Investigating...").
+
+CRITICAL: Write the summary DIRECTLY. Do NOT repeat or reference these instructions. Do NOT start with "Summarize...", "Provide...", "The assistant is...", "A Claude Code session...", "The user...". Just state what the session is about.
+
+GOOD: "Fixing RPC serialization for C# nullable types. Currently investigating a deserialization failure in the .nettrace parser."
+BAD: "Summarize a session about RPC changes. The assistant is reviewing code."
+BAD: "Provide an in-depth summary of RPC and C# changes."`;
 
 /**
  * Derive the Claude projects directory name from a worktree path.

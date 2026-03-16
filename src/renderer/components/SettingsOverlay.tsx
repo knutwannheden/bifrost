@@ -226,6 +226,26 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'terminal',
+      category: 'General',
+      label: 'Terminal',
+      tooltip:
+        'Which terminal to open when clicking the worktree path in the status bar. Opens a new window at the task\u2019s worktree directory.',
+      render: (config, update) => (
+        <PillToggle
+          options={[
+            { value: 'Terminal' as const, label: 'Terminal' },
+            { value: 'iTerm' as const, label: 'iTerm' },
+            { value: 'Ghostty' as const, label: 'Ghostty' },
+            { value: 'Warp' as const, label: 'Warp' },
+          ]}
+          value={config.terminal}
+          onChange={(v) => update({ terminal: v })}
+          size="md"
+        />
+      ),
+    },
+    {
       key: 'showTips',
       category: 'General',
       label: 'Show tips on welcome screen',
