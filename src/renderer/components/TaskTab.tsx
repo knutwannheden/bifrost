@@ -113,10 +113,8 @@ export default function TaskTab({
       <button
         ref={buttonRef}
         draggable
-        className={`group relative flex items-center gap-1.5 px-5 h-full whitespace-nowrap overflow-hidden max-w-[280px] transition-colors ${
-          isActive
-            ? 'bg-surface-alt border-b-2 border-accent text-primary'
-            : 'bg-transparent hover:bg-surface-alt/50 text-secondary'
+        className={`group relative flex items-center gap-1.5 pl-4 pr-2 h-full whitespace-nowrap overflow-hidden max-w-[280px] transition-colors ${
+          isActive ? 'bg-surface-alt text-primary' : 'bg-transparent hover:bg-surface-alt/50 text-secondary'
         }`}
         onClick={onClick}
         onDoubleClick={startEdit}
@@ -141,7 +139,7 @@ export default function TaskTab({
         {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
         <span
           role="button"
-          className="ml-1 text-muted hover:text-primary shrink-0 hidden group-hover:inline transition-colors cursor-pointer"
+          className="ml-1 text-muted hover:text-primary shrink-0 invisible group-hover:visible transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
