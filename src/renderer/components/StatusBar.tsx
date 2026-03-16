@@ -1,7 +1,76 @@
-import { useEffect, useState } from 'react';
-import type { BifrostConfig, DiffStats, Task } from '../../shared/types';
+import { useEffect, useRef, useState } from 'react';
+import type { BifrostConfig, DiffStats, Task, TokenUsageResult } from '../../shared/types';
 import { shortPath } from '../utils/paths';
 import DiffStatsBadge from './DiffStatsBadge';
+
+function formatTokenCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}m`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
+  return String(count);
+}
+
+interface TokenTotals {
+  total: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+}
+
+function computeTokenTotals(data: TokenUsageResult): TokenTotals {
+  let input = 0;
+  let output = 0;
+  let cacheRead = 0;
+  let cacheCreation = 0;
+  const allPoints = [...data.points, ...data.subagents.flatMap((s) => s.points)];
+  for (const p of allPoints) {
+    input += p.inputTokens;
+    output += p.outputTokens;
+    cacheRead += p.cacheReadTokens ?? 0;
+    cacheCreation += p.cacheCreationTokens ?? 0;
+  }
+  return { total: input + output + cacheRead + cacheCreation, input, output, cacheRead, cacheCreation };
+}
+
+function PathMenu({ worktreePath, onClose }: { worktreePath: string; onClose: () => void }) {
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="absolute bottom-full left-0 mb-1 bg-surface border border-border-input rounded-sm shadow-lg py-1 min-w-[160px] z-30"
+    >
+      <button
+        type="button"
+        className="block w-full text-left px-3 py-1 text-xs text-secondary hover:text-primary hover:bg-surface-hover transition-colors"
+        onClick={() => {
+          navigator.clipboard.writeText(worktreePath);
+          onClose();
+        }}
+      >
+        Copy path
+      </button>
+      <button
+        type="button"
+        className="block w-full text-left px-3 py-1 text-xs text-secondary hover:text-primary hover:bg-surface-hover transition-colors"
+        onClick={() => {
+          window.bifrost.openInTerminal(worktreePath);
+          onClose();
+        }}
+      >
+        Open in terminal
+      </button>
+    </div>
+  );
+}
 
 interface StatusBarProps {
   activeTask: Task | null;
@@ -11,10 +80,15 @@ interface StatusBarProps {
 
 export default function StatusBar({ activeTask, config, onToggleIde }: StatusBarProps) {
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
+  const [tokenTotals, setTokenTotals] = useState<TokenTotals | null>(null);
+  const [prUrl, setPrUrl] = useState<string | null>(null);
+  const [pathMenuOpen, setPathMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!activeTask) {
       setDiffStats(null);
+      setTokenTotals(null);
+      setPrUrl(null);
       return;
     }
 
@@ -24,10 +98,26 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
         .then(setDiffStats)
         .catch(() => setDiffStats(null));
     };
+
+    const fetchTokens = () => {
+      window.bifrost
+        .getTokenUsage(activeTask.id)
+        .then((data) => setTokenTotals(computeTokenTotals(data)))
+        .catch(() => setTokenTotals(null));
+    };
+
     fetchStats();
+    fetchTokens();
+    window.bifrost
+      .getPrUrl(activeTask.id)
+      .then(setPrUrl)
+      .catch(() => setPrUrl(null));
 
     const unsub = window.bifrost.onActivityEntry((entry) => {
-      if (entry.taskId === activeTask.id) fetchStats();
+      if (entry.taskId === activeTask.id) {
+        fetchStats();
+        fetchTokens();
+      }
     });
     return unsub;
   }, [activeTask?.id]);
@@ -37,10 +127,37 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {activeTask && (
           <>
-            <span className="truncate" title={activeTask.worktreePath}>
-              {shortPath(activeTask.worktreePath)}
+            <span className="relative">
+              <button
+                type="button"
+                className="truncate hover:text-secondary transition-colors"
+                title={activeTask.worktreePath}
+                onClick={() => setPathMenuOpen((v) => !v)}
+              >
+                {shortPath(activeTask.worktreePath)}
+              </button>
+              {pathMenuOpen && (
+                <PathMenu worktreePath={activeTask.worktreePath} onClose={() => setPathMenuOpen(false)} />
+              )}
             </span>
             <DiffStatsBadge additions={diffStats?.additions ?? 0} deletions={diffStats?.deletions ?? 0} />
+            {tokenTotals && tokenTotals.total > 0 && (
+              <span
+                title={`Input: ${tokenTotals.input.toLocaleString()} · Output: ${tokenTotals.output.toLocaleString()} · Cache read: ${tokenTotals.cacheRead.toLocaleString()} · Cache creation: ${tokenTotals.cacheCreation.toLocaleString()}`}
+              >
+                {formatTokenCount(tokenTotals.total)}
+              </span>
+            )}
+            {prUrl && (
+              <button
+                type="button"
+                className="text-accent-hover hover:underline transition-colors"
+                onClick={() => window.bifrost.openUrl(prUrl)}
+                title={prUrl}
+              >
+                PR #{prUrl.split('/').pop()}
+              </button>
+            )}
           </>
         )}
       </div>
