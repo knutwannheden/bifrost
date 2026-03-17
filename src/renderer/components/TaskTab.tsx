@@ -150,6 +150,7 @@ export default function TaskTab({
         </span>
         {showSweep && <span className="activity-sweep absolute bottom-0 left-0 right-0 h-[2px]" />}
         {showSolid && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-success" />}
+        {isActive && !showSweep && !showSolid && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />}
       </button>
       {showTooltip &&
         tooltipPos &&
