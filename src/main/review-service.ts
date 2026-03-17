@@ -183,7 +183,7 @@ export async function runReview(
       extraEnv,
       autoTrust: true,
       prompt,
-      onBeforeExit: (_buffer, _exitCode) => {
+      onBeforeExit: (buffer, exitCode) => {
         if (settled) return false;
         settled = true;
         clearTimeout(timeout);
@@ -209,7 +209,11 @@ export async function runReview(
               reject(new Error('Review produced no output'));
             }
           } catch {
-            reject(new Error('Review file not written'));
+            const lastLines = buffer ? buffer.slice(-500) : '(no buffer)';
+            console.error(`[review] Claude exited with code ${exitCode} without writing review file`);
+            console.error(`[review] Expected file: ${reviewFilePath}`);
+            console.error(`[review] Last PTY output: ${lastLines}`);
+            reject(new Error(`Review file not written (exit code ${exitCode})`));
           }
         }
         return false;
