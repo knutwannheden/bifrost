@@ -21,7 +21,13 @@ import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } fr
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
 import { addRepo } from './repo-manager';
-import { cancelReview, completeReview, setReviewSessionId, startReviewActivityWatch } from './review-service';
+import {
+  cancelReview,
+  completeReview,
+  getActiveReviewFile,
+  setReviewSessionId,
+  startReviewActivityWatch,
+} from './review-service';
 import { killSession } from './session-manager';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 import { removeWorktree } from './worktree-manager';
@@ -463,9 +469,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // Review stop — review is complete, kill the session so the Promise resolves
+      // Review stop — only kill the session if the review file was actually written.
+      // The Stop hook fires after every turn, including the first turn where Claude
+      // may just acknowledge the prompt without producing output yet.
       if (hookContext === 'review' && hookTaskId) {
-        completeReview(hookTaskId);
+        const reviewFile = getActiveReviewFile(hookTaskId);
+        if (reviewFile && fs.existsSync(reviewFile)) {
+          completeReview(hookTaskId);
+        }
         jsonResponse(res, { ok: true });
         return;
       }

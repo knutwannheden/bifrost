@@ -107,8 +107,13 @@ export function migrateIfNeeded(taskId: string, legacySessionId?: string): Revie
 const runningReviews = new Map<string, string>(); // taskId -> ptySessionId
 const cancelledReviews = new Set<string>();
 const reviewGeneration = new Map<string, number>(); // taskId -> generation counter
+const activeReviewFiles = new Map<string, string>(); // taskId -> review file path
 
 // --- Public API ---
+
+export function getActiveReviewFile(taskId: string): string | null {
+  return activeReviewFiles.get(taskId) ?? null;
+}
 
 export function listReviews(taskId: string): ReviewEntry[] {
   return migrateIfNeeded(taskId);
@@ -145,6 +150,7 @@ export async function runReview(
   const ptySessionId = `${taskId}-review`;
   const gen = (reviewGeneration.get(taskId) ?? 0) + 1;
   reviewGeneration.set(taskId, gen);
+  activeReviewFiles.set(taskId, reviewFilePath);
   killSession(ptySessionId);
 
   const extraEnv: Record<string, string> = {
@@ -230,6 +236,7 @@ export async function runReview(
 export function completeReview(taskId: string): void {
   const ptySessionId = runningReviews.get(taskId);
   if (!ptySessionId) return;
+  activeReviewFiles.delete(taskId);
   killSession(ptySessionId);
 }
 
@@ -237,6 +244,7 @@ export function cancelReview(taskId: string): void {
   stopReviewActivityWatch(taskId);
   const ptySessionId = runningReviews.get(taskId);
   if (!ptySessionId) return;
+  activeReviewFiles.delete(taskId);
   cancelledReviews.add(taskId);
   killSession(ptySessionId);
 }
