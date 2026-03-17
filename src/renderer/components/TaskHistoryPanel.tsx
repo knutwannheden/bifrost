@@ -310,7 +310,7 @@ function TaskRow({
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
   const [filter, setFilter] = useState<Filter>('active');
-  const { options: filterOptions, handleTabKey: handleFilterKey } = useTabMnemonics(FILTER_TABS, setFilter);
+  const { options: filterOptions, handleTabKey: handleFilterKey } = useTabMnemonics(FILTER_TABS, filter, setFilter);
   const { search, searchVisible, handleSearchKey } = useInstantSearch();
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -756,8 +756,7 @@ export default function TaskHistoryPanel() {
         {/* Footer */}
         <OverlayFooter>
           <span className="text-xs text-faint">
-            {altSymbol}T/{altSymbol}L/{altSymbol}C/{altSymbol}S tabs &middot; &uarr;&darr; navigate &middot; Enter{' '}
-            {isSessionsMode ? 'resume' : 'open'} &middot;{' '}
+            &uarr;&darr; navigate &middot; Enter {isSessionsMode ? 'resume' : 'open'} &middot;{' '}
             {!isSessionsMode && (
               <>
                 F2 rename &middot; {altSymbol}O/{altSymbol}A/{altSymbol}D actions &middot;{' '}

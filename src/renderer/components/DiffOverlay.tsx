@@ -12,7 +12,7 @@ import { useTokenUsage } from '../hooks/useTokenUsage';
 import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
 import { diffFileStats, extFromPath, parseDiff } from '../utils/diff-parser';
 import { formatRelative } from '../utils/format-time';
-import { altSymbol, isModKey } from '../utils/platform';
+import { isModKey } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { highlightLines } from '../utils/syntax-highlight';
@@ -853,15 +853,15 @@ export default function DiffOverlay() {
   const gitFilesRef = useRef<DiffFile[]>([]);
 
   const { search, searchVisible, handleSearchKey, clearSearch } = useInstantSearch();
-  const { options: modeOptions, handleTabKey: handleModeKey } = useTabMnemonics(MODE_TABS, (m) =>
-    dispatch({ type: 'SET_DIFF_MODE', mode: m }),
-  );
   const [focusedIdx, setFocusedIdx] = useState(0);
   const [gitFileIdx, setGitFileIdx] = useState(0);
   const [gitFileCount, setGitFileCount] = useState(0);
   const [diffScope, setDiffScope] = useState<DiffScope>('working');
 
   const { showDiff, diffMode } = getActiveDiffState(state);
+  const { options: modeOptions, handleTabKey: handleModeKey } = useTabMnemonics(MODE_TABS, diffMode, (m) =>
+    dispatch({ type: 'SET_DIFF_MODE', mode: m }),
+  );
   const isActivity = diffMode === 'activity';
   const isLog = diffMode === 'log';
   const isReview = diffMode === 'review';
@@ -1051,10 +1051,7 @@ export default function DiffOverlay() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-faint">
-            &uarr;&darr; navigate &middot; {altSymbol}G/{altSymbol}T/{altSymbol}L/{altSymbol}R/{altSymbol}M tabs
-            &middot; type to search &middot; Esc close
-          </span>
+          <span className="text-xs text-faint">&uarr;&darr; navigate &middot; type to search &middot; Esc close</span>
           <CloseButton onClick={() => dispatch({ type: 'TOGGLE_DIFF' })} />
         </div>
       </div>

@@ -3,7 +3,6 @@ import type { ContextRotEntry, EscalationEntry, StatsData } from '../../shared/t
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { useTabMnemonics } from '../hooks/useTabMnemonics';
-import { altSymbol } from '../utils/platform';
 import FlaskIcon from './FlaskIcon';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
@@ -218,7 +217,7 @@ export default function StatsOverlay() {
     label: tab.label,
     suffix: tab.experimental ? <FlaskIcon /> : undefined,
   }));
-  const { options: tabOptions, handleTabKey } = useTabMnemonics(tabDefs, setActiveTab);
+  const { options: tabOptions, handleTabKey } = useTabMnemonics(tabDefs, activeTab, setActiveTab);
 
   useOverlayFocus(containerRef);
 
@@ -290,10 +289,7 @@ export default function StatsOverlay() {
 
         {/* Footer */}
         <OverlayFooter>
-          <span className="text-xs text-faint">
-            {altSymbol}S/{altSymbol}T/{altSymbol}B/{altSymbol}O/{altSymbol}E tabs &middot; &larr;&rarr; time range
-            &middot; Esc close
-          </span>
+          <span className="text-xs text-faint">&larr;&rarr; time range &middot; Esc close</span>
         </OverlayFooter>
       </div>
     </div>

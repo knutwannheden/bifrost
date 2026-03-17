@@ -167,7 +167,7 @@ export default function TriageOverlay() {
   const [interactiveId, setInteractiveId] = useState<string | null>(null);
   const [historyPtySessionId, setHistoryPtySessionId] = useState<string | null>(null);
   const [historyEntryId, setHistoryEntryId] = useState<string | null>(null);
-  const { options: tabOptions, handleTabKey } = useTabMnemonics(TAB_DEFS, (tab) =>
+  const { options: tabOptions, handleTabKey } = useTabMnemonics(TAB_DEFS, state.triageTab, (tab) =>
     dispatch({ type: 'SET_TRIAGE_TAB', tab }),
   );
   const [altHeld, setAltHeld] = useState(false);
@@ -546,9 +546,6 @@ export default function TriageOverlay() {
                     <span>type to search</span>
                   </>
                 )}
-                <span>
-                  {altSymbol}N/{altSymbol}H tabs
-                </span>
                 <span>Esc close</span>
               </>
             )}

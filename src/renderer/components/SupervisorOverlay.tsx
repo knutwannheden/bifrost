@@ -516,7 +516,7 @@ function CuratorTab({
 export default function SupervisorOverlay() {
   const { state: appState, dispatch } = useApp();
   const [tab, setTab] = useState<Tab>('supervisor');
-  const { options: tabOptions, handleTabKey } = useTabMnemonics(TAB_DEFS, setTab);
+  const { options: tabOptions, handleTabKey } = useTabMnemonics(TAB_DEFS, tab, setTab);
   const [svState, setSvState] = useState<SupervisorState | null>(null);
   const [svFocusedIdx, setSvFocusedIdx] = useState(-1);
   const [curFocusedIdx, setCurFocusedIdx] = useState(0);
@@ -676,12 +676,10 @@ export default function SupervisorOverlay() {
             {tab === 'supervisor' ? (
               <>
                 &uarr;&darr; navigate &middot; Enter open &middot; {altSymbol}S start/stop &middot; {altSymbol}+/&minus;
-                concurrency &middot; {altSymbol}U/{altSymbol}C tabs &middot; Esc close
+                concurrency &middot; Esc close
               </>
             ) : (
-              <>
-                &uarr;&darr; navigate &middot; {altSymbol}U/{altSymbol}C tabs &middot; Esc close
-              </>
+              <>&uarr;&darr; navigate &middot; Esc close</>
             )}
           </span>
         </OverlayFooter>
