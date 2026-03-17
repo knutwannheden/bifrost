@@ -187,6 +187,7 @@ export function spawnSession(
     const cmdParts = [command, ...args.map(shellEscape)].join(' ');
     spawnCommand = 'sh';
     spawnArgs = ['-c', `cat ${shellEscape(tmpFile)} | ${cmdParts}; rm -f ${shellEscape(tmpFile)}`];
+    console.log(`[session] Prompt piped for ${sessionId}: ${tmpFile} (${options.prompt.length} chars)`);
   } else {
     spawnCommand = command;
     spawnArgs = args;

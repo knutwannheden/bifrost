@@ -140,7 +140,7 @@ export async function runReview(
   if (instructions?.trim()) {
     prompt += `\n\nAdditional reviewer instructions:\n${instructions.trim()}`;
   }
-  prompt += `\n\nWrite the review document to: ${reviewFilePath}\nIf later resumed for discussion and asked to update the review, write changes to that same file.`;
+  prompt += `\n\nWrite the review document to: ${reviewFilePath}\nIf later resumed for discussion and asked to update the review, write changes to that same file.\n\nProceed with the review now.`;
 
   const ptySessionId = `${taskId}-review`;
   const gen = (reviewGeneration.get(taskId) ?? 0) + 1;
