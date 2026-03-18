@@ -263,6 +263,7 @@ export function createSession(
   options?: {
     resumeSessionId?: string;
     taskId?: string;
+    name?: string;
     apiPort?: number;
     permissionMode?: string;
     agentTeams?: boolean;
@@ -274,6 +275,7 @@ export function createSession(
   const buildArgs = (resume: boolean): string[] => {
     const a: string[] = [];
     if (resume && options?.resumeSessionId) a.push('--resume', options.resumeSessionId);
+    if (options?.name) a.push('--name', options.name);
     if (options?.permissionMode === 'sandbox') a.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
     else if (options?.permissionMode === 'skip-permissions') a.push('--dangerously-skip-permissions');
     return a;
