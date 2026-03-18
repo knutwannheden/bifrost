@@ -275,6 +275,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   const taskId = randomUUID();
   createSession(taskId, worktreePath, mainWindow, {
     taskId,
+    name,
     apiPort: getApiPort() ?? undefined,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
@@ -316,6 +317,7 @@ export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): v
   createSession(taskId, task.worktreePath, mainWindow, {
     resumeSessionId: task.sessionId,
     taskId,
+    name: task.name,
     apiPort: getApiPort() ?? undefined,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
@@ -532,6 +534,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     createSession(taskId, worktreePath, mainWindow, {
       resumeSessionId,
       taskId,
+      name: task.name,
       apiPort: getApiPort() ?? undefined,
       permissionMode: reopenConfig.permissionMode,
       agentTeams: reopenConfig.agentTeams,
@@ -813,6 +816,7 @@ end tell`;
     createSession(taskId, cwd, mainWindow, {
       resumeSessionId: externalSessionId,
       taskId,
+      name,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
       agentTeams: config.agentTeams,
@@ -885,6 +889,7 @@ end tell`;
     createSession(reviewPtySessionId, task.worktreePath, mainWindow, {
       resumeSessionId: sessionId,
       taskId,
+      name: `${task.name} (review)`,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
       context: 'review',
@@ -1116,6 +1121,7 @@ end tell`;
 
     createSession(taskId, item.worktreePath, mainWindow, {
       taskId,
+      name: item.name,
       apiPort: getApiPort() ?? undefined,
       permissionMode: config.permissionMode,
       agentTeams: config.agentTeams,
