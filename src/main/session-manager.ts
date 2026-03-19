@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -182,7 +183,7 @@ export function spawnSession(
     // Pipe the prompt via stdin so Claude reads it as the initial message.
     // This avoids terminal paste-detection issues that occur when writing
     // multi-line text to the PTY after the welcome banner.
-    const tmpFile = path.join(os.tmpdir(), `bifrost-prompt-${sessionId}`);
+    const tmpFile = path.join(os.tmpdir(), `bifrost-prompt-${sessionId}-${randomUUID().slice(0, 8)}`);
     fs.writeFileSync(tmpFile, `${options.prompt}\n`);
     const cmdParts = [command, ...args.map(shellEscape)].join(' ');
     spawnCommand = 'sh';
