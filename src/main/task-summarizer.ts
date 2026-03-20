@@ -1,5 +1,6 @@
 import { execSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -152,49 +153,47 @@ export function countJsonlLines(worktreePath: string, sessionId?: string): numbe
 }
 
 /**
- * Try to summarize using an ollama model. Returns summary or null.
+ * Try to summarize using ollama's HTTP API. Returns summary or null.
  */
 function tryOllama(model: string, input: string): Promise<string | null> {
   return new Promise<string | null>((resolve) => {
-    const proc = spawn('ollama', ['run', model], {
-      stdio: ['pipe', 'pipe', 'pipe'],
+    const body = JSON.stringify({
+      model,
+      prompt: `${SUMMARY_PROMPT}\n\n${input}`,
+      stream: false,
     });
 
-    let stdout = '';
-    let settled = false;
+    const req = http.request(
+      {
+        hostname: '127.0.0.1',
+        port: 11434,
+        path: '/api/generate',
+        method: 'POST',
+        timeout: SUMMARY_TIMEOUT_MS,
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(Buffer.concat(chunks).toString());
+            const text = (json.response as string)?.trim();
+            resolve(text || null);
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    );
 
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        proc.kill();
-        resolve(null);
-      }
-    }, SUMMARY_TIMEOUT_MS);
-
-    proc.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-
-    proc.on('close', (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (code === 0 && stdout.trim()) {
-        resolve(stdout.trim());
-      } else {
-        resolve(null);
-      }
-    });
-
-    proc.on('error', () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
+    req.on('timeout', () => {
+      req.destroy();
       resolve(null);
     });
-
-    proc.stdin.write(`${SUMMARY_PROMPT}\n\n${input}`);
-    proc.stdin.end();
+    req.on('error', () => resolve(null));
+    req.write(body);
+    req.end();
   });
 }
 
