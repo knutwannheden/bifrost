@@ -24,7 +24,7 @@ function getApiPort() {
 
 const TASK_ID = process.env.BIFROST_TASK_ID || null;
 
-function apiCall(endpoint, body, { timeout = 15000 } = {}) {
+function apiCall(endpoint, body, { timeout = 60000 } = {}) {
   const port = getApiPort();
   if (!port) return Promise.reject(new Error('Bifrost API not running'));
 
