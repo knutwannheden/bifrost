@@ -31,7 +31,7 @@ const api: BifrostAPI = {
   // Terminal
   createDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CREATE_DEV_TERMINAL, taskId),
   closeDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CLOSE_DEV_TERMINAL, taskId),
-  writeToSession: (sessionId, data) => ipcRenderer.invoke(IPC.WRITE_TO_SESSION, sessionId, data),
+  writeToSession: (sessionId, data) => ipcRenderer.send(IPC.WRITE_TO_SESSION, sessionId, data),
   resizeSession: (sessionId, cols, rows) => ipcRenderer.invoke(IPC.RESIZE_SESSION, sessionId, cols, rows),
   drainSessionBuffer: (sessionId) => ipcRenderer.invoke(IPC.DRAIN_SESSION_BUFFER, sessionId),
   onSessionData: (callback) => {

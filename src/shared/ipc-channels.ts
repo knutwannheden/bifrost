@@ -229,7 +229,7 @@ export interface BifrostAPI {
   // Terminal
   createDevTerminal(taskId: string): Promise<string>;
   closeDevTerminal(taskId: string): Promise<void>;
-  writeToSession(sessionId: string, data: string): Promise<void>;
+  writeToSession(sessionId: string, data: string): void;
   resizeSession(sessionId: string, cols: number, rows: number): Promise<void>;
   drainSessionBuffer(sessionId: string): Promise<string>;
   onSessionData(callback: (sessionId: string, data: string) => void): () => void;

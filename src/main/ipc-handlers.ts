@@ -613,7 +613,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Terminal sessions
-  ipcMain.handle(IPC.WRITE_TO_SESSION, (_event, sessionId: string, data: string) => {
+  ipcMain.on(IPC.WRITE_TO_SESSION, (_event, sessionId: string, data: string) => {
     writeToSession(sessionId, data);
   });
 
