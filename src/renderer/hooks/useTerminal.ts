@@ -204,15 +204,19 @@ export function useTerminal(
     // Send keystrokes to session (buffer when locked by prompt-sender)
     terminal.onData((data) => {
       resetHippieState();
+      // When pasting multi-character text containing newlines, replace \r with
+      // Alt+Enter (\x1b\r) so Claude Code inserts a newline instead of submitting.
+      // Single \r from pressing Enter is left untouched.
+      const outData = data.length > 1 && data.includes('\r') ? data.replaceAll('\r', '\x1b\r') : data;
       if (terminalInputLocks.has(sessionId)) {
         let buf = terminalInputBuffers.get(sessionId);
         if (!buf) {
           buf = [];
           terminalInputBuffers.set(sessionId, buf);
         }
-        buf.push(data);
+        buf.push(outData);
       } else {
-        window.bifrost.writeToSession(sessionId, data);
+        window.bifrost.writeToSession(sessionId, outData);
       }
     });
 
