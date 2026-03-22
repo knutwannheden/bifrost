@@ -1,4 +1,5 @@
 import { type BundledLanguage, createHighlighter, type Highlighter } from 'shiki';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
 let highlighterPromise: Promise<Highlighter> | null = null;
 
@@ -97,6 +98,7 @@ async function getHighlighter(): Promise<Highlighter> {
     highlighterPromise = createHighlighter({
       themes: ['github-dark', 'github-light'],
       langs: allLangs,
+      engine: createJavaScriptRegexEngine(),
     }).catch((err) => {
       // Reset so next call retries instead of caching the rejected promise
       highlighterPromise = null;
