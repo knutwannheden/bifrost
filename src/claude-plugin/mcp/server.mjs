@@ -306,7 +306,7 @@ server.registerTool(
         .string()
         .optional()
         .describe(
-          'Human-readable task description (shown in tooltips/history). Auto-generated from prompt if omitted.',
+          'Short task title (max ~50 chars, shown in tabs/history). Auto-generated from prompt if omitted.',
         ),
       repo: z
         .string()
@@ -315,15 +315,9 @@ server.registerTool(
           "Path to the git repository (e.g. '~/git/org/repo') or GitHub slug (e.g. 'org/repo'). Required when not running inside a Bifrost task.",
         ),
       prompt: z.string().optional().describe("Initial prompt/instructions for the new task's Claude session"),
-      branch: z
-        .string()
-        .optional()
-        .describe(
-          "Desired git branch name for the new worktree (e.g. 'fix-auth-bug'). Auto-derived from task name if omitted.",
-        ),
     },
   },
-  async ({ name, repo, prompt, branch }) => {
+  async ({ name, repo, prompt }) => {
     let repoId;
     let repoPath;
     let defaultBranch;
@@ -355,7 +349,6 @@ server.registerTool(
       repoPath,
       name,
       branch: defaultBranch || 'main',
-      branchName: branch || undefined,
       prompt,
     });
     return {

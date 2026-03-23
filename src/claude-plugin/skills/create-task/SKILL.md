@@ -27,10 +27,9 @@ Extract what the user wants the new task to accomplish from `$1` (the skill argu
 
 Pass the repo as a filesystem path (e.g. `~/git/org/repo`) or GitHub slug (e.g. `org/repo`) via the `repo` parameter. The tool resolves and auto-adds unknown repos. If the task targets the current repo, `repo` can be omitted. Only fall back to `list_repos` if no repo context is available from the conversation.
 
-## 3. Draft task name, branch, and prompt
+## 3. Draft task name and prompt
 
-- **Name**: A short human-readable task name (e.g. "Add dark mode support").
-- **Branch**: A kebab-case branch name derived from the task name (e.g. `add-dark-mode-support`). Keep it under 50 characters.
+- **Name**: A short task title, max ~50 characters (e.g. "Add dark mode support"). Shown in tabs and history. The branch and worktree names are auto-generated — do NOT pass a branch name.
 - **Prompt**: A concise, actionable prompt for the new task's Claude session. Include:
   - The core objective
   - Relevant context from the current conversation (design decisions, constraints, key details)
@@ -46,7 +45,7 @@ If the user's intent was fully and clearly specified in the arguments, proceed d
 
 ## 5. Create
 
-Call the `create_task` MCP tool with the resolved repo, name, branch, and prompt.
+Call the `create_task` MCP tool with the resolved repo, name, and prompt.
 
 ## 6. Report
 
