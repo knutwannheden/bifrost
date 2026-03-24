@@ -486,6 +486,38 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'No matching task', 404);
         return;
       }
+
+      // SubagentStart/SubagentStop — forward to renderer for activity indicator
+      if (hookEventName === 'SubagentStart' || hookEventName === 'SubagentStop') {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, hookEventName === 'SubagentStart');
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // StopFailure — mark idle and notify (API/turn error)
+      if (hookEventName === 'StopFailure') {
+        if (hookContext === 'code') {
+          markIdle(task.id);
+        }
+        handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, 'Claude stopped with an error', '', 'stop_failure');
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // PreCompact — informational, forward to renderer
+      if (hookEventName === 'PreCompact') {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, '', '', 'pre_compact');
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
       // Stop hook for code context — mark task idle for prompt-sender queue/restore
       if (hookContext === 'code') {
         markIdle(task.id);
