@@ -344,18 +344,22 @@ server.registerTool(
       };
     }
 
-    const task = await apiCall('/create-task', {
+    const result = await apiCall('/create-task', {
       repoId,
       repoPath,
       name,
       branch: defaultBranch || 'main',
       prompt,
+      async: true,
     });
+    const taskName = name || 'new task';
     return {
       content: [
         {
           type: 'text',
-          text: `Task "${task.name}" created (id: ${task.id}, branch: ${task.branch}). It's running in a new tab.`,
+          text: result.pending
+            ? `Task "${taskName}" is being created and will appear in a new Bifrost tab shortly.`
+            : `Task "${result.name}" created (id: ${result.id}, branch: ${result.branch}). It's running in a new tab.`,
         },
       ],
     };

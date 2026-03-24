@@ -270,22 +270,40 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'either repoId or repoPath is required');
         return;
       }
-      try {
-        const task = await createTaskCore(
+      const async = body.async === true;
+      if (async) {
+        // Return immediately with a pending response, create in background
+        jsonResponse(res, { ok: true, pending: true });
+        createTaskCore(
           { repoId, repoPath, name, branch: branch || 'main', branchName, prompt },
           mainWindow!,
-        );
-        mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
+        )
+          .then((task) => {
+            mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
+            const callerTriageId = body.bifrost_triage_id as string;
+            if (callerTriageId) addTriageTaskId(callerTriageId, task.id);
+          })
+          .catch((e) => {
+            console.error('[api] async create-task failed:', (e as Error).message);
+          });
+      } else {
+        try {
+          const task = await createTaskCore(
+            { repoId, repoPath, name, branch: branch || 'main', branchName, prompt },
+            mainWindow!,
+          );
+          mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
 
-        // Track task created by triage session
-        const callerTriageId = body.bifrost_triage_id as string;
-        if (callerTriageId) {
-          addTriageTaskId(callerTriageId, task.id);
+          // Track task created by triage session
+          const callerTriageId = body.bifrost_triage_id as string;
+          if (callerTriageId) {
+            addTriageTaskId(callerTriageId, task.id);
+          }
+
+          jsonResponse(res, task);
+        } catch (e) {
+          errorResponse(res, (e as Error).message, 400);
         }
-
-        jsonResponse(res, task);
-      } catch (e) {
-        errorResponse(res, (e as Error).message, 400);
       }
       return;
     }
