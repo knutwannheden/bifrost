@@ -763,7 +763,7 @@ export default function SettingsOverlay() {
           <div className="flex-1 overflow-y-auto p-4 space-y-6">
             {visibleCategories.map((cat) => {
               const catSettings = filteredSettings.filter((s) => s.category === cat);
-              if (catSettings.length === 0) return null;
+              if (catSettings.length === 0 && cat !== 'Macros') return null;
               return (
                 <div
                   key={cat}
