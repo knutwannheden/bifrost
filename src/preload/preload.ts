@@ -55,6 +55,11 @@ const api: BifrostAPI = {
   // Shell
   openUrl: (url) => ipcRenderer.invoke(IPC.OPEN_URL, url),
   openInTerminal: (dirPath) => ipcRenderer.invoke(IPC.OPEN_IN_TERMINAL, dirPath),
+  onZoomChanged: (callback: (pct: number) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, pct: number) => callback(pct);
+    ipcRenderer.on('zoom-changed', handler);
+    return () => ipcRenderer.removeListener('zoom-changed', handler);
+  },
 
   // Activity Log
   getActivityLog: (taskId) => ipcRenderer.invoke(IPC.GET_ACTIVITY_LOG, taskId),

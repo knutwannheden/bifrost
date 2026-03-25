@@ -185,17 +185,31 @@ function buildMenu() {
         {
           label: 'Zoom In',
           accelerator: 'CommandOrControl+Shift+=',
-          click: (_mi, win) => win?.webContents.setZoomLevel(win.webContents.getZoomLevel() + 0.5),
+          click: (_mi, win) => {
+            if (!win) return;
+            const level = win.webContents.getZoomLevel() + 0.5;
+            win.webContents.setZoomLevel(level);
+            win.webContents.send('zoom-changed', Math.round(100 * Math.pow(1.2, level)));
+          },
         },
         {
           label: 'Zoom Out',
           accelerator: 'CommandOrControl+Shift+-',
-          click: (_mi, win) => win?.webContents.setZoomLevel(win.webContents.getZoomLevel() - 0.5),
+          click: (_mi, win) => {
+            if (!win) return;
+            const level = win.webContents.getZoomLevel() - 0.5;
+            win.webContents.setZoomLevel(level);
+            win.webContents.send('zoom-changed', Math.round(100 * Math.pow(1.2, level)));
+          },
         },
         {
           label: 'Reset Zoom',
           accelerator: 'CommandOrControl+0',
-          click: (_mi, win) => win?.webContents.setZoomLevel(0),
+          click: (_mi, win) => {
+            if (!win) return;
+            win.webContents.setZoomLevel(0);
+            win.webContents.send('zoom-changed', 100);
+          },
         },
         { type: 'separator' },
         { role: 'toggleDevTools' },

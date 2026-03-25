@@ -245,6 +245,7 @@ export interface BifrostAPI {
   // Shell
   openUrl(url: string): Promise<void>;
   openInTerminal(dirPath: string): Promise<void>;
+  onZoomChanged(callback: (pct: number) => void): () => void;
 
   // Activity Log
   getActivityLog(taskId: string): Promise<ActivityEntry[]>;
