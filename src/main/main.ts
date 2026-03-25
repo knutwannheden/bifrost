@@ -194,7 +194,7 @@ function buildMenu() {
         },
         {
           label: 'Reset Zoom',
-          accelerator: 'CommandOrControl+Shift+0',
+          accelerator: 'CommandOrControl+0',
           click: (_mi, win) => win?.webContents.setZoomLevel(0),
         },
         { type: 'separator' },
