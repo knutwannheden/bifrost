@@ -81,7 +81,7 @@ function buildMenu() {
             submenu: [
               { role: 'about' as const },
               { type: 'separator' as const },
-              { role: 'hide' as const },
+              { role: 'hide' as const, registerAccelerator: false },
               { role: 'hideOthers' as const },
               { role: 'unhide' as const },
               { type: 'separator' as const },
