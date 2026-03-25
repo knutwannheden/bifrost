@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { PROMPT_DEFS } from '../../shared/default-prompts';
-import type { BifrostConfig } from '../../shared/types';
+import type { BifrostConfig, Macro } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
@@ -25,7 +25,7 @@ interface SettingDef {
   render: (config: BifrostConfig, update: (updates: Partial<BifrostConfig>) => void) => React.ReactNode;
 }
 
-const CATEGORIES = ['Appearance', 'Agent', 'General', 'Slack'] as const;
+const CATEGORIES = ['Appearance', 'Agent', 'General', 'Macros', 'Slack'] as const;
 
 function buildSettings(): SettingDef[] {
   return [
@@ -501,6 +501,134 @@ function PromptEditor({
   );
 }
 
+function MacroEditor({
+  config,
+  updateConfig,
+}: {
+  config: BifrostConfig;
+  updateConfig: (updates: Partial<BifrostConfig>) => void;
+}) {
+  const macros = config.macros ?? [];
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editHotkey, setEditHotkey] = useState('');
+  const [editText, setEditText] = useState('');
+
+  const startEdit = (idx: number) => {
+    const m = macros[idx];
+    setEditIdx(idx);
+    setEditName(m.name);
+    setEditHotkey(m.hotkey ?? '');
+    setEditText(m.text);
+  };
+
+  const startAdd = () => {
+    setEditIdx(macros.length);
+    setEditName('');
+    setEditHotkey('');
+    setEditText('');
+  };
+
+  const save = () => {
+    if (!editName.trim() || !editText.trim()) return;
+    const updated = [...macros];
+    const macro: Macro = { name: editName.trim(), text: editText.trim() };
+    if (editHotkey.trim()) macro.hotkey = editHotkey.trim();
+    updated[editIdx!] = macro;
+    updateConfig({ macros: updated });
+    setEditIdx(null);
+  };
+
+  const remove = (idx: number) => {
+    const updated = macros.filter((_, i) => i !== idx);
+    updateConfig({ macros: updated.length > 0 ? updated : undefined });
+    if (editIdx === idx) setEditIdx(null);
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="border border-border-input rounded-sm overflow-hidden">
+        {macros.length === 0 && editIdx === null && (
+          <div className="text-sm text-muted text-center py-4">No macros configured</div>
+        )}
+        {macros.map((m, idx) => (
+          <div
+            key={idx}
+            onClick={() => startEdit(idx)}
+            className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
+              editIdx === idx ? 'bg-surface-alt' : 'hover:bg-surface-hover'
+            }`}
+          >
+            <span className="text-sm text-primary flex-1">{m.name}</span>
+            {m.hotkey && (
+              <span className="text-xs text-faint font-mono bg-surface-alt px-1.5 py-0.5 rounded-sm">{m.hotkey}</span>
+            )}
+            <span className="text-xs text-muted truncate max-w-[200px]">{m.text}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                remove(idx);
+              }}
+              className="text-xs text-danger hover:brightness-125 transition-colors"
+            >
+              &times;
+            </button>
+          </div>
+        ))}
+      </div>
+      {editIdx !== null ? (
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-2">
+            <FormInput
+              autoFocus
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Name"
+              className="flex-1 px-2 py-1"
+            />
+            <FormInput
+              value={editHotkey}
+              onChange={(e) => setEditHotkey(e.target.value)}
+              placeholder="Hotkey (e.g. ctrl+shift+u)"
+              className="w-48 px-2 py-1 font-mono"
+            />
+          </div>
+          <FormInput
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            placeholder="Text to send (e.g. /handoff)"
+            className="w-full px-2 py-1 font-mono"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save();
+            }}
+          />
+          <div className="flex gap-2">
+            <PrimaryButton size="sm" onClick={save}>
+              Save
+            </PrimaryButton>
+            <button
+              onClick={() => setEditIdx(null)}
+              className="text-xs text-secondary hover:text-primary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={startAdd}
+          className="mt-2 text-xs text-accent-hover hover:brightness-125 transition-colors"
+        >
+          + Add macro
+        </button>
+      )}
+      <p className="mt-2 text-xs text-muted">
+        Macros send text to the active terminal session. Assign a hotkey to trigger from the keyboard.
+      </p>
+    </div>
+  );
+}
+
 function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
@@ -671,6 +799,10 @@ export default function SettingsOverlay() {
                       </div>
                     ))}
                   </div>
+                  {cat === 'Macros' &&
+                    (!search.trim() || matchesAllTerms('Macros', search)) && (
+                      <MacroEditor config={config} updateConfig={updateConfig} />
+                    )}
                   {cat === 'Agent' &&
                     (!search.trim() ||
                       PROMPT_DEFS.some((p) => matchesAllTerms(`${p.name} ${p.description} Prompts`, search))) && (

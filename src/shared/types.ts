@@ -85,6 +85,12 @@ export interface ClaudeSession {
   lastModified: number;
 }
 
+export interface Macro {
+  name: string;
+  hotkey?: string; // e.g. "ctrl+shift+u"
+  text: string;
+}
+
 export interface BifrostConfig {
   repos: Repo[];
   ide: 'code' | 'idea' | 'zed';
@@ -108,6 +114,7 @@ export interface BifrostConfig {
     triage?: string;
     reviewInstructions?: string;
   };
+  macros?: Macro[];
 }
 
 export interface CreateTaskParams {

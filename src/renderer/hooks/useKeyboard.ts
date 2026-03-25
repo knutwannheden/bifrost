@@ -150,6 +150,17 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
     const handler = (e: KeyboardEvent) => {
       const { showDiff, diffMode } = getActiveDiffState(state);
 
+      // Macro hotkeys (Ctrl+Shift+letter)
+      if (e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey && state.activeTaskId && state.config?.macros) {
+        const pressed = `ctrl+shift+${e.key.toLowerCase()}`;
+        const macro = state.config.macros.find((m) => m.hotkey === pressed);
+        if (macro) {
+          e.preventDefault();
+          window.bifrost.writeToSession(state.activeTaskId, macro.text + '\r');
+          return;
+        }
+      }
+
       if (!isModKey(e)) return;
 
       // Skip shortcuts when typing in an overlay input/textarea/select
