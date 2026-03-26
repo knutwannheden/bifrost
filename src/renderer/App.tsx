@@ -614,7 +614,7 @@ export default function App() {
 
         {/* Toast notification */}
         {state.toast && (
-          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-lg shadow-2xl border border-border-input animate-fade-in max-w-lg">
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-app/60 backdrop-blur-xl text-primary text-sm rounded-lg shadow-2xl border border-border-input animate-fade-in max-w-lg">
             <div className="flex items-center gap-3">
               <SimpleMarkdown text={state.toast} />
               {state.toastAction?.map((a, i) => (

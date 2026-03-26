@@ -150,11 +150,12 @@ function buildSettings(): SettingDef[] {
       category: 'Agent',
       label: 'Permission Mode',
       tooltip:
-        'Controls how Claude Code handles tool permissions.\n\nDefault: Claude asks before running tools that could modify files or execute commands.\n\nSandbox: Restricts file system and network access to a safe subset, reducing the need for manual approvals.\n\nSkip Permissions: Auto-approves all tool use without asking. Use with caution — Claude can run any command.',
+        'Controls how Claude Code handles tool permissions.\n\nDefault: Claude asks before running tools that could modify files or execute commands.\n\nAuto Mode: An AI safety classifier reviews each tool call and auto-approves low-risk actions. High-risk actions are still blocked. Research preview.\n\nSandbox: Restricts file system and network access to a safe subset, reducing the need for manual approvals.\n\nSkip Permissions: Auto-approves all tool use without asking. Use with caution — Claude can run any command.',
       render: (config, update) => (
         <div className="flex flex-col gap-1.5 mt-1">
           {[
             { value: 'default' as const, label: 'Default' },
+            { value: 'auto-mode' as const, label: 'Auto Mode', desc: 'AI classifier approves low-risk actions' },
             { value: 'sandbox' as const, label: 'Sandbox', desc: 'restricts file and network access' },
             { value: 'skip-permissions' as const, label: 'Skip Permissions', desc: 'auto-approve all tool use' },
           ].map((opt) => (

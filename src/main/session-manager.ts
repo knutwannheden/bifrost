@@ -277,7 +277,9 @@ export function createSession(
     const a: string[] = [];
     if (resume && options?.resumeSessionId) a.push('--resume', options.resumeSessionId);
     if (options?.name) a.push('--name', options.name);
-    if (options?.permissionMode === 'sandbox') a.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
+    if (options?.permissionMode === 'auto-mode') a.push('--enable-auto-mode');
+    else if (options?.permissionMode === 'sandbox')
+      a.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
     else if (options?.permissionMode === 'skip-permissions') a.push('--dangerously-skip-permissions');
     return a;
   };
