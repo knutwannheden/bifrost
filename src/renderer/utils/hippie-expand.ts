@@ -108,11 +108,21 @@ function findMatches(terminal: Terminal, prefix: string): string[] {
     const line = buffer.getLine(y);
     if (!line) continue;
     const text = line.translateToString(true);
-    // Split on non-word characters to extract tokens
-    for (const word of text.split(/[^\w\-./]+/)) {
-      if (word.length > prefix.length && word.startsWith(prefix) && !seen.has(word)) {
-        seen.add(word);
-        matches.push(word);
+    // Split on whitespace to get full tokens (preserving dots, slashes, etc.)
+    for (const token of text.split(/\s+/)) {
+      if (!token) continue;
+      if (token.length > prefix.length && token.startsWith(prefix) && !seen.has(token)) {
+        seen.add(token);
+        matches.push(token);
+      }
+      // Also split on separators (dots, slashes) to match sub-words
+      // e.g. prefix "Chan" matches "ChangeDotNetTargetFramework" within
+      // "org.openrewrite.csharp.ChangeDotNetTargetFramework"
+      for (const sub of token.split(/[./]+/)) {
+        if (sub.length > prefix.length && sub.startsWith(prefix) && !seen.has(sub)) {
+          seen.add(sub);
+          matches.push(sub);
+        }
       }
     }
   }
