@@ -5,7 +5,7 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import { resolveKeymap, serializeBinding } from '../shared/keymap';
 import { stopAllWatching } from './activity-watcher';
 import { initApi, startApi, stopApi } from './bifrost-api';
-import { loadConfig } from './config';
+import { loadConfig, saveConfig } from './config';
 import { closeDatabase, openDatabase } from './db';
 import { ensureHooks } from './integration-installer';
 import { registerIpcHandlers } from './ipc-handlers';
@@ -20,6 +20,15 @@ if (started) {
 app.name = 'Bifrost';
 
 let mainWindow: BrowserWindow | null = null;
+
+function setZoom(win: BrowserWindow | null | undefined, level: number): void {
+  if (!win) return;
+  win.webContents.setZoomLevel(level);
+  win.webContents.send('zoom-changed', Math.round(100 * Math.pow(1.2, level)));
+  const config = loadConfig();
+  config.zoomLevel = level;
+  saveConfig(config);
+}
 
 const createWindow = () => {
   mainWindow = new BrowserWindow({
@@ -44,6 +53,10 @@ const createWindow = () => {
     });
     return { action: 'deny' };
   });
+
+  // Restore saved zoom level
+  const savedZoom = loadConfig().zoomLevel;
+  if (savedZoom) mainWindow.webContents.setZoomLevel(savedZoom);
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
@@ -185,31 +198,17 @@ function buildMenu() {
         {
           label: 'Zoom In',
           accelerator: 'CommandOrControl+Shift+=',
-          click: (_mi, win) => {
-            if (!win) return;
-            const level = win.webContents.getZoomLevel() + 0.5;
-            win.webContents.setZoomLevel(level);
-            win.webContents.send('zoom-changed', Math.round(100 * Math.pow(1.2, level)));
-          },
+          click: (_mi, win) => setZoom(win, (win?.webContents.getZoomLevel() ?? 0) + 0.5),
         },
         {
           label: 'Zoom Out',
           accelerator: 'CommandOrControl+Shift+-',
-          click: (_mi, win) => {
-            if (!win) return;
-            const level = win.webContents.getZoomLevel() - 0.5;
-            win.webContents.setZoomLevel(level);
-            win.webContents.send('zoom-changed', Math.round(100 * Math.pow(1.2, level)));
-          },
+          click: (_mi, win) => setZoom(win, (win?.webContents.getZoomLevel() ?? 0) - 0.5),
         },
         {
           label: 'Reset Zoom',
           accelerator: 'CommandOrControl+0',
-          click: (_mi, win) => {
-            if (!win) return;
-            win.webContents.setZoomLevel(0);
-            win.webContents.send('zoom-changed', 100);
-          },
+          click: (_mi, win) => setZoom(win, 0),
         },
         { type: 'separator' },
         { role: 'toggleDevTools' },

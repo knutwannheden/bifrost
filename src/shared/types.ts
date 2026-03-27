@@ -98,6 +98,7 @@ export interface BifrostConfig {
   fontSize: number;
   fontFamily: string;
   fontWeight: number;
+  zoomLevel?: number;
   permissionMode: 'default' | 'auto-mode' | 'sandbox' | 'skip-permissions';
   hideTerminalOnSwitch: boolean;
   notifications: boolean;
