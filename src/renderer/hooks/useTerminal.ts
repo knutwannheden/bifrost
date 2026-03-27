@@ -405,16 +405,20 @@ export function useTerminal(
 
   // Re-fit when pane becomes visible (e.g. switching tabs) so the PTY
   // column count stays in sync with xterm after background data writes.
+  // Debounce by 50ms so rapid Cmd+Shift+[/] cycling doesn't trigger
+  // a fit+resize IPC for every intermediate tab.
   const visible = options?.visible ?? true;
   useEffect(() => {
-    if (visible && sessionId && terminalRef.current && fitAddonRef.current) {
+    if (!visible || !sessionId || !terminalRef.current || !fitAddonRef.current) return;
+    const timer = setTimeout(() => {
       try {
-        fitAddonRef.current.fit();
-        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
+        fitAddonRef.current!.fit();
+        window.bifrost.resizeSession(sessionId, terminalRef.current!.cols, terminalRef.current!.rows);
       } catch {
         // ignore fit errors
       }
-    }
+    }, 50);
+    return () => clearTimeout(timer);
   }, [visible, sessionId]);
 
   return { terminal: terminalRef, fitAddon: fitAddonRef, loading };
