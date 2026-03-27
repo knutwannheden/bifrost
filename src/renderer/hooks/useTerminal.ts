@@ -4,7 +4,7 @@ import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
 import { resolveTerminalTheme } from '../terminal-themes';
 import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
@@ -347,47 +347,53 @@ export function useTerminal(
     };
   }, [sessionId, containerRef]);
 
+  // Debounced fit+resize to avoid flooding the PTY with SIGWINCHes
+  // when multiple config changes or tab switches fire in quick succession.
+  // A SIGWINCH mid-render can corrupt Claude Code's TUI output.
+  const pendingResize = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedFitResize = useCallback(
+    (delay = 50) => {
+      if (pendingResize.current) clearTimeout(pendingResize.current);
+      pendingResize.current = setTimeout(() => {
+        pendingResize.current = null;
+        if (!terminalRef.current || !fitAddonRef.current || !sessionId) return;
+        try {
+          fitAddonRef.current.fit();
+          window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
+        } catch {
+          // ignore fit errors
+        }
+      }, delay);
+    },
+    [sessionId],
+  );
+
   // Update fontSize dynamically when config changes
   const fontSize = options?.fontSize ?? 14;
   useEffect(() => {
-    if (sessionId && terminalRef.current && fitAddonRef.current) {
+    if (sessionId && terminalRef.current) {
       terminalRef.current.options.fontSize = fontSize;
-      try {
-        fitAddonRef.current.fit();
-        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
-      } catch {
-        // ignore fit errors
-      }
+      debouncedFitResize();
     }
-  }, [sessionId, fontSize]);
+  }, [sessionId, fontSize, debouncedFitResize]);
 
   // Update fontWeight dynamically when config changes
   const fontWeight = options?.fontWeight ?? 300;
   useEffect(() => {
-    if (sessionId && terminalRef.current && fitAddonRef.current) {
+    if (sessionId && terminalRef.current) {
       terminalRef.current.options.fontWeight = fontWeight;
-      try {
-        fitAddonRef.current.fit();
-        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
-      } catch {
-        // ignore fit errors
-      }
+      debouncedFitResize();
     }
-  }, [sessionId, fontWeight]);
+  }, [sessionId, fontWeight, debouncedFitResize]);
 
   // Update fontFamily dynamically when config changes
   const fontFamily = options?.fontFamily ?? 'MesloLGS NF';
   useEffect(() => {
-    if (sessionId && terminalRef.current && fitAddonRef.current) {
+    if (sessionId && terminalRef.current) {
       terminalRef.current.options.fontFamily = `"${fontFamily}", Menlo, Monaco, "Courier New", monospace`;
-      try {
-        fitAddonRef.current.fit();
-        window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
-      } catch {
-        // ignore fit errors
-      }
+      debouncedFitResize();
     }
-  }, [sessionId, fontFamily]);
+  }, [sessionId, fontFamily, debouncedFitResize]);
 
   // Update terminal theme dynamically when config changes
   const terminalTheme = options?.terminalTheme ?? 'Auto';
@@ -409,17 +415,8 @@ export function useTerminal(
   // a fit+resize IPC for every intermediate tab.
   const visible = options?.visible ?? true;
   useEffect(() => {
-    if (!visible || !sessionId || !terminalRef.current || !fitAddonRef.current) return;
-    const timer = setTimeout(() => {
-      try {
-        fitAddonRef.current!.fit();
-        window.bifrost.resizeSession(sessionId, terminalRef.current!.cols, terminalRef.current!.rows);
-      } catch {
-        // ignore fit errors
-      }
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [visible, sessionId]);
+    if (visible && sessionId) debouncedFitResize();
+  }, [visible, sessionId, debouncedFitResize]);
 
   return { terminal: terminalRef, fitAddon: fitAddonRef, loading };
 }
