@@ -136,9 +136,9 @@ export default function TaskTab({
         ref={buttonRef}
         draggable
         className={`group relative flex items-center gap-1.5 pl-4 pr-2 h-full whitespace-nowrap overflow-hidden max-w-[280px] transition-colors ${
-          isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-alt/50 text-secondary'
+          isActive ? 'text-primary' : 'hover:bg-surface-alt/50 text-secondary'
         }`}
-        style={!isActive ? { backgroundColor: recencyBg } : undefined}
+        style={{ backgroundColor: isActive ? 'color-mix(in srgb, var(--color-accent) 25%, transparent)' : recencyBg }}
         onClick={onClick}
         onDoubleClick={startEdit}
         onMouseEnter={handleMouseEnter}
