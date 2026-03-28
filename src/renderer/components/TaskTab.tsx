@@ -39,17 +39,26 @@ export default function TaskTab({
     }
   }, [editing]);
 
-  // Compute recency-based accent background for inactive tabs
+  // Compute recency-based accent background for inactive tabs.
+  // Uses rank among running tasks: most recently visited inactive tab
+  // gets the strongest color, fading in steps for older tabs.
   const recencyBg = (() => {
     if (isActive) return undefined;
     const lastActive = state.lastActiveAt[task.id];
     if (!lastActive) return 'transparent';
-    const ageMs = Date.now() - lastActive;
-    const ageMinutes = ageMs / 60_000;
-    // Full opacity (12%) for just-used tabs, fading to 0% over 60 minutes
-    const opacity = Math.max(0, 0.12 * (1 - ageMinutes / 60));
-    if (opacity < 0.01) return 'transparent';
-    return `color-mix(in srgb, var(--color-accent) ${Math.round(opacity * 100)}%, transparent)`;
+    // Rank this tab among all running tasks by recency (0 = most recent)
+    const runningTasks = state.tasks.filter((t) => t.status === 'running' && t.id !== state.activeTaskId);
+    const ranked = runningTasks
+      .map((t) => ({ id: t.id, ts: state.lastActiveAt[t.id] ?? 0 }))
+      .filter((t) => t.ts > 0)
+      .sort((a, b) => b.ts - a.ts);
+    const rank = ranked.findIndex((t) => t.id === task.id);
+    if (rank < 0) return 'transparent';
+    // Opacity tiers: 18%, 12%, 7%, 3%, then 0%
+    const tiers = [18, 12, 7, 3];
+    const pct = rank < tiers.length ? tiers[rank] : 0;
+    if (pct === 0) return 'transparent';
+    return `color-mix(in srgb, var(--color-accent) ${pct}%, transparent)`;
   })();
 
   // React to START_RENAME_TASK from keymap engine
