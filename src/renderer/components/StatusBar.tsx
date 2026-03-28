@@ -1,36 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { BifrostConfig, DiffStats, Task, TokenUsageResult } from '../../shared/types';
+import type { BifrostConfig, DiffStats, Task } from '../../shared/types';
 import { shortPath } from '../utils/paths';
 import DiffStatsBadge from './DiffStatsBadge';
-
-function formatTokenCount(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}m`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
-  return String(count);
-}
-
-interface TokenTotals {
-  total: number;
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheCreation: number;
-}
-
-function computeTokenTotals(data: TokenUsageResult): TokenTotals {
-  let input = 0;
-  let output = 0;
-  let cacheRead = 0;
-  let cacheCreation = 0;
-  const allPoints = [...data.points, ...data.subagents.flatMap((s) => s.points)];
-  for (const p of allPoints) {
-    input += p.inputTokens;
-    output += p.outputTokens;
-    cacheRead += p.cacheReadTokens ?? 0;
-    cacheCreation += p.cacheCreationTokens ?? 0;
-  }
-  return { total: input + output + cacheRead + cacheCreation, input, output, cacheRead, cacheCreation };
-}
 
 function PathMenu({ worktreePath, onClose }: { worktreePath: string; onClose: () => void }) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -80,14 +51,12 @@ interface StatusBarProps {
 
 export default function StatusBar({ activeTask, config, onToggleIde }: StatusBarProps) {
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
-  const [tokenTotals, setTokenTotals] = useState<TokenTotals | null>(null);
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [pathMenuOpen, setPathMenuOpen] = useState(false);
 
   useEffect(() => {
     if (!activeTask) {
       setDiffStats(null);
-      setTokenTotals(null);
       setPrUrl(null);
       return;
     }
@@ -99,41 +68,16 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
         .catch(() => setDiffStats(null));
     };
 
-    const fetchTokens = () => {
-      window.bifrost
-        .getTokenUsage(activeTask.id)
-        .then((data) => setTokenTotals(computeTokenTotals(data)))
-        .catch(() => setTokenTotals(null));
-    };
-
-    // Throttled token fetch — full JSONL parse is expensive and blocks the
-    // main process event loop, causing keystroke IPC messages to be delayed.
-    let tokenTimer: ReturnType<typeof setTimeout> | null = null;
-    const throttledFetchTokens = () => {
-      if (tokenTimer) return;
-      tokenTimer = setTimeout(() => {
-        tokenTimer = null;
-        fetchTokens();
-      }, 5000);
-    };
-
     fetchStats();
-    fetchTokens();
     window.bifrost
       .getPrUrl(activeTask.id)
       .then(setPrUrl)
       .catch(() => setPrUrl(null));
 
     const unsub = window.bifrost.onActivityEntry((entry) => {
-      if (entry.taskId === activeTask.id) {
-        fetchStats();
-        throttledFetchTokens();
-      }
+      if (entry.taskId === activeTask.id) fetchStats();
     });
-    return () => {
-      unsub();
-      if (tokenTimer) clearTimeout(tokenTimer);
-    };
+    return unsub;
   }, [activeTask?.id]);
 
   return (
@@ -155,13 +99,6 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
               )}
             </span>
             <DiffStatsBadge additions={diffStats?.additions ?? 0} deletions={diffStats?.deletions ?? 0} />
-            {tokenTotals && tokenTotals.total > 0 && (
-              <span
-                title={`Input: ${tokenTotals.input.toLocaleString()} · Output: ${tokenTotals.output.toLocaleString()} · Cache read: ${tokenTotals.cacheRead.toLocaleString()} · Cache creation: ${tokenTotals.cacheCreation.toLocaleString()}`}
-              >
-                {formatTokenCount(tokenTotals.total)}
-              </span>
-            )}
             {prUrl && (
               <button
                 type="button"
