@@ -92,6 +92,7 @@ export type AppAction =
   | { type: 'REMOVE_TASK'; taskId: string }
   | { type: 'UPDATE_TASK'; task: Task }
   | { type: 'SET_ACTIVE_TASK'; taskId: string | null }
+  | { type: 'MARK_TAB_ACTIVE'; taskId: string }
   | { type: 'SET_TASK_UNREAD'; taskId: string; hasUnread: boolean }
   | { type: 'SET_TASK_STATUS'; taskId: string; status: TaskStatus }
   | { type: 'TOGGLE_REPO_MANAGER' }
@@ -308,9 +309,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         activeTaskId: action.taskId,
         previousActiveTaskId: state.activeTaskId !== action.taskId ? state.activeTaskId : state.previousActiveTaskId,
-        lastActiveAt: action.taskId
-          ? { ...state.lastActiveAt, [action.taskId]: Date.now() }
-          : state.lastActiveAt,
+      };
+    case 'MARK_TAB_ACTIVE':
+      return {
+        ...state,
+        lastActiveAt: { ...state.lastActiveAt, [action.taskId]: Date.now() },
       };
     case 'SET_TASK_UNREAD': {
       const target = state.tasks.find((t) => t.id === action.taskId);

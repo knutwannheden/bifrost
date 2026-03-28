@@ -475,6 +475,17 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [state.toast, state.toastDuration, dispatch]);
 
+  // Track tab recency — only mark as active after a 200ms dwell
+  // so rapid Cmd+Shift+[/] cycling doesn't mark every tab
+  useEffect(() => {
+    if (!state.activeTaskId) return;
+    const taskId = state.activeTaskId;
+    const timer = setTimeout(() => {
+      dispatch({ type: 'MARK_TAB_ACTIVE', taskId });
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [state.activeTaskId, dispatch]);
+
   // Show zoom level toast
   useEffect(() => {
     const unsub = window.bifrost.onZoomChanged((pct) => {
