@@ -29,7 +29,7 @@ function getInbox(taskId: string): AgentMessage[] {
 
 function nudgeText(count: number): string {
   const s = count === 1 ? '' : 's';
-  return `You have ${count} new agent message${s}. Use the read_messages tool to read and respond to them. Do not produce any other text output.`;
+  return `You have ${count} new agent message${s}. Use the Bifrost read_messages MCP tool to read and respond to them. Do not produce any other text output.`;
 }
 
 function triggerNudge(taskId: string, mode: NudgeMode): void {
