@@ -39,6 +39,7 @@ export interface AppState {
   tasksLoaded: boolean;
   activeTaskId: string | null;
   previousActiveTaskId: string | null;
+  lastActiveAt: Record<string, number>;
   lastNotifiedTaskId: string | null;
   config: BifrostConfig | null;
   showRepoManager: boolean;
@@ -157,6 +158,7 @@ const initialState: AppState = {
   tasksLoaded: false,
   activeTaskId: null,
   previousActiveTaskId: null,
+  lastActiveAt: {},
   lastNotifiedTaskId: null,
   config: null,
   showRepoManager: false,
@@ -306,6 +308,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         activeTaskId: action.taskId,
         previousActiveTaskId: state.activeTaskId !== action.taskId ? state.activeTaskId : state.previousActiveTaskId,
+        lastActiveAt: action.taskId
+          ? { ...state.lastActiveAt, [action.taskId]: Date.now() }
+          : state.lastActiveAt,
       };
     case 'SET_TASK_UNREAD': {
       const target = state.tasks.find((t) => t.id === action.taskId);

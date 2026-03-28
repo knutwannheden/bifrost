@@ -39,6 +39,19 @@ export default function TaskTab({
     }
   }, [editing]);
 
+  // Compute recency-based accent background for inactive tabs
+  const recencyBg = (() => {
+    if (isActive) return undefined;
+    const lastActive = state.lastActiveAt[task.id];
+    if (!lastActive) return 'transparent';
+    const ageMs = Date.now() - lastActive;
+    const ageMinutes = ageMs / 60_000;
+    // Full opacity (12%) for just-used tabs, fading to 0% over 60 minutes
+    const opacity = Math.max(0, 0.12 * (1 - ageMinutes / 60));
+    if (opacity < 0.01) return 'transparent';
+    return `color-mix(in srgb, var(--color-accent) ${Math.round(opacity * 100)}%, transparent)`;
+  })();
+
   // React to START_RENAME_TASK from keymap engine
   useEffect(() => {
     if (state.renamingTaskId === task.id) {
@@ -114,8 +127,9 @@ export default function TaskTab({
         ref={buttonRef}
         draggable
         className={`group relative flex items-center gap-1.5 pl-4 pr-2 h-full whitespace-nowrap overflow-hidden max-w-[280px] transition-colors ${
-          isActive ? 'bg-surface-alt text-primary' : 'bg-transparent hover:bg-surface-alt/50 text-secondary'
+          isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-alt/50 text-secondary'
         }`}
+        style={!isActive ? { backgroundColor: recencyBg } : undefined}
         onClick={onClick}
         onDoubleClick={startEdit}
         onMouseEnter={handleMouseEnter}
