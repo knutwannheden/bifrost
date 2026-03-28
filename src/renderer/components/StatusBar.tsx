@@ -106,6 +106,17 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
         .catch(() => setTokenTotals(null));
     };
 
+    // Throttled token fetch — full JSONL parse is expensive and blocks the
+    // main process event loop, causing keystroke IPC messages to be delayed.
+    let tokenTimer: ReturnType<typeof setTimeout> | null = null;
+    const throttledFetchTokens = () => {
+      if (tokenTimer) return;
+      tokenTimer = setTimeout(() => {
+        tokenTimer = null;
+        fetchTokens();
+      }, 5000);
+    };
+
     fetchStats();
     fetchTokens();
     window.bifrost
@@ -116,10 +127,13 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
     const unsub = window.bifrost.onActivityEntry((entry) => {
       if (entry.taskId === activeTask.id) {
         fetchStats();
-        fetchTokens();
+        throttledFetchTokens();
       }
     });
-    return unsub;
+    return () => {
+      unsub();
+      if (tokenTimer) clearTimeout(tokenTimer);
+    };
   }, [activeTask?.id]);
 
   return (
