@@ -314,7 +314,7 @@ server.registerTool(
         .describe(
           "Path to the git repository (e.g. '~/git/org/repo') or GitHub slug (e.g. 'org/repo'). Required when not running inside a Bifrost task.",
         ),
-      prompt: z.string().optional().describe("Initial prompt/instructions for the new task's Claude session"),
+      prompt: z.string().describe("The prompt text to send to the new task's Claude session. This is the instruction the new agent will act on."),
     },
   },
   async ({ name, repo, prompt }) => {

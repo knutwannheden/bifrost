@@ -45,7 +45,12 @@ If the user's intent was fully and clearly specified in the arguments, proceed d
 
 ## 5. Create
 
-Call the `create_task` MCP tool with the resolved repo, name, and prompt.
+Call the `create_task` MCP tool with these parameters:
+- `name`: the task title from step 3
+- `prompt`: the drafted prompt from step 3
+- `repo`: the resolved repo path from step 2 (omit if same repo as current task)
+
+**IMPORTANT**: The parameter is called `prompt`, NOT `text`. Do NOT use `text` — that is a different tool's parameter.
 
 ## 6. Report
 
