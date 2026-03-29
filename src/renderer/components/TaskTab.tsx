@@ -150,7 +150,7 @@ export default function TaskTab({
         }}
         onDragEnd={onDragEnd}
       >
-        <span className="flex flex-col items-center min-w-0 max-w-[200px]">
+        <span className="flex flex-col items-center min-w-0 overflow-hidden">
           <span className="flex items-center gap-1.5">
             {task.hasUnread && !isActive && !showSolid ? (
               <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
