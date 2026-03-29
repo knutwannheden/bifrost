@@ -270,8 +270,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'either repoId or repoPath is required');
         return;
       }
-      const async = body.async === true;
-      if (async) {
+      const isAsync = body.async === true;
+      console.log(`[api] create-task: name=${name}, async=${isAsync}, prompt=${prompt ? prompt.length + ' chars' : 'none'}`);
+      if (isAsync) {
         // Return immediately with a pending response, create in background
         jsonResponse(res, { ok: true, pending: true });
         createTaskCore(
