@@ -271,7 +271,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       const isAsync = body.async === true;
-      console.log(`[api] create-task: name=${name}, async=${isAsync}, prompt=${prompt ? prompt.length + ' chars' : 'none'}`);
+      console.log(`[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? prompt.length + ' chars' : 'none'}`);
       if (isAsync) {
         // Return immediately with a pending response, create in background
         jsonResponse(res, { ok: true, pending: true });
@@ -506,10 +506,21 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // SubagentStart/SubagentStop — forward to renderer for activity indicator
-      if (hookEventName === 'SubagentStart' || hookEventName === 'SubagentStop') {
+      // PostToolUse / SubagentStart — Claude is actively working, ensure sweep is on
+      if (hookEventName === 'PostToolUse' || hookEventName === 'SubagentStart') {
+        markActive(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, hookEventName === 'SubagentStart');
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // SessionEnd — session terminated, definitively mark idle
+      if (hookEventName === 'SessionEnd') {
+        markIdle(task.id);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
         }
         jsonResponse(res, { ok: true });
         return;
@@ -522,6 +533,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         }
         handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
           mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, 'Claude stopped with an error', '', 'stop_failure');
         }
         jsonResponse(res, { ok: true });
@@ -537,9 +549,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // Stop hook for code context — mark task idle for prompt-sender queue/restore
-      if (hookContext === 'code') {
+      // Stop / Notification — mark task idle and stop sweep
+      if (hookContext === 'code' && (hookEventName === 'Stop' || hookEventName === 'Notification')) {
         markIdle(task.id);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+        }
       }
       if (isDebounced(task.id)) {
         jsonResponse(res, { ok: true, debounced: true });
