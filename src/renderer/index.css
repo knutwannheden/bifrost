@@ -133,18 +133,27 @@ body {
   width: 100vw;
 }
 
-/* Activity sweep animation for task tabs */
+/* Activity sweep animation for task tabs — uses transform (compositor-only,
+   no main-thread repaints) instead of background-position. */
 .activity-sweep {
-  background: linear-gradient(90deg, transparent 40%, var(--color-success) 50%, transparent 60%);
-  background-size: 300% 100%;
+  overflow: hidden;
+}
+.activity-sweep::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 20%, var(--color-success) 50%, transparent 80%);
+  width: 200%;
+  left: -100%;
   animation: sweep 3s ease-in-out infinite;
+  will-change: transform;
 }
 
 @keyframes sweep {
   0% {
-    background-position: 100% 0;
+    transform: translateX(-25%);
   }
   100% {
-    background-position: 0% 0;
+    transform: translateX(75%);
   }
 }
