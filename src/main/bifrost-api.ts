@@ -15,7 +15,7 @@ import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
 import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
-import { cleanupTask as cleanupMessages, readMessages, replyToMessage, sendMessage } from './message-store';
+import { cleanupTask as cleanupMessages, getUnreadCount, readMessages, replyToMessage, sendMessage } from './message-store';
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
@@ -405,6 +405,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/permission': {
+      // Helper: build additionalContext nudge if there are unread messages
+      const messageContext = (taskId: string): string | undefined => {
+        const count = getUnreadCount(taskId);
+        if (count === 0) return undefined;
+        const s = count === 1 ? '' : 's';
+        return `\u26a1 You have ${count} new Bifrost agent message${s}. Use the Bifrost read_messages MCP tool to read and respond.`;
+      };
+
       const cwd = body.cwd as string;
       const toolName = body.tool_name as string;
       const toolInput = (body.tool_input as Record<string, unknown>) || {};
@@ -417,13 +425,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // If permission management is disabled or permissions are bypassed, let Claude Code handle it
       const config = loadConfig();
       if (!config.managePermissions || config.permissionMode === 'skip-permissions') {
-        jsonResponse(res, {});
+        const pmTask = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+        const ctx = pmTask ? messageContext(pmTask.id) : undefined;
+        jsonResponse(res, ctx ? { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: ctx } } : {});
         return;
       }
 
       const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
       if (!task) {
-        // No matching task — fall back to Claude default
         jsonResponse(res, {});
         return;
       }
@@ -431,8 +440,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Check existing allow/deny rules before prompting
       const existingDecision = checkExistingRules(cwd, toolName, toolInput);
       if (existingDecision) {
+        const ctx = messageContext(task.id);
         jsonResponse(res, {
-          hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: existingDecision },
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: existingDecision,
+            ...(ctx ? { additionalContext: ctx } : {}),
+          },
         });
         return;
       }
@@ -463,13 +477,24 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // UserPromptSubmit — signal Claude is actively working
+      // UserPromptSubmit — signal Claude is actively working + inject message nudge
       if (hookEventName === 'UserPromptSubmit' && hookContext === 'code') {
         const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
         if (task) {
           markActive(task.id);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
+          }
+          const count = getUnreadCount(task.id);
+          if (count > 0) {
+            const s = count === 1 ? '' : 's';
+            jsonResponse(res, {
+              hookSpecificOutput: {
+                hookEventName: 'UserPromptSubmit',
+                additionalContext: `\u26a1 You have ${count} new Bifrost agent message${s}. Use the Bifrost read_messages MCP tool to read and respond.`,
+              },
+            });
+            return;
           }
         }
         jsonResponse(res, { ok: true });
