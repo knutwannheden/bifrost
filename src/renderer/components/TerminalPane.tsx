@@ -42,6 +42,12 @@ export default function TerminalPane({
   const { state } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showSearch, setShowSearch] = useState(false);
+  // Lazy init: don't create the terminal until this pane has been active at least once.
+  // Once initialized, keep it alive so switching back is instant.
+  const [initialized, setInitialized] = useState(active);
+  useEffect(() => {
+    if (active && !initialized) setInitialized(true);
+  }, [active, initialized]);
 
   const fontSize = state.config?.fontSize ?? 14;
   const fontFamily = state.config?.fontFamily;
@@ -49,7 +55,7 @@ export default function TerminalPane({
   const terminalTheme = state.config?.terminalTheme;
   const dark = useResolvedDark();
 
-  const { terminal, loading } = useTerminal(sessionId, containerRef, onTitleChange, {
+  const { terminal, loading } = useTerminal(initialized ? sessionId : '', containerRef, onTitleChange, {
     hideCursor,
     fontSize,
     fontFamily,
