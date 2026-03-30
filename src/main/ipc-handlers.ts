@@ -164,7 +164,17 @@ async function resolveBaseBranch(task: Task): Promise<string | undefined> {
 }
 
 async function resolveBaseBranchInner(task: Task): Promise<string | undefined> {
-  // Try repo's configured default branch (remote-tracking refs preferred for freshness)
+  // Prefer the branch the task was created from — it's the actual fork point
+  if (task.branch) {
+    try {
+      await execFile('git', ['rev-parse', '--verify', task.branch], { cwd: task.worktreePath, timeout: 5000 });
+      return task.branch;
+    } catch {
+      /* ref doesn't exist */
+    }
+  }
+
+  // Fallback: repo's configured default branch (remote-tracking refs preferred)
   const config = loadConfig();
   const repo = config.repos.find((r: Repo) => r.id === task.repoId);
   if (repo?.defaultBranch) {
