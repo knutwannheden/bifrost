@@ -574,8 +574,23 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // Stop / Notification — mark task idle and stop sweep
-      if (hookContext === 'code' && (hookEventName === 'Stop' || hookEventName === 'Notification')) {
+      // Stop — mark task idle and stop sweep, notify user, but don't send
+      // the hook's message fields (Stop doesn't carry notification content)
+      if (hookEventName === 'Stop' && hookContext === 'code') {
+        markIdle(task.id);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+        }
+        if (!isDebounced(task.id)) {
+          markNotified(task.id);
+          handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // Notification — mark idle (Claude is waiting for input) and forward message
+      if (hookEventName === 'Notification' && hookContext === 'code') {
         markIdle(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
