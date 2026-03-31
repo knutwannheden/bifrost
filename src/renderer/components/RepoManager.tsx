@@ -35,7 +35,9 @@ export default function RepoManager() {
 
   useOverlayFocus(overlayRef);
 
-  const filteredRepos = state.repos.filter((r) => matchesAllTerms(`${repoDisplayName(r)} ${r.path}`, search));
+  const filteredRepos = state.repos.filter(
+    (r) => !r.multiTaskId && matchesAllTerms(`${repoDisplayName(r)} ${r.path}`, search),
+  );
 
   // Reset focus when search changes
   useEffect(() => {

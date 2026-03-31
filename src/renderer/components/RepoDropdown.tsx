@@ -64,6 +64,7 @@ export default function RepoDropdown({
     inputRef.current.value.length > 0;
 
   const filtered = repos.filter((r) => {
+    if (r.multiTaskId) return false; // hide container repos
     if (!search || inputFullySelected) return true;
     return matchesRepoSearch(r, search);
   });
