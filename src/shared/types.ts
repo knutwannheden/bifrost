@@ -34,6 +34,8 @@ export interface Repo {
   path: string;
   defaultBranch: string;
   githubPath?: string; // e.g. "openrewrite/hibernate"
+  /** Set when this repo is a synthetic container for a multi-repo task */
+  multiTaskId?: string;
 }
 
 export interface Task {
@@ -133,6 +135,8 @@ export interface CreateTaskParams {
   inPlace?: boolean;
   /** Initial prompt sent to Claude as the first message */
   prompt?: string;
+  /** Repo IDs for multi-repo task — when set, repoId/branch/inPlace/prInfo are ignored */
+  multiRepoIds?: string[];
 }
 
 export interface PrInfo {
