@@ -415,59 +415,8 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           break;
         }
 
-        case 'r':
-          e.preventDefault();
-          dispatch({ type: 'TOGGLE_REPO_MANAGER' });
-          break;
-
-        case 'd':
-          e.preventDefault();
-          dispatch({ type: 'TOGGLE_DIFF' });
-          break;
-
-        case 'y':
-          e.preventDefault();
-          dispatch({ type: 'TOGGLE_TASK_HISTORY' });
-          break;
-
-        case 'l':
-          e.preventDefault();
-          if (showDiff && diffMode === 'log') {
-            dispatch({ type: 'TOGGLE_DIFF' });
-          } else {
-            dispatch({ type: 'SET_DIFF_MODE', mode: 'log' });
-            if (!showDiff) {
-              dispatch({ type: 'TOGGLE_DIFF' });
-            }
-          }
-          break;
-
-        case 'e':
-          e.preventDefault();
-          if (showDiff && diffMode === 'review') {
-            dispatch({ type: 'TOGGLE_DIFF' });
-          } else {
-            dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
-            if (!showDiff) {
-              dispatch({ type: 'TOGGLE_DIFF' });
-            }
-          }
-          break;
-
-        case 'k':
-          e.preventDefault();
-          dispatch({ type: 'TOGGLE_KEYBOARD_SHORTCUTS' });
-          break;
-
-        case ',':
-          e.preventDefault();
-          dispatch({ type: 'TOGGLE_SETTINGS' });
-          break;
-
-        case 'n':
-          e.preventDefault();
-          dispatch({ type: 'TOGGLE_NOTES' });
-          break;
+        // view.repos, view.diff, view.history, view.log, view.review,
+        // view.shortcuts, view.settings, view.notes — handled by useKeymapEngine
 
         case 'g': {
           e.preventDefault();
