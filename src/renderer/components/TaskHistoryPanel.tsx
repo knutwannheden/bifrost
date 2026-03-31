@@ -524,7 +524,11 @@ export default function TaskHistoryPanel() {
     }
   };
 
-  const canReopen = (task: Task) => task.status === 'archived' || task.status === 'stopped';
+  const canReopen = (task: Task) => {
+    if (task.status !== 'archived' && task.status !== 'stopped') return false;
+    const repo = state.repos.find((r) => r.id === task.repoId);
+    return !repo?.multiTaskId;
+  };
   const canArchive = (task: Task) => task.status === 'running' || task.status === 'stopped';
 
   const handleOutcomeOverride = async (taskId: string, outcome: TaskOutcome) => {
@@ -579,7 +583,7 @@ export default function TaskHistoryPanel() {
           if (focusedTask) {
             if (focusedTask.status === 'running') {
               handleActivate(focusedTask);
-            } else {
+            } else if (canReopen(focusedTask)) {
               handleReopen(focusedTask);
             }
           }

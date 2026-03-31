@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BifrostConfig, DiffStats, Task } from '../../shared/types';
+import { useApp } from '../context/AppContext';
 import { shortPath } from '../utils/paths';
 import DiffStatsBadge from './DiffStatsBadge';
 
@@ -50,9 +51,13 @@ interface StatusBarProps {
 }
 
 export default function StatusBar({ activeTask, config, onToggleIde }: StatusBarProps) {
+  const { state } = useApp();
   const [diffStats, setDiffStats] = useState<DiffStats | null>(null);
   const [prUrl, setPrUrl] = useState<string | null>(null);
   const [pathMenuOpen, setPathMenuOpen] = useState(false);
+
+  const activeRepo = activeTask ? state.repos.find((r) => r.id === activeTask.repoId) : null;
+  const isMultiRepo = !!activeRepo?.multiTaskId;
 
   useEffect(() => {
     if (!activeTask) {
@@ -98,7 +103,9 @@ export default function StatusBar({ activeTask, config, onToggleIde }: StatusBar
                 <PathMenu worktreePath={activeTask.worktreePath} onClose={() => setPathMenuOpen(false)} />
               )}
             </span>
-            <DiffStatsBadge additions={diffStats?.additions ?? 0} deletions={diffStats?.deletions ?? 0} />
+            {!isMultiRepo && (
+              <DiffStatsBadge additions={diffStats?.additions ?? 0} deletions={diffStats?.deletions ?? 0} />
+            )}
             {prUrl && (
               <button
                 type="button"

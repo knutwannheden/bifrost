@@ -267,11 +267,18 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
         }
 
-        case 'view.diff':
+        case 'view.diff': {
+          const activeTaskForDiff = s.tasks.find((t) => t.id === s.activeTaskId);
+          const repoForDiff = activeTaskForDiff ? s.repos.find((r) => r.id === activeTaskForDiff.repoId) : null;
+          if (repoForDiff?.multiTaskId) break;
           dispatch({ type: 'TOGGLE_DIFF' });
           break;
+        }
 
-        case 'view.log':
+        case 'view.log': {
+          const activeTaskForLog = s.tasks.find((t) => t.id === s.activeTaskId);
+          const repoForLog = activeTaskForLog ? s.repos.find((r) => r.id === activeTaskForLog.repoId) : null;
+          if (repoForLog?.multiTaskId) break;
           if (showDiff && diffMode === 'log') {
             dispatch({ type: 'TOGGLE_DIFF' });
           } else {
@@ -279,6 +286,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
             if (!showDiff) dispatch({ type: 'TOGGLE_DIFF' });
           }
           break;
+        }
 
         case 'view.history':
           dispatch({ type: 'TOGGLE_TASK_HISTORY' });
@@ -288,7 +296,10 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           dispatch({ type: 'TOGGLE_REPO_MANAGER' });
           break;
 
-        case 'view.review':
+        case 'view.review': {
+          const activeTaskForReview = s.tasks.find((t) => t.id === s.activeTaskId);
+          const repoForReview = activeTaskForReview ? s.repos.find((r) => r.id === activeTaskForReview.repoId) : null;
+          if (repoForReview?.multiTaskId) break;
           if (showDiff && diffMode === 'review') {
             dispatch({ type: 'TOGGLE_DIFF' });
           } else {
@@ -296,6 +307,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
             if (!showDiff) dispatch({ type: 'TOGGLE_DIFF' });
           }
           break;
+        }
 
         case 'view.notes':
           dispatch({ type: 'TOGGLE_NOTES' });
@@ -321,7 +333,12 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           dispatch({ type: 'TOGGLE_SUPERVISOR' });
           break;
 
-        case 'view.activity':
+        case 'view.activity': {
+          const activeTaskForActivity = s.tasks.find((t) => t.id === s.activeTaskId);
+          const repoForActivity = activeTaskForActivity
+            ? s.repos.find((r) => r.id === activeTaskForActivity.repoId)
+            : null;
+          if (repoForActivity?.multiTaskId) break;
           if (showDiff && diffMode === 'activity') {
             dispatch({ type: 'TOGGLE_DIFF' });
           } else {
@@ -329,6 +346,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
             if (!showDiff) dispatch({ type: 'TOGGLE_DIFF' });
           }
           break;
+        }
 
         case 'action.openIde': {
           const activeTask = s.tasks.find((t) => t.id === s.activeTaskId);
