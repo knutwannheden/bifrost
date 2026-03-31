@@ -1,13 +1,15 @@
 import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import type { Repo } from '../shared/types';
 import { getRemotes } from './repo-manager';
 
 const execFile = promisify(execFileCb);
 
 /** Sanitize a task name into a valid git branch name / directory name. */
-function slugify(name: string): string {
+export function slugify(name: string): string {
   return (
     name
       .toLowerCase()
@@ -172,4 +174,159 @@ export async function removeWorktree(repoPath: string, worktreePath: string): Pr
     cwd: repoPath,
     timeout: 30000,
   });
+}
+
+/**
+ * Create a multi-repo container: git init a directory, then create worktrees
+ * from each selected repo as subdirectories.
+ *
+ * Returns the container path and a mapping of repo IDs to their worktree directories.
+ */
+export async function createMultiRepoContainer(
+  taskSlug: string,
+  repos: Repo[],
+): Promise<{ containerPath: string; repoWorktrees: Map<string, string> }> {
+  const containerPath = path.join(os.homedir(), '.bifrost', 'multi-tasks', taskSlug);
+  await fs.promises.mkdir(containerPath, { recursive: true });
+
+  // Init container repo
+  await execFile('git', ['init'], { cwd: containerPath, timeout: 10000 });
+
+  const repoWorktrees = new Map<string, string>();
+  const dirNames: string[] = [];
+  const dirNameSet = new Set<string>();
+  const branchNames: string[] = []; // actual resolved branch names per repo
+  const createdWorktrees: string[] = [];
+
+  try {
+    for (const repo of repos) {
+      // Disambiguate directory names
+      let dirName = repo.name;
+      if (dirNameSet.has(dirName)) {
+        let suffix = 2;
+        while (dirNameSet.has(`${dirName}-${suffix}`)) suffix++;
+        dirName = `${dirName}-${suffix}`;
+      }
+      dirNameSet.add(dirName);
+      dirNames.push(dirName);
+
+      const worktreePath = path.join(containerPath, dirName);
+      const branchName = await resolveAvailableBranchName(repo.path, taskSlug);
+      branchNames.push(branchName);
+
+      await execFile('git', ['worktree', 'add', worktreePath, '-b', branchName, repo.defaultBranch], {
+        cwd: repo.path,
+        timeout: 30000,
+      });
+      createdWorktrees.push(worktreePath);
+      repoWorktrees.set(repo.id, worktreePath);
+    }
+
+    // Write .gitignore
+    const gitignoreContent = `${dirNames.join('\n')}\n`;
+    await fs.promises.writeFile(path.join(containerPath, '.gitignore'), gitignoreContent);
+
+    // Write CLAUDE.md
+    const claudeMd = generateMultiRepoClaudeMd(taskSlug, repos, dirNames, branchNames);
+    await fs.promises.writeFile(path.join(containerPath, 'CLAUDE.md'), claudeMd);
+
+    // Commit initial state
+    await execFile('git', ['add', '.gitignore', 'CLAUDE.md'], { cwd: containerPath, timeout: 10000 });
+    await execFile('git', ['commit', '-m', 'Initial multi-repo task setup'], {
+      cwd: containerPath,
+      timeout: 10000,
+    });
+  } catch (err) {
+    // Rollback: remove any worktrees we created
+    for (const wt of createdWorktrees) {
+      try {
+        const dotGit = await fs.promises.readFile(path.join(wt, '.git'), 'utf-8');
+        const gitDirMatch = dotGit.match(/gitdir:\s*(.+)/);
+        if (gitDirMatch) {
+          const gitDir = path.resolve(wt, gitDirMatch[1].trim());
+          // .git/worktrees/<name> → .git is 2 levels up
+          const parentGitDir = path.resolve(gitDir, '..', '..');
+          const parentRepoPath = path.dirname(parentGitDir);
+          await execFile('git', ['worktree', 'remove', wt, '--force'], {
+            cwd: parentRepoPath,
+            timeout: 10000,
+          });
+        }
+      } catch {
+        /* best effort cleanup */
+      }
+    }
+    // Remove container directory
+    await fs.promises.rm(containerPath, { recursive: true, force: true });
+    throw err;
+  }
+
+  return { containerPath, repoWorktrees };
+}
+
+function generateMultiRepoClaudeMd(taskSlug: string, repos: Repo[], dirNames: string[], branchNames: string[]): string {
+  const lines: string[] = [
+    `# Multi-Repo Task: ${taskSlug}`,
+    '',
+    'This is a multi-repo task managed by Bifrost. Each subdirectory is a git worktree',
+    'from a separate repository.',
+    '',
+    '## Repos',
+    '',
+    '| Directory | Repository | Branch |',
+    '|-----------|-----------|--------|',
+  ];
+
+  for (let idx = 0; idx < repos.length; idx++) {
+    const repo = repos[idx];
+    const dir = dirNames[idx];
+    const branch = branchNames[idx];
+    lines.push(`| \`${dir}/\` | ${repo.path} | \`${branch}\` (from \`${repo.defaultBranch}\`) |`);
+  }
+
+  lines.push('');
+  lines.push('Make changes in the repo subdirectories, not in this root directory.');
+  lines.push('Each subdirectory has its own git history — commit changes within each repo directory separately.');
+  lines.push('Do not run git commands (commit, push, etc.) from this root directory.');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Remove all constituent worktrees and delete the container directory.
+ * Each subdirectory's .git file is read to find the parent repo for worktree removal.
+ */
+export async function cleanupMultiRepoContainer(containerPath: string): Promise<void> {
+  // Find and remove each constituent worktree
+  const entries = await fs.promises.readdir(containerPath, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === '.git') continue;
+    const subPath = path.join(containerPath, entry.name);
+    const dotGitPath = path.join(subPath, '.git');
+
+    try {
+      const stat = await fs.promises.stat(dotGitPath);
+      if (!stat.isFile()) continue; // worktrees have .git as a file, not a directory
+
+      const dotGit = await fs.promises.readFile(dotGitPath, 'utf-8');
+      const gitDirMatch = dotGit.match(/gitdir:\s*(.+)/);
+      if (!gitDirMatch) continue;
+
+      const gitDir = path.resolve(subPath, gitDirMatch[1].trim());
+      // .git/worktrees/<name> → .git is 2 levels up
+      const parentGitDir = path.resolve(gitDir, '..', '..');
+      const parentRepoPath = path.dirname(parentGitDir);
+
+      await execFile('git', ['worktree', 'remove', subPath, '--force'], {
+        cwd: parentRepoPath,
+        timeout: 30000,
+      });
+    } catch {
+      // Best effort — worktree may already be removed
+    }
+  }
+
+  // Delete the container directory
+  await fs.promises.rm(containerPath, { recursive: true, force: true });
 }
