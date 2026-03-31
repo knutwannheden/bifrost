@@ -80,7 +80,15 @@ import { loadTasks, saveTasks } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
 import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
 import { deleteTriage as deleteTriageEntry, listTriages } from './triage-store';
-import { createWorktree, createWorktreeFromPr, removeWorktree, restoreWorktree } from './worktree-manager';
+import {
+  cleanupMultiRepoContainer,
+  createMultiRepoContainer,
+  createWorktree,
+  createWorktreeFromPr,
+  removeWorktree,
+  restoreWorktree,
+  slugify,
+} from './worktree-manager';
 
 // In-memory task list, synced to disk
 let tasks: Task[] = [];
@@ -139,10 +147,19 @@ export async function archiveTaskCore(
     status: 'archived',
     archivedAt: Date.now(),
   });
-  if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
+  if (!task.isExternal && fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-    if (repo) {
+    if (repo?.multiTaskId === task.id) {
+      // Multi-repo cleanup: remove constituent worktrees, container dir, and container repo
+      try {
+        await cleanupMultiRepoContainer(task.worktreePath);
+      } catch {
+        /* best effort */
+      }
+      config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
+      saveConfig(config);
+    } else if (!task.inPlace && repo) {
       removeWorktree(repo.path, task.worktreePath).catch(() => {});
     }
   }
@@ -223,14 +240,22 @@ async function destroyTask(taskId: string): Promise<void> {
   if (task.status === 'running') {
     killSession(taskId);
   }
-  if (!task.inPlace && fs.existsSync(task.worktreePath)) {
+  if (fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-    if (repo) {
+    if (repo?.multiTaskId === task.id) {
+      try {
+        await cleanupMultiRepoContainer(task.worktreePath);
+      } catch {
+        /* best effort */
+      }
+      config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
+      saveConfig(config);
+    } else if (!task.inPlace && repo) {
       try {
         await removeWorktree(repo.path, task.worktreePath);
       } catch {
-        // Worktree may already be removed
+        /* Worktree may already be removed */
       }
     }
   }
@@ -238,7 +263,66 @@ async function destroyTask(taskId: string): Promise<void> {
   saveTasks(tasks);
 }
 
+async function createMultiRepoTask(params: CreateTaskParams, mainWindow: BrowserWindow): Promise<Task> {
+  const config = loadConfig();
+  const selectedRepos = params.multiRepoIds!.map((id) => {
+    const repo = config.repos.find((r: Repo) => r.id === id);
+    if (!repo) throw new Error(`Repo not found: ${id}`);
+    return repo;
+  });
+
+  const name = params.name || generateTaskName();
+  const taskId = randomUUID();
+  const taskSlug = slugify(name);
+
+  const { containerPath } = await createMultiRepoContainer(taskSlug, selectedRepos);
+
+  // Register container as a Repo
+  const containerRepo: Repo = {
+    id: randomUUID(),
+    name: taskSlug,
+    path: containerPath,
+    defaultBranch: 'main',
+    multiTaskId: taskId,
+  };
+  config.repos.push(containerRepo);
+  saveConfig(config);
+
+  createSession(taskId, containerPath, mainWindow, {
+    taskId,
+    name,
+    apiPort: getApiPort() ?? undefined,
+    permissionMode: config.permissionMode,
+    agentTeams: config.agentTeams,
+    prompt: params.prompt,
+  });
+
+  const task: Task = {
+    id: taskId,
+    name,
+    repoId: containerRepo.id,
+    branch: 'main',
+    worktreePath: containerPath,
+    status: 'running',
+    hasUnread: false,
+    createdAt: Date.now(),
+    ...(params.prompt ? { summary: params.prompt } : {}),
+  };
+
+  tasks.push(task);
+  saveTasks(tasks);
+
+  if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
+  startWatching(task.id, containerPath, mainWindow, _claudeCallbacks, task.sessionId);
+
+  return task;
+}
+
 export async function createTaskCore(params: CreateTaskParams, mainWindow: BrowserWindow): Promise<Task> {
+  if (params.multiRepoIds?.length) {
+    return createMultiRepoTask(params, mainWindow);
+  }
+
   const config = loadConfig();
   let repo: Repo | undefined;
 
@@ -508,6 +592,14 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.REOPEN_TASK, async (_event, taskId: string) => {
     const task = getTask(taskId);
+
+    // Multi-repo tasks cannot be reopened (container is deleted on archive)
+    const multiRepoGuardConfig = loadConfig();
+    const multiRepoGuardRepo = multiRepoGuardConfig.repos.find((r: Repo) => r.id === task.repoId);
+    if (multiRepoGuardRepo?.multiTaskId) {
+      throw new Error('Multi-repo tasks cannot be reopened after archiving');
+    }
+
     let worktreePath = task.worktreePath;
     let branch = task.branch;
 
