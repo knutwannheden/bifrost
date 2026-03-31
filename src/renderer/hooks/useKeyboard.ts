@@ -425,7 +425,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           dispatch({ type: 'TOGGLE_DIFF' });
           break;
 
-        case 'h':
+        case 'y':
           e.preventDefault();
           dispatch({ type: 'TOGGLE_TASK_HISTORY' });
           break;
@@ -442,7 +442,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           }
           break;
 
-        case 'u':
+        case 'e':
           e.preventDefault();
           if (showDiff && diffMode === 'review') {
             dispatch({ type: 'TOGGLE_DIFF' });
