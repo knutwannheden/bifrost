@@ -34,7 +34,7 @@ function getWordBeforeCursor(terminal: Terminal): string {
   let start = cursorX;
   while (start > 0) {
     const ch = line.getCell(start - 1)?.getChars() ?? '';
-    if (!ch || /\s/.test(ch)) break;
+    if (!ch || /\W/.test(ch)) break;
     start--;
   }
 
@@ -85,9 +85,9 @@ function getWordFromTuiPrompt(terminal: Terminal): string {
     }
     inputText = inputText.trimEnd();
 
-    // Extract the last word
-    const words = inputText.split(/\s+/).filter(Boolean);
-    return words.length > 0 ? words[words.length - 1] : '';
+    // Extract the last word (word chars only, no trailing punctuation)
+    const words = inputText.match(/\w+/g);
+    return words && words.length > 0 ? words[words.length - 1] : '';
   }
   return '';
 }
@@ -108,21 +108,13 @@ function findMatches(terminal: Terminal, prefix: string): string[] {
     const line = buffer.getLine(y);
     if (!line) continue;
     const text = line.translateToString(true);
-    // Split on whitespace to get full tokens (preserving dots, slashes, etc.)
-    for (const token of text.split(/\s+/)) {
-      if (!token) continue;
+    // Extract word-boundary tokens (no surrounding punctuation)
+    const tokens = text.match(/\w+/g);
+    if (!tokens) continue;
+    for (const token of tokens) {
       if (token.length > prefix.length && token.startsWith(prefix) && !seen.has(token)) {
         seen.add(token);
         matches.push(token);
-      }
-      // Also split on separators (dots, slashes) to match sub-words
-      // e.g. prefix "Chan" matches "ChangeDotNetTargetFramework" within
-      // "org.openrewrite.csharp.ChangeDotNetTargetFramework"
-      for (const sub of token.split(/[./]+/)) {
-        if (sub.length > prefix.length && sub.startsWith(prefix) && !seen.has(sub)) {
-          seen.add(sub);
-          matches.push(sub);
-        }
       }
     }
   }
