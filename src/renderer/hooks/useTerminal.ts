@@ -3,6 +3,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
+import type { IMarker } from '@xterm/xterm';
 import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
@@ -242,15 +243,13 @@ export function useTerminal(
     // When the viewport is not at the bottom, prevent xterm's
     // auto-scroll from jumping away from what the user is reading.
     //
-    // xterm v6 uses an internal ScrollableElement (not native DOM
-    // scroll), so DOM-level scrollTop interception doesn't work.
-    // Instead, save/restore the buffer's ydisp (display offset)
-    // around each write.  Detect user scrolling via the terminal's
-    // onScroll event (fires for both user and programmatic scrolls)
-    // with a wheel-event flag to distinguish the two.
+    // We pin to an IMarker at the viewport's top line: xterm keeps the
+    // marker's .line in sync with its content as the scrollback is
+    // written to and trimmed, so the viewport tracks content rather
+    // than a fixed absolute line number that would drift once the
+    // scrollback cap is reached.
     let hasReceivedData = false;
-    // ydisp to hold (null = follow tail / at bottom)
-    let lockedYdisp: number | null = null;
+    let lockedMarker: IMarker | null = null;
     // True while the user is actively scrolling via wheel/trackpad
     let userScrolling = false;
     let scrollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -260,33 +259,56 @@ export function useTerminal(
       return buf.viewportY >= buf.baseY;
     }
 
+    function clearLock(): void {
+      if (lockedMarker && !lockedMarker.isDisposed) lockedMarker.dispose();
+      lockedMarker = null;
+    }
+
+    function setLockAtViewportTop(): void {
+      clearLock();
+      const buf = terminal.buffer.active;
+      const cursorAbs = buf.baseY + buf.cursorY;
+      const offset = buf.viewportY - cursorAbs;
+      try {
+        const m = terminal.registerMarker(offset);
+        if (m && !m.isDisposed) lockedMarker = m;
+      } catch {
+        // marker out of range — leave lock unset
+      }
+    }
+
     // Detect user scroll via wheel events on the container
     const onWheel = () => {
       userScrolling = true;
       if (scrollTimer) clearTimeout(scrollTimer);
       scrollTimer = setTimeout(() => {
         userScrolling = false;
-        const buf = terminal.buffer.active;
-        if (buf.viewportY >= buf.baseY) {
-          lockedYdisp = null;
+        if (isAtBottom()) {
+          clearLock();
         } else {
-          lockedYdisp = buf.viewportY;
+          setLockAtViewportTop();
         }
       }, 150);
     };
     containerRef.current?.addEventListener('wheel', onWheel, { passive: true, capture: true });
 
     // When xterm scrolls programmatically (auto-scroll on write),
-    // snap back to locked position.  The onScroll event fires for
-    // all scroll changes (user wheel, programmatic, API calls).
+    // snap back to the locked marker's current line.
     terminal.onScroll(() => {
-      if (lockedYdisp === null || userScrolling) return;
-      const buf = terminal.buffer.active;
-      if (buf.viewportY !== lockedYdisp) {
-        // Clamp to valid range (buffer may have been trimmed)
-        const target = Math.min(lockedYdisp, buf.baseY);
-        terminal.scrollToLine(target);
+      if (!lockedMarker || userScrolling) return;
+      if (lockedMarker.isDisposed) {
+        // Content fell out of scrollback — release the lock
+        lockedMarker = null;
+        return;
       }
+      const buf = terminal.buffer.active;
+      const target = lockedMarker.line;
+      if (target >= buf.baseY) {
+        // Locked content is now within the bottom viewport — release lock
+        clearLock();
+        return;
+      }
+      if (buf.viewportY !== target) terminal.scrollToLine(target);
     });
 
     const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
@@ -296,9 +318,7 @@ export function useTerminal(
           setLoading(false);
         }
         // Auto-engage lock if viewport isn't at the bottom
-        if (lockedYdisp === null && !isAtBottom()) {
-          lockedYdisp = terminal.buffer.active.viewportY;
-        }
+        if (!lockedMarker && !isAtBottom()) setLockAtViewportTop();
         terminal.write(data);
       }
     });
@@ -335,6 +355,7 @@ export function useTerminal(
     return () => {
       if (resizeTimer) clearTimeout(resizeTimer);
       if (scrollTimer) clearTimeout(scrollTimer);
+      clearLock();
       containerRef.current?.removeEventListener('wheel', onWheel, { capture: true });
       resizeObserver.disconnect();
       removeDataListener();
