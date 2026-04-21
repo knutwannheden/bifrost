@@ -329,7 +329,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           // Check if worktree is dirty (unless forced or external/in-place)
           if (!force && !task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
             try {
-              const { stdout } = await execFile('git', ['status', '--porcelain'], {
+              const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
                 cwd: task.worktreePath,
                 timeout: 5000,
               });

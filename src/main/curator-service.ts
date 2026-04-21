@@ -82,7 +82,7 @@ async function curatorTick(): Promise<void> {
     if (!fs.existsSync(task.worktreePath)) continue;
 
     try {
-      const { stdout } = await execFile('git', ['status', '--porcelain'], {
+      const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
         cwd: task.worktreePath,
         timeout: 5000,
       });

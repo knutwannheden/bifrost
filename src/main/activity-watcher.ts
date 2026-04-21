@@ -127,7 +127,7 @@ async function getCommitMessage(worktreePath: string, sha: string): Promise<stri
 
 async function getChangedFiles(worktreePath: string): Promise<string[]> {
   try {
-    const { stdout } = await execFile('git', ['status', '--porcelain'], {
+    const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
       cwd: worktreePath,
       timeout: GIT_TIMEOUT_MS,
     });
@@ -291,7 +291,7 @@ export function clearActivityLog(taskId: string): void {
 
 export async function getFileDiffOnDemand(worktreePath: string, filePath: string): Promise<string> {
   try {
-    const { stdout } = await execFile('git', ['diff', 'HEAD', '--', filePath], {
+    const { stdout } = await execFile('git', ['--no-optional-locks', 'diff', 'HEAD', '--', filePath], {
       cwd: worktreePath,
       maxBuffer: 5 * 1024 * 1024,
       timeout: GIT_TIMEOUT_MS,

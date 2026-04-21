@@ -21,9 +21,9 @@ export async function getDiff(
         cwd: worktreePath,
         timeout: 10000,
       });
-      diffArgs = ['diff', mergeBaseOut.trim()];
+      diffArgs = ['--no-optional-locks', 'diff', mergeBaseOut.trim()];
     } else {
-      diffArgs = ['diff', 'HEAD'];
+      diffArgs = ['--no-optional-locks', 'diff', 'HEAD'];
     }
 
     // Get diff for tracked files
@@ -36,10 +36,14 @@ export async function getDiff(
     // Get untracked files and generate synthetic diffs
     let untrackedDiff = '';
     try {
-      const { stdout: untrackedOutput } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], {
-        cwd: worktreePath,
-        timeout: 10000,
-      });
+      const { stdout: untrackedOutput } = await execFile(
+        'git',
+        ['--no-optional-locks', 'ls-files', '--others', '--exclude-standard'],
+        {
+          cwd: worktreePath,
+          timeout: 10000,
+        },
+      );
       const untrackedFiles = untrackedOutput.trim().split('\n').filter(Boolean);
 
       for (const file of untrackedFiles) {
@@ -94,7 +98,10 @@ export async function getFileStatuses(
 
   // Unstaged tracked changes
   try {
-    const { stdout } = await execFile('git', ['diff', '--name-only'], { cwd: worktreePath, timeout: 10000 });
+    const { stdout } = await execFile('git', ['--no-optional-locks', 'diff', '--name-only'], {
+      cwd: worktreePath,
+      timeout: 10000,
+    });
     for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'unstaged');
   } catch {
     /* ignore */
@@ -102,7 +109,7 @@ export async function getFileStatuses(
 
   // Staged changes
   try {
-    const { stdout } = await execFile('git', ['diff', '--cached', '--name-only'], {
+    const { stdout } = await execFile('git', ['--no-optional-locks', 'diff', '--cached', '--name-only'], {
       cwd: worktreePath,
       timeout: 10000,
     });
@@ -113,7 +120,7 @@ export async function getFileStatuses(
 
   // Untracked files
   try {
-    const { stdout } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], {
+    const { stdout } = await execFile('git', ['--no-optional-locks', 'ls-files', '--others', '--exclude-standard'], {
       cwd: worktreePath,
       timeout: 10000,
     });
@@ -125,7 +132,7 @@ export async function getFileStatuses(
   // Committed changes since base branch
   if (baseBranch) {
     try {
-      const { stdout } = await execFile('git', ['diff', '--name-only', `${baseBranch}...HEAD`], {
+      const { stdout } = await execFile('git', ['--no-optional-locks', 'diff', '--name-only', `${baseBranch}...HEAD`], {
         cwd: worktreePath,
         timeout: 10000,
       });
@@ -155,9 +162,9 @@ export async function getDiffStats(
         cwd: worktreePath,
         timeout: 10000,
       });
-      diffArgs = ['diff', '--shortstat', mergeBaseOut.trim()];
+      diffArgs = ['--no-optional-locks', 'diff', '--shortstat', mergeBaseOut.trim()];
     } else {
-      diffArgs = ['diff', '--shortstat', 'HEAD'];
+      diffArgs = ['--no-optional-locks', 'diff', '--shortstat', 'HEAD'];
     }
 
     // Get stats for tracked changes
@@ -181,10 +188,14 @@ export async function getDiffStats(
 
     // Count untracked file additions
     try {
-      const { stdout: untrackedOutput } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], {
-        cwd: worktreePath,
-        timeout: 10000,
-      });
+      const { stdout: untrackedOutput } = await execFile(
+        'git',
+        ['--no-optional-locks', 'ls-files', '--others', '--exclude-standard'],
+        {
+          cwd: worktreePath,
+          timeout: 10000,
+        },
+      );
       const untrackedFiles = untrackedOutput.trim().split('\n').filter(Boolean);
 
       for (const file of untrackedFiles) {

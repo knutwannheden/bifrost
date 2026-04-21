@@ -580,7 +580,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (task.isExternal || task.inPlace) return false;
     if (!fs.existsSync(task.worktreePath)) return false;
     try {
-      const { stdout } = await execFile('git', ['status', '--porcelain'], {
+      const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
         cwd: task.worktreePath,
         timeout: 5000,
       });

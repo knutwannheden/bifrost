@@ -139,7 +139,7 @@ body {
   overflow: hidden;
 }
 .activity-sweep::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(90deg, transparent 20%, var(--color-success) 50%, transparent 80%);

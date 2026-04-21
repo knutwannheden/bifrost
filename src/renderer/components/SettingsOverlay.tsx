@@ -616,10 +616,7 @@ function MacroEditor({
           </div>
         </div>
       ) : (
-        <button
-          onClick={startAdd}
-          className="mt-2 text-xs text-accent-hover hover:brightness-125 transition-colors"
-        >
+        <button onClick={startAdd} className="mt-2 text-xs text-accent-hover hover:brightness-125 transition-colors">
           + Add macro
         </button>
       )}
@@ -800,10 +797,9 @@ export default function SettingsOverlay() {
                       </div>
                     ))}
                   </div>
-                  {cat === 'Macros' &&
-                    (!search.trim() || matchesAllTerms('Macros', search)) && (
-                      <MacroEditor config={config} updateConfig={updateConfig} />
-                    )}
+                  {cat === 'Macros' && (!search.trim() || matchesAllTerms('Macros', search)) && (
+                    <MacroEditor config={config} updateConfig={updateConfig} />
+                  )}
                   {cat === 'Agent' &&
                     (!search.trim() ||
                       PROMPT_DEFS.some((p) => matchesAllTerms(`${p.name} ${p.description} Prompts`, search))) && (
