@@ -277,6 +277,26 @@ export function useTerminal(
       }
     }
 
+    // Strip per-line trailing whitespace from clipboard text. xterm's
+    // getTrimmedLength counts cells holding regular spaces (e.g. background-
+    // color padding emitted by Claude's TUI) as content, so copied lines
+    // retain padding to the full terminal width — which destination editors
+    // wrap as visible blank lines. Capture phase + stopPropagation keeps
+    // xterm's bubble-phase handler from overwriting our cleaned data.
+    const onCopy = (e: ClipboardEvent) => {
+      if (!terminal.hasSelection()) return;
+      const sel = terminal.getSelection();
+      if (!sel) return;
+      const cleaned = sel
+        .split('\n')
+        .map((line) => line.replace(/[ \t]+$/, ''))
+        .join('\n');
+      e.clipboardData?.setData('text/plain', cleaned);
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    containerRef.current?.addEventListener('copy', onCopy, { capture: true });
+
     // Detect user scroll via wheel events on the container
     const onWheel = () => {
       userScrolling = true;
@@ -356,6 +376,7 @@ export function useTerminal(
       if (resizeTimer) clearTimeout(resizeTimer);
       if (scrollTimer) clearTimeout(scrollTimer);
       clearLock();
+      containerRef.current?.removeEventListener('copy', onCopy, { capture: true });
       containerRef.current?.removeEventListener('wheel', onWheel, { capture: true });
       resizeObserver.disconnect();
       removeDataListener();
