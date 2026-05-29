@@ -105,8 +105,11 @@ async function doInterruptAndSend(text: string, taskId: string): Promise<SendPro
   // Send Escape to stop current generation, then wait for prompt area
   writeToSession(taskId, '\x1b');
   await sleep(200);
-  // Now send the prompt normally (no save/restore — we interrupted)
-  writeToSession(taskId, `${text}\r`);
+  // Send text and submit separately so Claude's TUI doesn't treat the
+  // chunk as a paste (which would insert \r as a literal newline).
+  writeToSession(taskId, text);
+  await sleep(10);
+  writeToSession(taskId, '\r');
   return { ok: true };
 }
 
@@ -133,8 +136,11 @@ async function doSendPrompt(text: string, taskId: string): Promise<SendPromptRes
     }
   }
 
-  // Send the prompt
-  writeToSession(taskId, `${text}\r`);
+  // Send text and submit separately so Claude's TUI doesn't treat the
+  // chunk as a paste (which would insert \r as a literal newline).
+  writeToSession(taskId, text);
+  await sleep(10);
+  writeToSession(taskId, '\r');
 
   // Restore saved text immediately — characters written to the PTY
   // will be buffered in stdin and appear when the prompt area returns.
@@ -246,11 +252,17 @@ export async function sendPrompt(
  * scrape/restore of user input — it's a lightweight PTY write.
  */
 export function sendNudge(taskId: string, text: string, mode: 'direct' | 'interrupt'): void {
+  // Send text and submit separately so Claude's TUI doesn't treat the
+  // chunk as a paste (which would insert \r as a literal newline).
+  const submit = () => {
+    writeToSession(taskId, text);
+    setTimeout(() => writeToSession(taskId, '\r'), 10);
+  };
   if (mode === 'interrupt') {
     writeToSession(taskId, '\x1b');
-    setTimeout(() => writeToSession(taskId, `${text}\r`), 200);
+    setTimeout(submit, 200);
   } else {
-    writeToSession(taskId, `${text}\r`);
+    submit();
   }
 }
 
