@@ -348,7 +348,16 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   const name = params.branchName || params.name || generateTaskName();
 
   let worktreePath: string;
-  let branch = params.branch;
+  let branch = repo.defaultBranch;
+  if (params.branch) {
+    // Verify the requested branch/ref exists in the target repo before using it
+    try {
+      await execFile('git', ['rev-parse', '--verify', params.branch], { cwd: repo.path, timeout: 5000 });
+      branch = params.branch;
+    } catch {
+      console.warn(`[create-task] ref "${params.branch}" not found in ${repo.path}, using ${branch}`);
+    }
+  }
   let inPlace = false;
 
   if (params.inPlace) {
@@ -363,7 +372,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   } else {
     worktreePath = params.prInfo
       ? await createWorktreeFromPr(repo.path, name, params.prInfo)
-      : await createWorktree(repo.path, name, params.branch, params.branchName);
+      : await createWorktree(repo.path, name, branch, params.branchName);
   }
 
   const taskId = randomUUID();

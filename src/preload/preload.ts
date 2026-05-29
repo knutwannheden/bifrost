@@ -286,6 +286,14 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.CURATOR_UPDATE, handler);
   },
 
+  // Toast (main → renderer)
+  onToast: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, message: string, duration?: number) =>
+      callback(message, duration);
+    ipcRenderer.on(IPC_STREAM.TOAST, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TOAST, handler);
+  },
+
   // Menu actions
   onMenuAction: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, action: string) => callback(action);

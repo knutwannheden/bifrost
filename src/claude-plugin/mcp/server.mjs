@@ -128,20 +128,28 @@ server.registerTool(
   'list_tasks',
   {
     title: 'List Tasks',
-    description: 'List all Bifrost tasks with their status, branch, and worktree path.',
-    inputSchema: {},
+    description:
+      'List Bifrost tasks with their status, branch, and worktree path. By default returns only non-archived tasks (running, stopped, error). Use status="running" to narrow further to live tasks, or status="all" to include archived.',
+    inputSchema: {
+      status: z
+        .enum(['open', 'running', 'all'])
+        .optional()
+        .describe(
+          'Filter by task status. "open" (default) excludes archived; "running" only live tasks; "all" includes archived.',
+        ),
+    },
   },
-  async () => {
-    const result = await apiCall('/list-tasks', {});
+  async ({ status }) => {
+    const result = await apiCall('/list-tasks', { status: status ?? 'open' });
     const text =
       result.tasks.length > 0
         ? result.tasks
             .map((t) => {
-              const status = t.idle === false ? 'working' : t.idle === true ? 'idle' : t.status;
-              return `- ${t.name} [${status}] (branch: ${t.branch}, id: ${t.id})`;
+              const display = t.idle === false ? 'working' : t.idle === true ? 'idle' : t.status;
+              return `- ${t.name} [${display}] (branch: ${t.branch}, id: ${t.id})`;
             })
             .join('\n')
-        : 'No active Bifrost tasks.';
+        : 'No matching Bifrost tasks.';
     return { content: [{ type: 'text', text }] };
   },
 );
@@ -305,9 +313,7 @@ server.registerTool(
       name: z
         .string()
         .optional()
-        .describe(
-          'Short task title (max ~50 chars, shown in tabs/history). Auto-generated from prompt if omitted.',
-        ),
+        .describe('Short task title (max ~50 chars, shown in tabs/history). Auto-generated from prompt if omitted.'),
       repo: z
         .string()
         .optional()
@@ -320,14 +326,12 @@ server.registerTool(
   async ({ name, repo, prompt }) => {
     let repoId;
     let repoPath;
-    let defaultBranch;
 
     if (TASK_ID) {
       const result = await apiCall('/list-tasks', {});
       const callerTask = result.tasks.find((t) => t.id === TASK_ID);
       if (callerTask) {
         repoId = callerTask.repoId;
-        defaultBranch = callerTask.branch;
       }
     }
 
@@ -348,7 +352,6 @@ server.registerTool(
       repoId,
       repoPath,
       name,
-      branch: defaultBranch || 'main',
       prompt,
       async: true,
     });

@@ -179,6 +179,14 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
+  // Listen for toast messages from main process
+  useEffect(() => {
+    const unsub = window.bifrost.onToast((message, duration) => {
+      dispatch({ type: 'SHOW_TOAST', message, duration });
+    });
+    return unsub;
+  }, [dispatch]);
+
   // Listen for tasks closed/archived via the HTTP API (e.g. from MCP close_task tool)
   useEffect(() => {
     const unsub = window.bifrost.onTaskClosed((taskId, archived) => {

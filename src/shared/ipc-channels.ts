@@ -196,6 +196,7 @@ export const IPC_STREAM = {
   SCRAPE_PROMPT_REQUEST: 'prompt:scrape-request',
   TERMINAL_UNLOCK: 'terminal:unlock',
   CURATOR_UPDATE: 'curator:update',
+  TOAST: 'ui:toast',
 } as const;
 
 // Typed API exposed via contextBridge as window.bifrost
@@ -387,6 +388,9 @@ export interface BifrostAPI {
   setCuratorOutcome(taskId: string, outcome: TaskOutcome, note?: string): Promise<Task>;
   runCuratorNow(): Promise<void>;
   onCuratorUpdate(callback: (taskId: string, curation: TaskCuration) => void): () => void;
+
+  // Toast (main → renderer)
+  onToast(callback: (message: string, duration?: number) => void): () => void;
 
   // Menu actions
   onMenuAction(callback: (action: string) => void): () => void;

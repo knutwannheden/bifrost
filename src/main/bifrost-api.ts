@@ -15,7 +15,13 @@ import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
 import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
-import { cleanupTask as cleanupMessages, getUnreadCount, readMessages, replyToMessage, sendMessage } from './message-store';
+import {
+  cleanupTask as cleanupMessages,
+  getUnreadCount,
+  readMessages,
+  replyToMessage,
+  sendMessage,
+} from './message-store';
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
@@ -244,16 +250,23 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/list-tasks': {
-      const tasks = getTasks().map((t) => ({
-        id: t.id,
-        name: t.name,
-        repoId: t.repoId,
-        status: t.status,
-        idle: t.status === 'running' ? isIdle(t.id) : undefined,
-        branch: t.branch,
-        worktreePath: t.worktreePath,
-        createdAt: t.createdAt,
-      }));
+      const filter = (body as { status?: 'open' | 'running' | 'all' }).status ?? 'open';
+      const tasks = getTasks()
+        .filter((t) => {
+          if (filter === 'all') return true;
+          if (filter === 'running') return t.status === 'running';
+          return t.status !== 'archived';
+        })
+        .map((t) => ({
+          id: t.id,
+          name: t.name,
+          repoId: t.repoId,
+          status: t.status,
+          idle: t.status === 'running' ? isIdle(t.id) : undefined,
+          branch: t.branch,
+          worktreePath: t.worktreePath,
+          createdAt: t.createdAt,
+        }));
       jsonResponse(res, { tasks });
       return;
     }
@@ -272,28 +285,26 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       const isAsync = body.async === true;
-      console.log(`[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? prompt.length + ' chars' : 'none'}`);
+      console.log(
+        `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? prompt.length + ' chars' : 'none'}`,
+      );
       if (isAsync) {
         // Return immediately with a pending response, create in background
         jsonResponse(res, { ok: true, pending: true });
-        createTaskCore(
-          { repoId, repoPath, name, branch: branch || 'main', branchName, prompt },
-          mainWindow!,
-        )
+        createTaskCore({ repoId, repoPath, name, branch, branchName, prompt }, mainWindow!)
           .then((task) => {
             mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
             const callerTriageId = body.bifrost_triage_id as string;
             if (callerTriageId) addTriageTaskId(callerTriageId, task.id);
           })
           .catch((e) => {
-            console.error('[api] async create-task failed:', (e as Error).message);
+            const msg = (e as Error).message;
+            console.error('[api] async create-task failed:', msg);
+            mainWindow!.webContents.send(IPC_STREAM.TOAST, `Task creation failed: ${msg}`, 5000);
           });
       } else {
         try {
-          const task = await createTaskCore(
-            { repoId, repoPath, name, branch: branch || 'main', branchName, prompt },
-            mainWindow!,
-          );
+          const task = await createTaskCore({ repoId, repoPath, name, branch, branchName, prompt }, mainWindow!);
           mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
 
           // Track task created by triage session
@@ -568,7 +579,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-          mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, 'Claude stopped with an error', '', 'stop_failure');
+          mainWindow.webContents.send(
+            IPC_STREAM.HOOK_NOTIFICATION,
+            task.id,
+            task.name,
+            'Claude stopped with an error',
+            '',
+            'stop_failure',
+          );
         }
         jsonResponse(res, { ok: true });
         return;
