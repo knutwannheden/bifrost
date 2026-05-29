@@ -53,6 +53,7 @@ export default function TerminalPane({
   const fontFamily = state.config?.fontFamily;
   const fontWeight = state.config?.fontWeight;
   const terminalTheme = state.config?.terminalTheme;
+  const terminalRenderer = state.config?.terminalRenderer ?? 'dom';
   const dark = useResolvedDark();
 
   const { terminal, loading } = useTerminal(initialized ? sessionId : '', containerRef, onTitleChange, {
@@ -64,6 +65,7 @@ export default function TerminalPane({
     isDark: dark,
     visible: active,
     paneType,
+    renderer: terminalRenderer,
   });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing.
@@ -77,7 +79,7 @@ export default function TerminalPane({
     if (active && focused && terminal.current && !showSearch && (becameFocused || !anyOverlay)) {
       terminal.current.focus();
     }
-  }, [anyOverlay, active, focused, terminal, showSearch]);
+  }, [anyOverlay, active, focused, terminal, showSearch, initialized]);
 
   // Listen for Cmd+F to open search bar
   useEffect(() => {

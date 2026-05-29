@@ -111,6 +111,13 @@ export interface BifrostConfig {
   ollamaModels: string[];
   theme: 'system' | 'dark' | 'light';
   terminalTheme: string;
+  /**
+   * xterm.js renderer. 'dom' uses the built-in DOM renderer (robust, no
+   * texture-atlas ghosting); 'webgl' uses the GPU addon (faster under heavy
+   * streaming, but prone to atlas-ghosting on background-colored cells that
+   * only clears on resize — see useTerminal.ts).
+   */
+  terminalRenderer?: 'dom' | 'webgl';
   slack?: SlackConfig;
   keybindings?: Record<string, string | null>;
   prompts?: {
@@ -377,6 +384,7 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   ollamaModels: ['phi4-mini', 'gemma3:1b'],
   theme: 'system',
   terminalTheme: 'Auto',
+  terminalRenderer: 'dom',
 };
 
 // Permission approval types

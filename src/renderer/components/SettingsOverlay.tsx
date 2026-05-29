@@ -66,6 +66,23 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'terminalRenderer',
+      category: 'Appearance',
+      label: 'Terminal Renderer',
+      tooltip:
+        'DOM is robust and avoids GPU atlas-ghosting (garbled cells until resize). WebGL is faster under heavy streaming but can exhibit that ghosting. Switching recreates open terminals.',
+      render: (config, update) => (
+        <PillToggle
+          options={[
+            { label: 'DOM', value: 'dom' },
+            { label: 'WebGL', value: 'webgl' },
+          ]}
+          value={config.terminalRenderer ?? 'dom'}
+          onChange={(v) => update({ terminalRenderer: v as NonNullable<BifrostConfig['terminalRenderer']> })}
+        />
+      ),
+    },
+    {
       key: 'fontSize',
       category: 'Appearance',
       label: 'Font Size',

@@ -5,7 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { IMarker } from '@xterm/xterm';
 import { Terminal } from '@xterm/xterm';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
 import { resolveTerminalTheme } from '../terminal-themes';
 import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
@@ -39,6 +39,27 @@ export function unlockTerminalInput(sessionId: string): void {
 // Initialised from DEFAULT_KEYMAP so terminal interception works before KeymapProvider mounts.
 export const interceptedKeysRef: { current: InterceptedKeys } = { current: getInterceptedKeys(DEFAULT_KEYMAP) };
 
+/**
+ * Wrap fitAddon.fit() with viewport preservation. Without this, a row-count
+ * change during fit can leave the viewport pointing at an offset where there's
+ * no live content (Claude Code's TUI looks blank until the next user resize).
+ * Pattern adapted from Tabby (xtermFrontend.ts:427-437).
+ */
+function safeFit(terminal: Terminal, fitAddon: FitAddon): void {
+  const before = terminal.buffer.active;
+  const wasAtBottom = before.viewportY >= before.baseY;
+  try {
+    fitAddon.fit();
+  } catch {
+    return;
+  }
+  if (wasAtBottom) {
+    terminal.scrollToBottom();
+  }
+  // When the user is scrolled up (lockedMarker is set), the onScroll handler
+  // re-snaps to the marker — no explicit restoration needed here.
+}
+
 interface TerminalOptions {
   cursorBlink?: boolean;
   hideCursor?: boolean;
@@ -49,6 +70,8 @@ interface TerminalOptions {
   isDark?: boolean;
   visible?: boolean;
   paneType?: 'claude' | 'dev';
+  /** 'dom' (default) or 'webgl'. See BifrostConfig.terminalRenderer. */
+  renderer?: 'dom' | 'webgl';
 }
 
 export function useTerminal(
@@ -59,9 +82,24 @@ export function useTerminal(
 ) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const webglAddonRef = useRef<WebglAddon | null>(null);
   const [loading, setLoading] = useState(true);
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
+
+  // Track last cols/rows sent to PTY so we can skip no-op resizes that
+  // would otherwise fire SIGWINCH and trigger a TUI redraw on every
+  // tab switch.
+  const lastResize = useRef<{ cols: number; rows: number } | null>(null);
+  const sendResizeIfChanged = useCallback(
+    (cols: number, rows: number) => {
+      if (!sessionId) return;
+      if (lastResize.current?.cols === cols && lastResize.current?.rows === rows) return;
+      lastResize.current = { cols, rows };
+      window.bifrost.resizeSession(sessionId, cols, rows);
+    },
+    [sessionId],
+  );
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
     setLoading(true);
@@ -106,32 +144,75 @@ export function useTerminal(
     terminal.loadAddon(searchAddon);
     terminal.open(containerRef.current);
 
-    // Use WebGL renderer for better performance with multiple terminals.
+    // Renderer selection. The built-in DOM renderer (used when this is not
+    // 'webgl') has no texture atlas and so cannot exhibit the atlas-ghosting
+    // bug that garbles background-colored cells until a resize. The WebGL
+    // addon is faster under heavy streaming but carries that bug (and the
+    // context-loss / atlas-clear workarounds below exist solely to manage it).
+    const useWebgl = (options?.renderer ?? 'dom') === 'webgl';
+
     // On context loss (e.g. system sleep), dispose and re-create the addon
-    // so xterm falls back to canvas temporarily then recovers.
+    // so xterm falls back to the DOM renderer temporarily then recovers.
     const loadWebgl = () => {
       try {
         const webgl = new WebglAddon();
+        webglAddonRef.current = webgl;
         webgl.onContextLoss(() => {
           webgl.dispose();
+          if (webglAddonRef.current === webgl) webglAddonRef.current = null;
           // Re-attempt WebGL after a short delay (GPU may be available again)
           setTimeout(loadWebgl, 1000);
         });
+        // Atlas-overflow guard: heavy color/glyph variety from Claude Code's
+        // TUI fills multiple atlas pages and trips xterm.js's WebGL ghosting
+        // bug (xtermjs/xterm.js#5847), producing overlapping garbled glyphs
+        // on colored cells that only clear on resize. Force a clear once
+        // enough pages have accumulated so glyphs get rerasterized.
+        let pagesAdded = 0;
+        webgl.onAddTextureAtlasCanvas(() => {
+          pagesAdded++;
+          if (pagesAdded >= 4) {
+            pagesAdded = 0;
+            // Defer so we don't clear mid-render
+            setTimeout(() => webglAddonRef.current?.clearTextureAtlas(), 0);
+          }
+        });
         terminal.loadAddon(webgl);
       } catch {
-        // WebGL not available, fall back to default canvas renderer
+        // WebGL not available, fall back to the built-in DOM renderer
       }
     };
-    loadWebgl();
+    if (useWebgl) loadWebgl();
 
-    // Initial fit — also resize PTY immediately so output produced before
-    // the buffer drain uses correct dimensions instead of the default 120×30.
-    try {
-      fitAddon.fit();
-      window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
-    } catch {
-      // container may not be visible yet
-    }
+    // Initial fit sizes xterm to the container. Deliberately do NOT resize
+    // the PTY here — sending SIGWINCH before the historical buffer has been
+    // drained causes Claude to redraw, and that redraw races with the
+    // drained write, clobbering scrollback. The PTY resize is deferred
+    // until after the drain has been written below.
+    safeFit(terminal, fitAddon);
+
+    // Font-settle: terminal.open() above measures the cell using whatever
+    // font is currently resolved, which can be the fallback if the configured
+    // family hasn't finished loading. Once the real font lands, dimensions
+    // and atlas contents are stale. Re-measure and clear the atlas after the
+    // font is ready so first-paint glyphs aren't stuck at fallback metrics.
+    let fontSettleCancelled = false;
+    const desiredFont = `${options?.fontSize ?? 14}px "${options?.fontFamily ?? 'MesloLGS NF'}"`;
+    document.fonts
+      .load(desiredFont)
+      .then(() => {
+        if (fontSettleCancelled || !terminalRef.current || !fitAddonRef.current) return;
+        webglAddonRef.current?.clearTextureAtlas();
+        safeFit(terminal, fitAddon);
+        sendResizeIfChanged(terminal.cols, terminal.rows);
+      })
+      .catch(() => {
+        /* font failed to load — fall back to whatever xterm measured */
+      });
+
+    // Reset the last-sent dimensions on each terminal creation so the
+    // post-drain resize always fires for a fresh session.
+    lastResize.current = null;
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -222,23 +303,6 @@ export function useTerminal(
       onTitleChangeRef.current?.(title);
     });
 
-    // Replay any buffered output from before this listener was registered,
-    // then force a resize to trigger SIGWINCH so Claude Code redraws its
-    // TUI with the correct dimensions (buffer was generated at default 120×30).
-    window.bifrost.drainSessionBuffer(sessionId).then((buf) => {
-      if (buf) {
-        setLoading(false);
-        terminal.write(buf, () => {
-          try {
-            fitAddon.fit();
-            window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
-          } catch {
-            /* container may not be visible */
-          }
-        });
-      }
-    });
-
     // Receive data from session
     // When the viewport is not at the bottom, prevent xterm's
     // auto-scroll from jumping away from what the user is reading.
@@ -253,6 +317,11 @@ export function useTerminal(
     // True while the user is actively scrolling via wheel/trackpad
     let userScrolling = false;
     let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+    // Buffer live data arriving from the session until the historical
+    // drain has been written, so the replay isn't clobbered by a
+    // post-SIGWINCH redraw racing through the live listener.
+    let drainComplete = false;
+    const preDrainBuffer: string[] = [];
 
     function isAtBottom(): boolean {
       const buf = terminal.buffer.active;
@@ -276,6 +345,37 @@ export function useTerminal(
         // marker out of range — leave lock unset
       }
     }
+
+    function writeLiveData(data: string): void {
+      if (!hasReceivedData) {
+        hasReceivedData = true;
+        setLoading(false);
+      }
+      // Auto-engage lock if viewport isn't at the bottom
+      if (!lockedMarker && !isAtBottom()) setLockAtViewportTop();
+      terminal.write(data);
+    }
+
+    // Replay any buffered output from before this listener was registered.
+    // After the drained bytes have been written, flush any live data that
+    // arrived during the drain, then resize the PTY (deferred so the
+    // SIGWINCH-induced redraw can't race with the replay).
+    window.bifrost.drainSessionBuffer(sessionId).then((buf) => {
+      const finishDrain = () => {
+        drainComplete = true;
+        for (const data of preDrainBuffer) writeLiveData(data);
+        preDrainBuffer.length = 0;
+        safeFit(terminal, fitAddon);
+        sendResizeIfChanged(terminal.cols, terminal.rows);
+      };
+      if (buf) {
+        setLoading(false);
+        hasReceivedData = true;
+        terminal.write(buf, finishDrain);
+      } else {
+        finishDrain();
+      }
+    });
 
     // Strip per-line trailing whitespace from clipboard text. xterm's
     // getTrimmedLength counts cells holding regular spaces (e.g. background-
@@ -332,15 +432,12 @@ export function useTerminal(
     });
 
     const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
-      if (sid === sessionId) {
-        if (!hasReceivedData) {
-          hasReceivedData = true;
-          setLoading(false);
-        }
-        // Auto-engage lock if viewport isn't at the bottom
-        if (!lockedMarker && !isAtBottom()) setLockAtViewportTop();
-        terminal.write(data);
+      if (sid !== sessionId) return;
+      if (!drainComplete) {
+        preDrainBuffer.push(data);
+        return;
       }
+      writeLiveData(data);
     });
 
     // Handle session exit
@@ -359,20 +456,17 @@ export function useTerminal(
     const resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width === 0 || rect.height === 0) return;
-      try {
-        fitAddon.fit();
-      } catch {
-        // ignore fit errors
-      }
+      safeFit(terminal, fitAddon);
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
-        window.bifrost.resizeSession(sessionId, terminal.cols, terminal.rows);
+        sendResizeIfChanged(terminal.cols, terminal.rows);
       }, 100);
     });
     resizeObserver.observe(containerRef.current);
 
     return () => {
+      fontSettleCancelled = true;
       if (resizeTimer) clearTimeout(resizeTimer);
       if (scrollTimer) clearTimeout(scrollTimer);
       clearLock();
@@ -386,8 +480,12 @@ export function useTerminal(
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
+      webglAddonRef.current = null;
     };
-  }, [sessionId, containerRef]);
+    // options?.renderer is intentionally a dependency: switching renderer
+    // disposes and recreates the terminal (the safe pattern — never re-open
+    // an existing instance), so the A/B toggle takes effect without a restart.
+  }, [sessionId, containerRef, sendResizeIfChanged, options?.renderer]);
 
   // Debounced fit+resize to avoid flooding the PTY with SIGWINCHes
   // when multiple config changes or tab switches fire in quick succession.
@@ -399,15 +497,11 @@ export function useTerminal(
       pendingResize.current = setTimeout(() => {
         pendingResize.current = null;
         if (!terminalRef.current || !fitAddonRef.current || !sessionId) return;
-        try {
-          fitAddonRef.current.fit();
-          window.bifrost.resizeSession(sessionId, terminalRef.current.cols, terminalRef.current.rows);
-        } catch {
-          // ignore fit errors
-        }
+        safeFit(terminalRef.current, fitAddonRef.current);
+        sendResizeIfChanged(terminalRef.current.cols, terminalRef.current.rows);
       }, delay);
     },
-    [sessionId],
+    [sessionId, sendResizeIfChanged],
   );
 
   // Update fontSize dynamically when config changes
@@ -415,6 +509,7 @@ export function useTerminal(
   useEffect(() => {
     if (sessionId && terminalRef.current) {
       terminalRef.current.options.fontSize = fontSize;
+      webglAddonRef.current?.clearTextureAtlas();
       debouncedFitResize();
     }
   }, [sessionId, fontSize, debouncedFitResize]);
@@ -424,6 +519,7 @@ export function useTerminal(
   useEffect(() => {
     if (sessionId && terminalRef.current) {
       terminalRef.current.options.fontWeight = fontWeight;
+      webglAddonRef.current?.clearTextureAtlas();
       debouncedFitResize();
     }
   }, [sessionId, fontWeight, debouncedFitResize]);
@@ -433,6 +529,7 @@ export function useTerminal(
   useEffect(() => {
     if (sessionId && terminalRef.current) {
       terminalRef.current.options.fontFamily = `"${fontFamily}", Menlo, Monaco, "Courier New", monospace`;
+      webglAddonRef.current?.clearTextureAtlas();
       debouncedFitResize();
     }
   }, [sessionId, fontFamily, debouncedFitResize]);
@@ -448,6 +545,10 @@ export function useTerminal(
         ...theme,
         cursor: hideCursorOpt ? theme.background : theme.cursor,
       };
+      // Cached glyphs in the WebGL atlas keep their old fg/bg colors until
+      // invalidated — without this they'd render with the previous theme's
+      // colors until something else forces an atlas refresh.
+      webglAddonRef.current?.clearTextureAtlas();
     }
   }, [sessionId, terminalTheme, isDark, hideCursorOpt]);
 
@@ -459,6 +560,31 @@ export function useTerminal(
   useEffect(() => {
     if (visible && sessionId) debouncedFitResize();
   }, [visible, sessionId, debouncedFitResize]);
+
+  // xterm's RenderService pauses rendering while the terminal sits in a
+  // display:none subtree (driven by an IntersectionObserver on the screen
+  // element). When the subtree becomes visible again the IO callback that
+  // restarts rendering fires asynchronously and the recovery refresh is
+  // batched through requestAnimationFrame — so the browser can paint one
+  // or more frames showing the canvas's stale pixels before xterm catches
+  // up. That's the brief glyph-garbling on tab switch.
+  //
+  // Force a synchronous viewport refresh on the hidden→visible transition,
+  // before the next browser paint. We have to clear _isPaused first since
+  // the IO callback that normally clears it hasn't fired yet at this point;
+  // the IO will set it again later (and ours is idempotent with that).
+  const wasVisible = useRef(visible);
+  useLayoutEffect(() => {
+    const term = terminalRef.current;
+    if (term && visible && !wasVisible.current) {
+      const renderService = (term as { _core?: { _renderService?: { _isPaused: boolean } } })._core?._renderService;
+      if (renderService) renderService._isPaused = false;
+      // refresh's third (sync) argument is in the runtime impl but missing from the public d.ts;
+      // synchronous render guarantees the visible frame is correct, not the next one.
+      (term as { refresh(start: number, end: number, sync?: boolean): void }).refresh(0, term.rows - 1, true);
+    }
+    wasVisible.current = visible;
+  }, [visible]);
 
   return { terminal: terminalRef, fitAddon: fitAddonRef, loading };
 }
