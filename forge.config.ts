@@ -13,7 +13,7 @@ import fs from 'node:fs';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '**/{node-pty,node-pty/**,better-sqlite3,better-sqlite3/**}',
+      unpack: '**/{node-pty,node-pty/**,better-sqlite3,better-sqlite3/**,@parcel,@parcel/**}',
     },
     icon: './assets/icon',
     name: 'Bifrost',
@@ -50,7 +50,16 @@ const config: ForgeConfig = {
     },
     // Copy native modules and plugin source into the packaged app
     packageAfterCopy: async (_config, buildPath) => {
-      const nativeModules = ['node-pty', 'nan', 'node-addon-api', 'better-sqlite3', 'bindings', 'file-uri-to-path'];
+      const nativeModules = ['node-pty', 'nan', 'node-addon-api', 'better-sqlite3', 'bindings', 'file-uri-to-path', '@parcel/watcher'];
+      // @parcel/watcher resolves its prebuilt binary from a platform-specific
+      // package (e.g. @parcel/watcher-darwin-arm64); copy whichever ones the
+      // build host installed.
+      const parcelDir = path.join(__dirname, 'node_modules', '@parcel');
+      if (fs.existsSync(parcelDir)) {
+        for (const entry of fs.readdirSync(parcelDir)) {
+          if (entry.startsWith('watcher-')) nativeModules.push(`@parcel/${entry}`);
+        }
+      }
       for (const mod of nativeModules) {
         const src = path.join(__dirname, 'node_modules', mod);
         const dest = path.join(buildPath, 'node_modules', mod);
@@ -71,7 +80,9 @@ const config: ForgeConfig = {
     // node-pty ships with prebuilds for all platforms — skip rebuilding to
     // avoid creating a build/Release that shadows the prebuilds directory
     // and can break when spawn-helper goes missing.
-    ignoreModules: ['node-pty'],
+    // @parcel/watcher is N-API based, so its prebuilt binary loads under
+    // Electron unchanged — skip the rebuild and use the prebuild.
+    ignoreModules: ['node-pty', '@parcel/watcher'],
   },
   makers: [
     new MakerSquirrel({}),

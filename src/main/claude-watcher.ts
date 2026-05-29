@@ -13,9 +13,15 @@ import type {
   TokenUsageResult,
 } from '../shared/types';
 import { loadConfig } from './config';
+import { type FsWatchHandle, watchDir } from './fs-watcher';
 import { summarizeTask } from './task-summarizer';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
+
+// The filesystem watch drives the low-latency path; this slow poll is a safety
+// net (dropped events) and bootstraps the watch once the project dir appears —
+// Claude Code creates it lazily after the session starts writing.
+const CLAUDE_SAFETY_POLL_MS = 2000;
 
 interface ClaudeWatcher {
   taskId: string;
@@ -23,7 +29,12 @@ interface ClaudeWatcher {
   projectDir: string;
   /** Byte offset per JSONL file so we only read new lines */
   fileOffsets: Map<string, number>;
+  /** Safety-net poll; the filesystem watch drives the hot path. */
   pollTimer: ReturnType<typeof setInterval>;
+  /** Filesystem watch on the project dir, once it exists. */
+  fsWatch: FsWatchHandle | null;
+  /** Guards against overlapping subscribe() attempts. */
+  subscribing: boolean;
   /** Total JSONL lines seen so far */
   lineCount: number;
   /** lineCount at which we last triggered a summary */
@@ -268,7 +279,19 @@ export function startClaudeWatching(
     }
   }
 
-  const pollTimer = setInterval(() => {
+  const w: ClaudeWatcher = {
+    taskId,
+    sessionId,
+    projectDir,
+    fileOffsets,
+    pollTimer: null as unknown as ReturnType<typeof setInterval>,
+    fsWatch: null,
+    subscribing: false,
+    lineCount: 0,
+    lastSummaryAt: 0,
+  };
+
+  const processNewLines = (): void => {
     const files = getWatchFiles();
 
     for (const filePath of files) {
@@ -295,35 +318,51 @@ export function startClaudeWatching(
       }
 
       if (lines.length > 0) {
-        const w = watchers.get(taskId);
-        if (w) {
-          w.lineCount += lines.length;
-          const { onSummary } = callbacks ?? {};
-          if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
-            w.lastSummaryAt = w.lineCount;
-            const config = loadConfig();
-            summarizeTask(worktreePath, { sessionId: w.sessionId, ollamaModels: config.ollamaModels })
-              .then((summary) => {
-                if (summary) onSummary(taskId, summary);
-              })
-              .catch(() => {
-                /* ignore */
-              });
-          }
+        w.lineCount += lines.length;
+        const { onSummary } = callbacks ?? {};
+        if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
+          w.lastSummaryAt = w.lineCount;
+          const config = loadConfig();
+          summarizeTask(worktreePath, { sessionId: w.sessionId, ollamaModels: config.ollamaModels })
+            .then((summary) => {
+              if (summary) onSummary(taskId, summary);
+            })
+            .catch(() => {
+              /* ignore */
+            });
         }
       }
     }
-  }, 1000);
+  };
 
-  watchers.set(taskId, {
-    taskId,
-    sessionId,
-    projectDir,
-    fileOffsets,
-    pollTimer,
-    lineCount: 0,
-    lastSummaryAt: 0,
-  });
+  // Subscribe to the project dir once it exists. Claude Code creates it lazily,
+  // so this is retried from the safety poll until it succeeds.
+  const ensureSubscribed = (): void => {
+    if (w.fsWatch || w.subscribing || !fs.existsSync(projectDir)) return;
+    w.subscribing = true;
+    watchDir(projectDir, processNewLines, { debounceMs: 100 })
+      .then((handle) => {
+        if (watchers.get(taskId) === w) w.fsWatch = handle;
+        else void handle.close();
+      })
+      .catch(() => {
+        /* ignore — the safety poll keeps streaming and will retry */
+      })
+      .finally(() => {
+        w.subscribing = false;
+      });
+  };
+
+  ensureSubscribed();
+
+  // Safety net: catches any dropped events and (re)establishes the watch once
+  // the project dir appears. The fs watch handles the low-latency path.
+  w.pollTimer = setInterval(() => {
+    ensureSubscribed();
+    processNewLines();
+  }, CLAUDE_SAFETY_POLL_MS);
+
+  watchers.set(taskId, w);
 }
 
 /**
@@ -728,6 +767,7 @@ export function stopClaudeWatching(taskId: string): void {
   const w = watchers.get(taskId);
   if (w) {
     clearInterval(w.pollTimer);
+    void w.fsWatch?.close();
     watchers.delete(taskId);
   }
 }

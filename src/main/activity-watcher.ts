@@ -1,5 +1,7 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
@@ -11,11 +13,55 @@ import {
   stopClaudeWatching,
 } from './claude-watcher';
 import { getDb } from './db';
+import { type FsWatchHandle, watchDir } from './fs-watcher';
 
 const execFile = promisify(execFileCb);
 
-const POLL_INTERVAL_MS = 2000;
+// Filesystem watching drives the hot path; this slow poll is only a safety net
+// for events the OS may drop (FSEvents/inotify overflow under bursty load).
+const SAFETY_POLL_INTERVAL_MS = 15000;
 const GIT_TIMEOUT_MS = 10000;
+
+// Heavy/uninteresting subtrees we never need change signals from. `.git` is
+// excluded here and watched separately via the resolved gitdir (below), because
+// a commit on a worktree touches the gitdir's `logs/HEAD`, not the worktree.
+const WORKTREE_IGNORE = [
+  '**/node_modules/**',
+  '**/.git/**',
+  '**/dist/**',
+  '**/build/**',
+  '**/out/**',
+  '**/target/**',
+  '**/.next/**',
+  '**/.turbo/**',
+  '**/.cache/**',
+  '**/coverage/**',
+];
+
+// The gitdir's `objects/` sees heavy pack churn that tells us nothing the
+// `logs/HEAD`/refs/index changes don't; ignore it to avoid needless re-polls.
+const GITDIR_IGNORE = ['**/objects/**'];
+
+/**
+ * Resolve a worktree's actual git directory. For a linked worktree, `.git` is a
+ * file containing `gitdir: <path>` pointing at `<main-repo>/.git/worktrees/<name>`;
+ * for a normal checkout it's the `.git` directory itself. Returns null if it
+ * can't be resolved (the safety poll still covers commit detection in that case).
+ */
+function resolveGitDir(worktreePath: string): string | null {
+  const dotGit = path.join(worktreePath, '.git');
+  try {
+    const st = fs.statSync(dotGit);
+    if (st.isDirectory()) return dotGit;
+    const content = fs.readFileSync(dotGit, 'utf-8');
+    const match = content.match(/^gitdir:\s*(.+)$/m);
+    if (!match) return null;
+    const gitdir = match[1].trim();
+    return path.isAbsolute(gitdir) ? gitdir : path.resolve(worktreePath, gitdir);
+  } catch {
+    return null;
+  }
+}
 
 // biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
 type Row = Record<string, any>;
@@ -92,11 +138,16 @@ function loadEntries(taskId: string): ActivityEntry[] {
 }
 
 interface TaskWatcher {
-  pollTimer: ReturnType<typeof setInterval>;
+  /** Safety-net poll; the filesystem watches below drive the hot path. */
+  safetyTimer: ReturnType<typeof setInterval>;
+  worktreeWatch: FsWatchHandle | null;
+  gitdirWatch: FsWatchHandle | null;
   entries: ActivityEntry[];
   headSha: string | null;
   knownFiles: Set<string>;
   polling: boolean;
+  /** A change fired while a poll was in flight — re-run once it finishes. */
+  pollPending: boolean;
 }
 
 const watchers = new Map<string, TaskWatcher>();
@@ -156,11 +207,14 @@ export function startWatching(
   const entries = loadEntries(taskId);
 
   const tw: TaskWatcher = {
-    pollTimer: null as unknown as ReturnType<typeof setInterval>,
+    safetyTimer: null as unknown as ReturnType<typeof setInterval>,
+    worktreeWatch: null,
+    gitdirWatch: null,
     entries,
     headSha: null,
     knownFiles: new Set<string>(),
     polling: false,
+    pollPending: false,
   };
 
   // Get initial HEAD SHA and file state before starting the poll loop
@@ -172,8 +226,15 @@ export function startWatching(
   });
 
   const poll = async () => {
-    if (tw.polling) return; // Previous poll still running — skip this cycle
+    if (tw.polling) {
+      // A poll is in flight; remember to re-run once it finishes so a change
+      // (especially a commit) that lands mid-poll isn't stranded until the
+      // slow safety poll.
+      tw.pollPending = true;
+      return;
+    }
     tw.polling = true;
+    tw.pollPending = false;
     try {
       // 1. Check for new commit
       const currentSha = await getHeadSha(worktreePath);
@@ -231,11 +292,46 @@ export function startWatching(
       console.error(`[activity-watcher] poll error for task ${taskId}:`, err);
     } finally {
       tw.polling = false;
+      // A change fired during the poll above (including via the commit branch's
+      // early return) — run one more pass to pick it up. In `finally` so it
+      // covers every exit path.
+      if (tw.pollPending) {
+        tw.pollPending = false;
+        void poll();
+      }
     }
   };
 
-  tw.pollTimer = setInterval(poll, POLL_INTERVAL_MS);
+  // Slow safety net — the filesystem watches below handle the low-latency path.
+  tw.safetyTimer = setInterval(poll, SAFETY_POLL_INTERVAL_MS);
   watchers.set(taskId, tw);
+
+  // Event-driven: re-poll when worktree files change (file edits) or the gitdir
+  // changes (commits). `subscribe` is async; if this task's watcher is replaced
+  // or stopped before it resolves, close the orphaned handle immediately.
+  const trigger = (): void => {
+    void poll();
+  };
+  watchDir(worktreePath, trigger, { ignore: WORKTREE_IGNORE })
+    .then((handle) => {
+      if (watchers.get(taskId) === tw) tw.worktreeWatch = handle;
+      else void handle.close();
+    })
+    .catch((err) => {
+      console.error(`[activity-watcher] failed to watch worktree for task ${taskId}:`, err);
+    });
+
+  const gitdir = resolveGitDir(worktreePath);
+  if (gitdir) {
+    watchDir(gitdir, trigger, { ignore: GITDIR_IGNORE })
+      .then((handle) => {
+        if (watchers.get(taskId) === tw) tw.gitdirWatch = handle;
+        else void handle.close();
+      })
+      .catch((err) => {
+        console.error(`[activity-watcher] failed to watch gitdir for task ${taskId}:`, err);
+      });
+  }
 
   // Also watch Claude Code JSONL session files
   startClaudeWatching(taskId, worktreePath, mainWindow, claudeCallbacks, sessionId);
@@ -244,7 +340,9 @@ export function startWatching(
 export function stopWatching(taskId: string): void {
   const tw = watchers.get(taskId);
   if (tw) {
-    clearInterval(tw.pollTimer);
+    clearInterval(tw.safetyTimer);
+    void tw.worktreeWatch?.close();
+    void tw.gitdirWatch?.close();
     watchers.delete(taskId);
   }
   stopClaudeWatching(taskId);
