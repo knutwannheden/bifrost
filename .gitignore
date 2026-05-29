@@ -96,3 +96,6 @@ dist/
 
 # Git worktrees
 .worktrees/
+
+# memsearch index cache
+.memsearch/
