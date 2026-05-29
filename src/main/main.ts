@@ -24,7 +24,7 @@ let mainWindow: BrowserWindow | null = null;
 function setZoom(win: BrowserWindow | null | undefined, level: number): void {
   if (!win) return;
   win.webContents.setZoomLevel(level);
-  win.webContents.send('zoom-changed', Math.round(100 * Math.pow(1.2, level)));
+  win.webContents.send('zoom-changed', Math.round(100 * 1.2 ** level));
   const config = loadConfig();
   config.zoomLevel = level;
   saveConfig(config);
