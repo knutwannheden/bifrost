@@ -29,6 +29,7 @@ import {
   startReviewActivityWatch,
 } from './review-service';
 import { killSession } from './session-manager';
+import { completeSupervisorItem } from './supervisor-service';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 import { removeWorktree } from './worktree-manager';
 
@@ -509,6 +510,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId, hookMessage);
         }
         completeTriage(hookTriageId);
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // Supervisor stop — the item's Claude session finished its turn
+      const hookSupervisorItemId = body.bifrost_supervisor_item_id as string;
+      if (hookEventName === 'Stop' && hookContext === 'supervisor' && hookSupervisorItemId) {
+        completeSupervisorItem(hookSupervisorItemId);
         jsonResponse(res, { ok: true });
         return;
       }

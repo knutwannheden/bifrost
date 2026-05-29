@@ -16,6 +16,9 @@ if review_id:
 triage_id = os.environ.get('BIFROST_TRIAGE_ID', '')
 if triage_id:
     d['bifrost_triage_id'] = triage_id
+supervisor_item_id = os.environ.get('BIFROST_SUPERVISOR_ITEM_ID', '')
+if supervisor_item_id:
+    d['bifrost_supervisor_item_id'] = supervisor_item_id
 print(json.dumps(d))
 " 2>/dev/null)"
 [ -z "$ENRICHED" ] && exit 0

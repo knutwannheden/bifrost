@@ -1,4 +1,3 @@
-import { ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -10,6 +9,7 @@ import { generateTaskName } from '../shared/name-generator';
 import type { SupervisorItem, SupervisorState, Task } from '../shared/types';
 import { loadConfig } from './config';
 import { listNotes, updateNote } from './note-store';
+import { killSession, spawnSession } from './session-manager';
 import { loadSupervisorState, saveSupervisorState } from './supervisor-store';
 import { createWorktree, removeWorktree } from './worktree-manager';
 
@@ -18,7 +18,10 @@ type TaskCreator = (item: SupervisorItem) => Promise<Task>;
 let mainWindow: BrowserWindow | null = null;
 let taskCreator: TaskCreator | null = null;
 let state: SupervisorState = { running: false, concurrency: 2, items: [] };
-const processes = new Map<string, ChildProcess>();
+// itemId → PTY session ID of its running Claude session
+const sessionIds = new Map<string, string>();
+// itemIds whose Claude session signaled completion via the Stop hook
+const completedItems = new Set<string>();
 
 function broadcastState(): void {
   saveSupervisorState(state);
@@ -101,15 +104,11 @@ export function startSupervisor(): SupervisorState {
 export function stopSupervisor(): SupervisorState {
   state.running = false;
 
-  // Kill all running processes
+  // Kill all running sessions
   for (const item of state.items) {
     if (item.status === 'running') {
-      const proc = processes.get(item.id);
-      if (proc) {
-        proc.kill('SIGTERM');
-        processes.delete(item.id);
-      }
       updateItem(item.id, { status: 'paused' });
+      killItemSession(item.id);
     }
   }
 
@@ -130,12 +129,8 @@ export function pauseItem(itemId: string): SupervisorState {
   const item = state.items.find((i) => i.id === itemId);
   if (!item || item.status !== 'running') return state;
 
-  const proc = processes.get(itemId);
-  if (proc) {
-    proc.kill('SIGTERM');
-    processes.delete(itemId);
-  }
   updateItem(itemId, { status: 'paused' });
+  killItemSession(itemId);
   broadcastState();
 
   if (state.running) processQueue();
@@ -159,11 +154,8 @@ export async function openItem(itemId: string): Promise<Task> {
 
   // Kill if running
   if (item.status === 'running') {
-    const proc = processes.get(itemId);
-    if (proc) {
-      proc.kill('SIGTERM');
-      processes.delete(itemId);
-    }
+    updateItem(itemId, { status: 'opened' });
+    killItemSession(itemId);
   }
 
   const task = await taskCreator(item);
@@ -178,13 +170,9 @@ export function removeItem(itemId: string): SupervisorState {
   const item = state.items.find((i) => i.id === itemId);
   if (!item) return state;
 
-  // Only allow removing non-running items
+  // Kill the session if the item is still running
   if (item.status === 'running') {
-    const proc = processes.get(itemId);
-    if (proc) {
-      proc.kill('SIGTERM');
-      processes.delete(itemId);
-    }
+    killItemSession(itemId);
   }
 
   // Clean up worktree if it exists and wasn't opened as a task
@@ -231,10 +219,35 @@ function processQueue(): void {
   broadcastState();
 }
 
+function killItemSession(itemId: string): void {
+  const ptySessionId = sessionIds.get(itemId);
+  if (ptySessionId) {
+    killSession(ptySessionId);
+    sessionIds.delete(itemId);
+  }
+  completedItems.delete(itemId);
+}
+
+/**
+ * Called when an item's Claude session signals completion via the Stop hook.
+ * Kills the PTY; the onBeforeExit handler then marks the item done.
+ */
+export function completeSupervisorItem(itemId: string): void {
+  const item = state.items.find((i) => i.id === itemId);
+  if (!item || item.status !== 'running') return;
+  completedItems.add(itemId);
+  const ptySessionId = sessionIds.get(itemId);
+  if (ptySessionId) {
+    killSession(ptySessionId);
+  }
+}
+
 async function spawnProcess(item: SupervisorItem): Promise<void> {
   const config = loadConfig();
   const repo = config.repos.find((r) => r.id === item.repoId);
   if (!repo) throw new Error(`Repo not found: ${item.repoId}`);
+  const window = mainWindow;
+  if (!window) throw new Error('Supervisor not initialized');
 
   // Create worktree if needed
   let worktreePath = item.worktreePath;
@@ -244,75 +257,55 @@ async function spawnProcess(item: SupervisorItem): Promise<void> {
     broadcastState();
   }
 
-  const env = { ...process.env } as Record<string, string>;
-  delete env.CLAUDECODE;
-  env.BIFROST_CONTEXT = 'supervisor';
-  env.BIFROST_SUPERVISOR_ITEM_ID = item.id;
+  const extraEnv: Record<string, string> = {
+    BIFROST_CONTEXT: 'supervisor',
+    BIFROST_SUPERVISOR_ITEM_ID: item.id,
+  };
   const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
   try {
-    env.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim();
+    extraEnv.BIFROST_API_PORT = fs.readFileSync(portFile, 'utf-8').trim();
   } catch {
     /* port file may not exist */
   }
 
-  const args: string[] = ['-p'];
+  const args: string[] = [];
   if (config.permissionMode === 'skip-permissions') {
     args.push('--dangerously-skip-permissions');
   }
 
-  args.push(item.noteText);
+  const ptySessionId = `supervisor-${item.id}`;
 
-  const proc = spawn('claude', args, {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    cwd: worktreePath,
-    env,
-  });
+  spawnSession(ptySessionId, 'claude', args, worktreePath, window, {
+    extraEnv,
+    autoTrust: true,
+    prompt: item.noteText,
+    onBeforeExit: (buffer, exitCode) => {
+      sessionIds.delete(item.id);
+      const completed = completedItems.delete(item.id);
 
-  processes.set(item.id, proc);
+      // Item may have been paused/opened/removed while running — check current status
+      const current = state.items.find((i) => i.id === item.id);
+      if (!current || current.status !== 'running') return false;
 
-  let stderr = '';
-
-  proc.stderr?.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString();
-  });
-
-  proc.on('close', (code) => {
-    processes.delete(item.id);
-
-    // Item may have been paused/opened while running — check current status
-    const current = state.items.find((i) => i.id === item.id);
-    if (!current || current.status !== 'running') return;
-
-    if (code === 0) {
-      updateItem(item.id, { status: 'done', completedAt: Date.now() });
-      try {
-        updateNote(item.repoId, item.noteId, { addressed: true });
-      } catch {
-        /* note may have been deleted */
+      if (completed || exitCode === 0) {
+        updateItem(item.id, { status: 'done', completedAt: Date.now() });
+        try {
+          updateNote(item.repoId, item.noteId, { addressed: true });
+        } catch {
+          /* note may have been deleted */
+        }
+      } else {
+        updateItem(item.id, {
+          status: 'error',
+          errorMessage: buffer.trim().slice(-500) || `claude exited with code ${exitCode}`,
+          completedAt: Date.now(),
+        });
       }
-    } else {
-      updateItem(item.id, {
-        status: 'error',
-        errorMessage: stderr.trim().slice(0, 500) || `claude exited with code ${code}`,
-        completedAt: Date.now(),
-      });
-    }
-    broadcastState();
-    processQueue();
+      broadcastState();
+      processQueue();
+      return false;
+    },
   });
 
-  proc.on('error', (err) => {
-    processes.delete(item.id);
-
-    const current = state.items.find((i) => i.id === item.id);
-    if (!current || current.status !== 'running') return;
-
-    updateItem(item.id, {
-      status: 'error',
-      errorMessage: err.message,
-      completedAt: Date.now(),
-    });
-    broadcastState();
-    processQueue();
-  });
+  sessionIds.set(item.id, ptySessionId);
 }
