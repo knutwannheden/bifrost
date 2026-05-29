@@ -157,3 +157,20 @@ body {
     transform: translateX(75%);
   }
 }
+
+/* Active-tab underline grows from 0 to full width over the dwell window —
+   matches the duration of the MARK_TAB_ACTIVE timer in App.tsx so the
+   underline fills exactly as the tab "commits" to recents. */
+.tab-active-underline {
+  transform-origin: left;
+  animation: tab-underline-grow 200ms ease-out;
+}
+
+@keyframes tab-underline-grow {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}

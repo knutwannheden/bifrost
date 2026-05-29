@@ -38,7 +38,10 @@ export interface AppState {
   tasks: Task[];
   tasksLoaded: boolean;
   activeTaskId: string | null;
+  /** Tab the user previously dwelled on (≥ commit threshold). Cmd+- target. */
   previousActiveTaskId: string | null;
+  /** Tab the user is currently dwelling on. Promoted to previousActiveTaskId when a new tab commits. */
+  lastCommittedTaskId: string | null;
   lastActiveAt: Record<string, number>;
   lastNotifiedTaskId: string | null;
   config: BifrostConfig | null;
@@ -159,6 +162,7 @@ const initialState: AppState = {
   tasksLoaded: false,
   activeTaskId: null,
   previousActiveTaskId: null,
+  lastCommittedTaskId: null,
   lastActiveAt: {},
   lastNotifiedTaskId: null,
   config: null,
@@ -305,16 +309,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, tasks };
     }
     case 'SET_ACTIVE_TASK':
+      // previousActiveTaskId is promoted in MARK_TAB_ACTIVE after the dwell,
+      // so rapid Cmd+Shift+[/] cycling doesn't poison the Cmd+- target.
+      return { ...state, activeTaskId: action.taskId };
+    case 'MARK_TAB_ACTIVE': {
+      if (action.taskId === state.lastCommittedTaskId) {
+        return { ...state, lastActiveAt: { ...state.lastActiveAt, [action.taskId]: Date.now() } };
+      }
       return {
         ...state,
-        activeTaskId: action.taskId,
-        previousActiveTaskId: state.activeTaskId !== action.taskId ? state.activeTaskId : state.previousActiveTaskId,
-      };
-    case 'MARK_TAB_ACTIVE':
-      return {
-        ...state,
+        previousActiveTaskId: state.lastCommittedTaskId,
+        lastCommittedTaskId: action.taskId,
         lastActiveAt: { ...state.lastActiveAt, [action.taskId]: Date.now() },
       };
+    }
     case 'SET_TASK_UNREAD': {
       const target = state.tasks.find((t) => t.id === action.taskId);
       if (target?.hasUnread === action.hasUnread) return state;

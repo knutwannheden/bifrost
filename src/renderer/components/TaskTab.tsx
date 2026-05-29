@@ -140,6 +140,11 @@ export default function TaskTab({
         }`}
         style={{ backgroundColor: isActive ? 'color-mix(in srgb, var(--color-accent) 25%, transparent)' : recencyBg }}
         onClick={onClick}
+        onMouseDown={(e) => {
+          // Prevent the button from stealing focus so the terminal
+          // keeps (or receives) focus when switching tabs.
+          if (!editing) e.preventDefault();
+        }}
         onDoubleClick={startEdit}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -173,7 +178,7 @@ export default function TaskTab({
         </span>
         {showSweep && !isActive && <span className="activity-sweep absolute bottom-0 left-0 right-0 h-[2px]" />}
         {showSolid && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-success" />}
-        {isActive && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />}
+        {isActive && <span className="tab-active-underline absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />}
       </button>
       {showTooltip &&
         tooltipPos &&
