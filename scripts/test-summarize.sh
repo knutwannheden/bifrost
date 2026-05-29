@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/test-summarize.sh <path-to-jsonl-file> [provider:model]
+# Usage: ./scripts/test-summarize.sh <path-to-jsonl-file> [ollama:model]
 #
 # Examples:
 #   ./scripts/test-summarize.sh session.jsonl ollama:phi4-mini
 #   ./scripts/test-summarize.sh session.jsonl ollama:gemma3:1b
-#   ./scripts/test-summarize.sh session.jsonl claude:haiku
 #
 # Default: ollama:phi4-mini
 
@@ -57,12 +56,8 @@ case "$PROVIDER" in
     echo "--- Using ollama ($MODEL) ---" >&2
     ollama run "$MODEL" "$PROMPT" < "$INPUT_FILE"
     ;;
-  claude)
-    echo "--- Using claude -p --model $MODEL ---" >&2
-    claude -p --model "$MODEL" "$PROMPT" < "$INPUT_FILE"
-    ;;
   *)
-    echo "Error: Unknown provider '$PROVIDER'. Use 'ollama' or 'claude'." >&2
+    echo "Error: Unknown provider '$PROVIDER'. Use 'ollama'." >&2
     exit 1
     ;;
 esac

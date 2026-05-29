@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -197,72 +197,6 @@ function tryOllama(model: string, input: string): Promise<string | null> {
   });
 }
 
-/**
- * Summarize using claude -p --model haiku as fallback.
- */
-function tryClaude(input: string): Promise<string | null> {
-  return new Promise<string | null>((resolve) => {
-    const jsonSchema = JSON.stringify({
-      type: 'object',
-      properties: {
-        summary: { type: 'string' },
-      },
-      required: ['summary'],
-    });
-
-    const proc = spawn(
-      'claude',
-      ['-p', '--model', 'haiku', '--output-format', 'json', '--json-schema', jsonSchema, SUMMARY_PROMPT],
-      {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
-      },
-    );
-
-    let stdout = '';
-    let settled = false;
-
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        proc.kill();
-        resolve(null);
-      }
-    }, SUMMARY_TIMEOUT_MS);
-
-    proc.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-    });
-
-    proc.on('close', (code) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (code === 0 && stdout.trim()) {
-        try {
-          const wrapper = JSON.parse(stdout);
-          const inner = JSON.parse(wrapper.result);
-          resolve(inner.summary ?? null);
-        } catch {
-          resolve(null);
-        }
-      } else {
-        resolve(null);
-      }
-    });
-
-    proc.on('error', () => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      resolve(null);
-    });
-
-    proc.stdin.write(input);
-    proc.stdin.end();
-  });
-}
-
 export interface SummarizeOptions {
   sessionId?: string;
   ollamaModels?: string[];
@@ -306,16 +240,13 @@ async function runSummarize(worktreePath: string, options?: SummarizeOptions): P
   const model = (options?.ollamaModels ?? []).find(
     (m) => installed.has(m) || installed.has(m.includes(':') ? m : `${m}:latest`),
   );
-  if (model) {
-    const result = await tryOllama(model, input);
-    if (result) return result;
-  }
-  return tryClaude(input);
+  if (!model) return null;
+  return tryOllama(model, input);
 }
 
 /**
- * Summarize a task by feeding JSONL transcript head+tail to ollama (preferred)
- * or claude haiku (fallback). Returns the summary, or null on failure.
+ * Summarize a task by feeding the JSONL transcript head+tail to ollama.
+ * Returns the summary, or null on failure or when no ollama model is available.
  * Requests are queued with at most one entry per task. Only one summarization
  * runs at a time to avoid spawning many ollama processes.
  */
