@@ -213,11 +213,11 @@ async function resolveBaseBranch(task: Task): Promise<string | undefined> {
 }
 
 async function resolveBaseBranchInner(task: Task): Promise<string | undefined> {
-  // Prefer the branch the task was created from — it's the actual fork point
-  if (task.branch) {
+  // task.baseBranch is the ref the worktree was forked from — the actual fork point
+  if (task.baseBranch) {
     try {
-      await execFile('git', ['rev-parse', '--verify', task.branch], { cwd: task.worktreePath, timeout: 5000 });
-      return task.branch;
+      await execFile('git', ['rev-parse', '--verify', task.baseBranch], { cwd: task.worktreePath, timeout: 5000 });
+      return task.baseBranch;
     } catch {
       /* ref doesn't exist */
     }
