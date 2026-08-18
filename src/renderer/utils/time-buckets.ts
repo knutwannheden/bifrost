@@ -13,7 +13,7 @@ function startOfDay(date: Date): Date {
 }
 
 /** Which bucket a timestamp falls into, newest first. */
-export function getTimeBucket(ts: number): string {
+export function getTimeBucket(ts: number): (typeof TIME_BUCKETS)[number] {
   const now = new Date();
   const diffMs = now.getTime() - ts;
 

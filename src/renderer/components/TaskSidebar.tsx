@@ -7,7 +7,7 @@ import TaskTab from './TaskTab';
 const DEFAULT_WIDTH = 240;
 // Anything older than the current week starts folded, so dormant work costs
 // one line per group rather than one line per task.
-const DEFAULT_COLLAPSED = ['This week', 'Last week', 'This month', 'Older'];
+const DEFAULT_COLLAPSED: (typeof TIME_BUCKETS)[number][] = ['This week', 'Last week', 'This month', 'Older'];
 
 export default function TaskSidebar() {
   const { state, dispatch } = useApp();
