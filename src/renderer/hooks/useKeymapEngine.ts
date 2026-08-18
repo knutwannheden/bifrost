@@ -192,8 +192,10 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
 
         case 'nav.prevTab':
         case 'nav.nextTab': {
+          // A published order of fewer than two entries has nowhere to navigate
+          // (e.g. every group folded), so fall back to running-task order.
           const ids =
-            s.visibleTaskIds.length > 0
+            s.visibleTaskIds.length > 1
               ? s.visibleTaskIds
               : s.tasks.filter((t) => t.status === 'running').map((t) => t.id);
           if (ids.length === 0) break;
@@ -217,8 +219,10 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
         case 'nav.tab7':
         case 'nav.tab8':
         case 'nav.tab9': {
+          // A published order of fewer than two entries has nowhere to navigate
+          // (e.g. every group folded), so fall back to running-task order.
           const ids =
-            s.visibleTaskIds.length > 0
+            s.visibleTaskIds.length > 1
               ? s.visibleTaskIds
               : s.tasks.filter((t) => t.status === 'running').map((t) => t.id);
           const index = Number.parseInt(actionId.slice(-1), 10) - 1;
