@@ -124,7 +124,7 @@ export default function TaskTab({
             e.stopPropagation();
           }}
           onBlur={submitEdit}
-          className="px-1.5 py-0.5 bg-surface-hover border border-accent rounded-sm text-xs text-primary focus:outline-hidden focus:ring-1 focus:ring-accent w-28"
+          className="px-1.5 py-0.5 bg-surface-hover border border-accent rounded-sm text-xs text-primary focus:outline-hidden focus:ring-1 focus:ring-accent w-full"
         />
       </div>
     );
