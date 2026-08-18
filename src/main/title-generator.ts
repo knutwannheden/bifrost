@@ -86,6 +86,7 @@ function runClaude(input: string, cwd: string): Promise<string | null> {
     );
 
     let stdout = '';
+    let stderr = '';
     let settled = false;
     const finish = (result: string | null) => {
       if (settled) return;
@@ -101,8 +102,19 @@ function runClaude(input: string, cwd: string): Promise<string | null> {
     child.stdout.on('data', (c: Buffer) => {
       stdout += c.toString();
     });
-    child.on('error', () => finish(null));
-    child.on('close', (code) => finish(code === 0 ? stdout : null));
+    // Drained even though unused on success: an unread pipe fills once the CLI
+    // writes past the OS buffer (~64KB) and blocks the child until the timeout.
+    child.stderr.on('data', (c: Buffer) => {
+      stderr += c.toString();
+    });
+    child.on('error', (err) => {
+      console.error('[title-generator] failed to spawn claude:', err);
+      finish(null);
+    });
+    child.on('close', (code) => {
+      if (code !== 0) console.error(`[title-generator] claude exited with code ${code}:`, stderr.trim());
+      finish(code === 0 ? stdout : null);
+    });
 
     child.stdin.on('error', () => finish(null));
     child.stdin.end(`${PROMPT}\n\nSession transcript:\n${input}`);
