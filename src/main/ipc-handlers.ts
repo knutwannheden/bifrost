@@ -751,7 +751,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.GET_SESSION_MTIMES, () => {
     const result: Record<string, number> = {};
     for (const task of tasks) {
-      const mtime = getSessionMtime(task.worktreePath, task.sessionId);
+      const mtime = getSessionMtime(task.worktreePath);
       if (mtime != null) result[task.id] = mtime;
     }
     return result;
