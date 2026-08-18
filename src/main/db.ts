@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import { loadConfig } from './config';
+import { slugify } from './worktree-manager';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost');
 const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
@@ -136,20 +138,37 @@ CREATE TABLE IF NOT EXISTS schema_version (
 const BACKFILL_TIME_BUDGET_MS = 30_000;
 
 /**
+ * Recover each task's own branch, first from its worktree's HEAD and then,
+ * for whatever is still unrecovered, by matching the task name against the
+ * repo's local branches. Both passes share one time budget.
+ */
+function backfillTaskBranches(d: Database.Database): void {
+  const deadline = Date.now() + BACKFILL_TIME_BUDGET_MS;
+  const fromHead = backfillFromWorktreeHead(d, deadline);
+  const fromName = backfillFromTaskName(d, deadline);
+  console.log(
+    `[db] Migration v3: recovered ${fromHead.recovered} of ${fromHead.total} task branches from worktree HEAD ` +
+      `(processed ${fromHead.processed}), then ${fromName.recovered} of ${fromName.total} more from task name`,
+  );
+}
+
+/**
  * Recover each task's own branch from its worktree. Confirms the directory is
  * the worktree's own root — `git symbolic-ref` resolves upward through nested
  * paths, so an unverified read could return an enclosing repo's branch. In-place
  * tasks share their worktree with the repo checkout, so their current branch
  * is not a fact about the task and is left alone.
  */
-function backfillTaskBranches(d: Database.Database): void {
+function backfillFromWorktreeHead(
+  d: Database.Database,
+  deadline: number,
+): { recovered: number; processed: number; total: number } {
   const rows = d
     .prepare<unknown[], { id: string; worktree_path: string; in_place: number }>(
       'SELECT id, worktree_path, in_place FROM tasks WHERE worktree_path IS NOT NULL',
     )
     .all();
   const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
-  const deadline = Date.now() + BACKFILL_TIME_BUDGET_MS;
   let recovered = 0;
   let processed = 0;
   for (const row of rows) {
@@ -177,11 +196,73 @@ function backfillTaskBranches(d: Database.Database): void {
       // Not a git worktree root, no branch (detached HEAD), or the subprocess failed.
     }
   }
-  const remaining = rows.length - processed;
-  console.log(
-    `[db] Migration v3: recovered ${recovered} of ${rows.length} task branches ` +
-      `(processed ${processed}, ${remaining} left unprocessed when the time budget ran out)`,
-  );
+  return { recovered, processed, total: rows.length };
+}
+
+/**
+ * Recover remaining branches by matching each task's name-derived slug
+ * against the repo's local branches, which usually outlive the worktree.
+ * Assigns only when exactly one task in the repo maps to that slug and a
+ * branch with that name exists — a shared slug (`resolveAvailableBranchName`'s
+ * `-2` suffixing) could belong to either task, so it is left NULL.
+ */
+function backfillFromTaskName(d: Database.Database, deadline: number): { recovered: number; total: number } {
+  const rows = d
+    .prepare<unknown[], { id: string; repo_id: string; name: string }>(
+      'SELECT id, repo_id, name FROM tasks WHERE branch IS NULL',
+    )
+    .all();
+  if (rows.length === 0) return { recovered: 0, total: 0 };
+
+  const repoPaths = new Map(loadConfig().repos.map((r) => [r.id, r.path]));
+  const rowsByRepo = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const bucket = rowsByRepo.get(row.repo_id);
+    if (bucket) bucket.push(row);
+    else rowsByRepo.set(row.repo_id, [row]);
+  }
+
+  const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
+  let recovered = 0;
+  for (const [repoId, repoRows] of rowsByRepo) {
+    if (Date.now() >= deadline) break;
+    const repoPath = repoPaths.get(repoId);
+    if (!repoPath || !fs.existsSync(repoPath)) continue;
+
+    let branches: Set<string>;
+    try {
+      const out = execFileSync('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'], {
+        cwd: repoPath,
+        timeout: 10_000,
+        encoding: 'utf-8',
+      });
+      branches = new Set(
+        out
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean),
+      );
+    } catch {
+      continue;
+    }
+
+    const slugCounts = new Map<string, number>();
+    const rowBySlug = new Map<string, (typeof repoRows)[number]>();
+    for (const row of repoRows) {
+      const slug = slugify(row.name);
+      slugCounts.set(slug, (slugCounts.get(slug) ?? 0) + 1);
+      rowBySlug.set(slug, row);
+    }
+
+    for (const [slug, count] of slugCounts) {
+      if (count !== 1 || !branches.has(slug)) continue;
+      const row = rowBySlug.get(slug);
+      if (!row) continue;
+      update.run(slug, row.id);
+      recovered++;
+    }
+  }
+  return { recovered, total: rows.length };
 }
 
 export function openDatabase(): void {
