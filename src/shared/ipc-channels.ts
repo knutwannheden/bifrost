@@ -223,8 +223,11 @@ export interface BifrostAPI {
   isWorktreeDirty(taskId: string): Promise<boolean>;
   reopenTask(taskId: string): Promise<Task>;
   renameTask(taskId: string, name: string): Promise<Task>;
-  /** Resolves null when the task has no transcript to summarize or generation fails. */
-  regenerateTaskTitle(taskId: string): Promise<Task | null>;
+  /**
+   * Resolves null when the task has no transcript to summarize or generation
+   * fails; `renamedBranch` is null when the worktree branch was left alone.
+   */
+  regenerateTaskTitle(taskId: string): Promise<{ task: Task; renamedBranch: string | null } | null>;
   deleteTask(taskId: string): Promise<void>;
   listTasks(): Promise<Task[]>;
   reorderTasks(taskIds: string[]): Promise<void>;

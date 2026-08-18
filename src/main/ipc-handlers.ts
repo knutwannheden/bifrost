@@ -119,23 +119,28 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
 }
 
 /**
- * An upstream means the branch has been pushed, so renaming it would orphan the
- * remote branch and any PR built on it. In-place tasks run on the repo's own
- * checked-out branch, which is never ours to rename.
+ * Rename the worktree's branch, returning the new name or null when left alone.
+ * `task.branch` records the base the worktree was created from, so the branch to
+ * rename is whatever HEAD points at. An upstream means it has been pushed, and a
+ * rename would orphan the remote branch and any PR built on it. In-place tasks
+ * sit on the repo's own checked-out branch, which is never ours to rename.
  */
-async function canRenameBranch(task: Task, candidate: string): Promise<boolean> {
-  if (task.isExternal || task.inPlace) return false;
-  if (!candidate || candidate === task.branch) return false;
-  const exists = async (ref: string): Promise<boolean> => {
+async function renameWorktreeBranch(task: Task, candidate: string): Promise<string | null> {
+  if (task.isExternal || task.inPlace || !candidate) return null;
+  const git = async (args: string[]): Promise<string | null> => {
     try {
-      await execFile('git', ['rev-parse', '--verify', ref], { cwd: task.worktreePath, timeout: 5000 });
-      return true;
+      const { stdout } = await execFile('git', args, { cwd: task.worktreePath, timeout: 5000 });
+      return stdout.trim();
     } catch {
-      return false;
+      return null;
     }
   };
-  if (await exists(`${task.branch}@{upstream}`)) return false;
-  return !(await exists(candidate));
+  // Fails on a detached HEAD, which has no branch to rename.
+  const current = await git(['symbolic-ref', '--short', 'HEAD']);
+  if (!current || current === candidate) return null;
+  if (await git(['rev-parse', '--verify', `${current}@{upstream}`])) return null;
+  if (await git(['rev-parse', '--verify', candidate])) return null;
+  return (await git(['branch', '-m', current, candidate])) === null ? null : candidate;
 }
 
 export async function archiveTaskCore(
@@ -694,19 +699,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const generated = await generateTaskTitle(task.worktreePath, { sessionId: task.sessionId });
     if (!generated) return null;
 
-    const updates: Partial<Task> = { name: generated.title, summary: generated.description };
-    if (await canRenameBranch(task, generated.branch)) {
-      try {
-        await execFile('git', ['branch', '-m', task.branch, generated.branch], {
-          cwd: task.worktreePath,
-          timeout: 5000,
-        });
-        updates.branch = generated.branch;
-      } catch (err) {
-        console.error(`[task] Branch rename failed for ${taskId}:`, err);
-      }
-    }
-    return updateTask(taskId, updates);
+    const renamedBranch = await renameWorktreeBranch(task, generated.branch);
+    return {
+      task: updateTask(taskId, { name: generated.title, summary: generated.description }),
+      renamedBranch,
+    };
   });
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {

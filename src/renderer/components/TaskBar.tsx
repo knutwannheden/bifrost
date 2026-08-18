@@ -85,18 +85,17 @@ export default function TaskBar() {
               }}
               onRegenerateTitle={async () => {
                 try {
-                  const updated = await window.bifrost.regenerateTaskTitle(task.id);
-                  if (!updated) {
+                  const result = await window.bifrost.regenerateTaskTitle(task.id);
+                  if (!result) {
                     dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
                     return;
                   }
-                  dispatch({ type: 'UPDATE_TASK', task: updated });
-                  const renamed = updated.branch !== task.branch;
+                  dispatch({ type: 'UPDATE_TASK', task: result.task });
                   dispatch({
                     type: 'SHOW_TOAST',
-                    message: renamed
-                      ? `Renamed to "${updated.name}" on ${updated.branch}`
-                      : `Renamed to "${updated.name}"`,
+                    message: result.renamedBranch
+                      ? `Renamed to "${result.task.name}" on ${result.renamedBranch}`
+                      : `Renamed to "${result.task.name}"`,
                   });
                 } catch {
                   dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
