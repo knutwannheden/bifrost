@@ -40,28 +40,6 @@ export default function TaskTab({
     }
   }, [editing]);
 
-  // Compute recency-based accent background for inactive tabs.
-  // Uses rank among running tasks: most recently visited inactive tab
-  // gets the strongest color, fading in steps for older tabs.
-  const recencyBg = (() => {
-    if (isActive) return undefined;
-    const lastActive = state.lastActiveAt[task.id];
-    if (!lastActive) return 'transparent';
-    // Rank this tab among all running tasks by recency (0 = most recent)
-    const runningTasks = state.tasks.filter((t) => t.status === 'running' && t.id !== state.activeTaskId);
-    const ranked = runningTasks
-      .map((t) => ({ id: t.id, ts: state.lastActiveAt[t.id] ?? 0 }))
-      .filter((t) => t.ts > 0)
-      .sort((a, b) => b.ts - a.ts);
-    const rank = ranked.findIndex((t) => t.id === task.id);
-    if (rank < 0) return 'transparent';
-    // Opacity tiers: 18%, 12%, 7%, 3%, then 0%
-    const tiers = [18, 12, 7, 3];
-    const pct = rank < tiers.length ? tiers[rank] : 0;
-    if (pct === 0) return 'transparent';
-    return `color-mix(in srgb, var(--color-accent) ${pct}%, transparent)`;
-  })();
-
   // React to START_RENAME_TASK from keymap engine
   useEffect(() => {
     if (state.renamingTaskId === task.id) {
@@ -171,7 +149,7 @@ export default function TaskTab({
         className={`group relative flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors ${
           isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
         }`}
-        style={{ backgroundColor: isActive ? 'color-mix(in srgb, var(--color-accent) 25%, transparent)' : recencyBg }}
+        style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
         onClick={onClick}
         onMouseDown={(e) => {
           // Prevent the button from stealing focus so the terminal
