@@ -131,21 +131,39 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 `;
 
+// Each row costs one blocking git subprocess call; this caps how long a large
+// task table can hold up startup.
+const BACKFILL_TIME_BUDGET_MS = 30_000;
+
 /**
- * Recover each task's own branch from its worktree. A directory that is gone,
- * or on a detached HEAD, leaves the branch unknown.
+ * Recover each task's own branch from its worktree. Confirms the directory is
+ * the worktree's own root — `git symbolic-ref` resolves upward through nested
+ * paths, so an unverified read could return an enclosing repo's branch. In-place
+ * tasks share their worktree with the repo checkout, so their current branch
+ * is not a fact about the task and is left alone.
  */
 function backfillTaskBranches(d: Database.Database): void {
   const rows = d
-    .prepare<unknown[], { id: string; worktree_path: string }>(
-      'SELECT id, worktree_path FROM tasks WHERE worktree_path IS NOT NULL',
+    .prepare<unknown[], { id: string; worktree_path: string; in_place: number }>(
+      'SELECT id, worktree_path, in_place FROM tasks WHERE worktree_path IS NOT NULL',
     )
     .all();
   const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
+  const deadline = Date.now() + BACKFILL_TIME_BUDGET_MS;
   let recovered = 0;
+  let processed = 0;
   for (const row of rows) {
+    if (Date.now() >= deadline) break;
+    processed++;
+    if (row.in_place) continue;
     if (!fs.existsSync(row.worktree_path)) continue;
     try {
+      const toplevel = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        cwd: row.worktree_path,
+        timeout: 5000,
+        encoding: 'utf-8',
+      }).trim();
+      if (fs.realpathSync(toplevel) !== fs.realpathSync(row.worktree_path)) continue;
       const branch = execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], {
         cwd: row.worktree_path,
         timeout: 5000,
@@ -156,10 +174,14 @@ function backfillTaskBranches(d: Database.Database): void {
         recovered++;
       }
     } catch {
-      // Worktree unreadable or detached; the branch stays unknown.
+      // Not a git worktree root, no branch (detached HEAD), or the subprocess failed.
     }
   }
-  console.log(`[db] Migration v3: recovered ${recovered} of ${rows.length} task branches`);
+  const remaining = rows.length - processed;
+  console.log(
+    `[db] Migration v3: recovered ${recovered} of ${rows.length} task branches ` +
+      `(processed ${processed}, ${remaining} left unprocessed when the time budget ran out)`,
+  );
 }
 
 export function openDatabase(): void {
@@ -219,12 +241,19 @@ function runMigrations(): void {
       console.log('[db] Migration v2: dropped diff column from activity_entries');
     }
     if (row.version < 3) {
-      d.exec('ALTER TABLE tasks RENAME COLUMN branch TO base_branch');
-      d.exec('ALTER TABLE tasks ADD COLUMN branch TEXT');
+      // Atomic: an interrupted run rolls back cleanly, so schema_version always
+      // matches whether base_branch/branch exist and a retry never trips a
+      // duplicate-column error.
+      d.transaction(() => {
+        d.exec('ALTER TABLE tasks RENAME COLUMN branch TO base_branch');
+        d.exec('ALTER TABLE tasks ADD COLUMN branch TEXT');
+        d.prepare('UPDATE schema_version SET version = ?').run(3);
+      })();
+      // branch is optional and updates are idempotent, so running this partially
+      // or more than once is harmless.
       backfillTaskBranches(d);
       console.log('[db] Migration v3: split tasks.branch into base_branch + branch');
     }
-    d.prepare('UPDATE schema_version SET version = ?').run(CURRENT_VERSION);
   }
 }
 
