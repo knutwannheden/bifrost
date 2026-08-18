@@ -12,8 +12,6 @@ interface TaskTabProps {
   onClose: () => void;
   onRename: (name: string) => void;
   onRegenerateTitle: () => Promise<void>;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragEnd: () => void;
 }
 
 export default function TaskTab({
@@ -24,8 +22,6 @@ export default function TaskTab({
   onClose,
   onRename,
   onRegenerateTitle,
-  onDragStart,
-  onDragEnd,
 }: TaskTabProps) {
   const { state, dispatch } = useApp();
   const [editing, setEditing] = useState(false);
@@ -167,9 +163,8 @@ export default function TaskTab({
     <>
       <button
         ref={buttonRef}
-        draggable
-        className={`group relative flex items-center gap-1.5 pl-4 pr-2 h-full whitespace-nowrap overflow-hidden max-w-[280px] transition-colors ${
-          isActive ? 'text-primary' : 'hover:bg-surface-alt/50 text-secondary'
+        className={`group relative flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+          isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
         }`}
         style={{ backgroundColor: isActive ? 'color-mix(in srgb, var(--color-accent) 25%, transparent)' : recencyBg }}
         onClick={onClick}
@@ -186,14 +181,8 @@ export default function TaskTab({
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', task.id);
-          onDragStart(e);
-        }}
-        onDragEnd={onDragEnd}
       >
-        <span className="flex flex-col items-center min-w-0 overflow-hidden">
+        <span className="flex flex-col min-w-0 flex-1 overflow-hidden">
           <span className="flex items-center gap-1.5">
             {regenerating ? <Spinner size="sm" /> : null}
             {task.hasUnread && !isActive && !showSolid ? (
@@ -201,7 +190,7 @@ export default function TaskTab({
             ) : null}
             <span className="text-xs leading-tight truncate">{task.name}</span>
           </span>
-          <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
+          <span className="text-[10px] leading-tight truncate text-muted">{repoName}</span>
         </span>
         {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
         <span
@@ -215,9 +204,9 @@ export default function TaskTab({
         >
           &times;
         </span>
-        {showSweep && !isActive && <span className="activity-sweep absolute bottom-0 left-0 right-0 h-[2px]" />}
-        {showSolid && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-success" />}
-        {isActive && <span className="tab-active-underline absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />}
+        {showSweep && !isActive && <span className="activity-sweep absolute top-0 bottom-0 left-0 w-[2px]" />}
+        {showSolid && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-success" />}
+        {isActive && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-accent" />}
       </button>
       {showTooltip &&
         tooltipPos &&
