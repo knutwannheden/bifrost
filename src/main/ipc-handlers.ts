@@ -713,7 +713,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     const renamedBranch = await renameWorktreeBranch(task, generated.branch);
     return {
-      task: updateTask(taskId, { name: generated.title, summary: generated.description }),
+      task: updateTask(taskId, {
+        name: generated.title,
+        summary: generated.description,
+        ...(renamedBranch ? { branch: renamedBranch } : {}),
+      }),
       renamedBranch,
     };
   });
