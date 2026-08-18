@@ -8,6 +8,30 @@ import { getRemotes } from './repo-manager';
 
 const execFile = promisify(execFileCb);
 
+/**
+ * Whether a worktree holds nothing its base branch does not: no staged,
+ * unstaged or untracked changes, and no commits ahead. Only such a directory
+ * can be recreated exactly, so only such a directory is safe to remove.
+ * Anything unreadable answers false, so a failed check never costs a worktree.
+ */
+export async function isWorktreeDisposable(worktreePath: string, baseRef: string): Promise<boolean> {
+  if (!baseRef || !fs.existsSync(worktreePath)) return false;
+  try {
+    const { stdout: status } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
+      cwd: worktreePath,
+      timeout: 5000,
+    });
+    if (status.trim().length > 0) return false;
+    const { stdout: ahead } = await execFile('git', ['rev-list', '--count', `${baseRef}..HEAD`], {
+      cwd: worktreePath,
+      timeout: 5000,
+    });
+    return ahead.trim() === '0';
+  } catch {
+    return false;
+  }
+}
+
 /** Sanitize a task name into a valid git branch name / directory name. */
 export function slugify(name: string): string {
   return (

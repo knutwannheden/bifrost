@@ -86,6 +86,7 @@ import {
   createMultiRepoContainer,
   createWorktree,
   createWorktreeFromPr,
+  isWorktreeDisposable,
   removeWorktree,
   restoreWorktree,
   slugify,
@@ -189,7 +190,9 @@ export async function archiveTaskCore(
       }
       config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
       saveConfig(config);
-    } else if (!task.inPlace && repo) {
+    } else if (!task.inPlace && repo && (await isWorktreeDisposable(task.worktreePath, task.branch))) {
+      // Archiving keeps a worktree that still holds work, so reopening it finds
+      // the directory exactly as it was left.
       removeWorktree(repo.path, task.worktreePath).catch(() => {});
     }
   }
