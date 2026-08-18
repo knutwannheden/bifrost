@@ -38,7 +38,7 @@ function triageParams(t: TriageEntry) {
 }
 
 export function listTriages(): TriageEntry[] {
-  return getDb().prepare('SELECT * FROM triages ORDER BY created_at DESC').all().map(rowToTriage);
+  return getDb().prepare<unknown[], Row>('SELECT * FROM triages ORDER BY created_at DESC').all().map(rowToTriage);
 }
 
 export function addTriage(entry: TriageEntry): void {

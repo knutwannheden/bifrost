@@ -3,7 +3,6 @@ import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
-import type { IMarker } from '@xterm/xterm';
 import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
@@ -56,8 +55,6 @@ function safeFit(terminal: Terminal, fitAddon: FitAddon): void {
   if (wasAtBottom) {
     terminal.scrollToBottom();
   }
-  // When the user is scrolled up (lockedMarker is set), the onScroll handler
-  // re-snaps to the marker — no explicit restoration needed here.
 }
 
 interface TerminalOptions {
@@ -112,7 +109,7 @@ export function useTerminal(
       : {
           cursorBlink: options?.cursorBlink ?? true,
           cursorStyle: 'block' as const,
-          cursorInactiveStyle: 'outline-solid' as const,
+          cursorInactiveStyle: 'outline' as const,
         };
 
     const terminal = new Terminal({
@@ -283,9 +280,8 @@ export function useTerminal(
       return true;
     });
 
-    // Send keystrokes to session (buffer when locked by prompt-sender)
-    terminal.onData((data) => {
-      resetHippieState();
+    // Route input to the session, buffering when locked by prompt-sender.
+    const sendInput = (data: string) => {
       if (terminalInputLocks.has(sessionId)) {
         let buf = terminalInputBuffers.get(sessionId);
         if (!buf) {
@@ -296,6 +292,11 @@ export function useTerminal(
       } else {
         window.bifrost.writeToSession(sessionId, data);
       }
+    };
+
+    terminal.onData((data) => {
+      resetHippieState();
+      sendInput(data);
     });
 
     // Listen for terminal title changes (OSC 0/2)
@@ -304,55 +305,18 @@ export function useTerminal(
     });
 
     // Receive data from session
-    // When the viewport is not at the bottom, prevent xterm's
-    // auto-scroll from jumping away from what the user is reading.
-    //
-    // We pin to an IMarker at the viewport's top line: xterm keeps the
-    // marker's .line in sync with its content as the scrollback is
-    // written to and trimmed, so the viewport tracks content rather
-    // than a fixed absolute line number that would drift once the
-    // scrollback cap is reached.
     let hasReceivedData = false;
-    let lockedMarker: IMarker | null = null;
-    // True while the user is actively scrolling via wheel/trackpad
-    let userScrolling = false;
-    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
     // Buffer live data arriving from the session until the historical
     // drain has been written, so the replay isn't clobbered by a
     // post-SIGWINCH redraw racing through the live listener.
     let drainComplete = false;
     const preDrainBuffer: string[] = [];
 
-    function isAtBottom(): boolean {
-      const buf = terminal.buffer.active;
-      return buf.viewportY >= buf.baseY;
-    }
-
-    function clearLock(): void {
-      if (lockedMarker && !lockedMarker.isDisposed) lockedMarker.dispose();
-      lockedMarker = null;
-    }
-
-    function setLockAtViewportTop(): void {
-      clearLock();
-      const buf = terminal.buffer.active;
-      const cursorAbs = buf.baseY + buf.cursorY;
-      const offset = buf.viewportY - cursorAbs;
-      try {
-        const m = terminal.registerMarker(offset);
-        if (m && !m.isDisposed) lockedMarker = m;
-      } catch {
-        // marker out of range — leave lock unset
-      }
-    }
-
     function writeLiveData(data: string): void {
       if (!hasReceivedData) {
         hasReceivedData = true;
         setLoading(false);
       }
-      // Auto-engage lock if viewport isn't at the bottom
-      if (!lockedMarker && !isAtBottom()) setLockAtViewportTop();
       terminal.write(data);
     }
 
@@ -397,39 +361,23 @@ export function useTerminal(
     };
     containerRef.current?.addEventListener('copy', onCopy, { capture: true });
 
-    // Detect user scroll via wheel events on the container
-    const onWheel = () => {
-      userScrolling = true;
-      if (scrollTimer) clearTimeout(scrollTimer);
-      scrollTimer = setTimeout(() => {
-        userScrolling = false;
-        if (isAtBottom()) {
-          clearLock();
-        } else {
-          setLockAtViewportTop();
-        }
-      }, 150);
+    // Claude's TUI always accepts bracketed paste at the prompt, so frame the
+    // paste here rather than relying on xterm's tracked mode, which requires
+    // it to have parsed Claude's enable sequence off the output stream.
+    const onPaste = (e: ClipboardEvent) => {
+      if (paneType !== 'claude') return;
+      const text = e.clipboardData?.getData('text/plain');
+      if (!text) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Mirror xterm's prepareTextForTerminal (\n→\r); replace embedded ESC
+      // with the visible ␛ symbol so it can't prematurely close the
+      // bracketed-paste span.
+      const sanitized = text.replace(/\r?\n/g, '\r').split('\x1b').join('␛');
+      const framed = `\x1b[200~${sanitized}\x1b[201~`;
+      sendInput(framed);
     };
-    containerRef.current?.addEventListener('wheel', onWheel, { passive: true, capture: true });
-
-    // When xterm scrolls programmatically (auto-scroll on write),
-    // snap back to the locked marker's current line.
-    terminal.onScroll(() => {
-      if (!lockedMarker || userScrolling) return;
-      if (lockedMarker.isDisposed) {
-        // Content fell out of scrollback — release the lock
-        lockedMarker = null;
-        return;
-      }
-      const buf = terminal.buffer.active;
-      const target = lockedMarker.line;
-      if (target >= buf.baseY) {
-        // Locked content is now within the bottom viewport — release lock
-        clearLock();
-        return;
-      }
-      if (buf.viewportY !== target) terminal.scrollToLine(target);
-    });
+    containerRef.current?.addEventListener('paste', onPaste, { capture: true });
 
     const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
       if (sid !== sessionId) return;
@@ -468,10 +416,8 @@ export function useTerminal(
     return () => {
       fontSettleCancelled = true;
       if (resizeTimer) clearTimeout(resizeTimer);
-      if (scrollTimer) clearTimeout(scrollTimer);
-      clearLock();
       containerRef.current?.removeEventListener('copy', onCopy, { capture: true });
-      containerRef.current?.removeEventListener('wheel', onWheel, { capture: true });
+      containerRef.current?.removeEventListener('paste', onPaste, { capture: true });
       resizeObserver.disconnect();
       removeDataListener();
       removeExitListener();

@@ -9,13 +9,14 @@ function rowToTask(row: Row): Task {
     id: row.id,
     name: row.name,
     repoId: row.repo_id,
-    branch: row.branch,
+    baseBranch: row.base_branch,
     worktreePath: row.worktree_path,
     status: row.status,
     hasUnread: !!row.has_unread,
     createdAt: row.created_at,
   };
 
+  if (row.branch != null) task.branch = row.branch;
   if (row.session_id != null) task.sessionId = row.session_id;
   if (row.archived_at != null) task.archivedAt = row.archived_at;
   if (row.terminal_title != null) task.terminalTitle = row.terminal_title;
@@ -43,18 +44,19 @@ function rowToTask(row: Row): Task {
 }
 
 const UPSERT_SQL = `INSERT OR REPLACE INTO tasks (
-  id, name, repo_id, branch, worktree_path, session_id, status, has_unread,
+  id, name, repo_id, base_branch, branch, worktree_path, session_id, status, has_unread,
   created_at, archived_at, terminal_title, summary, is_external, in_place,
   session_history, claude_active, cur_outcome, cur_confidence, cur_reason,
   cur_pr_state, cur_branch_merged, cur_classified_at, cur_user_override, cur_user_note
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function taskParams(t: Task) {
   return [
     t.id,
     t.name,
     t.repoId,
-    t.branch ?? '',
+    t.baseBranch ?? '',
+    t.branch ?? null,
     t.worktreePath,
     t.sessionId ?? null,
     t.status,
@@ -79,7 +81,7 @@ function taskParams(t: Task) {
 }
 
 export function loadTasks(): Task[] {
-  const rows = getDb().prepare('SELECT * FROM tasks ORDER BY created_at').all();
+  const rows = getDb().prepare<unknown[], Row>('SELECT * FROM tasks ORDER BY created_at').all();
   return rows.map(rowToTask);
 }
 

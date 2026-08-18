@@ -78,6 +78,7 @@ import {
 } from './supervisor-service';
 import { loadTasks, saveTasks } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
+import { generateTaskTitle } from './title-generator';
 import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
 import { deleteTriage as deleteTriageEntry, listTriages } from './triage-store';
 import {
@@ -85,6 +86,7 @@ import {
   createMultiRepoContainer,
   createWorktree,
   createWorktreeFromPr,
+  isWorktreeDisposable,
   removeWorktree,
   restoreWorktree,
   slugify,
@@ -115,6 +117,34 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
   tasks[idx] = { ...tasks[idx], ...updates };
   saveTasks(tasks);
   return tasks[idx];
+}
+
+/**
+ * Rename the worktree's branch, returning the new name or null when left alone.
+ * HEAD is the source of truth for which branch that is, since it's observed
+ * rather than stored. In-place tasks sit on the repo's own checked-out branch,
+ * which is never ours to rename.
+ */
+async function renameWorktreeBranch(task: Task, candidate: string): Promise<string | null> {
+  if (task.isExternal || task.inPlace || !candidate) return null;
+  const git = async (args: string[]): Promise<string | null> => {
+    try {
+      const { stdout } = await execFile('git', args, { cwd: task.worktreePath, timeout: 5000 });
+      return stdout.trim();
+    } catch {
+      return null;
+    }
+  };
+  // Fails on a detached HEAD, which has no branch to rename.
+  const current = await git(['symbolic-ref', '--short', 'HEAD']);
+  if (!current || current === candidate) return null;
+  // Branching a worktree off a remote ref inherits tracking from it, so an
+  // upstream says nothing about this branch. A remote ref under its own name
+  // does; treat an unreadable answer as pushed rather than risk the rename.
+  const pushed = await git(['for-each-ref', '--format=%(refname)', `refs/remotes/*/${current}`]);
+  if (pushed === null || pushed !== '') return null;
+  if (await git(['rev-parse', '--verify', candidate])) return null;
+  return (await git(['branch', '-m', current, candidate])) === null ? null : candidate;
 }
 
 export async function archiveTaskCore(
@@ -159,7 +189,9 @@ export async function archiveTaskCore(
       }
       config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
       saveConfig(config);
-    } else if (!task.inPlace && repo) {
+    } else if (!task.inPlace && repo && (await isWorktreeDisposable(task.worktreePath, task.baseBranch))) {
+      // Archiving keeps a worktree that still holds work, so reopening it finds
+      // the directory exactly as it was left.
       removeWorktree(repo.path, task.worktreePath).catch(() => {});
     }
   }
@@ -181,11 +213,11 @@ async function resolveBaseBranch(task: Task): Promise<string | undefined> {
 }
 
 async function resolveBaseBranchInner(task: Task): Promise<string | undefined> {
-  // Prefer the branch the task was created from — it's the actual fork point
-  if (task.branch) {
+  // task.baseBranch is the ref the worktree was forked from — the actual fork point
+  if (task.baseBranch) {
     try {
-      await execFile('git', ['rev-parse', '--verify', task.branch], { cwd: task.worktreePath, timeout: 5000 });
-      return task.branch;
+      await execFile('git', ['rev-parse', '--verify', task.baseBranch], { cwd: task.worktreePath, timeout: 5000 });
+      return task.baseBranch;
     } catch {
       /* ref doesn't exist */
     }
@@ -301,6 +333,7 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
     id: taskId,
     name,
     repoId: containerRepo.id,
+    baseBranch: 'main',
     branch: 'main',
     worktreePath: containerPath,
     status: 'running',
@@ -348,18 +381,19 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   const name = params.branchName || params.name || generateTaskName();
 
   let worktreePath: string;
-  let branch = repo.defaultBranch;
+  let baseBranch = repo.defaultBranch;
   if (params.branch) {
     // Verify the requested branch/ref exists in the target repo before using it
     try {
       await execFile('git', ['rev-parse', '--verify', params.branch], { cwd: repo.path, timeout: 5000 });
-      branch = params.branch;
+      baseBranch = params.branch;
     } catch {
-      console.warn(`[create-task] ref "${params.branch}" not found in ${repo.path}, using ${branch}`);
+      console.warn(`[create-task] ref "${params.branch}" not found in ${repo.path}, using ${baseBranch}`);
     }
   }
   let inPlace = false;
 
+  let taskBranch: string | undefined;
   if (params.inPlace) {
     const conflict = tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path);
     if (conflict) {
@@ -367,12 +401,15 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     }
     worktreePath = repo.path;
     const { stdout } = await execFile('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: repo.path, timeout: 5000 });
-    branch = stdout.trim();
+    baseBranch = stdout.trim();
     inPlace = true;
+    taskBranch = baseBranch;
   } else {
-    worktreePath = params.prInfo
+    const created = params.prInfo
       ? await createWorktreeFromPr(repo.path, name, params.prInfo)
-      : await createWorktree(repo.path, name, branch, params.branchName);
+      : await createWorktree(repo.path, name, baseBranch, params.branchName);
+    worktreePath = created.worktreePath;
+    taskBranch = created.branch;
   }
 
   const taskId = randomUUID();
@@ -389,7 +426,8 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     id: taskId,
     name,
     repoId: repo.id,
-    branch,
+    baseBranch,
+    ...(taskBranch ? { branch: taskBranch } : {}),
     worktreePath,
     status: 'running',
     hasUnread: false,
@@ -620,7 +658,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const config = loadConfig();
       const repo = config.repos.find((r: Repo) => r.id === task.repoId);
       if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
-      worktreePath = await restoreWorktree(repo.path, task.name);
+      worktreePath = await restoreWorktree(repo.path, task.name, task.branch);
     }
 
     // Re-detect current branch for in-place tasks (user may have switched)
@@ -666,6 +704,22 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.RENAME_TASK, (_event, taskId: string, name: string) => {
     return updateTask(taskId, { name });
+  });
+
+  ipcMain.handle(IPC.REGENERATE_TASK_TITLE, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    const generated = await generateTaskTitle(task.worktreePath, { sessionId: task.sessionId });
+    if (!generated) return null;
+
+    const renamedBranch = await renameWorktreeBranch(task, generated.branch);
+    return {
+      task: updateTask(taskId, {
+        name: generated.title,
+        summary: generated.description,
+        ...(renamedBranch ? { branch: renamedBranch } : {}),
+      }),
+      renamedBranch,
+    };
   });
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {
@@ -760,9 +814,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Git log
   ipcMain.handle(IPC.GET_GIT_LOG, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    // task.branch is the base branch the worktree was forked from
-    const baseBranch = task.branch || undefined;
-    return getGitLog(task.worktreePath, baseBranch);
+    return getGitLog(task.worktreePath, task.baseBranch || undefined);
   });
 
   // PR URL
@@ -941,6 +993,7 @@ end tell`;
       id: taskId,
       name,
       repoId: matchedRepo?.id ?? '',
+      baseBranch: branch,
       branch,
       worktreePath: cwd,
       sessionId: externalSessionId,
@@ -1246,6 +1299,7 @@ end tell`;
       id: taskId,
       name: item.name,
       repoId: item.repoId,
+      baseBranch: repo.defaultBranch,
       branch: item.branch,
       worktreePath: item.worktreePath,
       status: 'running',

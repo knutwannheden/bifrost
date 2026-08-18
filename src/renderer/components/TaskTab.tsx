@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import Spinner from './Spinner';
 
 interface TaskTabProps {
   task: Task;
@@ -10,6 +11,7 @@ interface TaskTabProps {
   onClick: () => void;
   onClose: () => void;
   onRename: (name: string) => void;
+  onRegenerateTitle: () => Promise<void>;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }
@@ -21,6 +23,7 @@ export default function TaskTab({
   onClick,
   onClose,
   onRename,
+  onRegenerateTitle,
   onDragStart,
   onDragEnd,
 }: TaskTabProps) {
@@ -29,6 +32,8 @@ export default function TaskTab({
   const [editName, setEditName] = useState(task.name);
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -87,9 +92,36 @@ export default function TaskTab({
     setShowTooltip(false);
   };
 
+  useEffect(() => {
+    if (!menuPos) return;
+    const close = () => setMenuPos(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        close();
+      }
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [menuPos]);
+
   const startEdit = () => {
     setEditName(task.name);
     setEditing(true);
+  };
+
+  const handleRegenerate = async () => {
+    setMenuPos(null);
+    setRegenerating(true);
+    try {
+      await onRegenerateTitle();
+    } finally {
+      setRegenerating(false);
+    }
   };
 
   const submitEdit = () => {
@@ -122,7 +154,8 @@ export default function TaskTab({
   const tooltipLines = [
     task.name,
     task.summary,
-    `Branch: ${task.branch}`,
+    task.branch ? `Branch: ${task.branch}` : undefined,
+    `Base: ${task.baseBranch}`,
     task.terminalTitle ? `Terminal: ${task.terminalTitle}` : undefined,
   ].filter(Boolean) as string[];
 
@@ -146,6 +179,11 @@ export default function TaskTab({
           if (!editing) e.preventDefault();
         }}
         onDoubleClick={startEdit}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setShowTooltip(false);
+          setMenuPos({ x: e.clientX, y: e.clientY });
+        }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onDragStart={(e) => {
@@ -157,6 +195,7 @@ export default function TaskTab({
       >
         <span className="flex flex-col items-center min-w-0 overflow-hidden">
           <span className="flex items-center gap-1.5">
+            {regenerating ? <Spinner size="sm" /> : null}
             {task.hasUnread && !isActive && !showSolid ? (
               <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
             ) : null}
@@ -192,6 +231,23 @@ export default function TaskTab({
                 {line}
               </div>
             ))}
+          </div>,
+          document.body,
+        )}
+      {menuPos &&
+        createPortal(
+          <div
+            className="fixed z-50 bg-surface border border-border-input rounded-sm shadow-xl py-1 min-w-[180px]"
+            style={{ left: menuPos.x, top: menuPos.y }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-xs text-primary hover:bg-surface-hover transition-colors"
+              onClick={handleRegenerate}
+            >
+              Regenerate title
+            </button>
           </div>,
           document.body,
         )}

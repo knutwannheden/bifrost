@@ -229,11 +229,15 @@ async function processQueue(): Promise<void> {
   }
 }
 
-async function runSummarize(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
-  const jsonlPath = resolveJsonlPath(worktreePath, options?.sessionId);
+/** First and last exchanges of a task's Claude transcript, or null when there is none. */
+export function readTranscriptExcerpt(worktreePath: string, sessionId?: string): string | null {
+  const jsonlPath = resolveJsonlPath(worktreePath, sessionId);
   if (!jsonlPath) return null;
+  return readHeadTail(jsonlPath) || null;
+}
 
-  const input = readHeadTail(jsonlPath);
+async function runSummarize(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
+  const input = readTranscriptExcerpt(worktreePath, options?.sessionId);
   if (!input) return null;
 
   const installed = getInstalledOllamaModels();

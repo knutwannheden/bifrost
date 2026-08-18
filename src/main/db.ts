@@ -1,14 +1,17 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
+import { loadConfig } from './config';
+import { slugify } from './worktree-manager';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost');
 const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
 let db: Database.Database | null = null;
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 // SQLite schema — TEXT for strings, INTEGER for booleans/timestamps, JSON text for arrays
 const SCHEMA_SQL = `
@@ -16,7 +19,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
   repo_id       TEXT NOT NULL,
-  branch        TEXT NOT NULL,
+  base_branch   TEXT NOT NULL,
+  branch        TEXT,
   worktree_path TEXT NOT NULL,
   session_id    TEXT,
   status        TEXT NOT NULL DEFAULT 'running',
@@ -129,6 +133,160 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 `;
 
+// Each row costs up to two blocking git subprocess calls; this caps how long
+// a large task table can hold up startup.
+const BACKFILL_TIME_BUDGET_MS = 30_000;
+
+/**
+ * Recover each task's own branch, first from its worktree's HEAD and then,
+ * for whatever is still unrecovered, by matching the task name against the
+ * repo's local branches. Both passes share one time budget.
+ */
+function backfillTaskBranches(d: Database.Database): void {
+  const deadline = Date.now() + BACKFILL_TIME_BUDGET_MS;
+  const fromHead = backfillFromWorktreeHead(d, deadline);
+  const fromName = backfillFromTaskName(d, deadline);
+  console.log(
+    `[db] Migration v3: recovered ${fromHead.recovered} of ${fromHead.total} task branches from worktree HEAD ` +
+      `(processed ${fromHead.processed}), then ${fromName.recovered} of ${fromName.total} more from task name`,
+  );
+}
+
+/**
+ * Recover each task's own branch from its worktree. Confirms the directory is
+ * the worktree's own root — `git symbolic-ref` resolves upward through nested
+ * paths, so an unverified read could return an enclosing repo's branch. In-place
+ * tasks share their worktree with the repo checkout, so their current branch
+ * is not a fact about the task and is left alone.
+ */
+function backfillFromWorktreeHead(
+  d: Database.Database,
+  deadline: number,
+): { recovered: number; processed: number; total: number } {
+  const rows = d
+    .prepare<unknown[], { id: string; worktree_path: string; in_place: number }>(
+      'SELECT id, worktree_path, in_place FROM tasks WHERE worktree_path IS NOT NULL',
+    )
+    .all();
+  const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
+  let recovered = 0;
+  let processed = 0;
+  for (const row of rows) {
+    if (Date.now() >= deadline) break;
+    processed++;
+    if (row.in_place) continue;
+    if (!fs.existsSync(row.worktree_path)) continue;
+    try {
+      // A pruned worktree or a detached HEAD is an ordinary outcome here, so
+      // git's diagnostics on stderr would be startup noise for expected cases.
+      const toplevel = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+        cwd: row.worktree_path,
+        timeout: 5000,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      if (fs.realpathSync(toplevel) !== fs.realpathSync(row.worktree_path)) continue;
+      const branch = execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], {
+        cwd: row.worktree_path,
+        timeout: 5000,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      if (branch) {
+        update.run(branch, row.id);
+        recovered++;
+      }
+    } catch {
+      // Not a git worktree root, no branch (detached HEAD), or the subprocess failed.
+    }
+  }
+  return { recovered, processed, total: rows.length };
+}
+
+/**
+ * Recover remaining branches by matching each task's name-derived slug
+ * against the repo's local branches, which usually outlive the worktree.
+ * Assigns only when exactly one task in the repo maps to that slug and a
+ * branch with that name exists — a shared slug (`resolveAvailableBranchName`'s
+ * `-2` suffixing) could belong to either task, so it is left NULL.
+ */
+function backfillFromTaskName(d: Database.Database, deadline: number): { recovered: number; total: number } {
+  const rows = d
+    .prepare<unknown[], { id: string; repo_id: string; name: string }>(
+      'SELECT id, repo_id, name FROM tasks WHERE branch IS NULL',
+    )
+    .all();
+  if (rows.length === 0) return { recovered: 0, total: 0 };
+
+  const repoPaths = new Map(loadConfig().repos.map((r) => [r.id, r.path]));
+  const rowsByRepo = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const bucket = rowsByRepo.get(row.repo_id);
+    if (bucket) bucket.push(row);
+    else rowsByRepo.set(row.repo_id, [row]);
+  }
+
+  // A candidate is blocked once its repo already has a task on that branch, from either
+  // pass — branch names are scoped per repo, so the same name claimed in a different
+  // repo is not a conflict.
+  const claimedByRepo = new Map<string, Set<string>>();
+  for (const r of d
+    .prepare<unknown[], { repo_id: string; branch: string }>(
+      'SELECT repo_id, branch FROM tasks WHERE branch IS NOT NULL',
+    )
+    .all()) {
+    const bucket = claimedByRepo.get(r.repo_id);
+    if (bucket) bucket.add(r.branch);
+    else claimedByRepo.set(r.repo_id, new Set([r.branch]));
+  }
+
+  const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
+  let recovered = 0;
+  for (const [repoId, repoRows] of rowsByRepo) {
+    if (Date.now() >= deadline) break;
+    const repoPath = repoPaths.get(repoId);
+    if (!repoPath || !fs.existsSync(repoPath)) continue;
+    const claimed = claimedByRepo.get(repoId) ?? new Set<string>();
+    claimedByRepo.set(repoId, claimed);
+
+    let branches: Set<string>;
+    try {
+      const out = execFileSync('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads/'], {
+        cwd: repoPath,
+        timeout: 10_000,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      branches = new Set(
+        out
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean),
+      );
+    } catch {
+      continue;
+    }
+
+    const slugCounts = new Map<string, number>();
+    const rowBySlug = new Map<string, (typeof repoRows)[number]>();
+    for (const row of repoRows) {
+      const slug = slugify(row.name);
+      slugCounts.set(slug, (slugCounts.get(slug) ?? 0) + 1);
+      rowBySlug.set(slug, row);
+    }
+
+    for (const [slug, count] of slugCounts) {
+      if (count !== 1 || !branches.has(slug) || claimed.has(slug)) continue;
+      const row = rowBySlug.get(slug);
+      if (!row) continue;
+      update.run(slug, row.id);
+      claimed.add(slug);
+      recovered++;
+    }
+  }
+  return { recovered, total: rows.length };
+}
+
 export function openDatabase(): void {
   if (db) return;
 
@@ -177,7 +335,6 @@ function runMigrations(): void {
   const row = d.prepare('SELECT version FROM schema_version').get() as { version: number } | undefined;
 
   if (!row) {
-    importFromJson();
     d.prepare('INSERT INTO schema_version VALUES (?)').run(CURRENT_VERSION);
     console.log(`[db] Initialized schema at version ${CURRENT_VERSION}`);
   } else if (row.version < CURRENT_VERSION) {
@@ -185,258 +342,19 @@ function runMigrations(): void {
       d.exec('ALTER TABLE activity_entries DROP COLUMN diff');
       console.log('[db] Migration v2: dropped diff column from activity_entries');
     }
-    d.prepare('UPDATE schema_version SET version = ?').run(CURRENT_VERSION);
-  }
-}
-
-function importFromJson(): void {
-  const d = getDb();
-  let totalImported = 0;
-
-  // Wrap all imports in a transaction for speed
-  const runImport = d.transaction(() => {
-    // Import tasks
-    const tasksFile = path.join(BIFROST_DIR, 'tasks.json');
-    if (fs.existsSync(tasksFile)) {
-      try {
-        const tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf-8'));
-        const stmt = d.prepare(
-          `INSERT INTO tasks (id, name, repo_id, branch, worktree_path, session_id, status, has_unread,
-            created_at, archived_at, terminal_title, summary, is_external, in_place, session_history,
-            claude_active, cur_outcome, cur_confidence, cur_reason, cur_pr_state, cur_branch_merged,
-            cur_classified_at, cur_user_override, cur_user_note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        );
-        for (const t of tasks) {
-          stmt.run(
-            t.id,
-            t.name,
-            t.repoId,
-            t.branch ?? '',
-            t.worktreePath,
-            t.sessionId ?? null,
-            t.status,
-            t.hasUnread ? 1 : 0,
-            t.createdAt,
-            t.archivedAt ?? null,
-            t.terminalTitle ?? null,
-            t.summary ?? null,
-            t.isExternal ? 1 : 0,
-            t.inPlace ? 1 : 0,
-            t.sessionHistory ? JSON.stringify(t.sessionHistory) : null,
-            t.claudeActive ? 1 : 0,
-            t.curation?.outcome ?? null,
-            t.curation?.confidence ?? null,
-            t.curation?.reason ?? null,
-            t.curation?.prState ?? null,
-            t.curation?.branchMerged != null ? (t.curation.branchMerged ? 1 : 0) : null,
-            t.curation?.classifiedAt ?? null,
-            t.curation?.userOverride ?? null,
-            t.curation?.userNote ?? null,
-          );
-        }
-        totalImported += tasks.length;
-        console.log(`[db] Imported ${tasks.length} tasks from JSON`);
-      } catch (err) {
-        console.error('[db] Failed to import tasks:', err);
-      }
+    if (row.version < 3) {
+      // Atomic: an interrupted run rolls back cleanly, so schema_version always
+      // matches whether base_branch/branch exist and a retry never trips a
+      // duplicate-column error.
+      d.transaction(() => {
+        d.exec('ALTER TABLE tasks RENAME COLUMN branch TO base_branch');
+        d.exec('ALTER TABLE tasks ADD COLUMN branch TEXT');
+        d.prepare('UPDATE schema_version SET version = ?').run(3);
+      })();
+      // branch is optional and updates are idempotent, so running this partially
+      // or more than once is harmless.
+      backfillTaskBranches(d);
+      console.log('[db] Migration v3: split tasks.branch into base_branch + branch');
     }
-
-    // Import triages
-    const triagesFile = path.join(BIFROST_DIR, 'triages.json');
-    if (fs.existsSync(triagesFile)) {
-      try {
-        const triages = JSON.parse(fs.readFileSync(triagesFile, 'utf-8'));
-        const stmt = d.prepare(
-          `INSERT INTO triages (id, prompt, created_at, status, completed_at, task_ids, last_activity, summary, claude_session_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        );
-        for (const t of triages) {
-          stmt.run(
-            t.id,
-            t.prompt,
-            t.createdAt,
-            t.status,
-            t.completedAt ?? null,
-            t.taskIds ? JSON.stringify(t.taskIds) : null,
-            t.lastActivity ?? null,
-            t.summary ?? null,
-            t.claudeSessionId ?? null,
-          );
-        }
-        totalImported += triages.length;
-        console.log(`[db] Imported ${triages.length} triages from JSON`);
-      } catch (err) {
-        console.error('[db] Failed to import triages:', err);
-      }
-    }
-
-    // Import notes (per-repo files)
-    const notesDir = path.join(BIFROST_DIR, 'notes');
-    if (fs.existsSync(notesDir)) {
-      try {
-        const files = fs.readdirSync(notesDir).filter((f) => f.endsWith('.json'));
-        const stmt = d.prepare('INSERT INTO notes (id, repo_id, text, created_at, addressed) VALUES (?, ?, ?, ?, ?)');
-        let noteCount = 0;
-        for (const file of files) {
-          const repoId = file.replace('.json', '');
-          const notes = JSON.parse(fs.readFileSync(path.join(notesDir, file), 'utf-8'));
-          for (const n of notes) {
-            stmt.run(n.id, repoId, n.text, n.createdAt, n.addressed ? 1 : 0);
-            noteCount++;
-          }
-        }
-        totalImported += noteCount;
-        console.log(`[db] Imported ${noteCount} notes from JSON`);
-      } catch (err) {
-        console.error('[db] Failed to import notes:', err);
-      }
-    }
-
-    // Import activity entries (per-task files)
-    const activityDir = path.join(BIFROST_DIR, 'activity');
-    if (fs.existsSync(activityDir)) {
-      try {
-        const files = fs.readdirSync(activityDir).filter((f) => f.endsWith('.json'));
-        const stmt = d.prepare(
-          `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, commit_sha,
-            commit_message, claude_event_kind, claude_text, claude_tool_name)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        );
-        let activityCount = 0;
-        for (const file of files) {
-          const taskId = file.replace('.json', '');
-          const entries = JSON.parse(fs.readFileSync(path.join(activityDir, file), 'utf-8'));
-          for (const e of entries) {
-            stmt.run(
-              e.id,
-              taskId,
-              e.timestamp,
-              e.type,
-              e.filePath ?? null,
-              e.commitSha ?? null,
-              e.commitMessage ?? null,
-              e.claudeEventKind ?? null,
-              e.claudeText ?? null,
-              e.claudeToolName ?? null,
-            );
-            activityCount++;
-          }
-        }
-        totalImported += activityCount;
-        console.log(`[db] Imported ${activityCount} activity entries from JSON`);
-      } catch (err) {
-        console.error('[db] Failed to import activity entries:', err);
-      }
-    }
-
-    // Import supervisor state
-    const supervisorFile = path.join(BIFROST_DIR, 'supervisor.json');
-    if (fs.existsSync(supervisorFile)) {
-      try {
-        const state = JSON.parse(fs.readFileSync(supervisorFile, 'utf-8'));
-        d.prepare('INSERT INTO supervisor_state (key, running, concurrency) VALUES (?, ?, ?)').run(
-          'state',
-          state.running ? 1 : 0,
-          state.concurrency ?? 2,
-        );
-        const stmt = d.prepare(
-          `INSERT INTO supervisor_items (id, note_id, repo_id, note_text, status, name, branch,
-            worktree_path, error_message, created_at, started_at, completed_at, opened_as_task_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        );
-        for (const item of state.items ?? []) {
-          stmt.run(
-            item.id,
-            item.noteId,
-            item.repoId,
-            item.noteText,
-            item.status,
-            item.name,
-            item.branch,
-            item.worktreePath ?? null,
-            item.errorMessage ?? null,
-            item.createdAt,
-            item.startedAt ?? null,
-            item.completedAt ?? null,
-            item.openedAsTaskId ?? null,
-          );
-        }
-        console.log(`[db] Imported supervisor state (${(state.items ?? []).length} items)`);
-      } catch (err) {
-        console.error('[db] Failed to import supervisor state:', err);
-      }
-    }
-
-    // Import context entries (per-task JSONL files)
-    const tasksDir = path.join(BIFROST_DIR, 'tasks');
-    if (fs.existsSync(tasksDir)) {
-      try {
-        const taskDirs = fs.readdirSync(tasksDir);
-        const stmt = d.prepare(
-          `INSERT INTO context_entries (id, task_id, task_name, type, content, captured_at,
-            has_selection, jsonl_path, line_number, uuid, selected_text, selection_start, selection_end, resolved_content)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        );
-        let contextCount = 0;
-        for (const taskDir of taskDirs) {
-          const filePath = path.join(tasksDir, taskDir, 'contexts.jsonl');
-          if (!fs.existsSync(filePath)) continue;
-          const data = fs.readFileSync(filePath, 'utf-8');
-          for (const line of data.split('\n')) {
-            if (!line.trim()) continue;
-            try {
-              const e = JSON.parse(line);
-              stmt.run(
-                e.id,
-                e.taskId,
-                e.taskName,
-                e.type,
-                e.content,
-                e.capturedAt,
-                e.hasSelection != null ? (e.hasSelection ? 1 : 0) : null,
-                e.jsonlPath ?? null,
-                e.lineNumber ?? null,
-                e.uuid ?? null,
-                e.selectedText ?? null,
-                e.selectionStart ?? null,
-                e.selectionEnd ?? null,
-                e.resolvedContent ?? null,
-              );
-              contextCount++;
-            } catch {
-              // Skip malformed lines
-            }
-          }
-        }
-        totalImported += contextCount;
-        console.log(`[db] Imported ${contextCount} context entries from JSONL`);
-      } catch (err) {
-        console.error('[db] Failed to import context entries:', err);
-      }
-    }
-
-    // Import slack seen reactions
-    const slackFile = path.join(BIFROST_DIR, 'slack.json');
-    if (fs.existsSync(slackFile)) {
-      try {
-        const state = JSON.parse(fs.readFileSync(slackFile, 'utf-8'));
-        const reactions: string[] = Array.isArray(state.seenReactions) ? state.seenReactions : [];
-        const stmt = d.prepare('INSERT INTO slack_seen_reactions (reaction_key, seen_at) VALUES (?, ?)');
-        const now = Date.now();
-        for (const key of reactions) {
-          stmt.run(key, now);
-        }
-        console.log(`[db] Imported ${reactions.length} slack seen reactions`);
-      } catch (err) {
-        console.error('[db] Failed to import slack state:', err);
-      }
-    }
-  });
-
-  runImport();
-
-  if (totalImported > 0) {
-    console.log(`[db] JSON import complete — ${totalImported} total records imported`);
   }
 }

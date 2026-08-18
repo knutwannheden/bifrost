@@ -132,7 +132,7 @@ function replacePersistedEntries(taskId: string, entries: ActivityEntry[]): void
 
 function loadEntries(taskId: string): ActivityEntry[] {
   return getDb()
-    .prepare('SELECT * FROM activity_entries WHERE task_id = ? ORDER BY timestamp')
+    .prepare<unknown[], Row>('SELECT * FROM activity_entries WHERE task_id = ? ORDER BY timestamp')
     .all(taskId)
     .map(rowToEntry);
 }

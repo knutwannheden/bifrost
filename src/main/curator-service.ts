@@ -7,6 +7,7 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import type { CuratorRunResult, CuratorState, Repo, Task, TaskCuration, TaskOutcome } from '../shared/types';
 import { loadConfig } from './config';
 import { archiveTaskCore, getTasks, updateTask } from './ipc-handlers';
+import { isWorktreeDisposable } from './worktree-manager';
 
 const execFile = promisify(execFileCb);
 
@@ -82,11 +83,7 @@ async function curatorTick(): Promise<void> {
     if (!fs.existsSync(task.worktreePath)) continue;
 
     try {
-      const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
-        cwd: task.worktreePath,
-        timeout: 5000,
-      });
-      if (stdout.trim().length === 0) {
+      if (await isWorktreeDisposable(task.worktreePath, task.baseBranch)) {
         console.log(`[curator] auto-archiving clean stopped task: ${task.name}`);
         const archived = await archiveTaskCore(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -102,7 +99,7 @@ async function curatorTick(): Promise<void> {
         if (classResult) results.push(classResult);
       }
     } catch {
-      // git status failed
+      // Archiving or classification failed; the next tick retries.
     }
   }
 
@@ -124,6 +121,9 @@ async function classifyTask(task: Task): Promise<CuratorRunResult | null> {
   const config = loadConfig();
   const repo = config.repos.find((r: Repo) => r.id === task.repoId);
   if (!repo) return null;
+  // Without the task's own branch there is nothing to ask GitHub or git about,
+  // and asking about the fork point answers for the wrong branch.
+  if (!task.branch) return null;
 
   let prState: 'open' | 'closed' | 'merged' | undefined;
   let branchMerged = false;

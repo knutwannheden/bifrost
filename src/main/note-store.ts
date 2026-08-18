@@ -15,7 +15,10 @@ function rowToNote(row: Row): Note {
 }
 
 export function listNotes(repoId: string): Note[] {
-  return getDb().prepare('SELECT * FROM notes WHERE repo_id = ? ORDER BY created_at').all(repoId).map(rowToNote);
+  return getDb()
+    .prepare<unknown[], Row>('SELECT * FROM notes WHERE repo_id = ? ORDER BY created_at')
+    .all(repoId)
+    .map(rowToNote);
 }
 
 export function createNote(repoId: string, text: string): Note {
@@ -32,7 +35,7 @@ export function createNote(repoId: string, text: string): Note {
 }
 
 export function updateNote(repoId: string, noteId: string, updates: { text?: string; addressed?: boolean }): Note {
-  const row = getDb().prepare('SELECT * FROM notes WHERE id = ? AND repo_id = ?').get(noteId, repoId);
+  const row = getDb().prepare<unknown[], Row>('SELECT * FROM notes WHERE id = ? AND repo_id = ?').get(noteId, repoId);
   if (!row) throw new Error(`Note not found: ${noteId}`);
   const note = rowToNote(row);
   const updated = { ...note, ...updates };
