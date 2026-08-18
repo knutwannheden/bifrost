@@ -154,7 +154,8 @@ export default function TaskTab({
   const tooltipLines = [
     task.name,
     task.summary,
-    `Branch: ${task.branch}`,
+    task.branch ? `Branch: ${task.branch}` : undefined,
+    `Base: ${task.baseBranch}`,
     task.terminalTitle ? `Terminal: ${task.terminalTitle}` : undefined,
   ].filter(Boolean) as string[];
 

@@ -296,7 +296,7 @@ function TaskRow({
               <Highlight text={repoName(task.repoId)} search={search} />
             </span>
             <span>
-              <Highlight text={task.branch} search={search} />
+              <Highlight text={task.branch ?? task.baseBranch} search={search} />
             </span>
           </>
         )}
@@ -384,7 +384,10 @@ export default function TaskHistoryPanel() {
           if (filter === 'archived' && t.status !== 'archived') return false;
           if (search) {
             const repo = state.repos.find((r) => r.id === t.repoId);
-            return matchesAllTerms(`${t.name} ${t.branch} ${repo?.name ?? ''} ${t.summary ?? ''}`, search);
+            return matchesAllTerms(
+              `${t.name} ${t.branch ?? ''} ${t.baseBranch} ${repo?.name ?? ''} ${t.summary ?? ''}`,
+              search,
+            );
           }
           return true;
         })
@@ -457,7 +460,7 @@ export default function TaskHistoryPanel() {
     if (task.inPlace) {
       try {
         const currentBranch = await window.bifrost.getCurrentBranch(task.repoId);
-        if (currentBranch !== task.branch) {
+        if (task.branch && currentBranch !== task.branch) {
           setBranchConfirm({ task, currentBranch });
           return;
         }
@@ -656,7 +659,8 @@ export default function TaskHistoryPanel() {
         {branchConfirm && (
           <div className="mx-4 mt-3 px-3 py-2 bg-warning/10 border border-warning/30 rounded-sm flex items-center gap-3">
             <span className="text-xs text-warning flex-1">
-              Branch changed from <span className="font-medium">{branchConfirm.task.branch}</span> to{' '}
+              Branch changed from{' '}
+              <span className="font-medium">{branchConfirm.task.branch ?? branchConfirm.task.baseBranch}</span> to{' '}
               <span className="font-medium">{branchConfirm.currentBranch}</span>
             </span>
             <PrimaryButton size="sm" onClick={() => doReopen(branchConfirm.task)}>
