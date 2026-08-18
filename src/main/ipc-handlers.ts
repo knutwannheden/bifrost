@@ -121,10 +121,9 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
 
 /**
  * Rename the worktree's branch, returning the new name or null when left alone.
- * `task.branch` records the base the worktree was created from, so the branch to
- * rename is whatever HEAD points at. An upstream means it has been pushed, and a
- * rename would orphan the remote branch and any PR built on it. In-place tasks
- * sit on the repo's own checked-out branch, which is never ours to rename.
+ * HEAD is the source of truth for which branch that is, since it's observed
+ * rather than stored. In-place tasks sit on the repo's own checked-out branch,
+ * which is never ours to rename.
  */
 async function renameWorktreeBranch(task: Task, candidate: string): Promise<string | null> {
   if (task.isExternal || task.inPlace || !candidate) return null;
@@ -659,7 +658,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       const config = loadConfig();
       const repo = config.repos.find((r: Repo) => r.id === task.repoId);
       if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
-      worktreePath = await restoreWorktree(repo.path, task.name);
+      worktreePath = await restoreWorktree(repo.path, task.name, task.branch);
     }
 
     // Re-detect current branch for in-place tasks (user may have switched)

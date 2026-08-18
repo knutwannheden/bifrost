@@ -180,15 +180,21 @@ export async function createWorktreeFromPr(
   return { worktreePath, branch: localBranch };
 }
 
-export async function restoreWorktree(repoPath: string, taskName: string): Promise<string> {
+export async function restoreWorktree(repoPath: string, taskName: string, branch?: string): Promise<string> {
   const worktreePath = resolveWorktreePath(repoPath, taskName);
 
   await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
 
-  await execFile('git', ['worktree', 'add', worktreePath, slugify(taskName)], {
-    cwd: repoPath,
-    timeout: 30000,
-  });
+  const ref = branch ?? slugify(taskName);
+  try {
+    await execFile('git', ['worktree', 'add', worktreePath, ref], { cwd: repoPath, timeout: 30000 });
+  } catch (err) {
+    throw new Error(
+      `Cannot restore worktree for "${taskName}": no branch named "${ref}". ` +
+        `This task predates branch tracking, so its branch must be selected manually.`,
+      { cause: err },
+    );
+  }
 
   return worktreePath;
 }

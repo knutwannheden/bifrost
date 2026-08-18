@@ -168,7 +168,7 @@ function findTask(idOrName: string): import('../shared/types').Task | null {
 
   // Partial name/branch match — only if unambiguous
   const partials = allTasks.filter(
-    (t) => t.name.toLowerCase().includes(lower) || t.branch.toLowerCase().includes(lower),
+    (t) => t.name.toLowerCase().includes(lower) || (t.branch ?? t.baseBranch ?? '').toLowerCase().includes(lower),
   );
   if (partials.length === 1) return partials[0];
 
@@ -264,6 +264,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           status: t.status,
           idle: t.status === 'running' ? isIdle(t.id) : undefined,
           branch: t.branch,
+          baseBranch: t.baseBranch,
           worktreePath: t.worktreePath,
           createdAt: t.createdAt,
         }));

@@ -121,6 +121,9 @@ async function classifyTask(task: Task): Promise<CuratorRunResult | null> {
   const config = loadConfig();
   const repo = config.repos.find((r: Repo) => r.id === task.repoId);
   if (!repo) return null;
+  // Without the task's own branch there is nothing to ask GitHub or git about,
+  // and asking about the fork point answers for the wrong branch.
+  if (!task.branch) return null;
 
   let prState: 'open' | 'closed' | 'merged' | undefined;
   let branchMerged = false;
