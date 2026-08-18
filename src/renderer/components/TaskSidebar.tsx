@@ -66,13 +66,15 @@ export default function TaskSidebar() {
 
   useEffect(() => {
     dispatch({ type: 'SET_VISIBLE_TASK_IDS', taskIds: visibleTaskIds });
-    // TaskSidebar unmounts (rather than hiding via CSS) when the sidebar is toggled off,
-    // so the published order must be cleared here or the keymap's running-tasks fallback
-    // never re-engages and Cmd+N can select a task closed while the sidebar was hidden.
+  }, [visibleTaskIds.join(',')]);
+
+  // TaskSidebar unmounts rather than hiding via CSS when the sidebar is toggled
+  // off, so clearing the published order here re-engages the keymap's fallback.
+  useEffect(() => {
     return () => {
       dispatch({ type: 'SET_VISIBLE_TASK_IDS', taskIds: [] });
     };
-  }, [visibleTaskIds.join(',')]);
+  }, []);
 
   if (openTasks.length === 0) return null;
 
