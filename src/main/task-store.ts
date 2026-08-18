@@ -79,7 +79,7 @@ function taskParams(t: Task) {
 }
 
 export function loadTasks(): Task[] {
-  const rows = getDb().prepare('SELECT * FROM tasks ORDER BY created_at').all();
+  const rows = getDb().prepare<unknown[], Row>('SELECT * FROM tasks ORDER BY created_at').all();
   return rows.map(rowToTask);
 }
 

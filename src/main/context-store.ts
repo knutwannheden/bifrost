@@ -282,7 +282,7 @@ function fuzzyContains(text: string, searchText: string): boolean {
 export function loadPersistedContexts(): void {
   const now = Date.now();
   const rows = getDb()
-    .prepare('SELECT * FROM context_entries WHERE captured_at > ?')
+    .prepare<unknown[], Row>('SELECT * FROM context_entries WHERE captured_at > ?')
     .all(now - TTL_MS);
   for (const row of rows) {
     const entry = rowToEntry(row);

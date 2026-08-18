@@ -26,7 +26,7 @@ function rowToItem(row: Row): SupervisorItem {
 export function loadSupervisorState(): SupervisorState {
   const d = getDb();
   const stateRow = d.prepare("SELECT * FROM supervisor_state WHERE key = 'state'").get() as Row | undefined;
-  const items = d.prepare('SELECT * FROM supervisor_items ORDER BY created_at').all().map(rowToItem);
+  const items = d.prepare<unknown[], Row>('SELECT * FROM supervisor_items ORDER BY created_at').all().map(rowToItem);
 
   return {
     running: stateRow ? !!stateRow.running : false,
