@@ -18,6 +18,62 @@ const sessions = new Map<string, IPty>();
 const sessionBuffers = new Map<string, string>();
 const MAX_BUFFER = 256 * 1024; // 256 KB per session
 
+/**
+ * Claude positions each word with its own `\e[<n>G`, so neither spaces nor
+ * multi-word phrases survive as literal substrings of the raw stream.
+ */
+function normalizeOutput(data: string): string {
+  return (
+    data
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: ESC is the input being stripped
+      .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')
+      .replace(/\s+/g, '')
+      .toLowerCase()
+  );
+}
+
+interface ReadyGate {
+  promise: Promise<void>;
+  resolve: () => void;
+  ready: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+// A freshly spawned PTY accepts writes seconds before Claude's TUI reads them,
+// so callers that inject input need a readiness signal rather than liveness.
+// Readiness is quiescence — output started, then stopped — because every
+// on-screen string Claude draws is subject to change between releases.
+const sessionReady = new Map<string, ReadyGate>();
+const READY_QUIET_MS = 1_000;
+const TRUST_SCAN_LIMIT = 32 * 1024;
+
+function createReadyGate(sessionId: string): void {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  sessionReady.set(sessionId, { promise, resolve, ready: false, timer: null });
+}
+
+/** Restart the quiet-period countdown; the last output before silence wins. */
+function noteSessionOutput(sessionId: string): void {
+  const gate = sessionReady.get(sessionId);
+  if (!gate || gate.ready) return;
+  if (gate.timer) clearTimeout(gate.timer);
+  gate.timer = setTimeout(() => {
+    gate.ready = true;
+    gate.timer = null;
+    gate.resolve();
+  }, READY_QUIET_MS);
+}
+
+/** Release waiters on a session that died before its TUI came up. */
+function disposeReadyGate(sessionId: string): void {
+  const gate = sessionReady.get(sessionId);
+  if (gate?.timer) clearTimeout(gate.timer);
+  gate?.resolve();
+  sessionReady.delete(sessionId);
+}
+
 function collectSpawnDiagnostics(
   command: string,
   cwd: string,
@@ -217,6 +273,7 @@ export function spawnSession(
 
   sessions.set(sessionId, shell);
   sessionBuffers.set(sessionId, '');
+  createReadyGate(sessionId);
 
   // Auto-accept workspace trust prompt for Bifrost-managed Claude sessions.
   // Worktree directories are subdirectories of repos the user already added,
@@ -228,14 +285,17 @@ export function spawnSession(
     const buf = (sessionBuffers.get(sessionId) ?? '') + data;
     sessionBuffers.set(sessionId, buf.length > MAX_BUFFER ? buf.slice(-MAX_BUFFER) : buf);
 
-    if (!trustHandled && buf.includes('Yes, I trust this folder')) {
-      trustHandled = true;
-      shell.write('\r');
-    }
+    noteSessionOutput(sessionId);
 
-    // Welcome banner without trust prompt means workspace is already trusted
-    if (!trustHandled && buf.includes('╰')) {
-      trustHandled = true;
+    // The trust prompt only appears during startup, which bounds this scan to
+    // a small buffer — normalizing every chunk of a long session would not.
+    if (!trustHandled) {
+      if (buf.length > TRUST_SCAN_LIMIT) {
+        trustHandled = true;
+      } else if (normalizeOutput(buf).includes('yesitrustthisfolder')) {
+        trustHandled = true;
+        shell.write('\r');
+      }
     }
 
     if (!mainWindow.isDestroyed()) {
@@ -251,6 +311,7 @@ export function spawnSession(
     }
     sessions.delete(sessionId);
     sessionBuffers.delete(sessionId);
+    disposeReadyGate(sessionId);
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
     }
@@ -274,7 +335,9 @@ export function createSession(
   },
 ): void {
   const buildArgs = (resume: boolean): string[] => {
-    const a: string[] = [];
+    // Its consent prompt blocks startup until answered, which strands sessions
+    // that are driven by an agent rather than watched in a tab.
+    const a: string[] = ['--no-chrome'];
     if (resume && options?.resumeSessionId) a.push('--resume', options.resumeSessionId);
     if (options?.name) a.push('--name', options.name);
     if (options?.permissionMode === 'auto-mode') a.push('--enable-auto-mode');
@@ -340,11 +403,30 @@ export function createShellSession(
   spawnSession(sessionId, shellPath, ['-l'], cwd, mainWindow, { rows: 15, extraEnv });
 }
 
-export function writeToSession(sessionId: string, data: string): void {
+/** Returns false when no live session holds the id, so callers can report the miss. */
+export function writeToSession(sessionId: string, data: string): boolean {
   const session = sessions.get(sessionId);
-  if (session) {
-    session.write(data);
-  }
+  if (!session) return false;
+  session.write(data);
+  return true;
+}
+
+export function hasSession(sessionId: string): boolean {
+  return sessions.has(sessionId);
+}
+
+/** Resolves true once the session's TUI accepts input, false on timeout or exit. */
+export function waitForSessionReady(sessionId: string, timeoutMs = 20_000): Promise<boolean> {
+  const gate = sessionReady.get(sessionId);
+  if (!gate) return Promise.resolve(false);
+  if (gate.ready) return Promise.resolve(true);
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(false), timeoutMs);
+    gate.promise.then(() => {
+      clearTimeout(timer);
+      resolve(gate.ready);
+    });
+  });
 }
 
 export function resizeSession(sessionId: string, cols: number, rows: number): void {
@@ -367,6 +449,7 @@ export function killSession(sessionId: string): void {
     session.kill('SIGTERM');
     sessions.delete(sessionId);
     sessionBuffers.delete(sessionId);
+    disposeReadyGate(sessionId);
   }
 }
 
@@ -375,5 +458,6 @@ export function killAllSessions(): void {
     session.kill('SIGTERM');
     sessions.delete(id);
     sessionBuffers.delete(id);
+    disposeReadyGate(id);
   }
 }

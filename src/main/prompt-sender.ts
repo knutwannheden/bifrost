@@ -4,7 +4,7 @@ import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { getTask, isPendingRestore, restoreTaskSession } from './ipc-handlers';
 import { onTaskIdle as deliverDeferredMessages } from './message-store';
-import { writeToSession } from './session-manager';
+import { hasSession, waitForSessionReady, writeToSession } from './session-manager';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
 
@@ -193,11 +193,18 @@ export async function sendPrompt(
     return { ok: false, error: `Task ${taskId} not found` };
   }
 
-  // Auto-restore tasks whose sessions were deferred on startup.
-  // Force queue mode since the session needs time to start up.
+  // Sessions deferred on startup spawn on tab activation, so a send that
+  // arrives first has to start one and wait for Claude's TUI: a PTY accepts
+  // writes seconds before Claude reads them, and early bytes are discarded.
   if (isPendingRestore(taskId) && mainWindow && !mainWindow.isDestroyed()) {
     restoreTaskSession(taskId, mainWindow);
-    mode = 'queue';
+    if (!(await waitForSessionReady(taskId))) {
+      return { ok: false, error: 'Session did not finish starting up' };
+    }
+  }
+
+  if (!hasSession(taskId)) {
+    return { ok: false, error: `Task ${taskId} has no running session` };
   }
 
   let sendResult: SendPromptResult;
