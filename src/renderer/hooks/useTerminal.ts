@@ -361,27 +361,18 @@ export function useTerminal(
     };
     containerRef.current?.addEventListener('copy', onCopy, { capture: true });
 
-    // Bracketed-paste safety net for the Claude pane. xterm only frames a
-    // paste in \x1b[200~…\x1b[201~ when it has parsed Claude's \x1b[?2004h
-    // from the output stream — but a remount recreates the Terminal fresh
-    // (bracketedPasteMode defaults off) and that enable sequence may have
-    // already scrolled out of the capped replay buffer or been consumed by a
-    // prior drain. An unframed multi-line paste then reaches Claude as
-    // \r-separated lines: each \r submits a partial line and most of the
-    // content is lost. Claude's TUI always accepts bracketed paste at the
-    // prompt, so frame it ourselves instead of trusting xterm's tracked mode.
-    // Capture phase + stopPropagation keeps xterm's bubble-phase paste handler
-    // from also writing the text. The dev (shell) pane keeps xterm's default
-    // behavior — a shell without bracketed-paste mode would echo literal
-    // markers.
+    // Claude's TUI always accepts bracketed paste at the prompt, so frame the
+    // paste here rather than relying on xterm's tracked mode, which requires
+    // it to have parsed Claude's enable sequence off the output stream.
     const onPaste = (e: ClipboardEvent) => {
       if (paneType !== 'claude') return;
       const text = e.clipboardData?.getData('text/plain');
       if (!text) return;
       e.preventDefault();
       e.stopPropagation();
-      // Mirror xterm's prepareTextForTerminal (\n→\r) and ESC-stripping so an
-      // embedded ESC can't prematurely close the bracketed-paste span.
+      // Mirror xterm's prepareTextForTerminal (\n→\r); replace embedded ESC
+      // with the visible ␛ symbol so it can't prematurely close the
+      // bracketed-paste span.
       const sanitized = text.replace(/\r?\n/g, '\r').split('\x1b').join('␛');
       const framed = `\x1b[200~${sanitized}\x1b[201~`;
       sendInput(framed);
