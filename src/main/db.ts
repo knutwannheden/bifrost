@@ -222,12 +222,28 @@ function backfillFromTaskName(d: Database.Database, deadline: number): { recover
     else rowsByRepo.set(row.repo_id, [row]);
   }
 
+  // A candidate is blocked once its repo already has a task on that branch, from either
+  // pass — branch names are scoped per repo, so the same name claimed in a different
+  // repo is not a conflict.
+  const claimedByRepo = new Map<string, Set<string>>();
+  for (const r of d
+    .prepare<unknown[], { repo_id: string; branch: string }>(
+      'SELECT repo_id, branch FROM tasks WHERE branch IS NOT NULL',
+    )
+    .all()) {
+    const bucket = claimedByRepo.get(r.repo_id);
+    if (bucket) bucket.add(r.branch);
+    else claimedByRepo.set(r.repo_id, new Set([r.branch]));
+  }
+
   const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
   let recovered = 0;
   for (const [repoId, repoRows] of rowsByRepo) {
     if (Date.now() >= deadline) break;
     const repoPath = repoPaths.get(repoId);
     if (!repoPath || !fs.existsSync(repoPath)) continue;
+    const claimed = claimedByRepo.get(repoId) ?? new Set<string>();
+    claimedByRepo.set(repoId, claimed);
 
     let branches: Set<string>;
     try {
@@ -255,10 +271,11 @@ function backfillFromTaskName(d: Database.Database, deadline: number): { recover
     }
 
     for (const [slug, count] of slugCounts) {
-      if (count !== 1 || !branches.has(slug)) continue;
+      if (count !== 1 || !branches.has(slug) || claimed.has(slug)) continue;
       const row = rowBySlug.get(slug);
       if (!row) continue;
       update.run(slug, row.id);
+      claimed.add(slug);
       recovered++;
     }
   }
