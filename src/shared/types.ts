@@ -42,7 +42,10 @@ export interface Task {
   id: string;
   name: string;
   repoId: string;
-  branch: string;
+  /** The ref this worktree was created from. */
+  baseBranch: string;
+  /** The worktree's own branch; undefined when it could not be recovered. */
+  branch?: string;
   worktreePath: string;
   sessionId?: string;
   status: TaskStatus;
