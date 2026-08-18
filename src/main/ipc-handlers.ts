@@ -78,6 +78,7 @@ import {
 } from './supervisor-service';
 import { loadTasks, saveTasks } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
+import { generateTaskTitle } from './title-generator';
 import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
 import { deleteTriage as deleteTriageEntry, listTriages } from './triage-store';
 import {
@@ -115,6 +116,26 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
   tasks[idx] = { ...tasks[idx], ...updates };
   saveTasks(tasks);
   return tasks[idx];
+}
+
+/**
+ * An upstream means the branch has been pushed, so renaming it would orphan the
+ * remote branch and any PR built on it. In-place tasks run on the repo's own
+ * checked-out branch, which is never ours to rename.
+ */
+async function canRenameBranch(task: Task, candidate: string): Promise<boolean> {
+  if (task.isExternal || task.inPlace) return false;
+  if (!candidate || candidate === task.branch) return false;
+  const exists = async (ref: string): Promise<boolean> => {
+    try {
+      await execFile('git', ['rev-parse', '--verify', ref], { cwd: task.worktreePath, timeout: 5000 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (await exists(`${task.branch}@{upstream}`)) return false;
+  return !(await exists(candidate));
 }
 
 export async function archiveTaskCore(
@@ -666,6 +687,26 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.RENAME_TASK, (_event, taskId: string, name: string) => {
     return updateTask(taskId, { name });
+  });
+
+  ipcMain.handle(IPC.REGENERATE_TASK_TITLE, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    const generated = await generateTaskTitle(task.worktreePath, { sessionId: task.sessionId });
+    if (!generated) return null;
+
+    const updates: Partial<Task> = { name: generated.title, summary: generated.description };
+    if (await canRenameBranch(task, generated.branch)) {
+      try {
+        await execFile('git', ['branch', '-m', task.branch, generated.branch], {
+          cwd: task.worktreePath,
+          timeout: 5000,
+        });
+        updates.branch = generated.branch;
+      } catch (err) {
+        console.error(`[task] Branch rename failed for ${taskId}:`, err);
+      }
+    }
+    return updateTask(taskId, updates);
   });
 
   ipcMain.handle(IPC.DELETE_TASK, async (_event, taskId: string) => {

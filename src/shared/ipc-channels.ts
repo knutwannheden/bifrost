@@ -49,6 +49,7 @@ export const IPC = {
   IS_WORKTREE_DIRTY: 'task:is-worktree-dirty',
   REOPEN_TASK: 'task:reopen',
   RENAME_TASK: 'task:rename',
+  REGENERATE_TASK_TITLE: 'task:regenerate-title',
   DELETE_TASK: 'task:delete',
   LIST_TASKS: 'task:list',
   REORDER_TASKS: 'tasks:reorder',
@@ -222,6 +223,8 @@ export interface BifrostAPI {
   isWorktreeDirty(taskId: string): Promise<boolean>;
   reopenTask(taskId: string): Promise<Task>;
   renameTask(taskId: string, name: string): Promise<Task>;
+  /** Resolves null when the task has no transcript to summarize or generation fails. */
+  regenerateTaskTitle(taskId: string): Promise<Task | null>;
   deleteTask(taskId: string): Promise<void>;
   listTasks(): Promise<Task[]>;
   reorderTasks(taskIds: string[]): Promise<void>;

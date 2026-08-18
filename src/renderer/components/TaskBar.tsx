@@ -83,6 +83,25 @@ export default function TaskBar() {
                   dispatch({ type: 'UPDATE_TASK', task: updated });
                 });
               }}
+              onRegenerateTitle={async () => {
+                try {
+                  const updated = await window.bifrost.regenerateTaskTitle(task.id);
+                  if (!updated) {
+                    dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
+                    return;
+                  }
+                  dispatch({ type: 'UPDATE_TASK', task: updated });
+                  const renamed = updated.branch !== task.branch;
+                  dispatch({
+                    type: 'SHOW_TOAST',
+                    message: renamed
+                      ? `Renamed to "${updated.name}" on ${updated.branch}`
+                      : `Renamed to "${updated.name}"`,
+                  });
+                } catch {
+                  dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
+                }
+              }}
               onDragStart={() => {
                 draggingId.current = task.id;
               }}
