@@ -13,7 +13,19 @@
 ## Global Constraints
 
 - No test framework is configured. Do NOT add one. Every task verifies with `npm run typecheck`, `npm run lint`, and a stated inspection.
-- `npm run typecheck` has a pre-existing baseline of **24 errors**. A task passes at 24 or fewer, with none naming a file the task touched.
+- `npm run typecheck` has a pre-existing baseline of **24 errors**. A task passes when the total is 24 or fewer AND it introduced no new error. Do not assume a touched file is error-free at baseline — these already hold errors, and a task may legitimately touch them:
+
+  | file | baseline errors |
+  |---|---|
+  | `src/main/main.ts` | 5 |
+  | `tools/postmortem/src/bucketing.ts` | 4 |
+  | `src/renderer/hooks/useKeymapEngine.ts` | 3 |
+  | `src/renderer/hooks/useKeyboard.ts` | 3 |
+  | `src/renderer/components/TokenUsageChart.tsx` | 3 |
+  | `src/main/slack-service.ts` | 2 |
+  | `src/main/bifrost-api.ts` | 2 |
+  | `src/renderer/components/SupervisorOverlay.tsx` | 1 |
+  | `src/renderer/components/KeyboardShortcutsPanel.tsx` | 1 |
 - `npm run lint` must exit 0. It reports 4 pre-existing warnings in `supervisor-service.ts`; that is expected.
 - Node is pinned by `.node-version` to 24.19.0. Run `eval "$(fnm env)" && fnm use` if commands fail on version grounds.
 - Never operate on the live database at `~/.bifrost/bifrost.db`, and never modify anything under `~/.bifrost/backups/`.
