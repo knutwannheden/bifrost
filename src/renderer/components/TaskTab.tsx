@@ -74,7 +74,12 @@ export default function TaskTab({
     hoverTimer.current = setTimeout(() => {
       if (buttonRef.current) {
         const rect = buttonRef.current.getBoundingClientRect();
-        setTooltipPos({ x: rect.left, y: rect.bottom + 4 });
+        // The tooltip has at most 5 short lines (name, summary, branch, base,
+        // terminal title), so a fixed height estimate is enough to flip it above the row.
+        const estimatedHeight = 100;
+        const fitsBelow = rect.bottom + 4 + estimatedHeight <= window.innerHeight;
+        const y = fitsBelow ? rect.bottom + 4 : rect.top - 4 - estimatedHeight;
+        setTooltipPos({ x: rect.left, y });
       }
       setShowTooltip(true);
     }, 500);

@@ -54,6 +54,12 @@ export default function TaskSidebar() {
     }
   };
 
+  // The active task's group always renders expanded, even if folded, so the
+  // highlighted row stays visible; collapsedBuckets itself is untouched so the
+  // fold preference survives switching away from that task.
+  const activeTask = sorted.find((t) => t.id === state.activeTaskId);
+  const activeBucket = activeTask ? getTimeBucket(recency(activeTask.id, activeTask.createdAt)) : null;
+
   if (openTasks.length === 0) return null;
 
   return (
@@ -63,7 +69,7 @@ export default function TaskSidebar() {
     >
       {TIME_BUCKETS.filter((b) => groups.has(b)).map((bucket) => {
         const tasks = groups.get(bucket) ?? [];
-        const isCollapsed = collapsed.includes(bucket);
+        const isCollapsed = collapsed.includes(bucket) && bucket !== activeBucket;
         return (
           <div key={bucket}>
             <button
