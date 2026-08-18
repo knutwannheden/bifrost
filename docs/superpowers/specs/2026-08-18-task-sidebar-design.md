@@ -43,6 +43,8 @@ A task's recency is the newest modification time among every `.jsonl` in its Cla
 | `src/renderer/App.tsx` | Sidebar becomes a left column beside the content column. |
 | `src/main/bifrost-api.ts` | `getSessionMtime` returns the newest transcript mtime in the project directory. |
 | `src/shared/types.ts` | `BifrostConfig` gains sidebar width, hidden, and collapsed-bucket state. |
+| `src/renderer/context/AppContext.tsx` | `AppState` carries the visible task order the sidebar renders. |
+| `src/renderer/hooks/useKeymapEngine.ts` | Tab navigation indexes that order rather than creation order. |
 
 `TaskTab` is restyled rather than parameterised by orientation. The strip is going away, so a second layout would be dead weight. It keeps its inline rename, tooltip, context menu with Regenerate title, close button, activity indicators, and recency tinting.
 
@@ -52,7 +54,11 @@ Tasks sort by recency descending, group by bucket, and render in `TIME_BUCKETS` 
 
 Groups from "This week" downward start collapsed. Collapse state persists in `BifrostConfig`, as do the sidebar's width and hidden state.
 
-`nav.prevTab` and `nav.nextTab` (`Cmd+Shift+[` and `Cmd+Shift+]`) walk the visible order and skip collapsed groups. No positional bindings exist, so nothing else in the keymap changes.
+Keyboard navigation follows what is on screen. `nav.prevTab` and `nav.nextTab` (`Cmd+Shift+[` and `Cmd+Shift+]`) step through visible rows, and `nav.tab1` through `nav.tab9` (`Cmd+1` to `Cmd+9`) select the Nth visible row.
+
+Both currently index `state.tasks` filtered to running, which is creation order. The sidebar sorts by recency and omits rows inside collapsed groups, so an index into creation order names a different task than the one under the same position on screen.
+
+The sidebar therefore publishes the order it renders — a flat array of task ids, collapsed groups excluded — into `AppState`, and the keymap engine indexes that instead. One producer, one consumer, and no second copy of the sorting rules to drift.
 
 ## Dropping manual order
 
@@ -67,6 +73,7 @@ No test framework is configured, so verification is by inspection and by running
 - A task whose session was cleared sorts by its newest transcript, not the stale one named by `sessionId`.
 - Collapse state, width, and hidden state survive a restart.
 - `Cmd+Shift+]` from the last visible item of an expanded group lands on the first visible item of the next expanded group, skipping collapsed ones.
+- `Cmd+3` selects the third row counting from the top of the sidebar, and selects a different task once a group above it is collapsed.
 - History's groups match the sidebar's for the same task.
 
 ## Out of scope
