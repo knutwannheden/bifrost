@@ -385,7 +385,9 @@ export default function TaskHistoryPanel() {
           if (search) {
             const repo = state.repos.find((r) => r.id === t.repoId);
             return matchesAllTerms(
-              `${t.name} ${t.branch ?? ''} ${t.baseBranch} ${repo?.name ?? ''} ${t.summary ?? ''}`,
+              // The fork point is searchable only when the task's own branch is
+              // unknown; nearly every task shares it, so it matches everything.
+              `${t.name} ${t.branch ?? t.baseBranch} ${repo?.name ?? ''} ${t.summary ?? ''}`,
               search,
             );
           }
