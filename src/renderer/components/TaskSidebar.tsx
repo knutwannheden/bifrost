@@ -93,7 +93,7 @@ export default function TaskSidebar() {
               <button
                 type="button"
                 onClick={() => toggle(bucket)}
-                className="flex w-full items-center gap-1 px-2 py-1 text-xs font-semibold text-secondary uppercase tracking-wider hover:text-primary transition-colors"
+                className="flex w-full items-center gap-1 px-2 py-1 bg-surface-alt text-xs font-semibold text-secondary uppercase tracking-wider hover:bg-surface-hover hover:text-primary transition-colors"
               >
                 <span className="w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
                 <span className="truncate">{bucket}</span>
