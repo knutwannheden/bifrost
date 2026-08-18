@@ -177,16 +177,20 @@ function backfillFromWorktreeHead(
     if (row.in_place) continue;
     if (!fs.existsSync(row.worktree_path)) continue;
     try {
+      // A pruned worktree or a detached HEAD is an ordinary outcome here, so
+      // git's diagnostics on stderr would be startup noise for expected cases.
       const toplevel = execFileSync('git', ['rev-parse', '--show-toplevel'], {
         cwd: row.worktree_path,
         timeout: 5000,
         encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
       }).trim();
       if (fs.realpathSync(toplevel) !== fs.realpathSync(row.worktree_path)) continue;
       const branch = execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], {
         cwd: row.worktree_path,
         timeout: 5000,
         encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
       }).trim();
       if (branch) {
         update.run(branch, row.id);
@@ -251,6 +255,7 @@ function backfillFromTaskName(d: Database.Database, deadline: number): { recover
         cwd: repoPath,
         timeout: 10_000,
         encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore'],
       });
       branches = new Set(
         out
