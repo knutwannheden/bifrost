@@ -82,25 +82,14 @@ export function getSessionMtime(worktreePath: string, sessionId?: string): numbe
 
   if (!fs.existsSync(projectPath)) return null;
 
-  if (sessionId) {
-    const sessionFilePath = path.join(projectPath, `${sessionId}.jsonl`);
-    try {
-      return fs.statSync(sessionFilePath).mtimeMs;
-    } catch {
-      return null;
-    }
-  }
-
-  // No sessionId — find the most recently modified .jsonl
+  // The newest transcript in the directory, which covers sessions replaced by
+  // /clear or a resume as well as the one named by sessionId.
   try {
-    const files = fs
+    const mtimes = fs
       .readdirSync(projectPath)
       .filter((f) => f.endsWith('.jsonl'))
-      .map((f) => {
-        const fp = path.join(projectPath, f);
-        return fs.statSync(fp).mtimeMs;
-      });
-    return files.length > 0 ? Math.max(...files) : null;
+      .map((f) => fs.statSync(path.join(projectPath, f)).mtimeMs);
+    return mtimes.length > 0 ? Math.max(...mtimes) : null;
   } catch {
     return null;
   }
