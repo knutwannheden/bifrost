@@ -80,74 +80,76 @@ export default function TaskSidebar() {
 
   return (
     <div
-      className="relative flex flex-col shrink-0 overflow-y-auto bg-surface/50 border-r border-border-default"
+      className="relative flex flex-col shrink-0 bg-surface/50 border-r border-border-default"
       style={{ width: dragWidth ?? width }}
     >
-      {TIME_BUCKETS.filter((b) => groups.has(b)).map((bucket) => {
-        const tasks = groups.get(bucket) ?? [];
-        const isCollapsed = collapsed.includes(bucket);
-        const visibleTasks = visibleTasksFor(bucket);
-        return (
-          <div key={bucket}>
-            <button
-              type="button"
-              onClick={() => toggle(bucket)}
-              className="flex w-full items-center gap-1 px-2 py-1 text-xs font-semibold text-secondary uppercase tracking-wider hover:text-primary transition-colors"
-            >
-              <span className="w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
-              <span className="truncate">{bucket}</span>
-              <span className="ml-auto text-muted">{tasks.length}</span>
-            </button>
-            {visibleTasks.map((task) => {
-              const repo = state.repos.find((r) => r.id === task.repoId);
-              return (
-                <TaskTab
-                  key={task.id}
-                  task={task}
-                  repoName={repo ? repoDisplayName(repo) : shortPath(task.worktreePath)}
-                  isActive={task.id === state.activeTaskId}
-                  onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
-                  onClose={() => {
-                    window.bifrost.stopTask(task.id).then((updated) => {
-                      dispatch({ type: 'UPDATE_TASK', task: updated });
-                      if (state.activeTaskId === task.id) {
-                        const next = sorted.find((t) => t.id !== task.id);
-                        dispatch({
-                          type: 'SET_ACTIVE_TASK',
-                          taskId: next ? next.id : null,
-                        });
-                      }
-                    });
-                  }}
-                  onRename={(name) => {
-                    window.bifrost.renameTask(task.id, name).then((updated) => {
-                      dispatch({ type: 'UPDATE_TASK', task: updated });
-                    });
-                  }}
-                  onRegenerateTitle={async () => {
-                    try {
-                      const result = await window.bifrost.regenerateTaskTitle(task.id);
-                      if (!result) {
-                        dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
-                        return;
-                      }
-                      dispatch({ type: 'UPDATE_TASK', task: result.task });
-                      dispatch({
-                        type: 'SHOW_TOAST',
-                        message: result.renamedBranch
-                          ? `Renamed to "${result.task.name}" on ${result.renamedBranch}`
-                          : `Renamed to "${result.task.name}"`,
+      <div className="flex-1 overflow-y-auto">
+        {TIME_BUCKETS.filter((b) => groups.has(b)).map((bucket) => {
+          const tasks = groups.get(bucket) ?? [];
+          const isCollapsed = collapsed.includes(bucket);
+          const visibleTasks = visibleTasksFor(bucket);
+          return (
+            <div key={bucket}>
+              <button
+                type="button"
+                onClick={() => toggle(bucket)}
+                className="flex w-full items-center gap-1 px-2 py-1 text-xs font-semibold text-secondary uppercase tracking-wider hover:text-primary transition-colors"
+              >
+                <span className="w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
+                <span className="truncate">{bucket}</span>
+                <span className="ml-auto text-muted">{tasks.length}</span>
+              </button>
+              {visibleTasks.map((task) => {
+                const repo = state.repos.find((r) => r.id === task.repoId);
+                return (
+                  <TaskTab
+                    key={task.id}
+                    task={task}
+                    repoName={repo ? repoDisplayName(repo) : shortPath(task.worktreePath)}
+                    isActive={task.id === state.activeTaskId}
+                    onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
+                    onClose={() => {
+                      window.bifrost.stopTask(task.id).then((updated) => {
+                        dispatch({ type: 'UPDATE_TASK', task: updated });
+                        if (state.activeTaskId === task.id) {
+                          const next = sorted.find((t) => t.id !== task.id);
+                          dispatch({
+                            type: 'SET_ACTIVE_TASK',
+                            taskId: next ? next.id : null,
+                          });
+                        }
                       });
-                    } catch {
-                      dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
-                    }
-                  }}
-                />
-              );
-            })}
-          </div>
-        );
-      })}
+                    }}
+                    onRename={(name) => {
+                      window.bifrost.renameTask(task.id, name).then((updated) => {
+                        dispatch({ type: 'UPDATE_TASK', task: updated });
+                      });
+                    }}
+                    onRegenerateTitle={async () => {
+                      try {
+                        const result = await window.bifrost.regenerateTaskTitle(task.id);
+                        if (!result) {
+                          dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
+                          return;
+                        }
+                        dispatch({ type: 'UPDATE_TASK', task: result.task });
+                        dispatch({
+                          type: 'SHOW_TOAST',
+                          message: result.renamedBranch
+                            ? `Renamed to "${result.task.name}" on ${result.renamedBranch}`
+                            : `Renamed to "${result.task.name}"`,
+                        });
+                      } catch {
+                        dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
+                      }
+                    }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
       <div
         onMouseDown={(e) => {
           e.preventDefault();
