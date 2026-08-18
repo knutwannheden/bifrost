@@ -90,7 +90,7 @@ export async function createWorktree(
   taskName: string,
   branch: string,
   branchName?: string,
-): Promise<string> {
+): Promise<{ worktreePath: string; branch: string }> {
   const worktreePath = resolveWorktreePath(repoPath, taskName);
 
   await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
@@ -125,14 +125,14 @@ export async function createWorktree(
     });
   }
 
-  return worktreePath;
+  return { worktreePath, branch: newBranchName };
 }
 
 export async function createWorktreeFromPr(
   repoPath: string,
   taskName: string,
   prInfo: import('../shared/types').PrInfo,
-): Promise<string> {
+): Promise<{ worktreePath: string; branch: string }> {
   const worktreePath = resolveWorktreePath(repoPath, taskName);
 
   await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
@@ -177,7 +177,7 @@ export async function createWorktreeFromPr(
     timeout: 10000,
   });
 
-  return worktreePath;
+  return { worktreePath, branch: localBranch };
 }
 
 export async function restoreWorktree(repoPath: string, taskName: string): Promise<string> {
