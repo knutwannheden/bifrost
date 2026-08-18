@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,7 +9,7 @@ const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
 let db: Database.Database | null = null;
 
-const CURRENT_VERSION = 2;
+const CURRENT_VERSION = 3;
 
 // SQLite schema — TEXT for strings, INTEGER for booleans/timestamps, JSON text for arrays
 const SCHEMA_SQL = `
@@ -16,7 +17,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   id            TEXT PRIMARY KEY,
   name          TEXT NOT NULL,
   repo_id       TEXT NOT NULL,
-  branch        TEXT NOT NULL,
+  base_branch   TEXT NOT NULL,
+  branch        TEXT,
   worktree_path TEXT NOT NULL,
   session_id    TEXT,
   status        TEXT NOT NULL DEFAULT 'running',
@@ -129,6 +131,37 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 `;
 
+/**
+ * Recover each task's own branch from its worktree. A directory that is gone,
+ * or on a detached HEAD, leaves the branch unknown.
+ */
+function backfillTaskBranches(d: Database.Database): void {
+  const rows = d
+    .prepare<unknown[], { id: string; worktree_path: string }>(
+      'SELECT id, worktree_path FROM tasks WHERE worktree_path IS NOT NULL',
+    )
+    .all();
+  const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
+  let recovered = 0;
+  for (const row of rows) {
+    if (!fs.existsSync(row.worktree_path)) continue;
+    try {
+      const branch = execFileSync('git', ['symbolic-ref', '--short', 'HEAD'], {
+        cwd: row.worktree_path,
+        timeout: 5000,
+        encoding: 'utf-8',
+      }).trim();
+      if (branch) {
+        update.run(branch, row.id);
+        recovered++;
+      }
+    } catch {
+      // Worktree unreadable or detached; the branch stays unknown.
+    }
+  }
+  console.log(`[db] Migration v3: recovered ${recovered} of ${rows.length} task branches`);
+}
+
 export function openDatabase(): void {
   if (db) return;
 
@@ -184,6 +217,12 @@ function runMigrations(): void {
     if (row.version < 2) {
       d.exec('ALTER TABLE activity_entries DROP COLUMN diff');
       console.log('[db] Migration v2: dropped diff column from activity_entries');
+    }
+    if (row.version < 3) {
+      d.exec('ALTER TABLE tasks RENAME COLUMN branch TO base_branch');
+      d.exec('ALTER TABLE tasks ADD COLUMN branch TEXT');
+      backfillTaskBranches(d);
+      console.log('[db] Migration v3: split tasks.branch into base_branch + branch');
     }
     d.prepare('UPDATE schema_version SET version = ?').run(CURRENT_VERSION);
   }
