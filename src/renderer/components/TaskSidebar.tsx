@@ -55,16 +55,23 @@ export default function TaskSidebar() {
     }
   };
 
-  // Mirrors the per-bucket row filtering below: a collapsed group still contributes
-  // the active task's row, so this can't just skip collapsed buckets outright.
-  const visibleTaskIds = TIME_BUCKETS.filter((b) => groups.has(b)).flatMap((b) => {
-    const tasks = groups.get(b) ?? [];
-    const visibleTasks = collapsed.includes(b) ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
-    return visibleTasks.map((t) => t.id);
-  });
+  // A collapsed group still shows the active task's row, so this is not simply
+  // "skip collapsed buckets" — shared by the published order and the rendered rows below.
+  const visibleTasksFor = (bucket: string) => {
+    const tasks = groups.get(bucket) ?? [];
+    return collapsed.includes(bucket) ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
+  };
+
+  const visibleTaskIds = TIME_BUCKETS.filter((b) => groups.has(b)).flatMap((b) => visibleTasksFor(b).map((t) => t.id));
 
   useEffect(() => {
     dispatch({ type: 'SET_VISIBLE_TASK_IDS', taskIds: visibleTaskIds });
+    // TaskSidebar unmounts (rather than hiding via CSS) when the sidebar is toggled off,
+    // so the published order must be cleared here or the keymap's running-tasks fallback
+    // never re-engages and Cmd+N can select a task closed while the sidebar was hidden.
+    return () => {
+      dispatch({ type: 'SET_VISIBLE_TASK_IDS', taskIds: [] });
+    };
   }, [visibleTaskIds.join(',')]);
 
   if (openTasks.length === 0) return null;
@@ -77,9 +84,7 @@ export default function TaskSidebar() {
       {TIME_BUCKETS.filter((b) => groups.has(b)).map((bucket) => {
         const tasks = groups.get(bucket) ?? [];
         const isCollapsed = collapsed.includes(bucket);
-        // A folded group still shows the active task's row, so the highlighted
-        // task is always visible without expanding the whole group.
-        const visibleTasks = isCollapsed ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
+        const visibleTasks = visibleTasksFor(bucket);
         return (
           <div key={bucket}>
             <button
