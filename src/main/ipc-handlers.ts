@@ -138,7 +138,11 @@ async function renameWorktreeBranch(task: Task, candidate: string): Promise<stri
   // Fails on a detached HEAD, which has no branch to rename.
   const current = await git(['symbolic-ref', '--short', 'HEAD']);
   if (!current || current === candidate) return null;
-  if (await git(['rev-parse', '--verify', `${current}@{upstream}`])) return null;
+  // Branching a worktree off a remote ref inherits tracking from it, so an
+  // upstream says nothing about this branch. A remote ref under its own name
+  // does; treat an unreadable answer as pushed rather than risk the rename.
+  const pushed = await git(['for-each-ref', '--format=%(refname)', `refs/remotes/*/${current}`]);
+  if (pushed === null || pushed !== '') return null;
   if (await git(['rev-parse', '--verify', candidate])) return null;
   return (await git(['branch', '-m', current, candidate])) === null ? null : candidate;
 }
