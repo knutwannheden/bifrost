@@ -190,8 +190,8 @@ export async function restoreWorktree(repoPath: string, taskName: string, branch
     await execFile('git', ['worktree', 'add', worktreePath, ref], { cwd: repoPath, timeout: 30000 });
   } catch (err) {
     throw new Error(
-      `Cannot restore worktree for "${taskName}": no branch named "${ref}". ` +
-        `This task predates branch tracking, so its branch must be selected manually.`,
+      `Cannot restore worktree for "${taskName}": could not create a worktree for ref "${ref}". ` +
+        `The branch may not exist, or may already be checked out in another worktree.`,
       { cause: err },
     );
   }
