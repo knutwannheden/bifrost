@@ -71,6 +71,25 @@ export async function runCuratorNow(): Promise<void> {
   }
 }
 
+/**
+ * Whether the task's branch carries commits its base does not. Archiving drops
+ * the worktree, so this and a clean status together mean there is nothing in
+ * the directory worth keeping. An unresolvable base counts as commits present,
+ * so an unreadable answer never costs a worktree.
+ */
+async function hasUnmergedCommits(task: Task): Promise<boolean> {
+  if (!task.branch) return true;
+  try {
+    const { stdout } = await execFile('git', ['rev-list', '--count', `${task.branch}..HEAD`], {
+      cwd: task.worktreePath,
+      timeout: 5000,
+    });
+    return stdout.trim() !== '0';
+  } catch {
+    return true;
+  }
+}
+
 async function curatorTick(): Promise<void> {
   const tasks = getTasks();
   const now = Date.now();
@@ -86,7 +105,7 @@ async function curatorTick(): Promise<void> {
         cwd: task.worktreePath,
         timeout: 5000,
       });
-      if (stdout.trim().length === 0) {
+      if (stdout.trim().length === 0 && !(await hasUnmergedCommits(task))) {
         console.log(`[curator] auto-archiving clean stopped task: ${task.name}`);
         const archived = await archiveTaskCore(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
