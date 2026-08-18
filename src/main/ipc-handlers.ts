@@ -190,7 +190,7 @@ export async function archiveTaskCore(
       }
       config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
       saveConfig(config);
-    } else if (!task.inPlace && repo && (await isWorktreeDisposable(task.worktreePath, task.branch))) {
+    } else if (!task.inPlace && repo && (await isWorktreeDisposable(task.worktreePath, task.baseBranch))) {
       // Archiving keeps a worktree that still holds work, so reopening it finds
       // the directory exactly as it was left.
       removeWorktree(repo.path, task.worktreePath).catch(() => {});
@@ -811,9 +811,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Git log
   ipcMain.handle(IPC.GET_GIT_LOG, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    // task.branch is the base branch the worktree was forked from
-    const baseBranch = task.branch || undefined;
-    return getGitLog(task.worktreePath, baseBranch);
+    return getGitLog(task.worktreePath, task.baseBranch || undefined);
   });
 
   // PR URL

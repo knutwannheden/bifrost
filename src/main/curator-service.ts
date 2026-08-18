@@ -83,7 +83,7 @@ async function curatorTick(): Promise<void> {
     if (!fs.existsSync(task.worktreePath)) continue;
 
     try {
-      if (await isWorktreeDisposable(task.worktreePath, task.branch)) {
+      if (await isWorktreeDisposable(task.worktreePath, task.baseBranch)) {
         console.log(`[curator] auto-archiving clean stopped task: ${task.name}`);
         const archived = await archiveTaskCore(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
