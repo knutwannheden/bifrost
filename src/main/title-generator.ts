@@ -112,7 +112,15 @@ function runClaude(input: string, cwd: string): Promise<string | null> {
       finish(null);
     });
     child.on('close', (code) => {
-      if (code !== 0) console.error(`[title-generator] claude exited with code ${code}:`, stderr.trim());
+      if (code !== 0) {
+        // --output-format json reports failures as JSON on stdout, so stderr is
+        // routinely empty and carries none of the reason.
+        console.error(
+          `[title-generator] claude exited with code ${code}`,
+          `\n  stdout: ${stdout.trim().slice(0, 2000) || '(empty)'}`,
+          `\n  stderr: ${stderr.trim().slice(0, 500) || '(empty)'}`,
+        );
+      }
       finish(code === 0 ? stdout : null);
     });
 
