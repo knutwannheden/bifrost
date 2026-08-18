@@ -23,7 +23,6 @@
     "@biomejs/biome": "^2.5.9",
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/maker-deb": "^7.11.2",
-    "@electron-forge/maker-dmg": "^7.11.2",
     "@electron-forge/maker-rpm": "^7.11.2",
     "@electron-forge/maker-squirrel": "^7.11.2",
     "@electron-forge/maker-zip": "^7.11.2",
@@ -58,6 +57,15 @@
     "shiki": "^4.4.3"
   },
   "overrides": {
-    "node-abi": "^3.94.0"
+    "node-abi": "^3.94.0",
+    "lodash": "^4.18.1",
+    "brace-expansion": "^2.1.4",
+    "tmp": "^0.2.7",
+    "tar": "^7.5.22",
+    "cacache": "^21.0.1",
+    "make-fetch-happen": "^16.0.1"
+  },
+  "engines": {
+    "node": ">=24.15.0"
   }
 }
