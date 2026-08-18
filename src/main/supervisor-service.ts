@@ -252,7 +252,8 @@ async function spawnProcess(item: SupervisorItem): Promise<void> {
   // Create worktree if needed
   let worktreePath = item.worktreePath;
   if (!worktreePath || !fs.existsSync(worktreePath)) {
-    worktreePath = await createWorktree(repo.path, item.name, repo.defaultBranch);
+    const created = await createWorktree(repo.path, item.name, repo.defaultBranch);
+    worktreePath = created.worktreePath;
     updateItem(item.id, { worktreePath });
     broadcastState();
   }

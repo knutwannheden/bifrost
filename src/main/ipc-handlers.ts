@@ -334,6 +334,7 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
     id: taskId,
     name,
     repoId: containerRepo.id,
+    baseBranch: 'main',
     branch: 'main',
     worktreePath: containerPath,
     status: 'running',
@@ -381,18 +382,19 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   const name = params.branchName || params.name || generateTaskName();
 
   let worktreePath: string;
-  let branch = repo.defaultBranch;
+  let baseBranch = repo.defaultBranch;
   if (params.branch) {
     // Verify the requested branch/ref exists in the target repo before using it
     try {
       await execFile('git', ['rev-parse', '--verify', params.branch], { cwd: repo.path, timeout: 5000 });
-      branch = params.branch;
+      baseBranch = params.branch;
     } catch {
-      console.warn(`[create-task] ref "${params.branch}" not found in ${repo.path}, using ${branch}`);
+      console.warn(`[create-task] ref "${params.branch}" not found in ${repo.path}, using ${baseBranch}`);
     }
   }
   let inPlace = false;
 
+  let taskBranch: string | undefined;
   if (params.inPlace) {
     const conflict = tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path);
     if (conflict) {
@@ -400,12 +402,15 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     }
     worktreePath = repo.path;
     const { stdout } = await execFile('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: repo.path, timeout: 5000 });
-    branch = stdout.trim();
+    baseBranch = stdout.trim();
     inPlace = true;
+    taskBranch = baseBranch;
   } else {
-    worktreePath = params.prInfo
+    const created = params.prInfo
       ? await createWorktreeFromPr(repo.path, name, params.prInfo)
-      : await createWorktree(repo.path, name, branch, params.branchName);
+      : await createWorktree(repo.path, name, baseBranch, params.branchName);
+    worktreePath = created.worktreePath;
+    taskBranch = created.branch;
   }
 
   const taskId = randomUUID();
@@ -422,7 +427,8 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     id: taskId,
     name,
     repoId: repo.id,
-    branch,
+    baseBranch,
+    ...(taskBranch ? { branch: taskBranch } : {}),
     worktreePath,
     status: 'running',
     hasUnread: false,
@@ -986,6 +992,7 @@ end tell`;
       id: taskId,
       name,
       repoId: matchedRepo?.id ?? '',
+      baseBranch: branch,
       branch,
       worktreePath: cwd,
       sessionId: externalSessionId,
@@ -1291,6 +1298,7 @@ end tell`;
       id: taskId,
       name: item.name,
       repoId: item.repoId,
+      baseBranch: repo.defaultBranch,
       branch: item.branch,
       worktreePath: item.worktreePath,
       status: 'running',
