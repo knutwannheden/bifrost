@@ -192,16 +192,19 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
 
         case 'nav.prevTab':
         case 'nav.nextTab': {
-          const openTasks = s.tasks.filter((t) => t.status === 'running');
-          if (openTasks.length === 0) break;
-          const currentIdx = openTasks.findIndex((t) => t.id === s.activeTaskId);
+          const ids =
+            s.visibleTaskIds.length > 0
+              ? s.visibleTaskIds
+              : s.tasks.filter((t) => t.status === 'running').map((t) => t.id);
+          if (ids.length === 0) break;
+          const currentIdx = ids.indexOf(s.activeTaskId ?? '');
           let newIdx: number;
           if (actionId === 'nav.prevTab') {
-            newIdx = currentIdx <= 0 ? openTasks.length - 1 : currentIdx - 1;
+            newIdx = currentIdx <= 0 ? ids.length - 1 : currentIdx - 1;
           } else {
-            newIdx = currentIdx >= openTasks.length - 1 ? 0 : currentIdx + 1;
+            newIdx = currentIdx >= ids.length - 1 ? 0 : currentIdx + 1;
           }
-          dispatch({ type: 'SET_ACTIVE_TASK', taskId: openTasks[newIdx].id });
+          dispatch({ type: 'SET_ACTIVE_TASK', taskId: ids[newIdx] });
           break;
         }
 
@@ -214,10 +217,13 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
         case 'nav.tab7':
         case 'nav.tab8':
         case 'nav.tab9': {
-          const openTasks = s.tasks.filter((t) => t.status === 'running');
+          const ids =
+            s.visibleTaskIds.length > 0
+              ? s.visibleTaskIds
+              : s.tasks.filter((t) => t.status === 'running').map((t) => t.id);
           const index = Number.parseInt(actionId.slice(-1), 10) - 1;
-          if (index < openTasks.length) {
-            dispatch({ type: 'SET_ACTIVE_TASK', taskId: openTasks[index].id });
+          if (index < ids.length) {
+            dispatch({ type: 'SET_ACTIVE_TASK', taskId: ids[index] });
           }
           break;
         }

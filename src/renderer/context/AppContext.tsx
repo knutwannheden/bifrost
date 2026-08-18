@@ -85,6 +85,8 @@ export interface AppState {
   apiPort: number | null;
   archiveConfirm: { taskId: string; taskName: string } | null;
   renamingTaskId: string | null;
+  /** Task ids in the order the sidebar renders them (collapsed groups contribute only the active task's row, if any). */
+  visibleTaskIds: string[];
 }
 
 export type AppAction =
@@ -154,7 +156,8 @@ export type AppAction =
   | { type: 'SET_TRIAGE_HISTORY'; history: TriageEntry[] }
   | { type: 'START_RENAME_TASK'; taskId: string }
   | { type: 'CLEAR_RENAME_TASK' }
-  | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean };
+  | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean }
+  | { type: 'SET_VISIBLE_TASK_IDS'; taskIds: string[] };
 
 const initialState: AppState = {
   repos: [],
@@ -199,6 +202,7 @@ const initialState: AppState = {
   apiPort: null,
   archiveConfirm: null,
   renamingTaskId: null,
+  visibleTaskIds: [],
 };
 
 export const defaultPaneState: TaskPaneState = {
@@ -580,6 +584,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, claudeActive: action.active } : t)),
       };
+    case 'SET_VISIBLE_TASK_IDS': {
+      const { taskIds } = action;
+      if (taskIds.length === state.visibleTaskIds.length && taskIds.every((id, i) => id === state.visibleTaskIds[i])) {
+        return state;
+      }
+      return { ...state, visibleTaskIds: taskIds };
+    }
     default:
       return state;
   }

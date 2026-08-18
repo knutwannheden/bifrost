@@ -55,6 +55,18 @@ export default function TaskSidebar() {
     }
   };
 
+  // Mirrors the per-bucket row filtering below: a collapsed group still contributes
+  // the active task's row, so this can't just skip collapsed buckets outright.
+  const visibleTaskIds = TIME_BUCKETS.filter((b) => groups.has(b)).flatMap((b) => {
+    const tasks = groups.get(b) ?? [];
+    const visibleTasks = collapsed.includes(b) ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
+    return visibleTasks.map((t) => t.id);
+  });
+
+  useEffect(() => {
+    dispatch({ type: 'SET_VISIBLE_TASK_IDS', taskIds: visibleTaskIds });
+  }, [visibleTaskIds.join(',')]);
+
   if (openTasks.length === 0) return null;
 
   return (
