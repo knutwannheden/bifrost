@@ -133,8 +133,8 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 `;
 
-// Each row costs one blocking git subprocess call; this caps how long a large
-// task table can hold up startup.
+// Each row costs up to two blocking git subprocess calls; this caps how long
+// a large task table can hold up startup.
 const BACKFILL_TIME_BUDGET_MS = 30_000;
 
 /**
