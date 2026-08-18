@@ -1,5 +1,6 @@
 export const TIME_BUCKETS = [
   'Last 10 minutes',
+  'Last hour',
   'Today',
   'Yesterday',
   'This week',
@@ -18,6 +19,7 @@ export function getTimeBucket(ts: number): (typeof TIME_BUCKETS)[number] {
   const diffMs = now.getTime() - ts;
 
   if (diffMs < 10 * 60 * 1000) return 'Last 10 minutes';
+  if (diffMs < 60 * 60 * 1000) return 'Last hour';
 
   const today = startOfDay(now);
   const taskDay = startOfDay(new Date(ts));
