@@ -266,11 +266,11 @@ Change its return type from `Promise<string>` to `Promise<{ worktreePath: string
   return { worktreePath, branch: localBranch };
 ```
 
-- [ ] **Step 3: Confirm the compiler flags the one caller**
+- [ ] **Step 3: Confirm the compiler flags both callers**
 
-Run: `npm run typecheck 2>&1 | grep "ipc-handlers"`
+Run: `npm run typecheck 2>&1 | grep -E "ipc-handlers|supervisor-service"`
 
-Expected: an error at the `createWorktree` / `createWorktreeFromPr` call site in `createTaskCore`. Task 5 fixes it.
+Expected: errors at **two** call sites — `ipc-handlers.ts` (inside `createTaskCore`) and `supervisor-service.ts` (which calls `createWorktree(repo.path, item.name, repo.defaultBranch)`). Task 5 fixes both.
 
 - [ ] **Step 4: Commit**
 
@@ -284,7 +284,8 @@ git commit -m "feat: return the created branch from worktree creation"
 ### Task 5: Record both branches when creating a task
 
 **Files:**
-- Modify: `src/main/ipc-handlers.ts:372-441` (`createTaskCore`)
+- Modify: `src/main/ipc-handlers.ts` — all four `const task: Task = {` literals (multi-repo container, `createTaskCore`, external-session resume, supervisor item)
+- Modify: `src/main/supervisor-service.ts` — the `createWorktree` caller
 
 **Interfaces:**
 - Consumes: `createWorktree` / `createWorktreeFromPr` from Task 4; `Task.baseBranch` / `Task.branch` from Task 1.
@@ -328,6 +329,42 @@ In the `const task: Task = { … }` literal, replace `branch,` with:
 ```ts
     baseBranch,
     ...(taskBranch ? { branch: taskBranch } : {}),
+```
+
+- [ ] **Step 3b: Fill in the other three Task-construction sites**
+
+`createTaskCore` is one of four places that build a `Task` literal, and all four need `baseBranch`. Locate each by its surrounding code, not by line number.
+
+The multi-repo container task currently sets `branch: 'main'`. The container is a freshly `git init`ed directory, so that value is both its base and its own branch:
+
+```ts
+    baseBranch: 'main',
+    branch: 'main',
+```
+
+The resumed external-session task derives `branch` from `git rev-parse --abbrev-ref HEAD` in the session's cwd, which is the worktree's own branch. There is no separate fork point to record, so both fields take it:
+
+```ts
+      baseBranch: branch,
+      branch,
+```
+
+The supervisor-item task sets `branch: item.branch`. `supervisor-service.ts` assigns that field the item's *name* and creates the worktree from `repo.defaultBranch`, so the item's value is the task's own branch and the base is the repo default:
+
+```ts
+      baseBranch: repo.defaultBranch,
+      branch: item.branch,
+```
+
+If `repo` is not in scope at that site, resolve it from `item.repoId` the way the surrounding code resolves repos, and fall back to `item.branch` for `baseBranch` if it cannot be found.
+
+- [ ] **Step 3c: Update the second `createWorktree` caller**
+
+`src/main/supervisor-service.ts` calls `createWorktree(repo.path, item.name, repo.defaultBranch)` and assigns the result straight to `worktreePath`. Task 4 made it return an object, so change it to:
+
+```ts
+    const created = await createWorktree(repo.path, item.name, repo.defaultBranch);
+    worktreePath = created.worktreePath;
 ```
 
 - [ ] **Step 4: Verify a new task records both**
