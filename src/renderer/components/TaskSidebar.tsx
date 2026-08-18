@@ -111,10 +111,10 @@ export default function TaskSidebar() {
                     window.bifrost.stopTask(task.id).then((updated) => {
                       dispatch({ type: 'UPDATE_TASK', task: updated });
                       if (state.activeTaskId === task.id) {
-                        const remaining = openTasks.filter((t) => t.id !== task.id);
+                        const next = sorted.find((t) => t.id !== task.id);
                         dispatch({
                           type: 'SET_ACTIVE_TASK',
-                          taskId: remaining.length > 0 ? remaining[0].id : null,
+                          taskId: next ? next.id : null,
                         });
                       }
                     });
