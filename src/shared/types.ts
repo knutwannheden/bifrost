@@ -121,6 +121,11 @@ export interface BifrostConfig {
    * only clears on resize — see useTerminal.ts).
    */
   terminalRenderer?: 'dom' | 'webgl';
+  /** Sidebar width in pixels; unset means the default. */
+  sidebarWidth?: number;
+  sidebarHidden?: boolean;
+  /** Names from TIME_BUCKETS whose groups are folded shut. */
+  collapsedBuckets?: string[];
   slack?: SlackConfig;
   keybindings?: Record<string, string | null>;
   prompts?: {
