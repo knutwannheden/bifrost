@@ -242,6 +242,15 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
         }
 
+        case 'nav.toggleSidebar': {
+          if (s.config) {
+            const updated = { ...s.config, sidebarHidden: !s.config.sidebarHidden };
+            dispatch({ type: 'SET_CONFIG', config: updated });
+            window.bifrost.saveConfig(updated);
+          }
+          break;
+        }
+
         case 'view.devTerminal': {
           if (!s.activeTaskId) break;
           const taskId = s.activeTaskId;

@@ -12,6 +12,7 @@ const DEFAULT_COLLAPSED = ['This week', 'Last week', 'This month', 'Older'];
 export default function TaskSidebar() {
   const { state, dispatch } = useApp();
   const [mtimes, setMtimes] = useState<Record<string, number>>({});
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,8 +59,8 @@ export default function TaskSidebar() {
 
   return (
     <div
-      className="flex flex-col shrink-0 overflow-y-auto bg-surface/50 border-r border-border-default"
-      style={{ width }}
+      className="relative flex flex-col shrink-0 overflow-y-auto bg-surface/50 border-r border-border-default"
+      style={{ width: dragWidth ?? width }}
     >
       {TIME_BUCKETS.filter((b) => groups.has(b)).map((bucket) => {
         const tasks = groups.get(bucket) ?? [];
@@ -128,6 +129,31 @@ export default function TaskSidebar() {
           </div>
         );
       })}
+      <div
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const startX = e.clientX;
+          const startWidth = width;
+          const onMove = (ev: MouseEvent) => {
+            setDragWidth(Math.min(480, Math.max(160, startWidth + ev.clientX - startX)));
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            setDragWidth((w) => {
+              if (w != null && config) {
+                const updated = { ...config, sidebarWidth: w };
+                dispatch({ type: 'SET_CONFIG', config: updated });
+                window.bifrost.saveConfig(updated);
+              }
+              return null;
+            });
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+        className="absolute top-0 right-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/40 transition-colors"
+      />
     </div>
   );
 }
