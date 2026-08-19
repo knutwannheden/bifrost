@@ -1,4 +1,4 @@
-export default function PinIcon({ size = 11 }: { size?: number }) {
+export default function PinIcon({ size = 12, filled = false }: { size?: number; filled?: boolean }) {
   return (
     <svg
       width={size}
@@ -6,13 +6,13 @@ export default function PinIcon({ size = 11 }: { size?: number }) {
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.4"
+      strokeWidth="1.3"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M10 1.5 14.5 6l-2 1-1 3.5-5-5L10 3.5z" />
-      <path d="M6.5 5.5 1.5 14.5" />
+      <path d="M6 2.5h4v3.5l2 2.5v1H4v-1l2-2.5V2.5z" fill={filled ? 'currentColor' : 'none'} />
+      <path d="M5 2.5h6M8 9.5V14" />
     </svg>
   );
 }

@@ -193,13 +193,13 @@ export default function TaskTab({
           }}
           tabIndex={-1}
         >
-          <PinIcon />
+          <PinIcon filled={isPinned} />
         </span>
         {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
         <span
           role="button"
           title="Close"
-          className="ml-1 text-muted hover:text-primary shrink-0 invisible group-hover:visible transition-colors cursor-pointer"
+          className="ml-0.5 text-muted hover:text-primary shrink-0 invisible group-hover:visible transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
