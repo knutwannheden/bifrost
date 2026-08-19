@@ -151,7 +151,7 @@ export default function TaskTab({
     <>
       <button
         ref={buttonRef}
-        className={`group relative flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+        className={`group relative flex w-full items-center px-3 py-1.5 text-left transition-colors ${
           isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
         }`}
         style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
@@ -170,7 +170,7 @@ export default function TaskTab({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <span className="flex flex-col min-w-0 flex-1 overflow-hidden">
+        <span className="flex flex-col min-w-0 flex-1 overflow-hidden group-hover:mask-r-from-[calc(100%-2.5rem)] group-hover:mask-r-to-[calc(100%-1.5rem)]">
           <span className="flex items-center gap-1.5">
             {regenerating ? <Spinner size="sm" /> : null}
             {task.hasUnread && !isActive && !showSolid ? (
@@ -180,33 +180,37 @@ export default function TaskTab({
           </span>
           <span className="text-[10px] leading-tight truncate text-muted">{repoName}</span>
         </span>
-        {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
-        <span
-          role="button"
-          title={isPinned ? 'Unpin' : 'Pin'}
-          className={`ml-1 shrink-0 invisible group-hover:visible transition-colors cursor-pointer ${
-            isPinned ? 'text-accent hover:text-primary' : 'text-muted hover:text-primary'
-          }`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onTogglePin();
-          }}
-          tabIndex={-1}
-        >
-          <PinIcon filled={isPinned} />
-        </span>
-        {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
-        <span
-          role="button"
-          title="Close"
-          className="ml-0.5 text-muted hover:text-primary shrink-0 invisible group-hover:visible transition-colors cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          tabIndex={-1}
-        >
-          &times;
+        {/* Sits over the label, which masks its right edge on hover: the label
+            is laid out at the full row width whatever these controls do. */}
+        <span className="absolute right-3 top-0 bottom-0 flex items-center gap-0.5 invisible group-hover:visible">
+          {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
+          <span
+            role="button"
+            title={isPinned ? 'Unpin' : 'Pin'}
+            className={`transition-colors cursor-pointer ${
+              isPinned ? 'text-accent hover:text-primary' : 'text-muted hover:text-primary'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin();
+            }}
+            tabIndex={-1}
+          >
+            <PinIcon filled={isPinned} />
+          </span>
+          {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
+          <span
+            role="button"
+            title="Close"
+            className="text-muted hover:text-primary transition-colors cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            tabIndex={-1}
+          >
+            &times;
+          </span>
         </span>
         {showSweep && !isActive && <span className="activity-sweep absolute top-0 bottom-0 left-0 w-1" />}
         {showSolid && <span className="absolute top-0 bottom-0 left-0 w-1 bg-success" />}
