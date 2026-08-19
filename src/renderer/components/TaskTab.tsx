@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import PinIcon from './PinIcon';
 import Spinner from './Spinner';
 
 interface TaskTabProps {
@@ -12,8 +13,8 @@ interface TaskTabProps {
   onClose: () => void;
   onRename: (name: string) => void;
   onRegenerateTitle: () => Promise<void>;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragEnd: () => void;
+  isPinned: boolean;
+  onTogglePin: () => void;
 }
 
 export default function TaskTab({
@@ -24,8 +25,8 @@ export default function TaskTab({
   onClose,
   onRename,
   onRegenerateTitle,
-  onDragStart,
-  onDragEnd,
+  isPinned,
+  onTogglePin,
 }: TaskTabProps) {
   const { state, dispatch } = useApp();
   const [editing, setEditing] = useState(false);
@@ -44,28 +45,6 @@ export default function TaskTab({
     }
   }, [editing]);
 
-  // Compute recency-based accent background for inactive tabs.
-  // Uses rank among running tasks: most recently visited inactive tab
-  // gets the strongest color, fading in steps for older tabs.
-  const recencyBg = (() => {
-    if (isActive) return undefined;
-    const lastActive = state.lastActiveAt[task.id];
-    if (!lastActive) return 'transparent';
-    // Rank this tab among all running tasks by recency (0 = most recent)
-    const runningTasks = state.tasks.filter((t) => t.status === 'running' && t.id !== state.activeTaskId);
-    const ranked = runningTasks
-      .map((t) => ({ id: t.id, ts: state.lastActiveAt[t.id] ?? 0 }))
-      .filter((t) => t.ts > 0)
-      .sort((a, b) => b.ts - a.ts);
-    const rank = ranked.findIndex((t) => t.id === task.id);
-    if (rank < 0) return 'transparent';
-    // Opacity tiers: 18%, 12%, 7%, 3%, then 0%
-    const tiers = [18, 12, 7, 3];
-    const pct = rank < tiers.length ? tiers[rank] : 0;
-    if (pct === 0) return 'transparent';
-    return `color-mix(in srgb, var(--color-accent) ${pct}%, transparent)`;
-  })();
-
   // React to START_RENAME_TASK from keymap engine
   useEffect(() => {
     if (state.renamingTaskId === task.id) {
@@ -78,7 +57,12 @@ export default function TaskTab({
     hoverTimer.current = setTimeout(() => {
       if (buttonRef.current) {
         const rect = buttonRef.current.getBoundingClientRect();
-        setTooltipPos({ x: rect.left, y: rect.bottom + 4 });
+        // Assumes the tooltip's 5 lines (name, summary, branch, base, terminal
+        // title) stay unwrapped; a long summary can make the actual height exceed this.
+        const estimatedHeight = 100;
+        const fitsBelow = rect.bottom + 4 + estimatedHeight <= window.innerHeight;
+        const y = fitsBelow ? rect.bottom + 4 : rect.top - 4 - estimatedHeight;
+        setTooltipPos({ x: rect.left, y });
       }
       setShowTooltip(true);
     }, 500);
@@ -145,7 +129,7 @@ export default function TaskTab({
             e.stopPropagation();
           }}
           onBlur={submitEdit}
-          className="px-1.5 py-0.5 bg-surface-hover border border-accent rounded-sm text-xs text-primary focus:outline-hidden focus:ring-1 focus:ring-accent w-28"
+          className="px-1.5 py-0.5 bg-surface-hover border border-accent rounded-sm text-xs text-primary focus:outline-hidden focus:ring-1 focus:ring-accent w-full"
         />
       </div>
     );
@@ -167,11 +151,10 @@ export default function TaskTab({
     <>
       <button
         ref={buttonRef}
-        draggable
-        className={`group relative flex items-center gap-1.5 pl-4 pr-2 h-full whitespace-nowrap overflow-hidden max-w-[280px] transition-colors ${
-          isActive ? 'text-primary' : 'hover:bg-surface-alt/50 text-secondary'
+        className={`group relative flex w-full items-center px-3 py-1.5 text-left transition-colors ${
+          isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
         }`}
-        style={{ backgroundColor: isActive ? 'color-mix(in srgb, var(--color-accent) 25%, transparent)' : recencyBg }}
+        style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
         onClick={onClick}
         onMouseDown={(e) => {
           // Prevent the button from stealing focus so the terminal
@@ -186,14 +169,8 @@ export default function TaskTab({
         }}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', task.id);
-          onDragStart(e);
-        }}
-        onDragEnd={onDragEnd}
       >
-        <span className="flex flex-col items-center min-w-0 overflow-hidden">
+        <span className="flex flex-col min-w-0 flex-1 overflow-hidden group-hover:mask-r-from-[calc(100%-2.5rem)] group-hover:mask-r-to-[calc(100%-1.5rem)]">
           <span className="flex items-center gap-1.5">
             {regenerating ? <Spinner size="sm" /> : null}
             {task.hasUnread && !isActive && !showSolid ? (
@@ -201,23 +178,43 @@ export default function TaskTab({
             ) : null}
             <span className="text-xs leading-tight truncate">{task.name}</span>
           </span>
-          <span className="text-[9px] leading-tight truncate max-w-full text-muted">{repoName}</span>
+          <span className="text-[10px] leading-tight truncate text-muted">{repoName}</span>
         </span>
-        {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
-        <span
-          role="button"
-          className="ml-1 text-muted hover:text-primary shrink-0 invisible group-hover:visible transition-colors cursor-pointer"
-          onClick={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
-          tabIndex={-1}
-        >
-          &times;
+        {/* Sits over the label, which masks its right edge on hover: the label
+            is laid out at the full row width whatever these controls do. */}
+        <span className="absolute right-3 top-0 bottom-0 flex items-center gap-0.5 invisible group-hover:visible">
+          {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
+          <span
+            role="button"
+            title={isPinned ? 'Unpin' : 'Pin'}
+            className={`transition-colors cursor-pointer ${
+              isPinned ? 'text-accent hover:text-primary' : 'text-muted hover:text-primary'
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin();
+            }}
+            tabIndex={-1}
+          >
+            <PinIcon filled={isPinned} />
+          </span>
+          {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
+          <span
+            role="button"
+            title="Close"
+            className="text-muted hover:text-primary transition-colors cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            tabIndex={-1}
+          >
+            &times;
+          </span>
         </span>
-        {showSweep && !isActive && <span className="activity-sweep absolute bottom-0 left-0 right-0 h-[2px]" />}
-        {showSolid && <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-success" />}
-        {isActive && <span className="tab-active-underline absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />}
+        {showSweep && !isActive && <span className="activity-sweep absolute top-0 bottom-0 left-0 w-1" />}
+        {showSolid && <span className="absolute top-0 bottom-0 left-0 w-1 bg-success" />}
+        {isActive && <span className="absolute top-0 bottom-0 left-0 w-1 bg-accent" />}
       </button>
       {showTooltip &&
         tooltipPos &&
@@ -241,6 +238,16 @@ export default function TaskTab({
             style={{ left: menuPos.x, top: menuPos.y }}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-xs text-primary hover:bg-surface-hover transition-colors"
+              onClick={() => {
+                setMenuPos(null);
+                onTogglePin();
+              }}
+            >
+              {isPinned ? 'Unpin' : 'Pin'}
+            </button>
             <button
               type="button"
               className="w-full text-left px-3 py-1.5 text-xs text-primary hover:bg-surface-hover transition-colors"

@@ -73,34 +73,21 @@ export function isSessionStale(worktreePath: string, sessionId?: string): boolea
 }
 
 /**
- * Get the mtime of the JSONL session file for a given worktree/session.
- * Returns epoch ms, or null if the file cannot be found.
+ * Get the mtime of the most recently modified JSONL transcript for a worktree.
+ * Returns epoch ms, or null if none can be found.
  */
-export function getSessionMtime(worktreePath: string, sessionId?: string): number | null {
+export function getSessionMtime(worktreePath: string): number | null {
   const encoded = worktreePath.replace(/[/.]/g, '-');
   const projectPath = path.join(os.homedir(), '.claude', 'projects', encoded);
 
   if (!fs.existsSync(projectPath)) return null;
 
-  if (sessionId) {
-    const sessionFilePath = path.join(projectPath, `${sessionId}.jsonl`);
-    try {
-      return fs.statSync(sessionFilePath).mtimeMs;
-    } catch {
-      return null;
-    }
-  }
-
-  // No sessionId — find the most recently modified .jsonl
   try {
-    const files = fs
+    const mtimes = fs
       .readdirSync(projectPath)
       .filter((f) => f.endsWith('.jsonl'))
-      .map((f) => {
-        const fp = path.join(projectPath, f);
-        return fs.statSync(fp).mtimeMs;
-      });
-    return files.length > 0 ? Math.max(...files) : null;
+      .map((f) => fs.statSync(path.join(projectPath, f)).mtimeMs);
+    return mtimes.length > 0 ? Math.max(...mtimes) : null;
   } catch {
     return null;
   }

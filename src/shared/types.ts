@@ -121,6 +121,13 @@ export interface BifrostConfig {
    * only clears on resize — see useTerminal.ts).
    */
   terminalRenderer?: 'dom' | 'webgl';
+  /** Sidebar width in pixels; unset means the default. */
+  sidebarWidth?: number;
+  sidebarHidden?: boolean;
+  /** Names from TIME_BUCKETS whose groups are folded shut. */
+  collapsedBuckets?: string[];
+  /** Tasks lifted out of their time group into the sidebar's Pinned group. */
+  pinnedTaskIds?: string[];
   slack?: SlackConfig;
   keybindings?: Record<string, string | null>;
   prompts?: {

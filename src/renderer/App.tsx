@@ -14,9 +14,9 @@ import SettingsOverlay from './components/SettingsOverlay';
 import StatsOverlay from './components/StatsOverlay';
 import StatusBar from './components/StatusBar';
 import SupervisorOverlay from './components/SupervisorOverlay';
-import TaskBar from './components/TaskBar';
 import TaskCreateDialog from './components/TaskCreateDialog';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
+import TaskSidebar from './components/TaskSidebar';
 import TaskView from './components/TaskView';
 import TriageOverlay from './components/TriageOverlay';
 import type { AppAction, AppState, PaneTarget } from './context/AppContext';
@@ -540,11 +540,9 @@ export default function App() {
 
         {/* Main area: content + right icon bar */}
         <div className="flex flex-1 min-h-0">
+          {!state.config?.sidebarHidden && <TaskSidebar />}
           {/* Content column — relative for overlay positioning */}
           <div className="flex flex-col flex-1 min-w-0 relative">
-            {/* Task tab bar */}
-            <TaskBar />
-
             {/* Task content area — relative container for content-scoped overlays */}
             <div className="flex-1 min-h-0 relative flex flex-col">
               {/* Main content: terminal */}
