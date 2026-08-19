@@ -181,11 +181,8 @@ export function useTerminal(
     };
     if (useWebgl) loadWebgl();
 
-    // Initial fit sizes xterm to the container. Deliberately do NOT resize
-    // the PTY here — sending SIGWINCH before the historical buffer has been
-    // drained causes Claude to redraw, and that redraw races with the
-    // drained write, clobbering scrollback. The PTY resize is deferred
-    // until after the drain has been written below.
+    // Sizes xterm to the container before attaching: the snapshot is built for
+    // these dimensions.
     safeFit(terminal, fitAddon);
 
     // Font-settle: terminal.open() above measures the cell using whatever
@@ -206,10 +203,6 @@ export function useTerminal(
       .catch(() => {
         /* font failed to load — fall back to whatever xterm measured */
       });
-
-    // Reset the last-sent dimensions on each terminal creation so the
-    // post-drain resize always fires for a fresh session.
-    lastResize.current = null;
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -306,13 +299,10 @@ export function useTerminal(
 
     // Receive data from session
     let hasReceivedData = false;
-    // Buffer live data arriving from the session until the historical
-    // drain has been written, so the replay isn't clobbered by a
-    // post-SIGWINCH redraw racing through the live listener.
-    let drainComplete = false;
-    const preDrainBuffer: string[] = [];
+    // Everything before the snapshot is already in it.
+    let attached = false;
 
-    function writeLiveData(data: string): void {
+    function writeSessionData(data: string): void {
       if (!hasReceivedData) {
         hasReceivedData = true;
         setLoading(false);
@@ -320,25 +310,10 @@ export function useTerminal(
       terminal.write(data);
     }
 
-    // Replay any buffered output from before this listener was registered.
-    // After the drained bytes have been written, flush any live data that
-    // arrived during the drain, then resize the PTY (deferred so the
-    // SIGWINCH-induced redraw can't race with the replay).
-    window.bifrost.drainSessionBuffer(sessionId).then((buf) => {
-      const finishDrain = () => {
-        drainComplete = true;
-        for (const data of preDrainBuffer) writeLiveData(data);
-        preDrainBuffer.length = 0;
-        safeFit(terminal, fitAddon);
-        sendResizeIfChanged(terminal.cols, terminal.rows);
-      };
-      if (buf) {
-        setLoading(false);
-        hasReceivedData = true;
-        terminal.write(buf, finishDrain);
-      } else {
-        finishDrain();
-      }
+    // The attach carries this geometry to the PTY, so record it as sent.
+    lastResize.current = { cols: terminal.cols, rows: terminal.rows };
+    window.bifrost.attachSession(sessionId, terminal.cols, terminal.rows).then((alive) => {
+      if (!alive) setLoading(false);
     });
 
     // Strip per-line trailing whitespace from clipboard text. xterm's
@@ -379,13 +354,11 @@ export function useTerminal(
     };
     containerRef.current?.addEventListener('paste', onPaste, { capture: true });
 
-    const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
+    const removeDataListener = window.bifrost.onSessionData((sid: string, data: string, isReplay: boolean) => {
       if (sid !== sessionId) return;
-      if (!drainComplete) {
-        preDrainBuffer.push(data);
-        return;
-      }
-      writeLiveData(data);
+      if (isReplay) attached = true;
+      else if (!attached) return;
+      writeSessionData(data);
     });
 
     // Handle session exit

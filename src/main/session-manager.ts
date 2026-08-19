@@ -6,17 +6,28 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror';
 
 // Use require for node-pty because it's externalized from Vite bundling
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pty = require('node-pty');
 
 const sessions = new Map<string, IPty>();
-// Buffer recent output per session so the renderer can replay it on connect.
-// This handles the startup race where the PTY produces data before the
-// renderer's terminal listener is registered.
-const sessionBuffers = new Map<string, string>();
-const MAX_BUFFER = 256 * 1024; // 256 KB per session
+
+function send(mainWindow: BrowserWindow, sessionId: string, data: string, isReplay: boolean): void {
+  if (!mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.SESSION_DATA, sessionId, data, isReplay);
+  }
+}
+
+// Claude's startup banners are the only thing scanned as raw text, so this is
+// held separately from the mirror and stops growing once startup is over.
+const startupBuffers = new Map<string, string>();
+const MAX_STARTUP_BUFFER = 256 * 1024;
+
+// Every task terminal shares one layout, so the last size any of them reported
+// is the best guess for a session nobody has opened yet.
+let lastKnownGeometry = { cols: 120, rows: 30 };
 
 /**
  * Claude positions each word with its own `\e[<n>G`, so neither spaces nor
@@ -254,8 +265,8 @@ export function spawnSession(
   try {
     shell = pty.spawn(spawnCommand, spawnArgs, {
       name: 'xterm-256color',
-      cols: options?.cols ?? 120,
-      rows: options?.rows ?? 30,
+      cols: options?.cols ?? lastKnownGeometry.cols,
+      rows: options?.rows ?? lastKnownGeometry.rows,
       cwd,
       env,
     });
@@ -272,7 +283,8 @@ export function spawnSession(
   }
 
   sessions.set(sessionId, shell);
-  sessionBuffers.set(sessionId, '');
+  startupBuffers.set(sessionId, '');
+  createMirror(sessionId, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
   createReadyGate(sessionId);
 
   // Auto-accept workspace trust prompt for Bifrost-managed Claude sessions.
@@ -281,9 +293,10 @@ export function spawnSession(
   let trustHandled = !options?.autoTrust;
 
   shell.onData((data: string) => {
-    // Accumulate output so the renderer can replay on connect
-    const buf = (sessionBuffers.get(sessionId) ?? '') + data;
-    sessionBuffers.set(sessionId, buf.length > MAX_BUFFER ? buf.slice(-MAX_BUFFER) : buf);
+    const forward = mirrorOutput(sessionId, data);
+
+    const buf = (startupBuffers.get(sessionId) ?? '') + data;
+    if (buf.length <= MAX_STARTUP_BUFFER) startupBuffers.set(sessionId, buf);
 
     noteSessionOutput(sessionId);
 
@@ -298,19 +311,16 @@ export function spawnSession(
       }
     }
 
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_STREAM.SESSION_DATA, sessionId, data);
-    }
+    if (forward) send(mainWindow, sessionId, data, false);
   });
 
   shell.onExit(({ exitCode }: { exitCode: number }) => {
-    const buffer = sessionBuffers.get(sessionId) ?? '';
-    if (options?.onBeforeExit?.(buffer, exitCode)) {
-      // Don't delete session/buffer or emit exit — caller already spawned a replacement
+    if (options?.onBeforeExit?.(startupBuffers.get(sessionId) ?? '', exitCode)) {
+      // Don't tear the session down or emit exit — caller already spawned a replacement
       return;
     }
     sessions.delete(sessionId);
-    sessionBuffers.delete(sessionId);
+    forgetSession(sessionId);
     disposeReadyGate(sessionId);
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
@@ -429,18 +439,36 @@ export function waitForSessionReady(sessionId: string, timeoutMs = 20_000): Prom
   });
 }
 
-export function resizeSession(sessionId: string, cols: number, rows: number): void {
-  const session = sessions.get(sessionId);
-  if (session) {
-    session.resize(cols, rows);
-  }
+function forgetSession(sessionId: string): void {
+  disposeMirror(sessionId);
+  startupBuffers.delete(sessionId);
 }
 
-/** Return buffered output and clear it (one-time replay for renderer connect). */
-export function drainSessionBuffer(sessionId: string): string {
-  const buf = sessionBuffers.get(sessionId) ?? '';
-  sessionBuffers.set(sessionId, '');
-  return buf;
+export function resizeSession(sessionId: string, cols: number, rows: number): void {
+  lastKnownGeometry = { cols, rows };
+  resizeMirror(sessionId, cols, rows);
+  sessions.get(sessionId)?.resize(cols, rows);
+}
+
+/**
+ * Send a connecting terminal the session's screen, then match the PTY to it.
+ * The snapshot travels on the data stream so it stays ordered with live output.
+ */
+export async function attachSession(
+  sessionId: string,
+  mainWindow: BrowserWindow,
+  cols: number,
+  rows: number,
+): Promise<boolean> {
+  const snapshot = await snapshotMirror(sessionId, cols, rows);
+  if (!snapshot) return false;
+
+  send(mainWindow, sessionId, snapshot.replay, true);
+  for (const data of snapshot.held) send(mainWindow, sessionId, data, false);
+
+  lastKnownGeometry = { cols, rows };
+  sessions.get(sessionId)?.resize(cols, rows);
+  return true;
 }
 
 export function killSession(sessionId: string): void {
@@ -448,7 +476,7 @@ export function killSession(sessionId: string): void {
   if (session) {
     session.kill('SIGTERM');
     sessions.delete(sessionId);
-    sessionBuffers.delete(sessionId);
+    forgetSession(sessionId);
     disposeReadyGate(sessionId);
   }
 }
@@ -457,7 +485,7 @@ export function killAllSessions(): void {
   for (const [id, session] of sessions) {
     session.kill('SIGTERM');
     sessions.delete(id);
-    sessionBuffers.delete(id);
+    forgetSession(id);
     disposeReadyGate(id);
   }
 }

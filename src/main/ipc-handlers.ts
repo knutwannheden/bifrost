@@ -55,9 +55,9 @@ import {
   watchReviewFile,
 } from './review-service';
 import {
+  attachSession,
   createSession,
   createShellSession,
-  drainSessionBuffer,
   killSession,
   resizeSession,
   writeToSession,
@@ -786,8 +786,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     resizeSession(sessionId, cols, rows);
   });
 
-  ipcMain.handle(IPC.DRAIN_SESSION_BUFFER, (_event, sessionId: string) => {
-    return drainSessionBuffer(sessionId);
+  ipcMain.handle(IPC.ATTACH_SESSION, (_event, sessionId: string, cols: number, rows: number) => {
+    return attachSession(sessionId, mainWindow, cols, rows);
   });
 
   // Diff

@@ -34,9 +34,10 @@ const api: BifrostAPI = {
   closeDevTerminal: (taskId) => ipcRenderer.invoke(IPC.CLOSE_DEV_TERMINAL, taskId),
   writeToSession: (sessionId, data) => ipcRenderer.send(IPC.WRITE_TO_SESSION, sessionId, data),
   resizeSession: (sessionId, cols, rows) => ipcRenderer.invoke(IPC.RESIZE_SESSION, sessionId, cols, rows),
-  drainSessionBuffer: (sessionId) => ipcRenderer.invoke(IPC.DRAIN_SESSION_BUFFER, sessionId),
+  attachSession: (sessionId, cols, rows) => ipcRenderer.invoke(IPC.ATTACH_SESSION, sessionId, cols, rows),
   onSessionData: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, data: string) => callback(sessionId, data);
+    const handler = (_event: Electron.IpcRendererEvent, sessionId: string, data: string, isReplay?: boolean) =>
+      callback(sessionId, data, isReplay === true);
     ipcRenderer.on(IPC_STREAM.SESSION_DATA, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.SESSION_DATA, handler);
   },
