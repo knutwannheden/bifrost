@@ -187,9 +187,9 @@ export default function TaskTab({
         >
           &times;
         </span>
-        {showSweep && !isActive && <span className="activity-sweep absolute top-0 bottom-0 left-0 w-[2px]" />}
-        {showSolid && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-success" />}
-        {isActive && <span className="absolute top-0 bottom-0 left-0 w-[2px] bg-accent" />}
+        {showSweep && !isActive && <span className="activity-sweep absolute top-0 bottom-0 left-0 w-1" />}
+        {showSolid && <span className="absolute top-0 bottom-0 left-0 w-1 bg-success" />}
+        {isActive && <span className="absolute top-0 bottom-0 left-0 w-1 bg-accent" />}
       </button>
       {showTooltip &&
         tooltipPos &&
