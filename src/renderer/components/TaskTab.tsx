@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import PinIcon from './PinIcon';
 import Spinner from './Spinner';
 
 interface TaskTabProps {
@@ -12,6 +13,8 @@ interface TaskTabProps {
   onClose: () => void;
   onRename: (name: string) => void;
   onRegenerateTitle: () => Promise<void>;
+  isPinned: boolean;
+  onTogglePin: () => void;
 }
 
 export default function TaskTab({
@@ -22,6 +25,8 @@ export default function TaskTab({
   onClose,
   onRename,
   onRegenerateTitle,
+  isPinned,
+  onTogglePin,
 }: TaskTabProps) {
   const { state, dispatch } = useApp();
   const [editing, setEditing] = useState(false);
@@ -178,6 +183,22 @@ export default function TaskTab({
         {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
         <span
           role="button"
+          title={isPinned ? 'Unpin' : 'Pin'}
+          className={`ml-1 shrink-0 invisible group-hover:visible transition-colors cursor-pointer ${
+            isPinned ? 'text-accent hover:text-primary' : 'text-muted hover:text-primary'
+          }`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin();
+          }}
+          tabIndex={-1}
+        >
+          <PinIcon />
+        </span>
+        {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
+        <span
+          role="button"
+          title="Close"
           className="ml-1 text-muted hover:text-primary shrink-0 invisible group-hover:visible transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
@@ -213,6 +234,16 @@ export default function TaskTab({
             style={{ left: menuPos.x, top: menuPos.y }}
             onMouseDown={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 text-xs text-primary hover:bg-surface-hover transition-colors"
+              onClick={() => {
+                setMenuPos(null);
+                onTogglePin();
+              }}
+            >
+              {isPinned ? 'Unpin' : 'Pin'}
+            </button>
             <button
               type="button"
               className="w-full text-left px-3 py-1.5 text-xs text-primary hover:bg-surface-hover transition-colors"

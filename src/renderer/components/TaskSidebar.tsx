@@ -5,9 +5,13 @@ import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
 import TaskTab from './TaskTab';
 
 const DEFAULT_WIDTH = 240;
+// Pinned tasks leave their time group for this one, so every task still belongs
+// to exactly one group and the header counts stay true.
+const PINNED = 'Pinned';
+const GROUPS = [PINNED, ...TIME_BUCKETS] as const;
 // Anything older than the current week starts folded, so dormant work costs
 // one line per group rather than one line per task.
-const DEFAULT_COLLAPSED: (typeof TIME_BUCKETS)[number][] = ['This week', 'Last week', 'This month', 'Older'];
+const DEFAULT_COLLAPSED: (typeof GROUPS)[number][] = ['This week', 'Last week', 'This month', 'Older'];
 
 export default function TaskSidebar() {
   const { state, dispatch } = useApp();
@@ -38,9 +42,11 @@ export default function TaskSidebar() {
   const recency = (id: string, createdAt: number) => mtimes[id] ?? createdAt;
   const sorted = [...openTasks].sort((a, b) => recency(b.id, b.createdAt) - recency(a.id, a.createdAt));
 
+  const pinnedIds = config?.pinnedTaskIds ?? [];
+
   const groups = new Map<string, typeof sorted>();
   for (const task of sorted) {
-    const bucket = getTimeBucket(recency(task.id, task.createdAt));
+    const bucket = pinnedIds.includes(task.id) ? PINNED : getTimeBucket(recency(task.id, task.createdAt));
     const list = groups.get(bucket);
     if (list) list.push(task);
     else groups.set(bucket, [task]);
@@ -62,7 +68,16 @@ export default function TaskSidebar() {
     return collapsed.includes(bucket) ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
   };
 
-  const visibleTaskIds = TIME_BUCKETS.filter((b) => groups.has(b)).flatMap((b) => visibleTasksFor(b).map((t) => t.id));
+  const visibleTaskIds = GROUPS.filter((b) => groups.has(b)).flatMap((b) => visibleTasksFor(b).map((t) => t.id));
+
+  const togglePin = (taskId: string) => {
+    const next = pinnedIds.includes(taskId) ? pinnedIds.filter((id) => id !== taskId) : [...pinnedIds, taskId];
+    if (config) {
+      const updated = { ...config, pinnedTaskIds: next };
+      dispatch({ type: 'SET_CONFIG', config: updated });
+      window.bifrost.saveConfig(updated);
+    }
+  };
 
   useEffect(() => {
     dispatch({ type: 'SET_VISIBLE_TASK_IDS', taskIds: visibleTaskIds });
@@ -84,7 +99,7 @@ export default function TaskSidebar() {
       style={{ width: dragWidth ?? width }}
     >
       <div className="flex-1 overflow-y-auto">
-        {TIME_BUCKETS.filter((b) => groups.has(b)).map((bucket) => {
+        {GROUPS.filter((b) => groups.has(b)).map((bucket) => {
           const tasks = groups.get(bucket) ?? [];
           const isCollapsed = collapsed.includes(bucket);
           const visibleTasks = visibleTasksFor(bucket);
@@ -125,6 +140,8 @@ export default function TaskSidebar() {
                         dispatch({ type: 'UPDATE_TASK', task: updated });
                       });
                     }}
+                    isPinned={pinnedIds.includes(task.id)}
+                    onTogglePin={() => togglePin(task.id)}
                     onRegenerateTitle={async () => {
                       try {
                         const result = await window.bifrost.regenerateTaskTitle(task.id);

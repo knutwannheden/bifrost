@@ -126,6 +126,8 @@ export interface BifrostConfig {
   sidebarHidden?: boolean;
   /** Names from TIME_BUCKETS whose groups are folded shut. */
   collapsedBuckets?: string[];
+  /** Tasks lifted out of their time group into the sidebar's Pinned group. */
+  pinnedTaskIds?: string[];
   slack?: SlackConfig;
   keybindings?: Record<string, string | null>;
   prompts?: {
