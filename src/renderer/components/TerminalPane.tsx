@@ -11,7 +11,6 @@ interface TerminalPaneProps {
   taskId?: string;
   active: boolean;
   focused: boolean;
-  hideCursor?: boolean;
   paneType?: 'claude' | 'dev';
   onFocusRequest?: () => void;
   onTitleChange?: (title: string) => void;
@@ -34,7 +33,6 @@ export default function TerminalPane({
   sessionId,
   active,
   focused,
-  hideCursor = false,
   paneType,
   onFocusRequest,
   onTitleChange,
@@ -57,7 +55,6 @@ export default function TerminalPane({
   const dark = useResolvedDark();
 
   const { terminal, loading } = useTerminal(initialized ? sessionId : '', containerRef, onTitleChange, {
-    hideCursor,
     fontSize,
     fontFamily,
     fontWeight,

@@ -59,7 +59,6 @@ function safeFit(terminal: Terminal, fitAddon: FitAddon): void {
 
 interface TerminalOptions {
   cursorBlink?: boolean;
-  hideCursor?: boolean;
   fontSize?: number;
   fontFamily?: string;
   fontWeight?: number;
@@ -102,18 +101,13 @@ export function useTerminal(
     setLoading(true);
 
     const paneType = options?.paneType;
-    const hideCursor = options?.hideCursor ?? false;
     const selectedTheme = resolveTerminalTheme(options?.terminalTheme ?? 'Auto', options?.isDark ?? true);
-    const cursorConfig = hideCursor
-      ? { cursorBlink: false, cursorStyle: 'bar' as const, cursorWidth: 1, cursorInactiveStyle: 'none' as const }
-      : {
-          cursorBlink: options?.cursorBlink ?? true,
-          cursorStyle: 'block' as const,
-          cursorInactiveStyle: 'outline' as const,
-        };
-
     const terminal = new Terminal({
-      ...cursorConfig,
+      // Claude Code draws no caret of its own: it parks the real cursor at the
+      // insertion point and shows it with DECTCEM.
+      cursorBlink: options?.cursorBlink ?? true,
+      cursorStyle: 'block',
+      cursorInactiveStyle: 'outline',
       fontWeight: options?.fontWeight ?? 300,
       fontSize: options?.fontSize ?? 14,
       fontFamily: `"${options?.fontFamily ?? 'MesloLGS NF'}", Menlo, Monaco, "Courier New", monospace`,
@@ -123,10 +117,7 @@ export function useTerminal(
         },
         allowNonHttpProtocols: true,
       },
-      theme: {
-        ...selectedTheme,
-        cursor: hideCursor ? selectedTheme.background : selectedTheme.cursor,
-      },
+      theme: selectedTheme,
     });
 
     const fitAddon = new FitAddon();
@@ -456,20 +447,15 @@ export function useTerminal(
   // Update terminal theme dynamically when config changes
   const terminalTheme = options?.terminalTheme ?? 'Auto';
   const isDark = options?.isDark ?? true;
-  const hideCursorOpt = options?.hideCursor ?? false;
   useEffect(() => {
     if (sessionId && terminalRef.current) {
-      const theme = resolveTerminalTheme(terminalTheme, isDark);
-      terminalRef.current.options.theme = {
-        ...theme,
-        cursor: hideCursorOpt ? theme.background : theme.cursor,
-      };
+      terminalRef.current.options.theme = resolveTerminalTheme(terminalTheme, isDark);
       // Cached glyphs in the WebGL atlas keep their old fg/bg colors until
       // invalidated — without this they'd render with the previous theme's
       // colors until something else forces an atlas refresh.
       webglAddonRef.current?.clearTextureAtlas();
     }
-  }, [sessionId, terminalTheme, isDark, hideCursorOpt]);
+  }, [sessionId, terminalTheme, isDark]);
 
   // Re-fit when pane becomes visible (e.g. switching tabs) so the PTY
   // column count stays in sync with xterm after background data writes.
