@@ -9,7 +9,7 @@ import { formatDate, formatRelative } from '../utils/format-time';
 import { allOutcomes, outcomeBadgeColors, outcomeLabels, taskStatusColor, taskStatusLabel } from '../utils/outcome';
 import { shortPath } from '../utils/paths';
 import { altSymbol } from '../utils/platform';
-import { matchesAllTerms } from '../utils/search';
+import { matchesAllTerms, matchesTaskSearch } from '../utils/search';
 import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
 import ActionLabel from './ActionLabel';
 import DiffStatsBadge from './DiffStatsBadge';
@@ -349,12 +349,7 @@ export default function TaskHistoryPanel() {
           if (filter === 'archived' && t.status !== 'archived') return false;
           if (search) {
             const repo = state.repos.find((r) => r.id === t.repoId);
-            return matchesAllTerms(
-              // The fork point is searchable only when the task's own branch is
-              // unknown; nearly every task shares it, so it matches everything.
-              `${t.name} ${t.branch ?? t.baseBranch} ${repo?.name ?? ''} ${t.summary ?? ''}`,
-              search,
-            );
+            return matchesTaskSearch(t, repo?.name ?? '', search);
           }
           return true;
         })

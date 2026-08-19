@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { terminalRegistry } from '../hooks/useTerminal';
 import { repoDisplayName, shortPath } from '../utils/paths';
+import { matchesTaskSearch } from '../utils/search';
 import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
+import FormInput from './FormInput';
 import TaskTab from './TaskTab';
 
 const DEFAULT_WIDTH = 240;
@@ -17,6 +20,8 @@ export default function TaskSidebar() {
   const { state, dispatch } = useApp();
   const [mtimes, setMtimes] = useState<Record<string, number>>({});
   const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const [filter, setFilter] = useState('');
+  const filterRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,6 +38,13 @@ export default function TaskSidebar() {
     };
   }, []);
 
+  // The nonce starts at 0, so the box is only focused on a deliberate request.
+  useEffect(() => {
+    if (state.sidebarFilterFocus === 0) return;
+    filterRef.current?.focus();
+    filterRef.current?.select();
+  }, [state.sidebarFilterFocus]);
+
   const config = state.config;
   const collapsed = config?.collapsedBuckets ?? DEFAULT_COLLAPSED;
   const width = config?.sidebarWidth ?? DEFAULT_WIDTH;
@@ -42,10 +54,22 @@ export default function TaskSidebar() {
   const recency = (id: string, createdAt: number) => mtimes[id] ?? createdAt;
   const sorted = [...openTasks].sort((a, b) => recency(b.id, b.createdAt) - recency(a.id, a.createdAt));
 
+  const repoNameFor = (task: (typeof sorted)[number]) => {
+    const repo = state.repos.find((r) => r.id === task.repoId);
+    return repo ? repoDisplayName(repo) : shortPath(task.worktreePath);
+  };
+
+  const filtering = filter.trim().length > 0;
+  const matchedIds = filtering
+    ? new Set(sorted.filter((t) => matchesTaskSearch(t, repoNameFor(t), filter)).map((t) => t.id))
+    : null;
+  // Keeps the row you are looking at from vanishing as you type.
+  const shown = matchedIds ? sorted.filter((t) => matchedIds.has(t.id) || t.id === state.activeTaskId) : sorted;
+
   const pinnedIds = config?.pinnedTaskIds ?? [];
 
   const groups = new Map<string, typeof sorted>();
-  for (const task of sorted) {
+  for (const task of shown) {
     const bucket = pinnedIds.includes(task.id) ? PINNED : getTimeBucket(recency(task.id, task.createdAt));
     const list = groups.get(bucket);
     if (list) list.push(task);
@@ -61,10 +85,12 @@ export default function TaskSidebar() {
     }
   };
 
-  // A collapsed group still shows the active task's row, so this is not simply
-  // "skip collapsed buckets" — shared by the published order and the rendered rows below.
+  // A filter overrides folds, since a hidden match defeats it, and an unfiltered
+  // fold still shows the active task's row — so this is not simply "skip folded
+  // buckets". Shared by the published order and the rendered rows below.
   const visibleTasksFor = (bucket: string) => {
     const tasks = groups.get(bucket) ?? [];
+    if (filtering) return tasks;
     return collapsed.includes(bucket) ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
   };
 
@@ -91,6 +117,14 @@ export default function TaskSidebar() {
     };
   }, []);
 
+  const returnFocusToTerminal = () => {
+    filterRef.current?.blur();
+    const taskId = state.activeTaskId;
+    if (!taskId) return;
+    const ps = state.paneStates[taskId];
+    terminalRegistry.get(ps?.focusedPane === 'dev' && ps.devSessionId ? ps.devSessionId : taskId)?.focus();
+  };
+
   if (openTasks.length === 0) return null;
 
   return (
@@ -98,71 +132,106 @@ export default function TaskSidebar() {
       className="relative flex flex-col shrink-0 bg-surface/50 border-r border-border-default"
       style={{ width: dragWidth ?? width }}
     >
+      <div className="p-2 border-b border-border-default">
+        <FormInput
+          ref={filterRef}
+          value={filter}
+          placeholder="Filter tasks…"
+          className="w-full px-2 py-1 text-xs"
+          onChange={(e) => setFilter(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              // The first real match: the active task's row is listed either way.
+              const first = visibleTaskIds.find((id) => !matchedIds || matchedIds.has(id));
+              if (first) dispatch({ type: 'SET_ACTIVE_TASK', taskId: first });
+              returnFocusToTerminal();
+            } else if (e.key === 'Escape') {
+              if (filtering) setFilter('');
+              else returnFocusToTerminal();
+            }
+            // Modified strokes stay with the global keymap (Cmd+B, tab switching);
+            // bare keys and F2 belong to the filter.
+            if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
+          }}
+        />
+      </div>
       <div className="flex-1 overflow-y-auto">
+        {filtering && groups.size === 0 ? (
+          <div className="text-sm text-muted text-center py-4">No matching tasks</div>
+        ) : null}
         {GROUPS.filter((b) => groups.has(b)).map((bucket) => {
           const tasks = groups.get(bucket) ?? [];
-          const isCollapsed = collapsed.includes(bucket);
+          const isCollapsed = !filtering && collapsed.includes(bucket);
           const visibleTasks = visibleTasksFor(bucket);
+          const headerClass =
+            'flex w-full items-center gap-1 px-2 py-1 bg-surface-alt text-xs font-semibold text-secondary uppercase tracking-wider';
           return (
             <div key={bucket}>
-              <button
-                type="button"
-                onClick={() => toggle(bucket)}
-                className="flex w-full items-center gap-1 px-2 py-1 bg-surface-alt text-xs font-semibold text-secondary uppercase tracking-wider hover:bg-surface-hover hover:text-primary transition-colors"
-              >
-                <span className="w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
-                <span className="truncate">{bucket}</span>
-                <span className="ml-auto text-muted">{tasks.length}</span>
-              </button>
-              {visibleTasks.map((task) => {
-                const repo = state.repos.find((r) => r.id === task.repoId);
-                return (
-                  <TaskTab
-                    key={task.id}
-                    task={task}
-                    repoName={repo ? repoDisplayName(repo) : shortPath(task.worktreePath)}
-                    isActive={task.id === state.activeTaskId}
-                    onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
-                    onClose={() => {
-                      window.bifrost.stopTask(task.id).then((updated) => {
-                        dispatch({ type: 'UPDATE_TASK', task: updated });
-                        if (state.activeTaskId === task.id) {
-                          const next = sorted.find((t) => t.id !== task.id);
-                          dispatch({
-                            type: 'SET_ACTIVE_TASK',
-                            taskId: next ? next.id : null,
-                          });
-                        }
-                      });
-                    }}
-                    onRename={(name) => {
-                      window.bifrost.renameTask(task.id, name).then((updated) => {
-                        dispatch({ type: 'UPDATE_TASK', task: updated });
-                      });
-                    }}
-                    isPinned={pinnedIds.includes(task.id)}
-                    onTogglePin={() => togglePin(task.id)}
-                    onRegenerateTitle={async () => {
-                      try {
-                        const result = await window.bifrost.regenerateTaskTitle(task.id);
-                        if (!result) {
-                          dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
-                          return;
-                        }
-                        dispatch({ type: 'UPDATE_TASK', task: result.task });
+              {filtering ? (
+                // A click here would rewrite a fold preference the filtered list ignores.
+                <div className={headerClass}>
+                  <span className="w-3 shrink-0" />
+                  <span className="truncate">{bucket}</span>
+                  <span className="ml-auto text-muted">{tasks.length}</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => toggle(bucket)}
+                  className={`${headerClass} hover:bg-surface-hover hover:text-primary transition-colors`}
+                >
+                  <span className="w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
+                  <span className="truncate">{bucket}</span>
+                  <span className="ml-auto text-muted">{tasks.length}</span>
+                </button>
+              )}
+              {visibleTasks.map((task) => (
+                <TaskTab
+                  key={task.id}
+                  task={task}
+                  repoName={repoNameFor(task)}
+                  isActive={task.id === state.activeTaskId}
+                  search={filter}
+                  onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
+                  onClose={() => {
+                    window.bifrost.stopTask(task.id).then((updated) => {
+                      dispatch({ type: 'UPDATE_TASK', task: updated });
+                      if (state.activeTaskId === task.id) {
+                        const next = sorted.find((t) => t.id !== task.id);
                         dispatch({
-                          type: 'SHOW_TOAST',
-                          message: result.renamedBranch
-                            ? `Renamed to "${result.task.name}" on ${result.renamedBranch}`
-                            : `Renamed to "${result.task.name}"`,
+                          type: 'SET_ACTIVE_TASK',
+                          taskId: next ? next.id : null,
                         });
-                      } catch {
-                        dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
                       }
-                    }}
-                  />
-                );
-              })}
+                    });
+                  }}
+                  onRename={(name) => {
+                    window.bifrost.renameTask(task.id, name).then((updated) => {
+                      dispatch({ type: 'UPDATE_TASK', task: updated });
+                    });
+                  }}
+                  isPinned={pinnedIds.includes(task.id)}
+                  onTogglePin={() => togglePin(task.id)}
+                  onRegenerateTitle={async () => {
+                    try {
+                      const result = await window.bifrost.regenerateTaskTitle(task.id);
+                      if (!result) {
+                        dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
+                        return;
+                      }
+                      dispatch({ type: 'UPDATE_TASK', task: result.task });
+                      dispatch({
+                        type: 'SHOW_TOAST',
+                        message: result.renamedBranch
+                          ? `Renamed to "${result.task.name}" on ${result.renamedBranch}`
+                          : `Renamed to "${result.task.name}"`,
+                      });
+                    } catch {
+                      dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
+                    }
+                  }}
+                />
+              ))}
             </div>
           );
         })}

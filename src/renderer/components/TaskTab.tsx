@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import Highlight from './Highlight';
 import PinIcon from './PinIcon';
 import Spinner from './Spinner';
 
@@ -15,6 +16,7 @@ interface TaskTabProps {
   onRegenerateTitle: () => Promise<void>;
   isPinned: boolean;
   onTogglePin: () => void;
+  search: string;
 }
 
 export default function TaskTab({
@@ -27,6 +29,7 @@ export default function TaskTab({
   onRegenerateTitle,
   isPinned,
   onTogglePin,
+  search,
 }: TaskTabProps) {
   const { state, dispatch } = useApp();
   const [editing, setEditing] = useState(false);
@@ -176,9 +179,13 @@ export default function TaskTab({
             {task.hasUnread && !isActive && !showSolid ? (
               <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
             ) : null}
-            <span className="text-xs leading-tight truncate">{task.name}</span>
+            <span className="text-xs leading-tight truncate">
+              <Highlight text={task.name} search={search} />
+            </span>
           </span>
-          <span className="text-[10px] leading-tight truncate text-muted">{repoName}</span>
+          <span className="text-[10px] leading-tight truncate text-muted">
+            <Highlight text={repoName} search={search} />
+          </span>
         </span>
         {/* Sits over the label, which masks its right edge on hover: the label
             is laid out at the full row width whatever these controls do. */}

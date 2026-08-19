@@ -14,3 +14,16 @@ export function matchesAllTerms(haystack: string, search: string): boolean {
 export function matchesRepoSearch(repo: { githubPath?: string; name: string; path: string }, search: string): boolean {
   return matchesAllTerms(`${repo.githubPath ?? repo.name} ${repo.path}`, search);
 }
+
+/**
+ * Match a task against a search string. The fork point is searchable only when
+ * the task's own branch is unknown; nearly every task shares it, so it matches
+ * everything.
+ */
+export function matchesTaskSearch(
+  task: { name: string; branch?: string; baseBranch: string; summary?: string },
+  repoName: string,
+  search: string,
+): boolean {
+  return matchesAllTerms(`${task.name} ${task.branch ?? task.baseBranch} ${repoName} ${task.summary ?? ''}`, search);
+}
