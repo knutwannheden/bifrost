@@ -290,8 +290,11 @@ export function useTerminal(
 
     // Receive data from session
     let hasReceivedData = false;
-    // Everything before the snapshot is already in it.
     let attached = false;
+    // A session is spawned on demand, so a terminal can reach it before it
+    // exists. Output is kept until the attach settles rather than judged
+    // against a snapshot that may never come.
+    const beforeAttach: string[] = [];
 
     function writeSessionData(data: string): void {
       if (!hasReceivedData) {
@@ -301,18 +304,26 @@ export function useTerminal(
       terminal.write(data);
     }
 
+    /** No session to snapshot: the pane renders live output from here on. */
+    function attachFailed(): void {
+      attached = true;
+      // The PTY never took this geometry, so let the next fit deliver it.
+      lastResize.current = null;
+      for (const data of beforeAttach) writeSessionData(data);
+      beforeAttach.length = 0;
+      setLoading(false);
+    }
+
     // The attach carries this geometry to the PTY, so record it as sent.
     lastResize.current = { cols: terminal.cols, rows: terminal.rows };
     window.bifrost
       .attachSession(sessionId, terminal.cols, terminal.rows)
       .then((alive) => {
-        if (!alive) setLoading(false);
+        if (!alive) attachFailed();
       })
       .catch((err) => {
-        // No snapshot is coming, so the pane renders live output as it arrives.
         console.error(`[terminal] attach failed for ${sessionId}:`, err);
-        attached = true;
-        setLoading(false);
+        attachFailed();
       });
 
     // Strip per-line trailing whitespace from clipboard text. xterm's
@@ -355,8 +366,14 @@ export function useTerminal(
 
     const removeDataListener = window.bifrost.onSessionData((sid: string, data: string, isReplay: boolean) => {
       if (sid !== sessionId) return;
-      if (isReplay) attached = true;
-      else if (!attached) return;
+      if (isReplay) {
+        // The snapshot already contains everything held here.
+        attached = true;
+        beforeAttach.length = 0;
+      } else if (!attached) {
+        beforeAttach.push(data);
+        return;
+      }
       writeSessionData(data);
     });
 
