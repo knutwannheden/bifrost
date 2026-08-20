@@ -87,6 +87,8 @@ export interface AppState {
   renamingTaskId: string | null;
   /** Task ids in the order the sidebar renders them (collapsed groups contribute only the active task's row, if any). */
   visibleTaskIds: string[];
+  /** Bumped to move focus into the sidebar's filter box; the value itself carries no meaning. */
+  sidebarFilterFocus: number;
 }
 
 export type AppAction =
@@ -157,7 +159,8 @@ export type AppAction =
   | { type: 'START_RENAME_TASK'; taskId: string }
   | { type: 'CLEAR_RENAME_TASK' }
   | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean }
-  | { type: 'SET_VISIBLE_TASK_IDS'; taskIds: string[] };
+  | { type: 'SET_VISIBLE_TASK_IDS'; taskIds: string[] }
+  | { type: 'FOCUS_SIDEBAR_FILTER' };
 
 const initialState: AppState = {
   repos: [],
@@ -203,6 +206,7 @@ const initialState: AppState = {
   archiveConfirm: null,
   renamingTaskId: null,
   visibleTaskIds: [],
+  sidebarFilterFocus: 0,
 };
 
 export const defaultPaneState: TaskPaneState = {
@@ -591,6 +595,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
       }
       return { ...state, visibleTaskIds: taskIds };
     }
+    case 'FOCUS_SIDEBAR_FILTER':
+      return { ...state, sidebarFilterFocus: state.sidebarFilterFocus + 1 };
     default:
       return state;
   }

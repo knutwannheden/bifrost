@@ -261,6 +261,16 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
         }
 
+        case 'nav.filterTasks': {
+          if (s.config?.sidebarHidden) {
+            const updated = { ...s.config, sidebarHidden: false };
+            dispatch({ type: 'SET_CONFIG', config: updated });
+            window.bifrost.saveConfig(updated);
+          }
+          dispatch({ type: 'FOCUS_SIDEBAR_FILTER' });
+          break;
+        }
+
         case 'view.devTerminal': {
           if (!s.activeTaskId) break;
           const taskId = s.activeTaskId;

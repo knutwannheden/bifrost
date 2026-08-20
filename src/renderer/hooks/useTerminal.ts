@@ -59,7 +59,6 @@ function safeFit(terminal: Terminal, fitAddon: FitAddon): void {
 
 interface TerminalOptions {
   cursorBlink?: boolean;
-  hideCursor?: boolean;
   fontSize?: number;
   fontFamily?: string;
   fontWeight?: number;
@@ -102,18 +101,13 @@ export function useTerminal(
     setLoading(true);
 
     const paneType = options?.paneType;
-    const hideCursor = options?.hideCursor ?? false;
     const selectedTheme = resolveTerminalTheme(options?.terminalTheme ?? 'Auto', options?.isDark ?? true);
-    const cursorConfig = hideCursor
-      ? { cursorBlink: false, cursorStyle: 'bar' as const, cursorWidth: 1, cursorInactiveStyle: 'none' as const }
-      : {
-          cursorBlink: options?.cursorBlink ?? true,
-          cursorStyle: 'block' as const,
-          cursorInactiveStyle: 'outline' as const,
-        };
-
     const terminal = new Terminal({
-      ...cursorConfig,
+      // Claude Code draws no caret of its own: it parks the real cursor at the
+      // insertion point and shows it with DECTCEM.
+      cursorBlink: options?.cursorBlink ?? true,
+      cursorStyle: 'block',
+      cursorInactiveStyle: 'outline',
       fontWeight: options?.fontWeight ?? 300,
       fontSize: options?.fontSize ?? 14,
       fontFamily: `"${options?.fontFamily ?? 'MesloLGS NF'}", Menlo, Monaco, "Courier New", monospace`,
@@ -123,10 +117,7 @@ export function useTerminal(
         },
         allowNonHttpProtocols: true,
       },
-      theme: {
-        ...selectedTheme,
-        cursor: hideCursor ? selectedTheme.background : selectedTheme.cursor,
-      },
+      theme: selectedTheme,
     });
 
     const fitAddon = new FitAddon();
@@ -181,11 +172,8 @@ export function useTerminal(
     };
     if (useWebgl) loadWebgl();
 
-    // Initial fit sizes xterm to the container. Deliberately do NOT resize
-    // the PTY here — sending SIGWINCH before the historical buffer has been
-    // drained causes Claude to redraw, and that redraw races with the
-    // drained write, clobbering scrollback. The PTY resize is deferred
-    // until after the drain has been written below.
+    // Sizes xterm to the container before attaching: the snapshot is built for
+    // these dimensions.
     safeFit(terminal, fitAddon);
 
     // Font-settle: terminal.open() above measures the cell using whatever
@@ -206,10 +194,6 @@ export function useTerminal(
       .catch(() => {
         /* font failed to load — fall back to whatever xterm measured */
       });
-
-    // Reset the last-sent dimensions on each terminal creation so the
-    // post-drain resize always fires for a fresh session.
-    lastResize.current = null;
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -306,13 +290,13 @@ export function useTerminal(
 
     // Receive data from session
     let hasReceivedData = false;
-    // Buffer live data arriving from the session until the historical
-    // drain has been written, so the replay isn't clobbered by a
-    // post-SIGWINCH redraw racing through the live listener.
-    let drainComplete = false;
-    const preDrainBuffer: string[] = [];
+    let attached = false;
+    // A session is spawned on demand, so a terminal can reach it before it
+    // exists. Output is kept until the attach settles rather than judged
+    // against a snapshot that may never come.
+    const beforeAttach: string[] = [];
 
-    function writeLiveData(data: string): void {
+    function writeSessionData(data: string): void {
       if (!hasReceivedData) {
         hasReceivedData = true;
         setLoading(false);
@@ -320,26 +304,27 @@ export function useTerminal(
       terminal.write(data);
     }
 
-    // Replay any buffered output from before this listener was registered.
-    // After the drained bytes have been written, flush any live data that
-    // arrived during the drain, then resize the PTY (deferred so the
-    // SIGWINCH-induced redraw can't race with the replay).
-    window.bifrost.drainSessionBuffer(sessionId).then((buf) => {
-      const finishDrain = () => {
-        drainComplete = true;
-        for (const data of preDrainBuffer) writeLiveData(data);
-        preDrainBuffer.length = 0;
-        safeFit(terminal, fitAddon);
-        sendResizeIfChanged(terminal.cols, terminal.rows);
-      };
-      if (buf) {
-        setLoading(false);
-        hasReceivedData = true;
-        terminal.write(buf, finishDrain);
-      } else {
-        finishDrain();
-      }
-    });
+    /** No session to snapshot: the pane renders live output from here on. */
+    function attachFailed(): void {
+      attached = true;
+      // The PTY never took this geometry, so let the next fit deliver it.
+      lastResize.current = null;
+      for (const data of beforeAttach) writeSessionData(data);
+      beforeAttach.length = 0;
+      setLoading(false);
+    }
+
+    // The attach carries this geometry to the PTY, so record it as sent.
+    lastResize.current = { cols: terminal.cols, rows: terminal.rows };
+    window.bifrost
+      .attachSession(sessionId, terminal.cols, terminal.rows)
+      .then((alive) => {
+        if (!alive) attachFailed();
+      })
+      .catch((err) => {
+        console.error(`[terminal] attach failed for ${sessionId}:`, err);
+        attachFailed();
+      });
 
     // Strip per-line trailing whitespace from clipboard text. xterm's
     // getTrimmedLength counts cells holding regular spaces (e.g. background-
@@ -379,13 +364,17 @@ export function useTerminal(
     };
     containerRef.current?.addEventListener('paste', onPaste, { capture: true });
 
-    const removeDataListener = window.bifrost.onSessionData((sid: string, data: string) => {
+    const removeDataListener = window.bifrost.onSessionData((sid: string, data: string, isReplay: boolean) => {
       if (sid !== sessionId) return;
-      if (!drainComplete) {
-        preDrainBuffer.push(data);
+      if (isReplay) {
+        // The snapshot already contains everything held here.
+        attached = true;
+        beforeAttach.length = 0;
+      } else if (!attached) {
+        beforeAttach.push(data);
         return;
       }
-      writeLiveData(data);
+      writeSessionData(data);
     });
 
     // Handle session exit
@@ -483,20 +472,15 @@ export function useTerminal(
   // Update terminal theme dynamically when config changes
   const terminalTheme = options?.terminalTheme ?? 'Auto';
   const isDark = options?.isDark ?? true;
-  const hideCursorOpt = options?.hideCursor ?? false;
   useEffect(() => {
     if (sessionId && terminalRef.current) {
-      const theme = resolveTerminalTheme(terminalTheme, isDark);
-      terminalRef.current.options.theme = {
-        ...theme,
-        cursor: hideCursorOpt ? theme.background : theme.cursor,
-      };
+      terminalRef.current.options.theme = resolveTerminalTheme(terminalTheme, isDark);
       // Cached glyphs in the WebGL atlas keep their old fg/bg colors until
       // invalidated — without this they'd render with the previous theme's
       // colors until something else forces an atlas refresh.
       webglAddonRef.current?.clearTextureAtlas();
     }
-  }, [sessionId, terminalTheme, isDark, hideCursorOpt]);
+  }, [sessionId, terminalTheme, isDark]);
 
   // Re-fit when pane becomes visible (e.g. switching tabs) so the PTY
   // column count stays in sync with xterm after background data writes.

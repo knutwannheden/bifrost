@@ -59,7 +59,7 @@ function TriageCard({
           )}
         </div>
         <div className="flex-1 min-h-0">
-          <TerminalPane sessionId={item.ptySessionId!} active focused hideCursor={false} />
+          <TerminalPane sessionId={item.ptySessionId!} active focused />
         </div>
       </div>
     );
@@ -474,7 +474,7 @@ export default function TriageOverlay() {
                 <span className="text-xs text-secondary truncate flex-1">{historyEntry?.prompt}</span>
               </div>
               <div className="flex-1 min-h-0">
-                <TerminalPane sessionId={historyPtySessionId} active focused hideCursor={false} />
+                <TerminalPane sessionId={historyPtySessionId} active focused />
               </div>
             </div>
           ) : (

@@ -55,9 +55,9 @@ import {
   watchReviewFile,
 } from './review-service';
 import {
+  attachSession,
   createSession,
   createShellSession,
-  drainSessionBuffer,
   killSession,
   resizeSession,
   writeToSession,
@@ -786,8 +786,18 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     resizeSession(sessionId, cols, rows);
   });
 
-  ipcMain.handle(IPC.DRAIN_SESSION_BUFFER, (_event, sessionId: string) => {
-    return drainSessionBuffer(sessionId);
+  ipcMain.handle(IPC.ATTACH_SESSION, (_event, sessionId: string, cols: number, rows: number) => {
+    // A task terminal mounts before the effect that marks it active, so this is
+    // where a deferred session is first asked for.
+    if (pendingRestore.has(sessionId)) {
+      try {
+        restoreTaskSession(sessionId, mainWindow);
+      } catch (err) {
+        console.error(`[ipc] Failed to restore task ${sessionId}:`, err);
+        updateTask(sessionId, { status: 'error' });
+      }
+    }
+    return attachSession(sessionId, mainWindow, cols, rows);
   });
 
   // Diff

@@ -10,10 +10,11 @@ Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Cod
 
 - `npm start` — run in development mode (Electron Forge + Vite HMR)
 - `npm run lint` — Biome check (linting + formatting)
+- `npm run check:mirror` — verify a joining terminal replays a session's screen exactly once
 - `npm run package` — build packaged app
 - `npm run make` — build distributable installers
 
-No test framework is configured.
+No test framework is configured; `scripts/` holds standalone checks for invariants worth pinning.
 
 ## Architecture
 
@@ -46,6 +47,7 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | Module | Purpose |
 |--------|---------|
 | `session-manager.ts` | Spawns/kills PTY sessions via node-pty |
+| `session-mirror.ts` | Headless xterm per session; shapes the replay for the terminal that attaches |
 | `ipc-handlers.ts` | Registers all IPC handlers, manages in-memory task list |
 | `activity-watcher.ts` | Watches worktrees for file changes, commits, Claude JSONL events |
 | `claude-watcher.ts` | Parses Claude JSONL session files for token usage, turn boundaries, and tool attribution |
