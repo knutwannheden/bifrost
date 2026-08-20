@@ -278,9 +278,8 @@ function buildSettings(): SettingDef[] {
       key: 'experimentalFeatures',
       category: 'General',
       label: 'Experimental features',
-      description: 'Enable experimental features like Supervisor',
-      tooltip:
-        'When enabled, experimental features like the Supervisor (for headless note processing) become available.',
+      description: 'Enable experimental features',
+      tooltip: 'When enabled, experimental features become available.',
       render: (config, update) => (
         <ToggleSwitch checked={config.experimentalFeatures} onChange={(v) => update({ experimentalFeatures: v })} />
       ),

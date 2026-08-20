@@ -82,6 +82,8 @@ CREATE TABLE IF NOT EXISTS activity_entries (
 CREATE INDEX IF NOT EXISTS idx_activity_task ON activity_entries(task_id);
 CREATE INDEX IF NOT EXISTS idx_activity_task_ts ON activity_entries(task_id, timestamp);
 
+-- No code reads the supervisor tables; they stay because dropping them costs
+-- a migration and buys nothing.
 CREATE TABLE IF NOT EXISTS supervisor_state (
   key         TEXT PRIMARY KEY,
   running     INTEGER NOT NULL DEFAULT 0,

@@ -1,9 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import type { SupervisorState } from '../../shared/types';
+import React from 'react';
 import type { DiffMode } from '../context/AppContext';
 import { getActiveDiffState, useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
-import FlaskIcon from './FlaskIcon';
 import Kbd from './Kbd';
 
 function BellIcon() {
@@ -73,27 +71,6 @@ function ReviewIcon() {
     >
       <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
       <path d="M6 5h4M6 8h4M6 11h2" />
-    </svg>
-  );
-}
-
-function SupervisorIcon() {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="8" cy="4" r="2" />
-      <path d="M8 6v2" />
-      <path d="M4.5 10.5L8 8l3.5 2.5" />
-      <circle cx="4.5" cy="12" r="1.5" />
-      <circle cx="11.5" cy="12" r="1.5" />
     </svg>
   );
 }
@@ -187,21 +164,6 @@ function IconButton({ active, badge, label, shortcut, onClick, children, ...rest
   );
 }
 
-function useSupervisorBadge(): 'green' | 'blue' | undefined {
-  const [svState, setSvState] = useState<SupervisorState | null>(null);
-  useEffect(() => {
-    window.bifrost.getSupervisorState().then(setSvState);
-    const unsub = window.bifrost.onSupervisorUpdate(setSvState);
-    return unsub;
-  }, []);
-  if (!svState) return undefined;
-  const hasRunning = svState.items.some((i) => i.status === 'running');
-  if (hasRunning) return 'green';
-  const hasDone = svState.items.some((i) => i.status === 'done');
-  if (hasDone) return 'blue';
-  return undefined;
-}
-
 export default function RightIconBar() {
   const { state, dispatch } = useApp();
   const { getDisplayString } = useKeymap();
@@ -209,7 +171,6 @@ export default function RightIconBar() {
   const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
   const reviewBadge = state.activeTaskId && state.unreadReview[state.activeTaskId] ? ('blue' as const) : undefined;
-  const supervisorBadge = useSupervisorBadge();
 
   const triageItems = Object.values(state.triages);
   const hasTriageWaiting = triageItems.some((t) => t.waiting);
@@ -267,21 +228,6 @@ export default function RightIconBar() {
       >
         <ReviewIcon />
       </IconButton>
-
-      {state.config?.experimentalFeatures && (
-        <IconButton
-          label="Supervisor"
-          shortcut={getDisplayString('view.supervisor')}
-          active={state.showSupervisor}
-          badge={supervisorBadge}
-          onClick={() => dispatch({ type: 'TOGGLE_SUPERVISOR' })}
-        >
-          <SupervisorIcon />
-          <span className="absolute bottom-0.5 left-1" title="Experimental">
-            <FlaskIcon />
-          </span>
-        </IconButton>
-      )}
 
       <IconButton
         label="Triage"

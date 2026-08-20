@@ -18,7 +18,6 @@ import type {
   ReviewEntry,
   SessionMetricsResult,
   StatsData,
-  SupervisorState,
   Task,
   TaskCuration,
   TaskOutcome,
@@ -143,16 +142,6 @@ export const IPC = {
   // Stats
   GET_STATS: 'stats:get',
 
-  // Supervisor
-  SUPERVISOR_GET_STATE: 'supervisor:get-state',
-  SUPERVISOR_START: 'supervisor:start',
-  SUPERVISOR_STOP: 'supervisor:stop',
-  SUPERVISOR_SET_CONCURRENCY: 'supervisor:set-concurrency',
-  SUPERVISOR_PAUSE_ITEM: 'supervisor:pause-item',
-  SUPERVISOR_RESUME_ITEM: 'supervisor:resume-item',
-  SUPERVISOR_OPEN_ITEM: 'supervisor:open-item',
-  SUPERVISOR_REMOVE_ITEM: 'supervisor:remove-item',
-
   // Slack
   SLACK_START_OAUTH: 'slack:start-oauth',
   SLACK_DISCONNECT: 'slack:disconnect',
@@ -187,7 +176,6 @@ export const IPC_STREAM = {
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
   STATS_UPDATE: 'stats:update',
-  SUPERVISOR_UPDATE: 'supervisor:update',
   TASK_CREATED: 'task:created',
   TASK_CLOSED: 'task:closed',
   SLACK_REACTION: 'slack:reaction',
@@ -350,17 +338,6 @@ export interface BifrostAPI {
   // Stats
   getStats(since?: number): Promise<void>;
   onStatsUpdate(callback: (data: StatsData) => void): () => void;
-
-  // Supervisor
-  getSupervisorState(): Promise<SupervisorState>;
-  startSupervisor(): Promise<SupervisorState>;
-  stopSupervisor(): Promise<SupervisorState>;
-  setSupervisorConcurrency(n: number): Promise<SupervisorState>;
-  pauseSupervisorItem(itemId: string): Promise<SupervisorState>;
-  resumeSupervisorItem(itemId: string): Promise<SupervisorState>;
-  openSupervisorItem(itemId: string): Promise<Task>;
-  removeSupervisorItem(itemId: string): Promise<SupervisorState>;
-  onSupervisorUpdate(callback: (state: SupervisorState) => void): () => void;
 
   // Slack
   startSlackOAuth(): Promise<void>;

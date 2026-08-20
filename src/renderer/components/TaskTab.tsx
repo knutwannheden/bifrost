@@ -17,6 +17,7 @@ interface TaskTabProps {
   isPinned: boolean;
   onTogglePin: () => void;
   search: string;
+  isSelected: boolean;
 }
 
 export default function TaskTab({
@@ -30,6 +31,7 @@ export default function TaskTab({
   isPinned,
   onTogglePin,
   search,
+  isSelected,
 }: TaskTabProps) {
   const { state, dispatch } = useApp();
   const [editing, setEditing] = useState(false);
@@ -138,17 +140,19 @@ export default function TaskTab({
     );
   }
 
-  const tooltipLines = [
-    task.name,
-    task.summary,
-    task.branch ? `Branch: ${task.branch}` : undefined,
-    `Base: ${task.baseBranch}`,
-    task.terminalTitle ? `Terminal: ${task.terminalTitle}` : undefined,
-  ].filter(Boolean) as string[];
+  // An in-place task works on the checked-out branch, so naming its base twice
+  // says nothing; a task with no branch of its own has only a base to show.
+  const branchLine = !task.branch
+    ? `Base: ${task.baseBranch}`
+    : task.branch === task.baseBranch
+      ? `Branch: ${task.branch}`
+      : `Branch: ${task.branch} · Base: ${task.baseBranch}`;
 
-  // Activity indicator: green sweep when Claude is working, solid green when results waiting
-  const showSweep = task.claudeActive === true;
-  const showSolid = !showSweep && task.hasUnread && !isActive;
+  const tooltipLines = [task.name, task.summary, branchLine].filter(Boolean) as string[];
+
+  // Activity indicator: green pulse when Claude is working, solid green when results waiting
+  const showPulse = task.claudeActive === true;
+  const showSolid = !showPulse && task.hasUnread && !isActive;
 
   return (
     <>
@@ -156,7 +160,7 @@ export default function TaskTab({
         ref={buttonRef}
         className={`group relative flex w-full items-center px-3 py-1.5 text-left transition-colors ${
           isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
-        }`}
+        } ${isSelected ? 'ring-1 ring-inset ring-accent' : ''}`}
         style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
         onClick={onClick}
         onMouseDown={(e) => {
@@ -219,7 +223,7 @@ export default function TaskTab({
             &times;
           </span>
         </span>
-        {showSweep && !isActive && <span className="activity-sweep absolute top-0 bottom-0 left-0 w-1" />}
+        {showPulse && !isActive && <span className="activity-pulse absolute top-0 bottom-0 left-0 w-1" />}
         {showSolid && <span className="absolute top-0 bottom-0 left-0 w-1 bg-success" />}
         {isActive && <span className="absolute top-0 bottom-0 left-0 w-1 bg-accent" />}
       </button>

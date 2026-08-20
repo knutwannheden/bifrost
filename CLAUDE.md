@@ -11,10 +11,12 @@ Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Cod
 - `npm start` — run in development mode (Electron Forge + Vite HMR)
 - `npm run lint` — Biome check (linting + formatting)
 - `npm run check:mirror` — verify a joining terminal replays a session's screen exactly once
+- `npm test` — vitest suite for `tools/postmortem`
 - `npm run package` — build packaged app
 - `npm run make` — build distributable installers
 
-No test framework is configured; `scripts/` holds standalone checks for invariants worth pinning.
+`tools/postmortem` has a vitest suite (`npm test`). The Electron app itself has no test framework;
+`scripts/` holds standalone checks for invariants worth pinning.
 
 ## Architecture
 
@@ -84,7 +86,7 @@ UI theme (`system`/`dark`/`light`) is controlled by `BifrostConfig.theme`. The `
 
 ## Linting
 
-Biome is used for linting and formatting (`biome.json`). A11y rules are disabled (Electron app, not web). Run `npm run lint` to check; `npx biome check --write src/` to auto-fix.
+Biome is used for linting and formatting (`biome.json`), covering `src/`, `tools/` and `scripts/`. A11y rules are disabled (Electron app, not web). Run `npm run lint` to check; `npx biome check --write src/ tools/ scripts/` to auto-fix. Invoke Biome with explicit paths — a bare `biome check` walks into `.worktrees/` and trips over the nested config there.
 
 ## Native Module Note
 

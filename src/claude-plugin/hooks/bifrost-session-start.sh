@@ -14,9 +14,6 @@ if task_id:
 review_id = os.environ.get('BIFROST_REVIEW_ID', '')
 if review_id:
     d['bifrost_review_id'] = review_id
-supervisor_item_id = os.environ.get('BIFROST_SUPERVISOR_ITEM_ID', '')
-if supervisor_item_id:
-    d['bifrost_supervisor_item_id'] = supervisor_item_id
 print(json.dumps(d))
 " 2>/dev/null)"
 [ -z "$ENRICHED" ] && exit 0

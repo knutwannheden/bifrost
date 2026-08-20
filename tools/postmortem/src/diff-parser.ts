@@ -1,11 +1,11 @@
-import type { DiffFile, DiffSummary } from "./types.js";
+import type { DiffFile, DiffSummary } from './types.js';
 
 /**
  * Parse a unified diff string into a structured DiffSummary.
  */
 export function parseDiff(diffText: string): DiffSummary {
   const files: DiffFile[] = [];
-  const lines = diffText.split("\n");
+  const lines = diffText.split('\n');
 
   let currentFile: DiffFile | null = null;
 
@@ -13,11 +13,11 @@ export function parseDiff(diffText: string): DiffSummary {
     const line = lines[i];
 
     // New file header
-    if (line.startsWith("diff --git ")) {
+    if (line.startsWith('diff --git ')) {
       if (currentFile) files.push(currentFile);
       // Extract b/ path — the destination path
       const match = line.match(/diff --git a\/.+ b\/(.+)/);
-      const path = match ? match[1] : "unknown";
+      const path = match ? match[1] : 'unknown';
       currentFile = {
         path,
         linesAdded: 0,
@@ -32,38 +32,38 @@ export function parseDiff(diffText: string): DiffSummary {
     if (!currentFile) continue;
 
     // Detect new/deleted files
-    if (line.startsWith("new file mode")) {
+    if (line.startsWith('new file mode')) {
       currentFile.isNew = true;
       continue;
     }
-    if (line.startsWith("deleted file mode")) {
+    if (line.startsWith('deleted file mode')) {
       currentFile.isDeleted = true;
       continue;
     }
 
     // Handle renames — update path to the destination
-    if (line.startsWith("rename to ")) {
-      currentFile.path = line.slice("rename to ".length);
+    if (line.startsWith('rename to ')) {
+      currentFile.path = line.slice('rename to '.length);
       continue;
     }
 
     // Skip diff metadata lines
     if (
-      line.startsWith("index ") ||
-      line.startsWith("--- ") ||
-      line.startsWith("+++ ") ||
-      line.startsWith("@@ ") ||
-      line.startsWith("similarity index") ||
-      line.startsWith("rename from ")
+      line.startsWith('index ') ||
+      line.startsWith('--- ') ||
+      line.startsWith('+++ ') ||
+      line.startsWith('@@ ') ||
+      line.startsWith('similarity index') ||
+      line.startsWith('rename from ')
     ) {
       continue;
     }
 
     // Count additions and removals
-    if (line.startsWith("+")) {
+    if (line.startsWith('+')) {
       currentFile.linesAdded++;
       currentFile.addedLines.push(line.slice(1));
-    } else if (line.startsWith("-")) {
+    } else if (line.startsWith('-')) {
       currentFile.linesRemoved++;
     }
   }

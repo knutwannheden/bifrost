@@ -202,22 +202,6 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.STATS_UPDATE, handler);
   },
 
-  // Supervisor
-  getSupervisorState: () => ipcRenderer.invoke(IPC.SUPERVISOR_GET_STATE),
-  startSupervisor: () => ipcRenderer.invoke(IPC.SUPERVISOR_START),
-  stopSupervisor: () => ipcRenderer.invoke(IPC.SUPERVISOR_STOP),
-  setSupervisorConcurrency: (n) => ipcRenderer.invoke(IPC.SUPERVISOR_SET_CONCURRENCY, n),
-  pauseSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_PAUSE_ITEM, itemId),
-  resumeSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_RESUME_ITEM, itemId),
-  openSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_OPEN_ITEM, itemId),
-  removeSupervisorItem: (itemId) => ipcRenderer.invoke(IPC.SUPERVISOR_REMOVE_ITEM, itemId),
-  onSupervisorUpdate: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, supervisorState: import('../shared/types').SupervisorState) =>
-      callback(supervisorState);
-    ipcRenderer.on(IPC_STREAM.SUPERVISOR_UPDATE, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.SUPERVISOR_UPDATE, handler);
-  },
-
   // Slack
   startSlackOAuth: () => ipcRenderer.invoke(IPC.SLACK_START_OAUTH),
   disconnectSlack: () => ipcRenderer.invoke(IPC.SLACK_DISCONNECT),

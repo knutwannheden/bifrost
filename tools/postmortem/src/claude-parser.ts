@@ -1,9 +1,9 @@
-import type { ToolEvent, ToolCategory, TokenTimeline, TokenTurn } from "./types.js";
-import path from "node:path";
+import path from 'node:path';
+import type { TokenTimeline, TokenTurn, ToolCategory, ToolEvent } from './types.js';
 
 /** Raw parsed JSONL entry */
 export interface TranscriptEntry {
-  type: "summary" | "system" | "user" | "assistant";
+  type: 'summary' | 'system' | 'user' | 'assistant';
   message?: {
     content?: unknown;
     usage?: {
@@ -20,21 +20,22 @@ export interface TranscriptEntry {
 }
 
 interface ToolUseBlock {
-  type: "tool_use";
+  type: 'tool_use';
   id: string;
   name: string;
   input: Record<string, unknown>;
 }
 
 interface ToolResultBlock {
-  type: "tool_result";
+  type: 'tool_result';
   tool_use_id: string;
   content: string | Array<{ type: string; text: string }>;
   is_error?: boolean;
 }
 
-const NAVIGATION_TOOLS = new Set(["Read", "ListFiles", "SearchFiles", "Grep", "LS", "Glob"]);
-const TEST_PATTERNS = /\b(jest|vitest|pytest|cargo\s+test|go\s+test|npm\s+test|npx\s+vitest|npx\s+jest|mvn\s+test|gradle\s+test|gw\s+test)\b/;
+const NAVIGATION_TOOLS = new Set(['Read', 'ListFiles', 'SearchFiles', 'Grep', 'LS', 'Glob']);
+const TEST_PATTERNS =
+  /\b(jest|vitest|pytest|cargo\s+test|go\s+test|npm\s+test|npx\s+vitest|npx\s+jest|mvn\s+test|gradle\s+test|gw\s+test)\b/;
 const WRITE_PATTERNS = /(?:sed\s+-i|tee\s|>\s|>>)/;
 
 /**
@@ -43,7 +44,7 @@ const WRITE_PATTERNS = /(?:sed\s+-i|tee\s|>\s|>>)/;
  */
 export function parseClaudeTranscript(text: string): TranscriptEntry[] {
   const entries: TranscriptEntry[] = [];
-  for (const line of text.split("\n")) {
+  for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     try {
       const entry = JSON.parse(line) as TranscriptEntry;
@@ -64,29 +65,26 @@ export function extractToolEvents(entries: TranscriptEntry[]): ToolEvent[] {
   const events: ToolEvent[] = [];
 
   // Collect all tool_use blocks with their timestamps
-  const pendingToolUses = new Map<
-    string,
-    { toolUse: ToolUseBlock; timestamp: string; cwd?: string }
-  >();
+  const pendingToolUses = new Map<string, { toolUse: ToolUseBlock; timestamp: string; cwd?: string }>();
 
   for (const entry of entries) {
-    if (entry.type === "assistant" && Array.isArray(entry.message?.content)) {
+    if (entry.type === 'assistant' && Array.isArray(entry.message?.content)) {
       for (const block of entry.message.content as unknown[]) {
         const b = block as Record<string, unknown>;
-        if (b.type === "tool_use") {
+        if (b.type === 'tool_use') {
           pendingToolUses.set(b.id as string, {
             toolUse: b as unknown as ToolUseBlock,
-            timestamp: entry.timestamp || "",
+            timestamp: entry.timestamp || '',
             cwd: entry.cwd,
           });
         }
       }
     }
 
-    if (entry.type === "user" && Array.isArray(entry.message?.content)) {
+    if (entry.type === 'user' && Array.isArray(entry.message?.content)) {
       for (const block of entry.message.content as unknown[]) {
         const b = block as Record<string, unknown>;
-        if (b.type === "tool_result") {
+        if (b.type === 'tool_result') {
           const result = b as unknown as ToolResultBlock;
           const pending = pendingToolUses.get(result.tool_use_id);
           if (!pending) continue;
@@ -124,18 +122,16 @@ export function extractTokenTimeline(entries: TranscriptEntry[]): TokenTimeline 
   const turns: TokenTurn[] = [];
 
   for (const entry of entries) {
-    if (entry.type !== "assistant") continue;
+    if (entry.type !== 'assistant') continue;
     const usage = entry.message?.usage;
     if (!usage) continue;
 
     // inputTokens = full context fill for this turn (non-cached + cached)
     const inputTokens =
-      usage.input_tokens +
-      (usage.cache_creation_input_tokens || 0) +
-      (usage.cache_read_input_tokens || 0);
+      usage.input_tokens + (usage.cache_creation_input_tokens || 0) + (usage.cache_read_input_tokens || 0);
 
     turns.push({
-      timestamp: entry.timestamp || "",
+      timestamp: entry.timestamp || '',
       inputTokens,
       outputTokens: usage.output_tokens,
       cacheCreationTokens: usage.cache_creation_input_tokens || 0,
@@ -166,42 +162,39 @@ export function normalizePath(filePath: string, cwd?: string): string {
   }
 
   // Strip common absolute prefixes: /Users/<user>/<project>/ or /home/<user>/<project>/
-  let normalized = filePath.replace(/^\/(?:Users|home)\/[^/]+\/[^/]+\//, "");
+  let normalized = filePath.replace(/^\/(?:Users|home)\/[^/]+\/[^/]+\//, '');
 
   // Strip leading ./
-  normalized = normalized.replace(/^\.\//, "");
+  normalized = normalized.replace(/^\.\//, '');
 
   return normalized;
 }
 
 function extractResultText(content: string | Array<{ type: string; text: string }>): string {
-  if (typeof content === "string") return content;
+  if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    return content.map((b) => b.text || "").join("");
+    return content.map((b) => b.text || '').join('');
   }
-  return "";
+  return '';
 }
 
 function categorizeTool(name: string, input: Record<string, unknown>): ToolCategory {
-  if (NAVIGATION_TOOLS.has(name)) return "navigation";
+  if (NAVIGATION_TOOLS.has(name)) return 'navigation';
 
-  if (name === "Write" || name === "Edit" || name === "MultiEdit") return "mutation";
+  if (name === 'Write' || name === 'Edit' || name === 'MultiEdit') return 'mutation';
 
-  if (name === "Bash") {
-    const cmd = (input.command as string) || "";
-    if (TEST_PATTERNS.test(cmd)) return "test";
-    if (WRITE_PATTERNS.test(cmd)) return "mutation";
-    return "other";
+  if (name === 'Bash') {
+    const cmd = (input.command as string) || '';
+    if (TEST_PATTERNS.test(cmd)) return 'test';
+    if (WRITE_PATTERNS.test(cmd)) return 'mutation';
+    return 'other';
   }
 
-  return "other";
+  return 'other';
 }
 
 function extractFilePath(toolUse: ToolUseBlock, cwd?: string): string | undefined {
-  const rawPath =
-    (toolUse.input.file_path as string) ||
-    (toolUse.input.path as string) ||
-    undefined;
+  const rawPath = (toolUse.input.file_path as string) || (toolUse.input.path as string) || undefined;
 
   if (!rawPath) return undefined;
   return normalizePath(rawPath, cwd);
@@ -209,14 +202,14 @@ function extractFilePath(toolUse: ToolUseBlock, cwd?: string): string | undefine
 
 function extractWrittenContent(toolUse: ToolUseBlock): string | undefined {
   switch (toolUse.name) {
-    case "Write":
+    case 'Write':
       return toolUse.input.content as string | undefined;
-    case "Edit":
+    case 'Edit':
       return toolUse.input.new_string as string | undefined;
-    case "MultiEdit": {
+    case 'MultiEdit': {
       const edits = toolUse.input.edits as Array<{ new_string: string }> | undefined;
       if (!edits) return undefined;
-      return edits.map((e) => e.new_string).join("\n");
+      return edits.map((e) => e.new_string).join('\n');
     }
     default:
       return undefined;

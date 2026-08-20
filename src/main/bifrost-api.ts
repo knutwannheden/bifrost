@@ -35,7 +35,6 @@ import {
   startReviewActivityWatch,
 } from './review-service';
 import { killSession } from './session-manager';
-import { completeSupervisorItem } from './supervisor-service';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 import { removeWorktree } from './worktree-manager';
 
@@ -274,7 +273,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       const isAsync = body.async === true;
       console.log(
-        `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? prompt.length + ' chars' : 'none'}`,
+        `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? `${prompt.length} chars` : 'none'}`,
       );
       if (isAsync) {
         // Return immediately with a pending response, create in background
@@ -509,14 +508,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId, hookMessage);
         }
         completeTriage(hookTriageId);
-        jsonResponse(res, { ok: true });
-        return;
-      }
-
-      // Supervisor stop — the item's Claude session finished its turn
-      const hookSupervisorItemId = body.bifrost_supervisor_item_id as string;
-      if (hookEventName === 'Stop' && hookContext === 'supervisor' && hookSupervisorItemId) {
-        completeSupervisorItem(hookSupervisorItemId);
         jsonResponse(res, { ok: true });
         return;
       }
@@ -779,11 +770,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const triageId = body.bifrost_triage_id as string;
       if (context === 'triage' && triageId) {
         setTriageSessionId(triageId, sessionId);
-        jsonResponse(res, { ok: true });
-        return;
-      }
-      // Supervisor context — no per-item session tracking yet
-      if (context === 'supervisor') {
         jsonResponse(res, { ok: true });
         return;
       }

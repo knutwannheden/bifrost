@@ -104,6 +104,9 @@ export interface BifrostConfig {
   fontFamily: string;
   fontWeight: number;
   zoomLevel?: number;
+  /** Where the window sits when it is neither maximized nor full screen. */
+  windowBounds?: { x: number; y: number; width: number; height: number };
+  windowMaximized?: boolean;
   permissionMode: 'default' | 'auto-mode' | 'sandbox' | 'skip-permissions';
   hideTerminalOnSwitch: boolean;
   notifications: boolean;
@@ -349,32 +352,6 @@ export interface StatsData {
   bashCommands: BashCommandEntry[];
   contextRot: ContextRotEntry[];
   tailEscalation: EscalationEntry[];
-}
-
-// Supervisor types
-
-export type SupervisorItemStatus = 'queued' | 'running' | 'paused' | 'done' | 'error' | 'opened';
-
-export interface SupervisorItem {
-  id: string;
-  noteId: string;
-  repoId: string;
-  noteText: string;
-  status: SupervisorItemStatus;
-  name: string;
-  branch: string;
-  worktreePath?: string;
-  errorMessage?: string;
-  createdAt: number;
-  startedAt?: number;
-  completedAt?: number;
-  openedAsTaskId?: string;
-}
-
-export interface SupervisorState {
-  running: boolean;
-  concurrency: number;
-  items: SupervisorItem[];
 }
 
 export const DEFAULT_CONFIG: BifrostConfig = {

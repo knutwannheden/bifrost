@@ -5,6 +5,7 @@ import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
 import { defaultPaneState, getActiveDiffState, isAnyOverlayOpen } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
+import { nextActiveTaskId } from '../utils/next-active-task';
 import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
 import { terminalRegistry } from './useTerminal';
 
@@ -165,11 +166,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
             }
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
-              const remaining = s.tasks.filter((t) => t.id !== taskId && t.status === 'running');
-              dispatch({
-                type: 'SET_ACTIVE_TASK',
-                taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-              });
+              dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(s, taskId) });
             });
           }
           break;
@@ -356,10 +353,6 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
 
         case 'view.stats':
           dispatch({ type: 'TOGGLE_STATS' });
-          break;
-
-        case 'view.supervisor':
-          dispatch({ type: 'TOGGLE_SUPERVISOR' });
           break;
 
         case 'view.activity': {

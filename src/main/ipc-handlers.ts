@@ -65,17 +65,6 @@ import {
 import { getSessionMetricsData } from './session-metrics';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
-import {
-  getSupervisorState,
-  initSupervisor,
-  openItem,
-  pauseItem,
-  removeItem,
-  resumeItem,
-  setSupervisorConcurrency,
-  startSupervisor,
-  stopSupervisor,
-} from './supervisor-service';
 import { loadTasks, saveTasks } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
 import { generateTaskTitle } from './title-generator';
@@ -935,13 +924,8 @@ end tell`;
   });
 
   // Terminal title
-  ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, taskId: string, title: string) => {
-    try {
-      updateTask(taskId, { terminalTitle: title });
-      mainWindow.setTitle(`BIFROST — ${title}`);
-    } catch {
-      // Database may be closed during shutdown
-    }
+  ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, _taskId: string, title: string) => {
+    mainWindow.setTitle(`BIFROST — ${title}`);
   });
 
   // Context capture
@@ -1288,53 +1272,8 @@ end tell`;
     }, since),
   );
 
-  // Supervisor
-  const supervisorTaskCreator = async (item: import('../shared/types').SupervisorItem): Promise<Task> => {
-    const config = loadConfig();
-    const repo = config.repos.find((r: Repo) => r.id === item.repoId);
-    if (!repo) throw new Error(`Repo not found: ${item.repoId}`);
-    if (!item.worktreePath) throw new Error('Supervisor item has no worktree');
-
-    const taskId = randomUUID();
-
-    createSession(taskId, item.worktreePath, mainWindow, {
-      taskId,
-      name: item.name,
-      apiPort: getApiPort() ?? undefined,
-      permissionMode: config.permissionMode,
-      agentTeams: config.agentTeams,
-    });
-
-    const task: Task = {
-      id: taskId,
-      name: item.name,
-      repoId: item.repoId,
-      baseBranch: repo.defaultBranch,
-      branch: item.branch,
-      worktreePath: item.worktreePath,
-      status: 'running',
-      hasUnread: false,
-      createdAt: Date.now(),
-    };
-
-    tasks.push(task);
-    saveTasks(tasks);
-    startWatching(taskId, item.worktreePath, mainWindow, claudeCallbacks);
-    return task;
-  };
-
-  initSupervisor(mainWindow, supervisorTaskCreator);
   initCurator(mainWindow);
   backfillTriageHistory();
-
-  ipcMain.handle(IPC.SUPERVISOR_GET_STATE, () => getSupervisorState());
-  ipcMain.handle(IPC.SUPERVISOR_START, () => startSupervisor());
-  ipcMain.handle(IPC.SUPERVISOR_STOP, () => stopSupervisor());
-  ipcMain.handle(IPC.SUPERVISOR_SET_CONCURRENCY, (_event, n: number) => setSupervisorConcurrency(n));
-  ipcMain.handle(IPC.SUPERVISOR_PAUSE_ITEM, (_event, itemId: string) => pauseItem(itemId));
-  ipcMain.handle(IPC.SUPERVISOR_RESUME_ITEM, (_event, itemId: string) => resumeItem(itemId));
-  ipcMain.handle(IPC.SUPERVISOR_OPEN_ITEM, (_event, itemId: string) => openItem(itemId));
-  ipcMain.handle(IPC.SUPERVISOR_REMOVE_ITEM, (_event, itemId: string) => removeItem(itemId));
 
   // Curator
   ipcMain.handle(IPC.CURATOR_GET_STATE, () => getCuratorState());

@@ -45,6 +45,12 @@ export const interceptedKeysRef: { current: InterceptedKeys } = { current: getIn
  * Pattern adapted from Tabby (xtermFrontend.ts:427-437).
  */
 function safeFit(terminal: Terminal, fitAddon: FitAddon): void {
+  // A pane hidden with display:none measures zero, which FitAddon floors to a
+  // 2x1 grid. Reflowing to two columns pushes the buffer past its scrollback
+  // limit and the overflow is gone for good, so a hidden pane is left alone.
+  const host = terminal.element?.parentElement;
+  if (!host || host.clientWidth === 0 || host.clientHeight === 0) return;
+
   const before = terminal.buffer.active;
   const wasAtBottom = before.viewportY >= before.baseY;
   try {
@@ -384,19 +390,19 @@ export function useTerminal(
       }
     });
 
-    // ResizeObserver for auto-fit
-    // Skip when container has zero dimensions (pane hidden via display:none)
-    // to avoid truncating xterm scrollback buffer.
-    // Debounce PTY resizes to avoid flooding the process with SIGWINCHes
-    // during rapid window/pane drags — each one causes a full TUI redraw.
+    // Auto-fit once a drag settles: one SIGWINCH per drag rather than one per
+    // frame, each of which costs a full TUI redraw. xterm is reshaped in the
+    // same callback, so the grid Claude writes for is the grid it lands in —
+    // fitting eagerly would leave them disagreeing for the length of the drag,
+    // and its cursor-relative redraws would land on the wrong rows.
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width === 0 || rect.height === 0) return;
-      safeFit(terminal, fitAddon);
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
+        safeFit(terminal, fitAddon);
         sendResizeIfChanged(terminal.cols, terminal.rows);
       }, 100);
     });

@@ -1,14 +1,8 @@
-import { describe, it, expect } from "vitest";
-import {
-  normalize,
-  kmeans,
-  classifyPoint,
-  buildClusterModel,
-  type ClusterModel,
-} from "../clustering.js";
+import { describe, expect, it } from 'vitest';
+import { buildClusterModel, type ClusterModel, classifyPoint, kmeans, normalize } from '../clustering.js';
 
-describe("normalize", () => {
-  it("z-score normalizes a matrix", () => {
+describe('normalize', () => {
+  it('z-score normalizes a matrix', () => {
     const data = [
       [10, 100],
       [20, 200],
@@ -26,7 +20,7 @@ describe("normalize", () => {
     expect(mean0).toBeCloseTo(0, 5);
   });
 
-  it("handles zero-stddev columns (constant values)", () => {
+  it('handles zero-stddev columns (constant values)', () => {
     const data = [
       [10, 5],
       [20, 5],
@@ -40,12 +34,18 @@ describe("normalize", () => {
   });
 });
 
-describe("kmeans", () => {
-  it("finds 2 clusters in clearly separated data", () => {
+describe('kmeans', () => {
+  it('finds 2 clusters in clearly separated data', () => {
     // Two well-separated groups
     const data = [
-      [0, 0], [1, 0], [0, 1], [1, 1],       // cluster near (0.5, 0.5)
-      [10, 10], [11, 10], [10, 11], [11, 11], // cluster near (10.5, 10.5)
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, 1], // cluster near (0.5, 0.5)
+      [10, 10],
+      [11, 10],
+      [10, 11],
+      [11, 11], // cluster near (10.5, 10.5)
     ];
     const result = kmeans(data, 2, 42);
 
@@ -65,7 +65,7 @@ describe("kmeans", () => {
     expect(result.assignments[7]).toBe(cluster1);
   });
 
-  it("is deterministic with the same seed", () => {
+  it('is deterministic with the same seed', () => {
     const data = Array.from({ length: 20 }, (_, i) => [i % 5, Math.floor(i / 5)]);
     const r1 = kmeans(data, 3, 42);
     const r2 = kmeans(data, 3, 42);
@@ -73,7 +73,7 @@ describe("kmeans", () => {
     expect(r1.centroids).toEqual(r2.centroids);
   });
 
-  it("produces different results with different seeds", () => {
+  it('produces different results with different seeds', () => {
     const data = Array.from({ length: 20 }, (_, i) => [i % 5, Math.floor(i / 5)]);
     const r1 = kmeans(data, 3, 42);
     const r2 = kmeans(data, 3, 99);
@@ -84,8 +84,8 @@ describe("kmeans", () => {
   });
 });
 
-describe("classifyPoint", () => {
-  it("assigns point to nearest centroid", () => {
+describe('classifyPoint', () => {
+  it('assigns point to nearest centroid', () => {
     const centroids = [
       [0, 0],
       [10, 10],
@@ -96,12 +96,18 @@ describe("classifyPoint", () => {
   });
 });
 
-describe("buildClusterModel", () => {
-  it("builds a serializable model from raw metric data", () => {
-    const metricNames = ["metricA", "metricB"];
+describe('buildClusterModel', () => {
+  it('builds a serializable model from raw metric data', () => {
+    const metricNames = ['metricA', 'metricB'];
     const rawData = [
-      [0, 0], [1, 0], [0, 1], [1, 1],
-      [10, 10], [11, 10], [10, 11], [11, 11],
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, 1],
+      [10, 10],
+      [11, 10],
+      [10, 11],
+      [11, 11],
     ];
     const model = buildClusterModel(rawData, metricNames, 2, 42);
 
@@ -122,11 +128,17 @@ describe("buildClusterModel", () => {
     expect(totalSize).toBe(8);
   });
 
-  it("model can classify new points", () => {
-    const metricNames = ["a", "b"];
+  it('model can classify new points', () => {
+    const metricNames = ['a', 'b'];
     const rawData = [
-      [0, 0], [1, 0], [0, 1], [1, 1],
-      [10, 10], [11, 10], [10, 11], [11, 11],
+      [0, 0],
+      [1, 0],
+      [0, 1],
+      [1, 1],
+      [10, 10],
+      [11, 10],
+      [10, 11],
+      [11, 11],
     ];
     const model = buildClusterModel(rawData, metricNames, 2, 42);
 
@@ -145,5 +157,8 @@ function classifyWithModel(model: ClusterModel, rawPoint: number[]): number {
     const { mean, stddev } = model.normalization[i];
     return stddev === 0 ? 0 : (v - mean) / stddev;
   });
-  return classifyPoint(normalized, model.clusters.map((c) => c.centroid));
+  return classifyPoint(
+    normalized,
+    model.clusters.map((c) => c.centroid),
+  );
 }

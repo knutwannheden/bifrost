@@ -1,8 +1,8 @@
-import type { TranscriptEntry } from "./claude-parser.js";
-import { extractTokenTimeline } from "./claude-parser.js";
-import type { ToolEvent, TokenTimeline, DiffSummary, SubTask } from "./types.js";
-import { computeMetrics } from "./metrics.js";
-import { bucketSession, flagMetrics } from "./bucketing.js";
+import { bucketSession, flagMetrics } from './bucketing.js';
+import type { TranscriptEntry } from './claude-parser.js';
+import { extractTokenTimeline } from './claude-parser.js';
+import { computeMetrics } from './metrics.js';
+import type { DiffSummary, SubTask, ToolEvent } from './types.js';
 
 interface PromptBoundary {
   index: number;
@@ -72,23 +72,23 @@ function findPromptBoundaries(entries: TranscriptEntry[]): PromptBoundary[] {
 
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i] as TranscriptEntry & { userType?: string };
-    if (entry.type !== "user" || entry.userType !== "external") continue;
+    if (entry.type !== 'user' || entry.userType !== 'external') continue;
 
     const text = extractPromptText(entry);
     if (!text) continue;
 
     // Skip non-human messages
-    if (text.startsWith("[Request interrupted")) continue;
-    if (text.startsWith("<local-command-caveat>")) continue;
-    if (text.startsWith("<bash-input>")) continue;
-    if (text.startsWith("<bash-stdout>")) continue;
-    if (text.startsWith("<bash-stderr>")) continue;
-    if (text.startsWith("<command-name>")) continue;
-    if (text.startsWith("<local-command-stdout>")) continue;
+    if (text.startsWith('[Request interrupted')) continue;
+    if (text.startsWith('<local-command-caveat>')) continue;
+    if (text.startsWith('<bash-input>')) continue;
+    if (text.startsWith('<bash-stdout>')) continue;
+    if (text.startsWith('<bash-stderr>')) continue;
+    if (text.startsWith('<command-name>')) continue;
+    if (text.startsWith('<local-command-stdout>')) continue;
 
     boundaries.push({
       index: i,
-      timestamp: entry.timestamp || "",
+      timestamp: entry.timestamp || '',
       promptText: text,
     });
   }
@@ -100,19 +100,17 @@ function extractPromptText(entry: TranscriptEntry): string | null {
   const content = entry.message?.content;
 
   // Plain string content
-  if (typeof content === "string") return content;
+  if (typeof content === 'string') return content;
 
   // Array of blocks — check for text blocks (not tool_result)
   if (Array.isArray(content)) {
     const blocks = content as Array<Record<string, unknown>>;
-    const hasToolResult = blocks.some((b) => b.type === "tool_result");
+    const hasToolResult = blocks.some((b) => b.type === 'tool_result');
     if (hasToolResult) return null;
 
-    const textParts = blocks
-      .filter((b) => b.type === "text")
-      .map((b) => b.text as string);
+    const textParts = blocks.filter((b) => b.type === 'text').map((b) => b.text as string);
 
-    return textParts.length > 0 ? textParts.join("\n") : null;
+    return textParts.length > 0 ? textParts.join('\n') : null;
   }
 
   return null;

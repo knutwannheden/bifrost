@@ -13,7 +13,6 @@ import RightIconBar from './components/RightIconBar';
 import SettingsOverlay from './components/SettingsOverlay';
 import StatsOverlay from './components/StatsOverlay';
 import StatusBar from './components/StatusBar';
-import SupervisorOverlay from './components/SupervisorOverlay';
 import TaskCreateDialog from './components/TaskCreateDialog';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import TaskSidebar from './components/TaskSidebar';
@@ -27,6 +26,7 @@ import { lockTerminalInput, unlockTerminalInput } from './hooks/useTerminal';
 import { useTheme } from './hooks/useTheme';
 import { performArchive, requestArchive } from './utils/archive';
 import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
+import { nextActiveTaskId } from './utils/next-active-task';
 import { modSymbol } from './utils/platform';
 import { scrapePartialPrompt } from './utils/scrape-prompt';
 import { slackToPlainText } from './utils/slack-markup';
@@ -440,11 +440,7 @@ export default function App() {
             }
             window.bifrost.stopTask(taskId).then((updated) => {
               dispatch({ type: 'UPDATE_TASK', task: updated });
-              const remaining = state.tasks.filter((t) => t.id !== taskId && t.status === 'running');
-              dispatch({
-                type: 'SET_ACTIVE_TASK',
-                taskId: remaining.length > 0 ? remaining[remaining.length - 1].id : null,
-              });
+              dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, taskId) });
             });
           }
           break;
@@ -557,7 +553,6 @@ export default function App() {
               {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
               {state.showNotes && <NotesOverlay />}
               {state.showStats && <StatsOverlay />}
-              {state.showSupervisor && <SupervisorOverlay />}
               {state.showTriage && <TriageOverlay />}
             </div>
 
