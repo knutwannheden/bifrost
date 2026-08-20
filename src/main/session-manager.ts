@@ -28,6 +28,18 @@ const MAX_STARTUP_BUFFER = 256 * 1024;
 // Every task terminal shares one layout, so the last size any of them reported
 // is the best guess for a session nobody has opened yet.
 let lastKnownGeometry = { cols: 120, rows: 30 };
+// Sessions spawned at a size of their own — the dev shell's short pane, say —
+// do not speak for the sessions that take the default.
+const fixedGeometry = new Set<string>();
+
+// The size each session's terminal last asked for. An attach takes a moment to
+// snapshot, and a resize landing in that window is the newer intent.
+const desiredGeometry = new Map<string, { cols: number; rows: number }>();
+
+function noteGeometry(sessionId: string, cols: number, rows: number): void {
+  desiredGeometry.set(sessionId, { cols, rows });
+  if (!fixedGeometry.has(sessionId)) lastKnownGeometry = { cols, rows };
+}
 
 /**
  * Claude positions each word with its own `\e[<n>G`, so neither spaces nor
@@ -283,6 +295,7 @@ export function spawnSession(
   }
 
   sessions.set(sessionId, shell);
+  if (options?.cols !== undefined || options?.rows !== undefined) fixedGeometry.add(sessionId);
   startupBuffers.set(sessionId, '');
   createMirror(sessionId, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
   createReadyGate(sessionId);
@@ -442,10 +455,12 @@ export function waitForSessionReady(sessionId: string, timeoutMs = 20_000): Prom
 function forgetSession(sessionId: string): void {
   disposeMirror(sessionId);
   startupBuffers.delete(sessionId);
+  fixedGeometry.delete(sessionId);
+  desiredGeometry.delete(sessionId);
 }
 
 export function resizeSession(sessionId: string, cols: number, rows: number): void {
-  lastKnownGeometry = { cols, rows };
+  noteGeometry(sessionId, cols, rows);
   resizeMirror(sessionId, cols, rows);
   sessions.get(sessionId)?.resize(cols, rows);
 }
@@ -460,14 +475,15 @@ export async function attachSession(
   cols: number,
   rows: number,
 ): Promise<boolean> {
+  noteGeometry(sessionId, cols, rows);
   const snapshot = await snapshotMirror(sessionId, cols, rows);
   if (!snapshot) return false;
 
   send(mainWindow, sessionId, snapshot.replay, true);
   for (const data of snapshot.held) send(mainWindow, sessionId, data, false);
 
-  lastKnownGeometry = { cols, rows };
-  sessions.get(sessionId)?.resize(cols, rows);
+  const desired = desiredGeometry.get(sessionId) ?? { cols, rows };
+  sessions.get(sessionId)?.resize(desired.cols, desired.rows);
   return true;
 }
 

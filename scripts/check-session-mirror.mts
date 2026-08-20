@@ -4,7 +4,14 @@
  * `npm run check:mirror`.
  */
 import headless from '@xterm/headless';
-import { createMirror, disposeMirror, mirrorOutput, snapshotMirror } from '../src/main/session-mirror.ts';
+import {
+  createMirror,
+  disposeMirror,
+  mirrorCols,
+  mirrorOutput,
+  resizeMirror,
+  snapshotMirror,
+} from '../src/main/session-mirror.ts';
 
 const { Terminal } = headless;
 const ESC = String.fromCharCode(27);
@@ -58,13 +65,37 @@ const cases: [string, string[], string[], string[]][] = [
 
 const expected = await display(ATTACH_COLS, CHUNKS);
 let failed = 0;
+
+function check(name: string, ok: boolean, detail = '') {
+  if (ok) console.log(`PASS  ${name}`);
+  else {
+    failed++;
+    console.log(`FAIL  ${name}${detail ? `\n${detail}` : ''}`);
+  }
+}
+
+{
+  createMirror('disposed', SPAWN_COLS, ROWS);
+  mirrorOutput('disposed', CHUNKS[0]);
+  const pending = snapshotMirror('disposed', ATTACH_COLS, ROWS);
+  disposeMirror('disposed');
+  const settled = await Promise.race([pending, new Promise((r) => setTimeout(() => r('HUNG'), 500))]);
+  check('snapshot settles when the session is disposed', settled === null, `  got ${JSON.stringify(settled)}`);
+}
+
+{
+  createMirror('resized', SPAWN_COLS, ROWS);
+  mirrorOutput('resized', CHUNKS[1]);
+  const pending = snapshotMirror('resized', ATTACH_COLS, ROWS);
+  resizeMirror('resized', 72, ROWS);
+  const settled = await Promise.race([pending, new Promise((r) => setTimeout(() => r('HUNG'), 500))]);
+  const applied = await new Promise((r) => setTimeout(() => r(mirrorCols('resized')), 50));
+  disposeMirror('resized');
+  check('a resize mid-snapshot settles and still lands', settled !== 'HUNG' && applied === 72, `  settled=${JSON.stringify(settled) === '"HUNG"' ? 'HUNG' : 'ok'} cols=${applied}`);
+}
+
 for (const [name, before, during, after] of cases) {
   const actual = await display(ATTACH_COLS, await joinedChunks(name, before, during, after));
-  if (actual === expected) {
-    console.log(`PASS  ${name}`);
-  } else {
-    failed++;
-    console.log(`FAIL  ${name}\n--- got ---\n${actual}\n--- want ---\n${expected}`);
-  }
+  check(name, actual === expected, `--- got ---\n${actual}\n--- want ---\n${expected}`);
 }
 process.exit(failed === 0 ? 0 : 1);
