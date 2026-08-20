@@ -1,5 +1,5 @@
 export interface PromptDef {
-  key: 'triage' | 'reviewInstructions';
+  key: 'triage';
   name: string;
   description: string;
   defaultValue: string;
@@ -34,29 +34,11 @@ Use duckdb -csv to query these files efficiently.
 - You may create multiple tasks if the work spans multiple repos
 - If you need clarification from the user, ask — they can type responses`;
 
-export const DEFAULT_REVIEW_INSTRUCTIONS = `Produce a Markdown document with:
-1. A brief summary paragraph of the changes
-2. A "## Review Items" section with a checked checkbox list (- [x]) of actionable findings:
-   bugs, logic errors, security issues, missing edge cases, code quality concerns.
-   Each item should be specific and actionable, prefixed with a severity tag:
-   \`[critical]\` — bugs, security vulnerabilities, data loss risks
-   \`[important]\` — logic errors, missing edge cases, correctness issues
-   \`[suggestion]\` — code quality, style, maintainability improvements
-   Order items by severity (critical first).
-If the code looks good, say so and use fewer items.
-Write ONLY the Markdown to the specified file, no preamble.`;
-
 export const PROMPT_DEFS: PromptDef[] = [
   {
     key: 'triage',
     name: 'Triage',
     description: 'System instructions for the triage assistant that analyzes requests and creates tasks',
     defaultValue: DEFAULT_TRIAGE_PROMPT,
-  },
-  {
-    key: 'reviewInstructions',
-    name: 'Review',
-    description: 'Output format and severity guidelines for code reviews',
-    defaultValue: DEFAULT_REVIEW_INSTRUCTIONS,
   },
 ];

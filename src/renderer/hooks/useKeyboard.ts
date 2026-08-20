@@ -183,11 +183,11 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           const taskMeta = { taskId: activeTask.id, taskName: activeTask.name };
 
           if (showDiff) {
-            // Use DOM text selection if available (works in any diff/review mode)
+            // Use DOM text selection if available (works in any diff mode)
             const domSelection = window.getSelection()?.toString()?.trim();
             if (domSelection) {
               params = {
-                type: diffMode === 'review' ? 'activity' : (diffMode as 'diff' | 'activity'),
+                type: diffMode as 'diff' | 'activity',
                 content: domSelection,
                 ...taskMeta,
               };
@@ -196,10 +196,6 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
               const content = diff.diff;
               if (!content?.trim()) return;
               params = { type: 'diff', content, ...taskMeta };
-            } else if (diffMode === 'review') {
-              const content = state.reviewContent[activeTask.id];
-              if (!content?.trim()) return;
-              params = { type: 'activity', content, ...taskMeta };
             } else {
               const entries = await window.bifrost.getActivityLog(activeTask.id);
               const parts: string[] = [];
@@ -415,7 +411,7 @@ export function useKeyboard(state: AppState, dispatch: React.Dispatch<AppAction>
           break;
         }
 
-        // view.repos, view.diff, view.history, view.log, view.review,
+        // view.repos, view.diff, view.history, view.log,
         // view.shortcuts, view.settings, view.notes — handled by useKeymapEngine
 
         case 'g': {

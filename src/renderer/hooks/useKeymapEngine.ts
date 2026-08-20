@@ -322,19 +322,6 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           dispatch({ type: 'TOGGLE_REPO_MANAGER' });
           break;
 
-        case 'view.review': {
-          const activeTaskForReview = s.tasks.find((t) => t.id === s.activeTaskId);
-          const repoForReview = activeTaskForReview ? s.repos.find((r) => r.id === activeTaskForReview.repoId) : null;
-          if (repoForReview?.multiTaskId) break;
-          if (showDiff && diffMode === 'review') {
-            dispatch({ type: 'TOGGLE_DIFF' });
-          } else {
-            dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
-            if (!showDiff) dispatch({ type: 'TOGGLE_DIFF' });
-          }
-          break;
-        }
-
         case 'view.notes':
           dispatch({ type: 'TOGGLE_NOTES' });
           break;
@@ -442,7 +429,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
               const domSelection = window.getSelection()?.toString()?.trim();
               if (domSelection) {
                 params = {
-                  type: diffMode === 'review' ? 'activity' : (diffMode as 'diff' | 'activity'),
+                  type: diffMode as 'diff' | 'activity',
                   content: domSelection,
                   ...taskMeta,
                 };
@@ -451,10 +438,6 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
                 const content = diff.diff;
                 if (!content?.trim()) return;
                 params = { type: 'diff', content, ...taskMeta };
-              } else if (diffMode === 'review') {
-                const content = s.reviewContent[activeTask.id];
-                if (!content?.trim()) return;
-                params = { type: 'activity', content, ...taskMeta };
               } else {
                 const entries = await window.bifrost.getActivityLog(activeTask.id);
                 const parts: string[] = [];

@@ -57,24 +57,6 @@ function ActivityIcon() {
   );
 }
 
-function ReviewIcon() {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 2h8a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" />
-      <path d="M6 5h4M6 8h4M6 11h2" />
-    </svg>
-  );
-}
-
 function TriageIcon() {
   return (
     <svg
@@ -170,7 +152,6 @@ export default function RightIconBar() {
 
   const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
-  const reviewBadge = state.activeTaskId && state.unreadReview[state.activeTaskId] ? ('blue' as const) : undefined;
 
   const triageItems = Object.values(state.triages);
   const hasTriageWaiting = triageItems.some((t) => t.waiting);
@@ -217,16 +198,6 @@ export default function RightIconBar() {
         onClick={() => toggleDiffMode('activity')}
       >
         <ActivityIcon />
-      </IconButton>
-
-      <IconButton
-        label="Review"
-        shortcut={getDisplayString('view.review')}
-        active={isDiffActive && diffMode === 'review'}
-        badge={reviewBadge}
-        onClick={() => toggleDiffMode('review')}
-      >
-        <ReviewIcon />
       </IconButton>
 
       <IconButton

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CaptureContextParams, GitLogEntry, ReviewEntry } from '../../shared/types';
+import type { CaptureContextParams, GitLogEntry } from '../../shared/types';
 import type { DiffMode } from '../context/AppContext';
 import { getActiveDiffState, useApp } from '../context/AppContext';
 import { useDiff } from '../hooks/useDiff';
@@ -20,8 +20,6 @@ import CloseButton from './CloseButton';
 import DiffStatsBadge from './DiffStatsBadge';
 import Highlight from './Highlight';
 import PillToggle, { type PillOption } from './PillToggle';
-import ReviewContent from './ReviewContent';
-import ReviewSidebar from './ReviewSidebar';
 import SearchIndicator from './SearchIndicator';
 import SessionMetricsPanel from './SessionMetricsPanel';
 import Spinner from './Spinner';
@@ -206,7 +204,6 @@ const MODE_TABS: TabDef<DiffMode>[] = [
   { value: 'git', label: 'Git Diff' },
   { value: 'activity', label: 'Tokens' },
   { value: 'log', label: 'Git Log', hintIndex: 4 },
-  { value: 'review', label: 'Review' },
   { value: 'metrics', label: 'Metrics' },
 ];
 
@@ -772,79 +769,6 @@ function GitLogEntryView({ entry, focused, search }: { entry: GitLogEntry; focus
   );
 }
 
-function ReviewPanel({ taskId }: { taskId: string }) {
-  const { state, dispatch } = useApp();
-
-  const reviews = state.reviews[taskId] ?? [];
-  const activeReviewId = state.activeReviewId[taskId] ?? null;
-
-  // Track which review has discussion active (for the sidebar indicator)
-  const [discussingReviewId, setDiscussingReviewId] = useState<string | null>(null);
-
-  // Load review list on mount
-  useEffect(() => {
-    window.bifrost.listReviews(taskId).then((entries) => {
-      dispatch({ type: 'SET_REVIEWS', taskId, reviews: entries });
-      // Auto-select the most recent review if none selected
-      if (
-        entries.length > 0 &&
-        !state.activeReviewId[taskId] &&
-        state.reviewStatus[`__pending__:${taskId}`] !== 'running'
-      ) {
-        const newest = entries.reduce((a, b) => (a.timestamp > b.timestamp ? a : b));
-        dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: newest.id });
-      }
-    });
-  }, [taskId]);
-
-  const handleSelectReview = useCallback(
-    (reviewId: string | null) => {
-      dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId });
-    },
-    [taskId, dispatch],
-  );
-
-  const handleNewReview = useCallback(() => {
-    dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: null });
-  }, [taskId, dispatch]);
-
-  const handleNewReviewCreated = useCallback(
-    (review: ReviewEntry) => {
-      dispatch({ type: 'ADD_REVIEW', taskId, review });
-      dispatch({ type: 'SET_ACTIVE_REVIEW', taskId, reviewId: review.id });
-    },
-    [taskId, dispatch],
-  );
-
-  const handleDeleteReview = useCallback(
-    async (reviewId: string) => {
-      await window.bifrost.deleteReview(taskId, reviewId);
-      dispatch({ type: 'DELETE_REVIEW', taskId, reviewId });
-    },
-    [taskId, dispatch],
-  );
-
-  return (
-    <div className="flex-1 flex min-h-0">
-      <ReviewSidebar
-        reviews={reviews}
-        activeReviewId={activeReviewId}
-        reviewStatuses={state.reviewStatus}
-        discussingReviewId={discussingReviewId}
-        onSelect={handleSelectReview}
-        onNewReview={handleNewReview}
-        onDelete={handleDeleteReview}
-      />
-      <ReviewContent
-        taskId={taskId}
-        activeReviewId={activeReviewId}
-        onNewReviewCreated={handleNewReviewCreated}
-        onDiscussionChange={setDiscussingReviewId}
-      />
-    </div>
-  );
-}
-
 export default function DiffOverlay() {
   const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -864,7 +788,6 @@ export default function DiffOverlay() {
   );
   const isActivity = diffMode === 'activity';
   const isLog = diffMode === 'log';
-  const isReview = diffMode === 'review';
   const isMetrics = diffMode === 'metrics';
 
   // Fetch token usage data for the Tokens tab
@@ -1126,7 +1049,6 @@ export default function DiffOverlay() {
           />
         </div>
       )}
-      {state.activeTaskId && isReview && <ReviewPanel taskId={state.activeTaskId} />}
       {state.activeTaskId && isMetrics && (
         <div className="flex-1 overflow-auto p-4">
           <SessionMetricsPanel

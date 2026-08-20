@@ -4,14 +4,12 @@ import type {
   BifrostConfig,
   PermissionPromptData,
   Repo,
-  ReviewEntry,
   Task,
   TaskStatus,
   TriageEntry,
 } from '../../shared/types';
 
-export type DiffMode = 'git' | 'activity' | 'log' | 'review' | 'metrics';
-export type ReviewStatus = 'idle' | 'running' | 'done' | 'error';
+export type DiffMode = 'git' | 'activity' | 'log' | 'metrics';
 export type PaneTarget = 'claude' | 'dev';
 export type TriageTab = 'new' | 'history';
 
@@ -55,20 +53,7 @@ export interface AppState {
   showNotes: boolean;
   showStats: boolean;
   paneStates: Record<string, TaskPaneState>;
-  /** Review markdown content keyed by reviewId */
-  reviewContent: Record<string, string>;
-  /** Review status keyed by reviewId */
-  reviewStatus: Record<string, ReviewStatus>;
-  /** Timestamp when the current review started running */
-  reviewStartedAt: number | null;
-  /** Review entry lists keyed by taskId */
-  reviews: Record<string, ReviewEntry[]>;
-  /** Active (selected) review ID keyed by taskId */
-  activeReviewId: Record<string, string | null>;
   /** Active discussion PTY sessions keyed by taskId */
-  reviewDiscussion: Record<string, { ptySessionId: string; reviewId: string }>;
-  /** Tasks with a review that completed but hasn't been viewed yet */
-  unreadReview: Record<string, boolean>;
   toast: string | null;
   toastHint: string | null;
   toastDuration: number;
@@ -130,17 +115,6 @@ export type AppAction =
   | { type: 'DISMISS_NOTIFICATION'; id: string }
   | { type: 'TOGGLE_NOTIFICATION_POPOVER' }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
-  | { type: 'SET_REVIEW_STATUS'; reviewId: string; status: ReviewStatus }
-  | { type: 'SET_REVIEW_CONTENT'; reviewId: string; content: string }
-  | { type: 'SET_REVIEWS'; taskId: string; reviews: ReviewEntry[] }
-  | { type: 'ADD_REVIEW'; taskId: string; review: ReviewEntry }
-  | { type: 'DELETE_REVIEW'; taskId: string; reviewId: string }
-  | { type: 'SET_ACTIVE_REVIEW'; taskId: string; reviewId: string | null }
-  | { type: 'UPDATE_REVIEW_SESSION'; taskId: string; reviewId: string; sessionId: string }
-  | { type: 'SET_REVIEW_DISCUSSION'; taskId: string; reviewId: string; ptySessionId: string }
-  | { type: 'CLEAR_REVIEW_DISCUSSION'; taskId: string }
-  | { type: 'MARK_REVIEW_UNREAD'; taskId: string }
-  | { type: 'CLEAR_REVIEW_UNREAD'; taskId: string }
   | { type: 'REORDER_TASKS'; taskIds: string[] }
   | { type: 'SHOW_ARCHIVE_CONFIRM'; taskId: string; taskName: string }
   | { type: 'HIDE_ARCHIVE_CONFIRM' }
@@ -180,13 +154,6 @@ const initialState: AppState = {
   showNotes: false,
   showStats: false,
   paneStates: {},
-  reviewContent: {},
-  reviewStatus: {},
-  reviewStartedAt: null,
-  reviews: {},
-  activeReviewId: {},
-  reviewDiscussion: {},
-  unreadReview: {},
   toast: null,
   toastHint: null,
   toastDuration: 2000,
@@ -355,13 +322,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
       const ps = getPaneState(state, state.activeTaskId);
       const opening = !ps.showDiff;
       const base = opening ? { ...state, ...allOverlaysClosed } : state;
-      let next = setPaneState(base, state.activeTaskId, { ...ps, showDiff: opening });
-      if (opening && ps.diffMode === 'review' && state.unreadReview[state.activeTaskId]) {
-        const { [state.activeTaskId]: _, ...rest } = next.unreadReview;
-        void _;
-        next = { ...next, unreadReview: rest };
-      }
-      return next;
+      return setPaneState(base, state.activeTaskId, { ...ps, showDiff: opening });
     }
     case 'TOGGLE_TASK_HISTORY':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showTaskHistory: !state.showTaskHistory });
@@ -380,13 +341,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_DIFF_MODE': {
       if (!state.activeTaskId) return state;
       const ps = getPaneState(state, state.activeTaskId);
-      const next = setPaneState(state, state.activeTaskId, { ...ps, diffMode: action.mode });
-      if (action.mode === 'review' && state.unreadReview[state.activeTaskId]) {
-        const { [state.activeTaskId]: _, ...rest } = next.unreadReview;
-        void _;
-        return { ...next, unreadReview: rest };
-      }
-      return next;
+      return setPaneState(state, state.activeTaskId, { ...ps, diffMode: action.mode });
     }
     case 'SET_DEV_SESSION': {
       const ps = getPaneState(state, action.taskId);
@@ -434,69 +389,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, summary: action.summary } : t)),
       };
-    case 'SET_REVIEW_STATUS':
-      return {
-        ...state,
-        reviewStatus: { ...state.reviewStatus, [action.reviewId]: action.status },
-        reviewStartedAt:
-          action.status === 'running'
-            ? (state.reviewStartedAt ?? Date.now())
-            : action.status === 'done' || action.status === 'idle'
-              ? null
-              : state.reviewStartedAt,
-      };
-    case 'SET_REVIEW_CONTENT':
-      return { ...state, reviewContent: { ...state.reviewContent, [action.reviewId]: action.content } };
-    case 'SET_REVIEWS':
-      return { ...state, reviews: { ...state.reviews, [action.taskId]: action.reviews } };
-    case 'ADD_REVIEW':
-      return {
-        ...state,
-        reviews: {
-          ...state.reviews,
-          [action.taskId]: [...(state.reviews[action.taskId] ?? []), action.review],
-        },
-      };
-    case 'DELETE_REVIEW': {
-      const reviews = (state.reviews[action.taskId] ?? []).filter((r) => r.id !== action.reviewId);
-      const activeId = state.activeReviewId[action.taskId];
-      return {
-        ...state,
-        reviews: { ...state.reviews, [action.taskId]: reviews },
-        activeReviewId:
-          activeId === action.reviewId
-            ? { ...state.activeReviewId, [action.taskId]: reviews.length > 0 ? reviews[reviews.length - 1].id : null }
-            : state.activeReviewId,
-      };
-    }
-    case 'SET_ACTIVE_REVIEW':
-      return { ...state, activeReviewId: { ...state.activeReviewId, [action.taskId]: action.reviewId } };
-    case 'UPDATE_REVIEW_SESSION': {
-      const taskReviews = (state.reviews[action.taskId] ?? []).map((r) =>
-        r.id === action.reviewId ? { ...r, sessionId: action.sessionId } : r,
-      );
-      return { ...state, reviews: { ...state.reviews, [action.taskId]: taskReviews } };
-    }
-    case 'SET_REVIEW_DISCUSSION':
-      return {
-        ...state,
-        reviewDiscussion: {
-          ...state.reviewDiscussion,
-          [action.taskId]: { ptySessionId: action.ptySessionId, reviewId: action.reviewId },
-        },
-      };
-    case 'CLEAR_REVIEW_DISCUSSION': {
-      const { [action.taskId]: _removed, ...rest } = state.reviewDiscussion;
-      void _removed;
-      return { ...state, reviewDiscussion: rest };
-    }
-    case 'MARK_REVIEW_UNREAD':
-      return { ...state, unreadReview: { ...state.unreadReview, [action.taskId]: true } };
-    case 'CLEAR_REVIEW_UNREAD': {
-      const { [action.taskId]: _cleared, ...remaining } = state.unreadReview;
-      void _cleared;
-      return { ...state, unreadReview: remaining };
-    }
     case 'REORDER_TASKS': {
       const idSet = new Set(action.taskIds);
       const reordered = action.taskIds.map((id) => state.tasks.find((t) => t.id === id)!).filter(Boolean);

@@ -19,7 +19,7 @@ import TaskSidebar from './components/TaskSidebar';
 import TaskView from './components/TaskView';
 import TriageOverlay from './components/TriageOverlay';
 import type { AppAction, AppState, PaneTarget } from './context/AppContext';
-import { defaultPaneState, getActiveDiffState, useApp } from './context/AppContext';
+import { defaultPaneState, useApp } from './context/AppContext';
 import { KeymapProvider } from './context/KeymapContext';
 import { useKeymapEngine } from './hooks/useKeymapEngine';
 import { lockTerminalInput, unlockTerminalInput } from './hooks/useTerminal';
@@ -387,16 +387,6 @@ export default function App() {
         case 'diff':
           dispatch({ type: 'TOGGLE_DIFF' });
           break;
-        case 'review': {
-          const { showDiff: sd, diffMode: dm } = getActiveDiffState(state);
-          if (sd && dm === 'review') {
-            dispatch({ type: 'TOGGLE_DIFF' });
-          } else {
-            dispatch({ type: 'SET_DIFF_MODE', mode: 'review' });
-            if (!sd) dispatch({ type: 'TOGGLE_DIFF' });
-          }
-          break;
-        }
         case 'task-history':
           dispatch({ type: 'TOGGLE_TASK_HISTORY' });
           break;

@@ -45,16 +45,6 @@ import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './p
 import { handleScrapeResponse, sendPrompt } from './prompt-sender';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
-  cancelReview,
-  deleteReview,
-  getReviewSessionId,
-  listReviews,
-  loadReview,
-  runReview,
-  saveReview,
-  watchReviewFile,
-} from './review-service';
-import {
   attachSession,
   createSession,
   createShellSession,
@@ -136,11 +126,7 @@ async function renameWorktreeBranch(task: Task, candidate: string): Promise<stri
   return (await git(['branch', '-m', current, candidate])) === null ? null : candidate;
 }
 
-export async function archiveTaskCore(
-  taskId: string,
-  devSessions?: Map<string, string>,
-  reviewSessions?: Map<string, string>,
-): Promise<Task> {
+export async function archiveTaskCore(taskId: string, devSessions?: Map<string, string>): Promise<Task> {
   cancelTaskRequests(taskId);
   const task = getTask(taskId);
   stopWatching(taskId);
@@ -151,14 +137,6 @@ export async function archiveTaskCore(
       devSessions.delete(taskId);
     }
   }
-  if (reviewSessions) {
-    const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) {
-      killSession(reviewPtyId);
-      reviewSessions.delete(taskId);
-    }
-  }
-  cancelReview(taskId);
   if (task.status === 'running') {
     killSession(taskId);
   }
@@ -188,7 +166,7 @@ export async function archiveTaskCore(
 }
 
 /**
- * Resolve the effective base branch for diff/review comparison.
+ * Resolve the effective base branch for diff comparison.
  * Tries repo.defaultBranch (preferring remote-tracking refs), then origin/HEAD,
  * then origin/main or origin/master as last resort. All local operations, no network.
  */
@@ -561,8 +539,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Dev terminal sessions (taskId -> dev sessionId)
   const devSessions = new Map<string, string>();
-  // Review terminal sessions (taskId -> review PTY sessionId)
-  const reviewSessions = new Map<string, string>();
 
   // Tasks
   ipcMain.handle(IPC.CREATE_TASK, async (_event, params: CreateTaskParams) => {
@@ -576,12 +552,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       killSession(devSessionId);
       devSessions.delete(taskId);
     }
-    const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) {
-      killSession(reviewPtyId);
-      reviewSessions.delete(taskId);
-    }
-    cancelReview(taskId);
     await destroyTask(taskId);
   });
 
@@ -591,23 +561,17 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       cancelTaskRequests(taskId);
       killSession(taskId);
     }
-    // Kill dev terminal and review sessions too
+    // Kill the dev terminal too
     const devSessionId = devSessions.get(taskId);
     if (devSessionId) {
       killSession(devSessionId);
       devSessions.delete(taskId);
     }
-    const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) {
-      killSession(reviewPtyId);
-      reviewSessions.delete(taskId);
-    }
-    cancelReview(taskId);
     return updateTask(taskId, { status: 'stopped' });
   });
 
   ipcMain.handle(IPC.ARCHIVE_TASK, async (_event, taskId: string) => {
-    return archiveTaskCore(taskId, devSessions, reviewSessions);
+    return archiveTaskCore(taskId, devSessions);
   });
 
   ipcMain.handle(IPC.IS_WORKTREE_DIRTY, async (_event, taskId: string) => {
@@ -716,11 +680,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (devSessionId) {
       killSession(devSessionId);
       devSessions.delete(taskId);
-    }
-    const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) {
-      killSession(reviewPtyId);
-      reviewSessions.delete(taskId);
     }
     await destroyTask(taskId);
   });
@@ -1003,77 +962,6 @@ end tell`;
     startWatching(taskId, cwd, mainWindow, claudeCallbacks, externalSessionId);
 
     return task;
-  });
-
-  // Review
-  ipcMain.handle(IPC.RUN_REVIEW, async (_event, taskId: string, scope?: 'working' | 'all', instructions?: string) => {
-    const task = getTask(taskId);
-    const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
-    const { reviewId, markdown } = await runReview(
-      task.worktreePath,
-      taskId,
-      mainWindow,
-      scope,
-      instructions,
-      baseBranch,
-    );
-    const sessionId = getReviewSessionId(taskId, reviewId);
-    return { reviewId, markdown, sessionId };
-  });
-
-  ipcMain.handle(IPC.CANCEL_REVIEW, (_event, taskId: string) => {
-    cancelReview(taskId);
-  });
-
-  ipcMain.handle(IPC.SAVE_REVIEW, (_event, taskId: string, reviewId: string, content: string) => {
-    saveReview(taskId, reviewId, content);
-  });
-
-  ipcMain.handle(IPC.LOAD_REVIEW, (_event, taskId: string, reviewId: string) => {
-    const content = loadReview(taskId, reviewId);
-    if (content) {
-      watchReviewFile(taskId, reviewId, mainWindow);
-    }
-    return content;
-  });
-
-  ipcMain.handle(IPC.RESUME_REVIEW, (_event, taskId: string, reviewId: string) => {
-    const task = getTask(taskId);
-    const sessionId = getReviewSessionId(taskId, reviewId);
-    if (!sessionId) throw new Error('No review session to resume');
-
-    // Kill existing review session if any
-    const existing = reviewSessions.get(taskId);
-    if (existing) killSession(existing);
-
-    const reviewPtySessionId = `${taskId}-review`;
-    const config = loadConfig();
-    createSession(reviewPtySessionId, task.worktreePath, mainWindow, {
-      resumeSessionId: sessionId,
-      taskId,
-      name: `${task.name} (review)`,
-      apiPort: getApiPort() ?? undefined,
-      permissionMode: config.permissionMode,
-      context: 'review',
-    });
-    reviewSessions.set(taskId, reviewPtySessionId);
-    return reviewPtySessionId;
-  });
-
-  ipcMain.handle(IPC.LIST_REVIEWS, (_event, taskId: string) => {
-    return listReviews(taskId);
-  });
-
-  ipcMain.handle(IPC.DELETE_REVIEW, (_event, taskId: string, reviewId: string) => {
-    deleteReview(taskId, reviewId);
-  });
-
-  ipcMain.handle(IPC.CLOSE_REVIEW_SESSION, (_event, taskId: string) => {
-    const reviewPtyId = reviewSessions.get(taskId);
-    if (reviewPtyId) {
-      killSession(reviewPtyId);
-      reviewSessions.delete(taskId);
-    }
   });
 
   // Integration

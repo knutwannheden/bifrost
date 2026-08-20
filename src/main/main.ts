@@ -233,12 +233,6 @@ function buildMenu() {
           registerAccelerator: false,
           click: () => sendAction('repositories'),
         },
-        {
-          label: 'Review',
-          accelerator: accelFor('view.review'),
-          registerAccelerator: false,
-          click: () => sendAction('review'),
-        },
         { type: 'separator' },
         {
           label: 'Open in IDE',

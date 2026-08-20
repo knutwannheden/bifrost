@@ -67,14 +67,6 @@ export interface Task {
   curation?: TaskCuration;
 }
 
-export interface ReviewEntry {
-  id: string;
-  scope: 'working' | 'all';
-  instructions?: string;
-  timestamp: number;
-  sessionId?: string;
-}
-
 export interface Note {
   id: string; // UUID
   text: string;
@@ -135,7 +127,6 @@ export interface BifrostConfig {
   keybindings?: Record<string, string | null>;
   prompts?: {
     triage?: string;
-    reviewInstructions?: string;
   };
   macros?: Macro[];
 }

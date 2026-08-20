@@ -95,34 +95,6 @@ const api: BifrostAPI = {
   resumeClaudeSession: (externalSessionId, cwd) =>
     ipcRenderer.invoke(IPC.RESUME_CLAUDE_SESSION, externalSessionId, cwd),
 
-  // Review
-  runReview: (taskId, scope, instructions) => ipcRenderer.invoke(IPC.RUN_REVIEW, taskId, scope, instructions),
-  cancelReview: (taskId) => ipcRenderer.invoke(IPC.CANCEL_REVIEW, taskId),
-  saveReview: (taskId, reviewId, content) => ipcRenderer.invoke(IPC.SAVE_REVIEW, taskId, reviewId, content),
-  loadReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.LOAD_REVIEW, taskId, reviewId),
-  resumeReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.RESUME_REVIEW, taskId, reviewId),
-  listReviews: (taskId) => ipcRenderer.invoke(IPC.LIST_REVIEWS, taskId),
-  deleteReview: (taskId, reviewId) => ipcRenderer.invoke(IPC.DELETE_REVIEW, taskId, reviewId),
-  closeReviewSession: (taskId) => ipcRenderer.invoke(IPC.CLOSE_REVIEW_SESSION, taskId),
-  onReviewProgress: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, reviewId: string, content: string) =>
-      callback(taskId, reviewId, content);
-    ipcRenderer.on(IPC_STREAM.REVIEW_PROGRESS, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_PROGRESS, handler);
-  },
-  onReviewSession: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, reviewId: string, sessionId: string) =>
-      callback(taskId, reviewId, sessionId);
-    ipcRenderer.on(IPC_STREAM.REVIEW_SESSION, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_SESSION, handler);
-  },
-  onReviewActivity: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, taskId: string, reviewId: string, activity: string) =>
-      callback(taskId, reviewId, activity);
-    ipcRenderer.on(IPC_STREAM.REVIEW_ACTIVITY, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.REVIEW_ACTIVITY, handler);
-  },
-
   // Integration
   checkIntegration: () => ipcRenderer.invoke(IPC.CHECK_INTEGRATION),
   installIntegration: () => ipcRenderer.invoke(IPC.INSTALL_INTEGRATION),

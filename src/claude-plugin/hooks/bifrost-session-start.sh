@@ -11,9 +11,6 @@ d['bifrost_context'] = '${BIFROST_CONTEXT:-code}'
 task_id = os.environ.get('BIFROST_TASK_ID', '')
 if task_id:
     d['bifrost_task_id'] = task_id
-review_id = os.environ.get('BIFROST_REVIEW_ID', '')
-if review_id:
-    d['bifrost_review_id'] = review_id
 print(json.dumps(d))
 " 2>/dev/null)"
 [ -z "$ENRICHED" ] && exit 0

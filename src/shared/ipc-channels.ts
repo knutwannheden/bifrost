@@ -15,7 +15,6 @@ import type {
   PrInfo,
   RecentRepo,
   Repo,
-  ReviewEntry,
   SessionMetricsResult,
   StatsData,
   Task,
@@ -96,16 +95,6 @@ export const IPC = {
   LIST_CLAUDE_SESSIONS: 'claude:list-sessions',
   RESUME_CLAUDE_SESSION: 'claude:resume-session',
 
-  // Review
-  RUN_REVIEW: 'review:run',
-  CANCEL_REVIEW: 'review:cancel',
-  SAVE_REVIEW: 'review:save',
-  LOAD_REVIEW: 'review:load',
-  RESUME_REVIEW: 'review:resume',
-  LIST_REVIEWS: 'review:list',
-  DELETE_REVIEW: 'review:delete',
-  CLOSE_REVIEW_SESSION: 'review:close-session',
-
   // Integration
   CHECK_INTEGRATION: 'integration:check',
   INSTALL_INTEGRATION: 'integration:install',
@@ -169,9 +158,6 @@ export const IPC_STREAM = {
   SESSION_EXIT: 'session:exit',
   ACTIVITY_ENTRY: 'activity:entry',
   TASK_SUMMARY: 'task:summary',
-  REVIEW_PROGRESS: 'review:progress',
-  REVIEW_SESSION: 'review:session',
-  REVIEW_ACTIVITY: 'review:activity',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
   PERMISSION_PROMPT: 'permission:prompt',
@@ -271,25 +257,6 @@ export interface BifrostAPI {
   // Claude sessions
   listClaudeSessions(): Promise<ClaudeSession[]>;
   resumeClaudeSession(externalSessionId: string, cwd: string): Promise<Task>;
-
-  // Review
-  runReview(
-    taskId: string,
-    scope?: 'working' | 'all',
-    instructions?: string,
-  ): Promise<{ reviewId: string; markdown: string; sessionId?: string }>;
-  cancelReview(taskId: string): Promise<void>;
-  saveReview(taskId: string, reviewId: string, content: string): Promise<void>;
-  loadReview(taskId: string, reviewId: string): Promise<string | null>;
-  resumeReview(taskId: string, reviewId: string): Promise<string>;
-  listReviews(taskId: string): Promise<ReviewEntry[]>;
-  deleteReview(taskId: string, reviewId: string): Promise<void>;
-  closeReviewSession(taskId: string): Promise<void>;
-
-  // Review progress
-  onReviewProgress(callback: (taskId: string, reviewId: string, content: string) => void): () => void;
-  onReviewSession(callback: (taskId: string, reviewId: string, sessionId: string) => void): () => void;
-  onReviewActivity(callback: (taskId: string, reviewId: string, activity: string) => void): () => void;
 
   // Integration
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;

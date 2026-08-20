@@ -27,13 +27,6 @@ import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } fr
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
 import { addRepo } from './repo-manager';
-import {
-  cancelReview,
-  completeReview,
-  getActiveReviewFile,
-  setReviewSessionId,
-  startReviewActivityWatch,
-} from './review-service';
 import { killSession } from './session-manager';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 import { removeWorktree } from './worktree-manager';
@@ -162,14 +155,12 @@ function findTask(idOrName: string): import('../shared/types').Task | null {
 }
 
 /**
- * Kill all sessions associated with a task: main, dev terminal, and review.
- * Uses deterministic session IDs so we don't need the in-memory Maps from ipc-handlers.
+ * Kill both of a task's sessions: the main one and its dev terminal. Uses
+ * deterministic session IDs so we don't need the in-memory Maps from ipc-handlers.
  */
 function killTaskSessions(taskId: string): void {
   killSession(taskId);
   killSession(`${taskId}-dev`);
-  killSession(`${taskId}-review`);
-  cancelReview(taskId);
   cleanupMessages(taskId);
 }
 
@@ -469,7 +460,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     case '/hook': {
       const cwd = body.cwd as string;
       const hookContext = (body.bifrost_context as string) || 'code';
-      const hookTaskId = body.bifrost_task_id as string;
       const hookEventName = body.hook_event_name as string;
       if (!cwd) {
         errorResponse(res, 'Missing cwd');
@@ -508,18 +498,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId, hookMessage);
         }
         completeTriage(hookTriageId);
-        jsonResponse(res, { ok: true });
-        return;
-      }
-
-      // Review stop — only kill the session if the review file was actually written.
-      // The Stop hook fires after every turn, including the first turn where Claude
-      // may just acknowledge the prompt without producing output yet.
-      if (hookContext === 'review' && hookTaskId) {
-        const reviewFile = getActiveReviewFile(hookTaskId);
-        if (reviewFile && fs.existsSync(reviewFile)) {
-          completeReview(hookTaskId);
-        }
         jsonResponse(res, { ok: true });
         return;
       }
@@ -761,7 +739,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const cwd = body.cwd as string;
       const context = body.bifrost_context as string;
       const taskId = body.bifrost_task_id as string;
-      const reviewId = body.bifrost_review_id as string;
       if (!sessionId || !cwd) {
         errorResponse(res, 'Missing session_id or cwd');
         return;
@@ -785,17 +762,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         : getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
       if (!task) {
         jsonResponse(res, { ok: false, reason: 'no matching task' });
-        return;
-      }
-
-      // Review context — capture session ID and start activity watch
-      if (context === 'review' && reviewId) {
-        setReviewSessionId(task.id, reviewId, sessionId);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.REVIEW_SESSION, task.id, reviewId, sessionId);
-          startReviewActivityWatch(task.id, reviewId, cwd, sessionId, mainWindow);
-        }
-        jsonResponse(res, { ok: true });
         return;
       }
 
