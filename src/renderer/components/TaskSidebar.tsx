@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useKeymap } from '../context/KeymapContext';
 import { terminalRegistry } from '../hooks/useTerminal';
 import { repoDisplayName, shortPath } from '../utils/paths';
 import { matchesTaskSearch } from '../utils/search';
 import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
 import FormInput from './FormInput';
+import Kbd from './Kbd';
 import TaskTab from './TaskTab';
 
 const DEFAULT_WIDTH = 240;
@@ -21,7 +23,10 @@ export default function TaskSidebar() {
   const [mtimes, setMtimes] = useState<Record<string, number>>({});
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const [filter, setFilter] = useState('');
+  const [selected, setSelected] = useState(0);
+  const [filterFocused, setFilterFocused] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
+  const filterShortcut = useKeymap().getDisplayString('nav.filterTasks');
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +101,20 @@ export default function TaskSidebar() {
 
   const visibleTaskIds = GROUPS.filter((b) => groups.has(b)).flatMap((b) => visibleTasksFor(b).map((t) => t.id));
 
+  // The active task's row is listed whether or not it matches, and it usually
+  // sorts first, so the cursor starts on the first real match instead.
+  const firstMatch = matchedIds
+    ? Math.max(
+        0,
+        visibleTaskIds.findIndex((id) => matchedIds.has(id)),
+      )
+    : 0;
+  // The cursor only means something while the box has focus.
+  const selectedId = filterFocused ? visibleTaskIds[Math.min(selected, visibleTaskIds.length - 1)] : undefined;
+  useEffect(() => {
+    setSelected(firstMatch);
+  }, [filter]);
+
   const togglePin = (taskId: string) => {
     const next = pinnedIds.includes(taskId) ? pinnedIds.filter((id) => id !== taskId) : [...pinnedIds, taskId];
     if (config) {
@@ -133,27 +152,42 @@ export default function TaskSidebar() {
       style={{ width: dragWidth ?? width }}
     >
       <div className="p-2 border-b border-border-default">
-        <FormInput
-          ref={filterRef}
-          value={filter}
-          placeholder="Filter tasks…"
-          className="w-full px-2 py-1 text-xs"
-          onChange={(e) => setFilter(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              // The first real match: the active task's row is listed either way.
-              const first = visibleTaskIds.find((id) => !matchedIds || matchedIds.has(id));
-              if (first) dispatch({ type: 'SET_ACTIVE_TASK', taskId: first });
-              returnFocusToTerminal();
-            } else if (e.key === 'Escape') {
-              if (filtering) setFilter('');
-              else returnFocusToTerminal();
-            }
-            // Modified strokes stay with the global keymap (Cmd+B, tab switching);
-            // bare keys and F2 belong to the filter.
-            if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
-          }}
-        />
+        <div className="relative">
+          <FormInput
+            ref={filterRef}
+            value={filter}
+            placeholder="Filter tasks…"
+            className="w-full px-2 py-1 pr-11 text-xs"
+            onChange={(e) => setFilter(e.target.value)}
+            onFocus={() => setFilterFocused(true)}
+            onBlur={() => setFilterFocused(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const count = visibleTaskIds.length;
+                if (count > 0) {
+                  const step = e.key === 'ArrowDown' ? 1 : -1;
+                  setSelected((i) => (Math.min(i, count - 1) + step + count) % count);
+                }
+              } else if (e.key === 'Enter') {
+                if (selectedId) dispatch({ type: 'SET_ACTIVE_TASK', taskId: selectedId });
+                setFilter('');
+                returnFocusToTerminal();
+              } else if (e.key === 'Escape') {
+                setFilter('');
+                returnFocusToTerminal();
+              }
+              // Modified strokes stay with the global keymap (Cmd+B, tab switching);
+              // bare keys and F2 belong to the filter.
+              if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
+            }}
+          />
+          {!filterFocused && !filter && filterShortcut ? (
+            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none">
+              <Kbd>{filterShortcut}</Kbd>
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {filtering && groups.size === 0 ? (
@@ -192,6 +226,7 @@ export default function TaskSidebar() {
                   repoName={repoNameFor(task)}
                   isActive={task.id === state.activeTaskId}
                   search={filter}
+                  isSelected={task.id === selectedId}
                   onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
                   onClose={() => {
                     window.bifrost.stopTask(task.id).then((updated) => {

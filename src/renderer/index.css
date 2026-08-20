@@ -133,28 +133,21 @@ body {
   width: 100vw;
 }
 
-/* Activity sweep animation for task tabs — uses transform (compositor-only,
-   no main-thread repaints) instead of background-position. */
-.activity-sweep {
-  overflow: hidden;
-}
-.activity-sweep::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent 20%, var(--color-success) 50%, transparent 80%);
-  width: 200%;
-  left: -100%;
-  animation: sweep 3s ease-in-out infinite;
-  will-change: transform;
+/* Marks a task as working. Animating opacity keeps the whole pulse on the
+   compositor, with no main-thread repaints. */
+.activity-pulse {
+  background: var(--color-success);
+  animation: activity-pulse 1.6s ease-in-out infinite;
+  will-change: opacity;
 }
 
-@keyframes sweep {
-  0% {
-    transform: translateX(-25%);
-  }
+@keyframes activity-pulse {
+  0%,
   100% {
-    transform: translateX(75%);
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
