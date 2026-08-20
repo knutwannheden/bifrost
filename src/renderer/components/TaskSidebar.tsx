@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { terminalRegistry } from '../hooks/useTerminal';
+import { nextActiveTaskId } from '../utils/next-active-task';
 import { repoDisplayName, shortPath } from '../utils/paths';
 import { matchesTaskSearch } from '../utils/search';
 import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
@@ -232,11 +233,7 @@ export default function TaskSidebar() {
                     window.bifrost.stopTask(task.id).then((updated) => {
                       dispatch({ type: 'UPDATE_TASK', task: updated });
                       if (state.activeTaskId === task.id) {
-                        const next = sorted.find((t) => t.id !== task.id);
-                        dispatch({
-                          type: 'SET_ACTIVE_TASK',
-                          taskId: next ? next.id : null,
-                        });
+                        dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, task.id) });
                       }
                     });
                   }}

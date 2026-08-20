@@ -1,19 +1,12 @@
 import type { AppAction, AppState } from '../context/AppContext';
+import { nextActiveTaskId } from './next-active-task';
 
 /**
  * Archive a task immediately: switch active tab then remove worktree.
  * Used both for clean worktrees (direct) and after force-archive confirmation.
  */
 export function performArchive(taskId: string, state: AppState, dispatch: React.Dispatch<AppAction>): void {
-  const running = state.tasks.filter((t) => t.status === 'running');
-  const idx = running.findIndex((t) => t.id === taskId);
-  const remaining = running.filter((t) => t.id !== taskId);
-  // Pick the next tab, or the previous one if archiving the last tab
-  const nextIdx = Math.min(idx, remaining.length - 1);
-  dispatch({
-    type: 'SET_ACTIVE_TASK',
-    taskId: nextIdx >= 0 ? remaining[nextIdx].id : null,
-  });
+  dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, taskId) });
   window.bifrost.archiveTask(taskId).then((updated) => {
     dispatch({ type: 'UPDATE_TASK', task: updated });
   });
