@@ -53,6 +53,13 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
   'action.openIde': { id: 'action.openIde', label: 'Open in IDE', category: 'actions', requiresTask: true },
   'action.openPr': { id: 'action.openPr', label: 'Open PR in GitHub', category: 'actions', requiresTask: true },
   'action.find': { id: 'action.find', label: 'Find in terminal', category: 'actions', requiresTask: true },
+  'action.scrollUp': { id: 'action.scrollUp', label: 'Scroll terminal up', category: 'actions', requiresTask: true },
+  'action.scrollDown': {
+    id: 'action.scrollDown',
+    label: 'Scroll terminal down',
+    category: 'actions',
+    requiresTask: true,
+  },
   'action.capture': { id: 'action.capture', label: 'Capture context', category: 'actions', requiresTask: true },
   'app.shortcuts': { id: 'app.shortcuts', label: 'Keyboard shortcuts', category: 'app' },
   'app.settings': { id: 'app.settings', label: 'Settings', category: 'app' },
@@ -78,12 +85,24 @@ export interface KeyBinding {
   strokes: KeyStroke[];
 }
 
+// Arrows round-trip through their symbols so a binding reads as ⌘↑ rather than
+// ⌘arrowup, in both the shortcut list and a recorded rebinding.
+const ARROW_SYMBOLS: Record<string, string> = {
+  arrowup: '↑',
+  arrowdown: '↓',
+  arrowleft: '←',
+  arrowright: '→',
+};
+const ARROW_KEYS: Record<string, string> = Object.fromEntries(
+  Object.entries(ARROW_SYMBOLS).map(([key, symbol]) => [symbol, key]),
+);
+
 function serializeStroke(s: KeyStroke): string {
   const parts: string[] = [];
   if (s.mod) parts.push('Cmd');
   if (s.alt) parts.push('Alt');
   if (s.shift) parts.push('Shift');
-  parts.push(s.key.length === 1 ? s.key.toUpperCase() : s.key);
+  parts.push(ARROW_SYMBOLS[s.key] ?? (s.key.length === 1 ? s.key.toUpperCase() : s.key));
   return parts.join('+');
 }
 
@@ -93,7 +112,8 @@ export function serializeBinding(strokes: KeyStroke[]): string {
 
 function parseStroke(s: string): KeyStroke {
   const parts = s.split('+');
-  const key = parts[parts.length - 1].toLowerCase();
+  const last = parts[parts.length - 1];
+  const key = ARROW_KEYS[last] ?? last.toLowerCase();
   return {
     mod: parts.some((p) => p === 'Cmd' || p === 'Ctrl'),
     shift: parts.some((p) => p === 'Shift'),
@@ -140,6 +160,8 @@ export const DEFAULT_KEYMAP: KeyBinding[] = [
   kb('action.openIde', 'Cmd+O'),
   kb('action.openPr', 'Cmd+G'),
   kb('action.find', 'Cmd+F'),
+  kb('action.scrollUp', 'Cmd+ArrowUp'),
+  kb('action.scrollDown', 'Cmd+ArrowDown'),
   kb('action.capture', 'Cmd+Shift+C'),
   kb('app.shortcuts', 'Cmd+K'),
   kb('app.settings', 'Cmd+,'),

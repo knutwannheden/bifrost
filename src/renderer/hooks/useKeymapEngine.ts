@@ -417,6 +417,15 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           // Handled locally by TerminalPane — no-op here
           break;
 
+        case 'action.scrollUp':
+        case 'action.scrollDown': {
+          if (!s.activeTaskId) break;
+          const ps = s.paneStates[s.activeTaskId] ?? defaultPaneState;
+          const sessionId = ps.focusedPane === 'dev' && ps.devSessionId ? ps.devSessionId : s.activeTaskId;
+          terminalRegistry.get(sessionId)?.scrollPages(actionId === 'action.scrollUp' ? -1 : 1);
+          break;
+        }
+
         case 'action.capture': {
           const activeTask = s.tasks.find((t) => t.id === s.activeTaskId);
           if (!activeTask) break;

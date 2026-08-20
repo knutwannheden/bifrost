@@ -114,6 +114,7 @@ export function useTerminal(
       cursorBlink: options?.cursorBlink ?? true,
       cursorStyle: 'block',
       cursorInactiveStyle: 'outline',
+      scrollback: 10_000,
       fontWeight: options?.fontWeight ?? 300,
       fontSize: options?.fontSize ?? 14,
       fontFamily: `"${options?.fontFamily ?? 'MesloLGS NF'}", Menlo, Monaco, "Courier New", monospace`,
