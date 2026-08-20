@@ -573,8 +573,15 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // Notification — mark idle (Claude is waiting for input) and forward message
-      if (hookEventName === 'Notification' && hookContext === 'code') {
+      // Notification is the one event that speaks to the user; anything else
+      // reaching here is a hook this build does not act on.
+      if (hookEventName !== 'Notification') {
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      if (hookContext === 'code') {
+        // Claude is waiting for input
         markIdle(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
