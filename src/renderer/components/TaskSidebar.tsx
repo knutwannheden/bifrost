@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
+import { useFlipList } from '../hooks/useFlipList';
 import { terminalRegistry } from '../hooks/useTerminal';
 import { nextActiveTaskId } from '../utils/next-active-task';
 import { repoDisplayName, shortPath } from '../utils/paths';
@@ -27,6 +28,7 @@ export default function TaskSidebar() {
   const [selected, setSelected] = useState(0);
   const [filterFocused, setFilterFocused] = useState(false);
   const filterRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const filterShortcut = useKeymap().getDisplayString('nav.filterTasks');
 
   useEffect(() => {
@@ -100,7 +102,10 @@ export default function TaskSidebar() {
     return collapsed.includes(bucket) ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
   };
 
-  const visibleTaskIds = GROUPS.filter((b) => groups.has(b)).flatMap((b) => visibleTasksFor(b).map((t) => t.id));
+  const shownGroups = GROUPS.filter((b) => groups.has(b));
+  const visibleTaskIds = shownGroups.flatMap((b) => visibleTasksFor(b).map((t) => t.id));
+  // Group headers shift when a group gains or loses rows, so they move with them.
+  useFlipList(listRef, shownGroups.map((b) => `${b}:${visibleTasksFor(b).length}`).join('|'));
 
   // The active task's row is listed whether or not it matches, and it usually
   // sorts first, so the cursor starts on the first real match instead.
@@ -190,11 +195,11 @@ export default function TaskSidebar() {
           ) : null}
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div ref={listRef} className="flex-1 overflow-y-auto">
         {filtering && groups.size === 0 ? (
           <div className="text-sm text-muted text-center py-4">No matching tasks</div>
         ) : null}
-        {GROUPS.filter((b) => groups.has(b)).map((bucket) => {
+        {shownGroups.map((bucket) => {
           const tasks = groups.get(bucket) ?? [];
           const isCollapsed = !filtering && collapsed.includes(bucket);
           const visibleTasks = visibleTasksFor(bucket);
@@ -204,7 +209,7 @@ export default function TaskSidebar() {
             <div key={bucket}>
               {filtering ? (
                 // A click here would rewrite a fold preference the filtered list ignores.
-                <div className={headerClass}>
+                <div className={headerClass} data-flip-key={`group:${bucket}`}>
                   <span className="w-3 shrink-0" />
                   <span className="truncate">{bucket}</span>
                   <span className="ml-auto text-muted">{tasks.length}</span>
@@ -214,6 +219,7 @@ export default function TaskSidebar() {
                   type="button"
                   onClick={() => toggle(bucket)}
                   className={`${headerClass} hover:bg-surface-hover hover:text-primary transition-colors`}
+                  data-flip-key={`group:${bucket}`}
                 >
                   <span className="w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
                   <span className="truncate">{bucket}</span>
@@ -221,48 +227,49 @@ export default function TaskSidebar() {
                 </button>
               )}
               {visibleTasks.map((task) => (
-                <TaskTab
-                  key={task.id}
-                  task={task}
-                  repoName={repoNameFor(task)}
-                  isActive={task.id === state.activeTaskId}
-                  search={filter}
-                  isSelected={task.id === selectedId}
-                  onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
-                  onClose={() => {
-                    window.bifrost.stopTask(task.id).then((updated) => {
-                      dispatch({ type: 'UPDATE_TASK', task: updated });
-                      if (state.activeTaskId === task.id) {
-                        dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, task.id) });
-                      }
-                    });
-                  }}
-                  onRename={(name) => {
-                    window.bifrost.renameTask(task.id, name).then((updated) => {
-                      dispatch({ type: 'UPDATE_TASK', task: updated });
-                    });
-                  }}
-                  isPinned={pinnedIds.includes(task.id)}
-                  onTogglePin={() => togglePin(task.id)}
-                  onRegenerateTitle={async () => {
-                    try {
-                      const result = await window.bifrost.regenerateTaskTitle(task.id);
-                      if (!result) {
-                        dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
-                        return;
-                      }
-                      dispatch({ type: 'UPDATE_TASK', task: result.task });
-                      dispatch({
-                        type: 'SHOW_TOAST',
-                        message: result.renamedBranch
-                          ? `Renamed to "${result.task.name}" on ${result.renamedBranch}`
-                          : `Renamed to "${result.task.name}"`,
+                <div key={task.id} data-flip-key={task.id}>
+                  <TaskTab
+                    task={task}
+                    repoName={repoNameFor(task)}
+                    isActive={task.id === state.activeTaskId}
+                    search={filter}
+                    isSelected={task.id === selectedId}
+                    onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
+                    onClose={() => {
+                      window.bifrost.stopTask(task.id).then((updated) => {
+                        dispatch({ type: 'UPDATE_TASK', task: updated });
+                        if (state.activeTaskId === task.id) {
+                          dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, task.id) });
+                        }
                       });
-                    } catch {
-                      dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
-                    }
-                  }}
-                />
+                    }}
+                    onRename={(name) => {
+                      window.bifrost.renameTask(task.id, name).then((updated) => {
+                        dispatch({ type: 'UPDATE_TASK', task: updated });
+                      });
+                    }}
+                    isPinned={pinnedIds.includes(task.id)}
+                    onTogglePin={() => togglePin(task.id)}
+                    onRegenerateTitle={async () => {
+                      try {
+                        const result = await window.bifrost.regenerateTaskTitle(task.id);
+                        if (!result) {
+                          dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
+                          return;
+                        }
+                        dispatch({ type: 'UPDATE_TASK', task: result.task });
+                        dispatch({
+                          type: 'SHOW_TOAST',
+                          message: result.renamedBranch
+                            ? `Renamed to "${result.task.name}" on ${result.renamedBranch}`
+                            : `Renamed to "${result.task.name}"`,
+                        });
+                      } catch {
+                        dispatch({ type: 'SHOW_TOAST', message: 'Title generation failed' });
+                      }
+                    }}
+                  />
+                </div>
               ))}
             </div>
           );
