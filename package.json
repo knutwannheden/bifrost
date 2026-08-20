@@ -10,8 +10,9 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "biome check src/",
+    "lint": "biome check src/ tools/ scripts/",
     "check:mirror": "node scripts/check-session-mirror.mts",
+    "test": "npm --prefix tools/postmortem test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [],

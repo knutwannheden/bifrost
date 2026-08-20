@@ -91,7 +91,11 @@ function check(name: string, ok: boolean, detail = '') {
   const settled = await Promise.race([pending, new Promise((r) => setTimeout(() => r('HUNG'), 500))]);
   const applied = await new Promise((r) => setTimeout(() => r(mirrorCols('resized')), 50));
   disposeMirror('resized');
-  check('a resize mid-snapshot settles and still lands', settled !== 'HUNG' && applied === 72, `  settled=${JSON.stringify(settled) === '"HUNG"' ? 'HUNG' : 'ok'} cols=${applied}`);
+  check(
+    'a resize mid-snapshot settles and still lands',
+    settled !== 'HUNG' && applied === 72,
+    `  settled=${JSON.stringify(settled) === '"HUNG"' ? 'HUNG' : 'ok'} cols=${applied}`,
+  );
 }
 
 for (const [name, before, during, after] of cases) {

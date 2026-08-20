@@ -1,5 +1,5 @@
-import type { TranscriptEntry } from "./claude-parser.js";
-import type { ToolEvent, TokenTimeline, DiffSummary, SessionMetrics, BacktrackEntry } from "./types.js";
+import type { TranscriptEntry } from './claude-parser.js';
+import type { BacktrackEntry, DiffSummary, SessionMetrics, TokenTimeline, ToolEvent } from './types.js';
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;
 const FILE_FOCUS_WINDOW = 50;
@@ -12,12 +12,12 @@ export function computeMetrics(
   events: ToolEvent[],
   tokenTimeline: TokenTimeline,
   diff: DiffSummary,
-  contextWindowSize = DEFAULT_CONTEXT_WINDOW,
+  _contextWindowSize = DEFAULT_CONTEXT_WINDOW,
   entries?: TranscriptEntry[],
 ): SessionMetrics {
   const diffFiles = new Set(diff.files.map((f) => f.path));
   const hasDiff = diffFiles.size > 0;
-  const hasMutations = events.some((e) => e.category === "mutation");
+  const hasMutations = events.some((e) => e.category === 'mutation');
   const canMeasureTargeting = hasDiff && hasMutations;
 
   return {
@@ -64,17 +64,20 @@ function computeTimeToFirstCorrectFile(events: ToolEvent[], diffFiles: Set<strin
 
 // --- Iteration phase ---
 
-function computeAimlessBacktracks(events: ToolEvent[]): { aimlessBacktracks: number; backtrackDetail: BacktrackEntry[] } {
+function computeAimlessBacktracks(events: ToolEvent[]): {
+  aimlessBacktracks: number;
+  backtrackDetail: BacktrackEntry[];
+} {
   let backtracks = 0;
   let lastMutatedFile: string | undefined;
   const perFile = new Map<string, number>();
 
   for (const event of events) {
-    if (event.category === "test") {
+    if (event.category === 'test') {
       lastMutatedFile = undefined;
       continue;
     }
-    if (event.category === "mutation") {
+    if (event.category === 'mutation') {
       if (!event.filePath) {
         lastMutatedFile = undefined;
       } else if (lastMutatedFile === event.filePath) {
@@ -94,7 +97,7 @@ function computeAimlessBacktracks(events: ToolEvent[]): { aimlessBacktracks: num
 }
 
 function computeTestCycleCount(events: ToolEvent[]): number {
-  const testEvents = events.filter((e) => e.category === "test");
+  const testEvents = events.filter((e) => e.category === 'test');
   let cycles = 0;
   let inFailure = false;
   for (const event of testEvents) {
@@ -126,10 +129,10 @@ function computeEditWithoutReadRate(events: ToolEvent[]): number {
   const editedWithoutRead = new Set<string>();
 
   for (const event of events) {
-    if (event.category === "navigation" && event.filePath && event.toolName === "Read") {
+    if (event.category === 'navigation' && event.filePath && event.toolName === 'Read') {
       readFiles.add(event.filePath);
     }
-    if (event.category === "mutation" && event.filePath && !editedFiles.has(event.filePath)) {
+    if (event.category === 'mutation' && event.filePath && !editedFiles.has(event.filePath)) {
       editedFiles.add(event.filePath);
       if (!readFiles.has(event.filePath)) {
         editedWithoutRead.add(event.filePath);
@@ -153,15 +156,15 @@ function computeHumanCorrectionDensity(events: ToolEvent[], entries?: Transcript
   if (entries) {
     for (const entry of entries) {
       const e = entry as TranscriptEntry & { userType?: string };
-      if (e.type !== "user" || e.userType !== "external") continue;
+      if (e.type !== 'user' || e.userType !== 'external') continue;
       const content = e.message?.content;
-      if (typeof content === "string") {
-        if (content.startsWith("<local-command-caveat>")) continue;
-        if (content.startsWith("<bash-input>")) continue;
-        if (content.startsWith("<command-name>")) continue;
+      if (typeof content === 'string') {
+        if (content.startsWith('<local-command-caveat>')) continue;
+        if (content.startsWith('<bash-input>')) continue;
+        if (content.startsWith('<command-name>')) continue;
         humanPrompts++;
       } else if (Array.isArray(content)) {
-        const hasToolResult = (content as Array<Record<string, unknown>>).some((b) => b.type === "tool_result");
+        const hasToolResult = (content as Array<Record<string, unknown>>).some((b) => b.type === 'tool_result');
         if (!hasToolResult) humanPrompts++;
       }
     }

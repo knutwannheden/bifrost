@@ -1,17 +1,17 @@
 #!/usr/bin/env bun
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
-import { execFileSync } from "node:child_process";
-import { resolve, dirname, basename, join } from "node:path";
-import minimist from "minimist";
-import { parseClaudeTranscript, extractToolEvents, extractTokenTimeline } from "./claude-parser.js";
-import type { TranscriptEntry } from "./claude-parser.js";
-import { parseDiff } from "./diff-parser.js";
-import { computeMetrics } from "./metrics.js";
-import { bucketSession, flagMetrics } from "./bucketing.js";
-import { segmentSubTasks } from "./segmentation.js";
-import { buildClusterModel, classifyPoint, type ClusterModel } from "./clustering.js";
-import { formatTextReport, formatJsonReport } from "./report.js";
-import type { SessionReport, SessionMetrics, SubagentSummary, ToolEvent, TokenTimeline } from "./types.js";
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
+import minimist from 'minimist';
+import { bucketSession, flagMetrics } from './bucketing.js';
+import type { TranscriptEntry } from './claude-parser.js';
+import { extractTokenTimeline, extractToolEvents, parseClaudeTranscript } from './claude-parser.js';
+import { buildClusterModel, type ClusterModel, classifyPoint } from './clustering.js';
+import { parseDiff } from './diff-parser.js';
+import { computeMetrics } from './metrics.js';
+import { formatJsonReport, formatTextReport } from './report.js';
+import { segmentSubTasks } from './segmentation.js';
+import type { SessionMetrics, SessionReport, SubagentSummary, TokenTimeline, ToolEvent } from './types.js';
 
 const USAGE = `
 Usage: postmortem <mode> [options]
@@ -41,20 +41,20 @@ Common options:
 
 /** The 7 clustering dimensions in canonical order */
 const CLUSTER_METRICS: (keyof SessionMetrics)[] = [
-  "timeToFirstCorrectFile",
-  "aimlessBacktracks",
-  "testCycleCount",
-  "editWithoutReadRate",
-  "humanCorrectionDensity",
-  "toolErrorRate",
-  "fileFocusScore",
+  'timeToFirstCorrectFile',
+  'aimlessBacktracks',
+  'testCycleCount',
+  'editWithoutReadRate',
+  'humanCorrectionDensity',
+  'toolErrorRate',
+  'fileFocusScore',
 ];
 
 function metricsToVector(metrics: SessionMetrics): number[] {
   return CLUSTER_METRICS.map((key) => {
     const v = metrics[key];
     // Replace NaN with 0 for clustering (NaN means no diff, treat as neutral)
-    return typeof v === "number" && !Number.isNaN(v) ? v : 0;
+    return typeof v === 'number' && !Number.isNaN(v) ? v : 0;
   });
 }
 
@@ -62,10 +62,10 @@ function metricsToVector(metrics: SessionMetrics): number[] {
 
 function main() {
   const args = minimist(process.argv.slice(2), {
-    string: ["transcript", "diff", "base", "batch", "classify", "model"],
-    boolean: ["json", "help"],
-    default: { "context-window": 200000, k: 3, seed: 42, "min-lines": 100, model: "cluster-model.json" },
-    alias: { h: "help" },
+    string: ['transcript', 'diff', 'base', 'batch', 'classify', 'model'],
+    boolean: ['json', 'help'],
+    default: { 'context-window': 200000, k: 3, seed: 42, 'min-lines': 100, model: 'cluster-model.json' },
+    alias: { h: 'help' },
   });
 
   if (args.help) {
@@ -80,7 +80,7 @@ function main() {
   } else if (args.transcript) {
     runSingle(args);
   } else {
-    console.error("Error: provide --transcript, --batch, or --classify");
+    console.error('Error: provide --transcript, --batch, or --classify');
     console.error(USAGE);
     process.exit(1);
   }
@@ -94,10 +94,10 @@ function runSingle(args: minimist.ParsedArgs) {
     console.error(`Error: transcript file not found: ${transcriptPath}`);
     process.exit(1);
   }
-  const transcriptText = readFileSync(transcriptPath, "utf-8");
+  const transcriptText = readFileSync(transcriptPath, 'utf-8');
   const entries = parseClaudeTranscript(transcriptText);
   const diffText = resolveDiff(args, entries);
-  const contextWindowSize = Number(args["context-window"]) || 200000;
+  const contextWindowSize = Number(args['context-window']) || 200000;
 
   const events = extractToolEvents(entries);
   const tokenTimeline = extractTokenTimeline(entries);
@@ -110,7 +110,13 @@ function runSingle(args: minimist.ParsedArgs) {
   const subTasks = segmentSubTasks(entries, mergedEvents, diffSummary, contextWindowSize);
 
   const report: SessionReport = {
-    metrics, bucket, flags, tokenTimeline: mergedTimeline, diffSummary, subTasks, subagents,
+    metrics,
+    bucket,
+    flags,
+    tokenTimeline: mergedTimeline,
+    diffSummary,
+    subTasks,
+    subagents,
   };
 
   if (args.json) {
@@ -127,7 +133,7 @@ function runBatch(args: minimist.ParsedArgs) {
   const k = Number(args.k) || 3;
   const seed = Number(args.seed) || 42;
   const modelPath = resolve(args.model);
-  const minLines = Number(args["min-lines"]) || 100;
+  const minLines = Number(args['min-lines']) || 100;
 
   // Find JSONL files
   const jsonlFiles = findJsonlFiles(batchDir, minLines);
@@ -143,7 +149,7 @@ function runBatch(args: minimist.ParsedArgs) {
 
   for (const file of jsonlFiles) {
     try {
-      const text = readFileSync(file, "utf-8");
+      const text = readFileSync(file, 'utf-8');
       const entries = parseClaudeTranscript(text);
       const events = extractToolEvents(entries);
       const tokenTimeline = extractTokenTimeline(entries);
@@ -187,7 +193,10 @@ function runBatch(args: minimist.ParsedArgs) {
       model,
       sessions: normalizedSessions.map((s) => ({
         path: s.path,
-        cluster: classifyPoint(s.normalizedVector, model.clusters.map((c) => c.centroid)),
+        cluster: classifyPoint(
+          s.normalizedVector,
+          model.clusters.map((c) => c.centroid),
+        ),
         metrics: s.metrics,
       })),
     };
@@ -197,22 +206,29 @@ function runBatch(args: minimist.ParsedArgs) {
     for (let c = 0; c < model.clusters.length; c++) {
       const cluster = model.clusters[c];
       const members = normalizedSessions.filter(
-        (s) => classifyPoint(s.normalizedVector, model.clusters.map((cl) => cl.centroid)) === c,
+        (s) =>
+          classifyPoint(
+            s.normalizedVector,
+            model.clusters.map((cl) => cl.centroid),
+          ) === c,
       );
 
       console.log(`\n=== Cluster ${c + 1}: ${cluster.label} (${members.length} sessions) ===`);
-      console.log(`  Centroid: ${CLUSTER_METRICS.map((m, i) => `${m}=${cluster.stats[i].mean.toFixed(1)}`).join(", ")}`);
+      console.log(
+        `  Centroid: ${CLUSTER_METRICS.map((m, i) => `${m}=${cluster.stats[i].mean.toFixed(1)}`).join(', ')}`,
+      );
 
       for (const s of members) {
-        const name = basename(s.path, ".jsonl").slice(0, 8);
-        const project = basename(dirname(s.path)).replace(/^-Users-knut-git-/, "").replace(/--worktrees-.*/, "");
-        const highlights = CLUSTER_METRICS
-          .map((m, i) => ({ name: m, value: s.vector[i], z: s.normalizedVector[i] }))
+        const name = basename(s.path, '.jsonl').slice(0, 8);
+        const project = basename(dirname(s.path))
+          .replace(/^-Users-knut-git-/, '')
+          .replace(/--worktrees-.*/, '');
+        const highlights = CLUSTER_METRICS.map((m, i) => ({ name: m, value: s.vector[i], z: s.normalizedVector[i] }))
           .filter((h) => Math.abs(h.z) > 0.5)
           .sort((a, b) => Math.abs(b.z) - Math.abs(a.z))
           .slice(0, 3)
           .map((h) => `${h.name}=${formatMetricValue(h.name, h.value)}`)
-          .join("  ");
+          .join('  ');
         console.log(`  ${name}  (${project})  ${highlights}`);
       }
     }
@@ -220,10 +236,10 @@ function runBatch(args: minimist.ParsedArgs) {
 }
 
 function formatMetricValue(metric: string, value: number): string {
-  if (metric === "timeToFirstCorrectFile" || metric === "editWithoutReadRate" || metric === "toolErrorRate") {
+  if (metric === 'timeToFirstCorrectFile' || metric === 'editWithoutReadRate' || metric === 'toolErrorRate') {
     return `${(value * 100).toFixed(0)}%`;
   }
-  if (metric === "humanCorrectionDensity") return `${value.toFixed(1)}/100`;
+  if (metric === 'humanCorrectionDensity') return `${value.toFixed(1)}/100`;
   return `${Math.round(value)}`;
 }
 
@@ -242,8 +258,8 @@ function runClassify(args: minimist.ParsedArgs) {
     process.exit(1);
   }
 
-  const model: ClusterModel = JSON.parse(readFileSync(modelPath, "utf-8"));
-  const text = readFileSync(transcriptPath, "utf-8");
+  const model: ClusterModel = JSON.parse(readFileSync(modelPath, 'utf-8'));
+  const text = readFileSync(transcriptPath, 'utf-8');
   const entries = parseClaudeTranscript(text);
   const events = extractToolEvents(entries);
   const tokenTimeline = extractTokenTimeline(entries);
@@ -259,7 +275,10 @@ function runClassify(args: minimist.ParsedArgs) {
     return p.stddev === 0 ? 0 : (v - p.mean) / p.stddev;
   });
 
-  const clusterIdx = classifyPoint(normalized, model.clusters.map((c) => c.centroid));
+  const clusterIdx = classifyPoint(
+    normalized,
+    model.clusters.map((c) => c.centroid),
+  );
   const cluster = model.clusters[clusterIdx];
 
   // Compute distance to each cluster for confidence
@@ -273,13 +292,13 @@ function runClassify(args: minimist.ParsedArgs) {
     console.log(JSON.stringify({ cluster: clusterIdx, label: cluster.label, distances, metrics }, null, 2));
   } else {
     console.log(`Cluster: ${clusterIdx + 1} — ${cluster.label}`);
-    console.log(`Distance to clusters: ${distances.map((d, i) => `${i + 1}:${d.toFixed(2)}`).join("  ")}`);
+    console.log(`Distance to clusters: ${distances.map((d, i) => `${i + 1}:${d.toFixed(2)}`).join('  ')}`);
     console.log();
     for (let i = 0; i < model.metrics.length; i++) {
       const m = model.metrics[i];
       const v = vector[i];
       const z = normalized[i];
-      const marker = Math.abs(z) > 1 ? (z > 0 ? "HIGH" : "LOW ") : "    ";
+      const marker = Math.abs(z) > 1 ? (z > 0 ? 'HIGH' : 'LOW ') : '    ';
       console.log(`  [${marker}] ${m.padEnd(28)} ${formatMetricValue(m, v).padStart(8)}  (z=${z.toFixed(2)})`);
     }
   }
@@ -293,12 +312,12 @@ function findJsonlFiles(dir: string, minLines: number): string[] {
   function scan(d: string, depth: number) {
     if (depth > 2) return;
     for (const entry of readdirSync(d, { withFileTypes: true })) {
-      if (entry.isDirectory() && entry.name !== "subagents") {
+      if (entry.isDirectory() && entry.name !== 'subagents') {
         scan(join(d, entry.name), depth + 1);
-      } else if (entry.name.endsWith(".jsonl") && !entry.name.startsWith("agent-acompact-")) {
+      } else if (entry.name.endsWith('.jsonl') && !entry.name.startsWith('agent-acompact-')) {
         const path = join(d, entry.name);
-        const text = readFileSync(path, "utf-8");
-        const lines = text.split("\n").filter((l) => l.trim()).length;
+        const text = readFileSync(path, 'utf-8');
+        const lines = text.split('\n').filter((l) => l.trim()).length;
         if (lines >= minLines) results.push(path);
       }
     }
@@ -315,37 +334,38 @@ function resolveDiff(args: minimist.ParsedArgs, entries: TranscriptEntry[]): str
       console.error(`Error: diff file not found: ${diffPath}`);
       process.exit(1);
     }
-    return readFileSync(diffPath, "utf-8");
+    return readFileSync(diffPath, 'utf-8');
   }
 
   const cwd = extractCwd(entries);
-  if (!cwd) return "";
+  if (!cwd) return '';
 
   if (args.base) {
     try {
-      return execFileSync("git", ["-C", cwd, "diff", args.base], { encoding: "utf-8" });
+      return execFileSync('git', ['-C', cwd, 'diff', args.base], { encoding: 'utf-8' });
     } catch {
-      return "";
+      return '';
     }
   }
 
   const { startTime, endTime } = extractTimeRange(entries);
-  if (!startTime) return "";
+  if (!startTime) return '';
 
   try {
-    const logOutput = execFileSync("git", [
-      "-C", cwd, "log", "--oneline", "--format=%H",
-      `--after=${startTime}`, `--before=${endTime}`,
-    ], { encoding: "utf-8" }).trim();
+    const logOutput = execFileSync(
+      'git',
+      ['-C', cwd, 'log', '--oneline', '--format=%H', `--after=${startTime}`, `--before=${endTime}`],
+      { encoding: 'utf-8' },
+    ).trim();
 
-    if (!logOutput) return "";
+    if (!logOutput) return '';
 
-    const commits = logOutput.split("\n");
+    const commits = logOutput.split('\n');
     const firstCommit = commits[commits.length - 1];
     const lastCommit = commits[0];
-    return execFileSync("git", ["-C", cwd, "diff", `${firstCommit}~1`, lastCommit], { encoding: "utf-8" });
+    return execFileSync('git', ['-C', cwd, 'diff', `${firstCommit}~1`, lastCommit], { encoding: 'utf-8' });
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -373,8 +393,8 @@ function mergeSubagents(
   mainEvents: ToolEvent[],
   mainTimeline: TokenTimeline,
 ): { mergedEvents: ToolEvent[]; mergedTimeline: TokenTimeline; subagents: SubagentSummary } {
-  const sessionId = basename(transcriptPath, ".jsonl");
-  const subagentsDir = join(dirname(transcriptPath), sessionId, "subagents");
+  const sessionId = basename(transcriptPath, '.jsonl');
+  const subagentsDir = join(dirname(transcriptPath), sessionId, 'subagents');
 
   const summary: SubagentSummary = { count: 0, totalInputTokens: 0, totalOutputTokens: 0, totalEvents: 0 };
 
@@ -387,12 +407,10 @@ function mergeSubagents(
   let subTotalOutput = 0;
   let subCostWeighted = 0;
 
-  const files = readdirSync(subagentsDir).filter(
-    (f) => f.endsWith(".jsonl") && !f.startsWith("agent-acompact-"),
-  );
+  const files = readdirSync(subagentsDir).filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-acompact-'));
 
   for (const file of files) {
-    const text = readFileSync(join(subagentsDir, file), "utf-8");
+    const text = readFileSync(join(subagentsDir, file), 'utf-8');
     const subEntries = parseClaudeTranscript(text);
     const subEvents = extractToolEvents(subEntries);
     const timeline = extractTokenTimeline(subEntries);
@@ -408,8 +426,8 @@ function mergeSubagents(
   summary.totalOutputTokens = subTotalOutput;
   summary.totalEvents = allSubEvents.length;
 
-  const mergedEvents = [...mainEvents, ...allSubEvents].sort(
-    (a, b) => (a.timestamp || "").localeCompare(b.timestamp || ""),
+  const mergedEvents = [...mainEvents, ...allSubEvents].sort((a, b) =>
+    (a.timestamp || '').localeCompare(b.timestamp || ''),
   );
 
   const mergedTimeline: TokenTimeline = {

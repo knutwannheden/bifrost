@@ -168,20 +168,13 @@ function euclideanDistSq(a: number[], b: number[]): number {
  * Build a ClusterModel from raw metric data.
  * Normalizes, clusters, and stores everything needed to classify new sessions.
  */
-export function buildClusterModel(
-  rawData: number[][],
-  metricNames: string[],
-  k: number,
-  seed = 42,
-): ClusterModel {
+export function buildClusterModel(rawData: number[][], metricNames: string[], k: number, seed = 42): ClusterModel {
   const { normalized, params } = normalize(rawData);
   const { centroids, assignments } = kmeans(normalized, k, seed);
 
   // Build per-cluster stats in raw space
   const clusters: ClusterInfo[] = centroids.map((centroid, clusterIdx) => {
-    const memberIndices = assignments
-      .map((a, i) => (a === clusterIdx ? i : -1))
-      .filter((i) => i >= 0);
+    const memberIndices = assignments.map((a, i) => (a === clusterIdx ? i : -1)).filter((i) => i >= 0);
 
     const size = memberIndices.length;
     const stats: ClusterStats[] = metricNames.map((_, metricIdx) => {
@@ -204,23 +197,23 @@ export function buildClusterModel(
 }
 
 const METRIC_SHORT_NAMES: Record<string, string> = {
-  timeToFirstCorrectFile: "slow discovery",
-  aimlessBacktracks: "thrashing",
-  testCycleCount: "test churn",
-  editWithoutReadRate: "blind edits",
-  humanCorrectionDensity: "high steering",
-  toolErrorRate: "error-prone",
-  fileFocusScore: "scattered",
+  timeToFirstCorrectFile: 'slow discovery',
+  aimlessBacktracks: 'thrashing',
+  testCycleCount: 'test churn',
+  editWithoutReadRate: 'blind edits',
+  humanCorrectionDensity: 'high steering',
+  toolErrorRate: 'error-prone',
+  fileFocusScore: 'scattered',
 };
 
 const METRIC_LOW_NAMES: Record<string, string> = {
-  timeToFirstCorrectFile: "fast discovery",
-  aimlessBacktracks: "focused edits",
-  testCycleCount: "few test cycles",
-  editWithoutReadRate: "careful reads",
-  humanCorrectionDensity: "autonomous",
-  toolErrorRate: "low errors",
-  fileFocusScore: "focused files",
+  timeToFirstCorrectFile: 'fast discovery',
+  aimlessBacktracks: 'focused edits',
+  testCycleCount: 'few test cycles',
+  editWithoutReadRate: 'careful reads',
+  humanCorrectionDensity: 'autonomous',
+  toolErrorRate: 'low errors',
+  fileFocusScore: 'focused files',
 };
 
 function generateLabel(elevated: string[], depressed: string[]): string {
@@ -237,8 +230,8 @@ function generateLabel(elevated: string[], depressed: string[]): string {
     }
   }
 
-  if (parts.length === 0) return "Average";
+  if (parts.length === 0) return 'Average';
   // Capitalize first letter
-  const label = parts.join(", ");
+  const label = parts.join(', ');
   return label.charAt(0).toUpperCase() + label.slice(1);
 }

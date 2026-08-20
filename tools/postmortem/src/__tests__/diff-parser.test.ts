@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { parseDiff } from "../diff-parser.js";
+import { describe, expect, it } from 'vitest';
+import { parseDiff } from '../diff-parser.js';
 
-describe("parseDiff", () => {
-  it("parses a simple unified diff with additions and removals", () => {
+describe('parseDiff', () => {
+  it('parses a simple unified diff with additions and removals', () => {
     const diff = `diff --git a/src/utils.ts b/src/utils.ts
 index abc1234..def5678 100644
 --- a/src/utils.ts
@@ -21,19 +21,15 @@ index abc1234..def5678 100644
     expect(result.totalAdded).toBe(3);
     expect(result.totalRemoved).toBe(2);
     expect(result.files).toHaveLength(1);
-    expect(result.files[0].path).toBe("src/utils.ts");
+    expect(result.files[0].path).toBe('src/utils.ts');
     expect(result.files[0].linesAdded).toBe(3);
     expect(result.files[0].linesRemoved).toBe(2);
     expect(result.files[0].isNew).toBe(false);
     expect(result.files[0].isDeleted).toBe(false);
-    expect(result.files[0].addedLines).toEqual([
-      "export function updated() {",
-      "  return 2;",
-      "  // extra line",
-    ]);
+    expect(result.files[0].addedLines).toEqual(['export function updated() {', '  return 2;', '  // extra line']);
   });
 
-  it("parses multiple files", () => {
+  it('parses multiple files', () => {
     const diff = `diff --git a/src/a.ts b/src/a.ts
 index abc..def 100644
 --- a/src/a.ts
@@ -56,11 +52,11 @@ index abc..def 100644
     expect(result.files).toHaveLength(2);
     expect(result.totalAdded).toBe(2);
     expect(result.totalRemoved).toBe(1);
-    expect(result.files[0].path).toBe("src/a.ts");
-    expect(result.files[1].path).toBe("src/b.ts");
+    expect(result.files[0].path).toBe('src/a.ts');
+    expect(result.files[1].path).toBe('src/b.ts');
   });
 
-  it("detects new files", () => {
+  it('detects new files', () => {
     const diff = `diff --git a/src/new.ts b/src/new.ts
 new file mode 100644
 index 0000000..abc1234
@@ -78,7 +74,7 @@ index 0000000..abc1234
     expect(result.files[0].linesRemoved).toBe(0);
   });
 
-  it("detects deleted files", () => {
+  it('detects deleted files', () => {
     const diff = `diff --git a/src/old.ts b/src/old.ts
 deleted file mode 100644
 index abc1234..0000000
@@ -95,14 +91,14 @@ index abc1234..0000000
     expect(result.files[0].linesAdded).toBe(0);
   });
 
-  it("handles empty diff", () => {
-    const result = parseDiff("");
+  it('handles empty diff', () => {
+    const result = parseDiff('');
     expect(result.totalAdded).toBe(0);
     expect(result.totalRemoved).toBe(0);
     expect(result.files).toHaveLength(0);
   });
 
-  it("handles rename with changes", () => {
+  it('handles rename with changes', () => {
     const diff = `diff --git a/src/old-name.ts b/src/new-name.ts
 similarity index 80%
 rename from src/old-name.ts
@@ -118,7 +114,7 @@ index abc..def 100644
 `;
     const result = parseDiff(diff);
     expect(result.files).toHaveLength(1);
-    expect(result.files[0].path).toBe("src/new-name.ts");
+    expect(result.files[0].path).toBe('src/new-name.ts');
     expect(result.files[0].linesAdded).toBe(1);
     expect(result.files[0].linesRemoved).toBe(1);
   });

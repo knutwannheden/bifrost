@@ -1,5 +1,5 @@
 /** Tool event categories */
-export type ToolCategory = "navigation" | "mutation" | "test" | "other";
+export type ToolCategory = 'navigation' | 'mutation' | 'test' | 'other';
 
 /** Normalized tool event extracted from a transcript */
 export interface ToolEvent {
@@ -83,15 +83,15 @@ export interface BacktrackEntry {
 }
 
 /** Severity level for metric thresholds */
-export type Severity = "ok" | "warn" | "critical";
+export type Severity = 'ok' | 'warn' | 'critical';
 
 /** Cost efficiency tier */
-export type CostTier = "efficient" | "moderate" | "expensive";
+export type CostTier = 'efficient' | 'moderate' | 'expensive';
 
 /** Session classification after bucketing */
 export interface SessionBucket {
   costTier: CostTier;
-  dominantWaste: keyof SessionMetrics | "none";
+  dominantWaste: keyof SessionMetrics | 'none';
   recommendation: string;
 }
 

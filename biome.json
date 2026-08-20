@@ -1,7 +1,13 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.4.6/schema.json",
   "files": {
-    "includes": ["src/**"]
+    "includes": [
+      "src/**",
+      "tools/**",
+      "scripts/**",
+      "!tools/postmortem/cluster-model.json",
+      "!**/node_modules/**"
+    ]
   },
   "linter": {
     "enabled": true,
@@ -17,7 +23,9 @@
       },
       "correctness": {
         "noUnusedImports": "warn",
-        "useExhaustiveDependencies": "off"
+        "useExhaustiveDependencies": "off",
+        "noUnusedVariables": "warn",
+        "noUnusedFunctionParameters": "warn"
       },
       "style": {
         "noNonNullAssertion": "off",
@@ -25,7 +33,8 @@
       },
       "suspicious": {
         "noArrayIndexKey": "off",
-        "noUnknownAtRules": "off"
+        "noUnknownAtRules": "off",
+        "noExplicitAny": "warn"
       }
     }
   },

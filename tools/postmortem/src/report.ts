@@ -1,20 +1,20 @@
-import type { SessionReport, SessionMetrics, MetricFlag, Severity, SubTask } from "./types.js";
+import type { SessionReport, Severity, SubTask } from './types.js';
 
 const METRIC_LABELS: Record<string, string> = {
-  costPerDiffLine: "Cost per diff line",
-  timeToFirstCorrectFile: "Time to first correct file",
-  aimlessBacktracks: "Aimless backtracks",
-  testCycleCount: "Test cycle count",
-  editWithoutReadRate: "Edit-without-read rate",
-  humanCorrectionDensity: "Human correction density",
-  toolErrorRate: "Tool error rate",
-  fileFocusScore: "File focus score",
+  costPerDiffLine: 'Cost per diff line',
+  timeToFirstCorrectFile: 'Time to first correct file',
+  aimlessBacktracks: 'Aimless backtracks',
+  testCycleCount: 'Test cycle count',
+  editWithoutReadRate: 'Edit-without-read rate',
+  humanCorrectionDensity: 'Human correction density',
+  toolErrorRate: 'Tool error rate',
+  fileFocusScore: 'File focus score',
 };
 
 const SEVERITY_MARKERS: Record<Severity, string> = {
-  ok: " ",
-  warn: "!",
-  critical: "X",
+  ok: ' ',
+  warn: '!',
+  critical: 'X',
 };
 
 /**
@@ -24,61 +24,63 @@ export function formatTextReport(report: SessionReport): string {
   const lines: string[] = [];
 
   // Header
-  lines.push("=== Postmortem Analysis ===");
-  lines.push("");
+  lines.push('=== Postmortem Analysis ===');
+  lines.push('');
 
   // Classification
   const { bucket } = report;
   lines.push(`Classification: ${bucket.costTier.toUpperCase()}`);
-  if (bucket.dominantWaste !== "none") {
+  if (bucket.dominantWaste !== 'none') {
     lines.push(`Dominant waste:  ${METRIC_LABELS[bucket.dominantWaste] || bucket.dominantWaste}`);
   }
   lines.push(`Recommendation:  ${bucket.recommendation}`);
-  lines.push("");
+  lines.push('');
 
   // Metrics table
-  lines.push("--- Metrics ---");
+  lines.push('--- Metrics ---');
   for (const [key, label] of Object.entries(METRIC_LABELS)) {
     const value = report.metrics[key as keyof typeof report.metrics];
     const flag = report.flags.find((f) => f.metric === key);
-    const marker = flag ? SEVERITY_MARKERS[flag.severity] : " ";
+    const marker = flag ? SEVERITY_MARKERS[flag.severity] : ' ';
     lines.push(`[${marker}] ${label.padEnd(30)} ${formatValue(key, value)}`);
   }
-  lines.push("");
+  lines.push('');
 
   // Flags detail
   if (report.flags.length > 0) {
-    lines.push("--- Flags ---");
+    lines.push('--- Flags ---');
     for (const flag of report.flags) {
       const label = METRIC_LABELS[flag.metric] || flag.metric;
       lines.push(`[${flag.severity.toUpperCase()}] ${label}: ${formatValue(flag.metric, flag.value)}`);
       lines.push(`  -> ${flag.recommendation}`);
       // Show backtrack detail for aimless backtracks
-      if (flag.metric === "aimlessBacktracks" && report.metrics.backtrackDetail.length > 0) {
+      if (flag.metric === 'aimlessBacktracks' && report.metrics.backtrackDetail.length > 0) {
         const top = report.metrics.backtrackDetail.slice(0, 5);
         for (const entry of top) {
           lines.push(`     ${entry.filePath} (${entry.count}x)`);
         }
       }
     }
-    lines.push("");
+    lines.push('');
   }
 
   // Token summary
   const tl = report.tokenTimeline;
-  lines.push("--- Tokens ---");
+  lines.push('--- Tokens ---');
   lines.push(`Total input:  ${tl.totalInputTokens.toLocaleString()}`);
   lines.push(`Total output: ${tl.totalOutputTokens.toLocaleString()}`);
   lines.push(`Turns:        ${tl.turns.length}`);
   if (report.subagents.count > 0) {
     const sa = report.subagents;
-    lines.push(`Subagents:    ${sa.count} (${sa.totalEvents} events, ${sa.totalInputTokens.toLocaleString()} in / ${sa.totalOutputTokens.toLocaleString()} out)`);
+    lines.push(
+      `Subagents:    ${sa.count} (${sa.totalEvents} events, ${sa.totalInputTokens.toLocaleString()} in / ${sa.totalOutputTokens.toLocaleString()} out)`,
+    );
   }
-  lines.push("");
+  lines.push('');
 
   // Diff summary
   const ds = report.diffSummary;
-  lines.push("--- Diff ---");
+  lines.push('--- Diff ---');
   lines.push(`Files changed: ${ds.files.length}`);
   lines.push(`Lines added:   ${ds.totalAdded}`);
   lines.push(`Lines removed: ${ds.totalRemoved}`);
@@ -86,15 +88,15 @@ export function formatTextReport(report: SessionReport): string {
   // Sub-task breakdown (skip trivial sub-tasks: <3 events AND <3 turns)
   const substantial = report.subTasks.filter((st) => st.events.length >= 3 || st.tokenTimeline.turns.length >= 3);
   if (substantial.length > 1) {
-    lines.push("");
+    lines.push('');
     lines.push(`=== Sub-task Breakdown (${substantial.length} of ${report.subTasks.length}) ===`);
     for (let i = 0; i < substantial.length; i++) {
-      lines.push("");
+      lines.push('');
       lines.push(formatSubTask(i + 1, substantial[i]));
     }
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 /**
@@ -108,8 +110,12 @@ function formatSubTask(num: number, st: SubTask): string {
   const lines: string[] = [];
   const prompt = st.promptText.length > 80 ? `${st.promptText.slice(0, 77)}...` : st.promptText;
   lines.push(`--- Sub-task ${num}: ${prompt} ---`);
-  lines.push(`  Classification: ${st.bucket.costTier.toUpperCase()}${st.bucket.dominantWaste !== "none" ? ` (${METRIC_LABELS[st.bucket.dominantWaste] || st.bucket.dominantWaste})` : ""}`);
-  lines.push(`  Events: ${st.events.length}  Turns: ${st.tokenTimeline.turns.length}  Tokens: ${st.tokenTimeline.totalInputTokens.toLocaleString()} in / ${st.tokenTimeline.totalOutputTokens.toLocaleString()} out`);
+  lines.push(
+    `  Classification: ${st.bucket.costTier.toUpperCase()}${st.bucket.dominantWaste !== 'none' ? ` (${METRIC_LABELS[st.bucket.dominantWaste] || st.bucket.dominantWaste})` : ''}`,
+  );
+  lines.push(
+    `  Events: ${st.events.length}  Turns: ${st.tokenTimeline.turns.length}  Tokens: ${st.tokenTimeline.totalInputTokens.toLocaleString()} in / ${st.tokenTimeline.totalOutputTokens.toLocaleString()} out`,
+  );
 
   // Compact metrics — only show flagged ones
   if (st.flags.length > 0) {
@@ -119,30 +125,34 @@ function formatSubTask(num: number, st: SubTask): string {
     }
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 const PERCENT_METRICS = new Set([
-  "timeToFirstCorrectFile", "contextPressurePeak", "mutationDiscoveryWaste",
-  "editWithoutReadRate", "editEditChainRate", "toolErrorRate",
+  'timeToFirstCorrectFile',
+  'contextPressurePeak',
+  'mutationDiscoveryWaste',
+  'editWithoutReadRate',
+  'editEditChainRate',
+  'toolErrorRate',
 ]);
 
 function formatValue(metric: string, value: number): string {
-  if (Number.isNaN(value)) return "N/A (no diff)";
-  if (value === Number.POSITIVE_INFINITY) return "Infinity";
+  if (Number.isNaN(value)) return 'N/A (no diff)';
+  if (value === Number.POSITIVE_INFINITY) return 'Infinity';
   if (PERCENT_METRICS.has(metric)) {
     return `${(value * 100).toFixed(1)}%`;
   }
-  if (metric === "costPerDiffLine") {
+  if (metric === 'costPerDiffLine') {
     return `${value.toFixed(0)} tokens/line`;
   }
-  if (metric === "fileRereadRatio") {
+  if (metric === 'fileRereadRatio') {
     return `${value.toFixed(1)}x`;
   }
-  if (metric === "humanCorrectionDensity") {
+  if (metric === 'humanCorrectionDensity') {
     return `${value.toFixed(1)} per 100 calls`;
   }
-  if (metric === "fileFocusScore") {
+  if (metric === 'fileFocusScore') {
     return `${value.toFixed(0)} files/window`;
   }
   return `${value}`;

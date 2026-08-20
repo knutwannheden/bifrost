@@ -273,7 +273,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       const isAsync = body.async === true;
       console.log(
-        `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? prompt.length + ' chars' : 'none'}`,
+        `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? `${prompt.length} chars` : 'none'}`,
       );
       if (isAsync) {
         // Return immediately with a pending response, create in background
