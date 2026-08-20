@@ -93,6 +93,12 @@ export function useTerminal(
   // would otherwise fire SIGWINCH and trigger a TUI redraw on every
   // tab switch.
   const lastResize = useRef<{ cols: number; rows: number } | null>(null);
+  // A snapshot is built for the size the terminal had when it asked for one, so
+  // reshaping before it lands would write it into a grid it was not laid out
+  // for — and Claude, which repaints only the cells it believes changed, would
+  // keep diffing against its own idea of the screen.
+  const attachSettled = useRef(false);
+  const deferredFit = useRef(false);
   const sendResizeIfChanged = useCallback(
     (cols: number, rows: number) => {
       if (!sessionId) return;
@@ -105,6 +111,8 @@ export function useTerminal(
   useEffect(() => {
     if (!sessionId || !containerRef.current) return;
     setLoading(true);
+    attachSettled.current = false;
+    deferredFit.current = false;
 
     const paneType = options?.paneType;
     const selectedTheme = resolveTerminalTheme(options?.terminalTheme ?? 'Auto', options?.isDark ?? true);
@@ -183,6 +191,15 @@ export function useTerminal(
     // these dimensions.
     safeFit(terminal, fitAddon);
 
+    const runFit = (): void => {
+      if (!attachSettled.current) {
+        deferredFit.current = true;
+        return;
+      }
+      safeFit(terminal, fitAddon);
+      sendResizeIfChanged(terminal.cols, terminal.rows);
+    };
+
     // Font-settle: terminal.open() above measures the cell using whatever
     // font is currently resolved, which can be the fallback if the configured
     // family hasn't finished loading. Once the real font lands, dimensions
@@ -195,8 +212,7 @@ export function useTerminal(
       .then(() => {
         if (fontSettleCancelled || !terminalRef.current || !fitAddonRef.current) return;
         webglAddonRef.current?.clearTextureAtlas();
-        safeFit(terminal, fitAddon);
-        sendResizeIfChanged(terminal.cols, terminal.rows);
+        runFit();
       })
       .catch(() => {
         /* font failed to load — fall back to whatever xterm measured */
@@ -311,6 +327,15 @@ export function useTerminal(
       terminal.write(data);
     }
 
+    /** Any fit held back while the snapshot was in flight lands now. */
+    function releaseFits(): void {
+      attachSettled.current = true;
+      if (deferredFit.current) {
+        deferredFit.current = false;
+        runFit();
+      }
+    }
+
     /** No session to snapshot: the pane renders live output from here on. */
     function attachFailed(): void {
       attached = true;
@@ -327,10 +352,12 @@ export function useTerminal(
       .attachSession(sessionId, terminal.cols, terminal.rows)
       .then((alive) => {
         if (!alive) attachFailed();
+        releaseFits();
       })
       .catch((err) => {
         console.error(`[terminal] attach failed for ${sessionId}:`, err);
         attachFailed();
+        releaseFits();
       });
 
     // Strip per-line trailing whitespace from clipboard text. xterm's
@@ -403,8 +430,7 @@ export function useTerminal(
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
-        safeFit(terminal, fitAddon);
-        sendResizeIfChanged(terminal.cols, terminal.rows);
+        runFit();
       }, 100);
     });
     resizeObserver.observe(containerRef.current);
@@ -439,6 +465,10 @@ export function useTerminal(
       pendingResize.current = setTimeout(() => {
         pendingResize.current = null;
         if (!terminalRef.current || !fitAddonRef.current || !sessionId) return;
+        if (!attachSettled.current) {
+          deferredFit.current = true;
+          return;
+        }
         safeFit(terminalRef.current, fitAddonRef.current);
         sendResizeIfChanged(terminalRef.current.cols, terminalRef.current.rows);
       }, delay);
