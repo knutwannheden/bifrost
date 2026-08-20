@@ -1,8 +1,9 @@
 import path from 'node:path';
-import { app, BrowserWindow, globalShortcut, Menu, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, globalShortcut, Menu, nativeImage, screen, shell } from 'electron';
 import started from 'electron-squirrel-startup';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { resolveKeymap, serializeBinding } from '../shared/keymap';
+import type { BifrostConfig } from '../shared/types';
 import { stopAllWatching } from './activity-watcher';
 import { initApi, startApi, stopApi } from './bifrost-api';
 import { loadConfig, saveConfig } from './config';
@@ -30,12 +31,55 @@ function setZoom(win: BrowserWindow | null | undefined, level: number): void {
   saveConfig(config);
 }
 
+const MIN_WIDTH = 800;
+const MIN_HEIGHT = 600;
+/** How much of the window a display must cover for the position to be reachable. */
+const ON_SCREEN_MARGIN = 100;
+
+type WindowBounds = NonNullable<BifrostConfig['windowBounds']>;
+
+/**
+ * Saved bounds survive a display being unplugged or rearranged, so they are
+ * only reused while some display still shows enough of the window to grab.
+ */
+function reachable(bounds: WindowBounds | undefined): WindowBounds | undefined {
+  if (!bounds) return undefined;
+  const visible = screen.getAllDisplays().some(({ workArea: a }) => {
+    const overlapX = Math.min(bounds.x + bounds.width, a.x + a.width) - Math.max(bounds.x, a.x);
+    const overlapY = Math.min(bounds.y + bounds.height, a.y + a.height) - Math.max(bounds.y, a.y);
+    return overlapX >= ON_SCREEN_MARGIN && overlapY >= ON_SCREEN_MARGIN;
+  });
+  if (!visible) return undefined;
+  return { ...bounds, width: Math.max(bounds.width, MIN_WIDTH), height: Math.max(bounds.height, MIN_HEIGHT) };
+}
+
+let boundsTimer: ReturnType<typeof setTimeout> | null = null;
+
+function rememberBounds(win: BrowserWindow): void {
+  if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return;
+  const config = loadConfig();
+  // getNormalBounds is the un-maximized rectangle, so restoring down after a
+  // restart puts the window back where it was before it was maximized.
+  config.windowBounds = win.getNormalBounds();
+  config.windowMaximized = win.isMaximized();
+  saveConfig(config);
+}
+
+function rememberBoundsSoon(win: BrowserWindow): void {
+  if (boundsTimer) clearTimeout(boundsTimer);
+  boundsTimer = setTimeout(() => {
+    boundsTimer = null;
+    rememberBounds(win);
+  }, 500);
+}
+
 const createWindow = () => {
+  const saved = loadConfig();
+  const bounds = reachable(saved.windowBounds);
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 600,
+    ...(bounds ?? { width: 1200, height: 800 }),
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
     backgroundColor: '#282a36',
     ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset' as const } : { autoHideMenuBar: true }),
     icon: path.join(__dirname, '../../assets/icon.png'),
@@ -54,9 +98,17 @@ const createWindow = () => {
     return { action: 'deny' };
   });
 
+  if (saved.windowMaximized) mainWindow.maximize();
+
+  const win = mainWindow;
+  win.on('resized', () => rememberBoundsSoon(win));
+  win.on('moved', () => rememberBoundsSoon(win));
+  win.on('maximize', () => rememberBounds(win));
+  win.on('unmaximize', () => rememberBounds(win));
+  win.on('close', () => rememberBounds(win));
+
   // Restore saved zoom level
-  const savedZoom = loadConfig().zoomLevel;
-  if (savedZoom) mainWindow.webContents.setZoomLevel(savedZoom);
+  if (saved.zoomLevel) mainWindow.webContents.setZoomLevel(saved.zoomLevel);
 
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);

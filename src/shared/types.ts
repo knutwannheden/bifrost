@@ -104,6 +104,9 @@ export interface BifrostConfig {
   fontFamily: string;
   fontWeight: number;
   zoomLevel?: number;
+  /** Where the window sits when it is neither maximized nor full screen. */
+  windowBounds?: { x: number; y: number; width: number; height: number };
+  windowMaximized?: boolean;
   permissionMode: 'default' | 'auto-mode' | 'sandbox' | 'skip-permissions';
   hideTerminalOnSwitch: boolean;
   notifications: boolean;
