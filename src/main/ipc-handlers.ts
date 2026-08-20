@@ -924,13 +924,8 @@ end tell`;
   });
 
   // Terminal title
-  ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, taskId: string, title: string) => {
-    try {
-      updateTask(taskId, { terminalTitle: title });
-      mainWindow.setTitle(`BIFROST — ${title}`);
-    } catch {
-      // Database may be closed during shutdown
-    }
+  ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, _taskId: string, title: string) => {
+    mainWindow.setTitle(`BIFROST — ${title}`);
   });
 
   // Context capture

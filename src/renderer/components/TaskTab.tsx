@@ -140,13 +140,15 @@ export default function TaskTab({
     );
   }
 
-  const tooltipLines = [
-    task.name,
-    task.summary,
-    task.branch ? `Branch: ${task.branch}` : undefined,
-    `Base: ${task.baseBranch}`,
-    task.terminalTitle ? `Terminal: ${task.terminalTitle}` : undefined,
-  ].filter(Boolean) as string[];
+  // An in-place task works on the checked-out branch, so naming its base twice
+  // says nothing; a task with no branch of its own has only a base to show.
+  const branchLine = !task.branch
+    ? `Base: ${task.baseBranch}`
+    : task.branch === task.baseBranch
+      ? `Branch: ${task.branch}`
+      : `Branch: ${task.branch} · Base: ${task.baseBranch}`;
+
+  const tooltipLines = [task.name, task.summary, branchLine].filter(Boolean) as string[];
 
   // Activity indicator: green pulse when Claude is working, solid green when results waiting
   const showPulse = task.claudeActive === true;
