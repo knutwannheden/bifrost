@@ -358,10 +358,6 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           dispatch({ type: 'TOGGLE_STATS' });
           break;
 
-        case 'view.supervisor':
-          dispatch({ type: 'TOGGLE_SUPERVISOR' });
-          break;
-
         case 'view.activity': {
           const activeTaskForActivity = s.tasks.find((t) => t.id === s.activeTaskId);
           const repoForActivity = activeTaskForActivity

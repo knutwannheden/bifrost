@@ -50,7 +50,6 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
   'view.triage': { id: 'view.triage', label: 'Triage', category: 'views' },
   'view.notifications': { id: 'view.notifications', label: 'Notifications', category: 'views' },
   'view.stats': { id: 'view.stats', label: 'Stats', category: 'views' },
-  'view.supervisor': { id: 'view.supervisor', label: 'Supervisor', category: 'views' },
   'view.activity': { id: 'view.activity', label: 'Activity / tokens', category: 'views', requiresTask: true },
   'action.openIde': { id: 'action.openIde', label: 'Open in IDE', category: 'actions', requiresTask: true },
   'action.openPr': { id: 'action.openPr', label: 'Open PR in GitHub', category: 'actions', requiresTask: true },

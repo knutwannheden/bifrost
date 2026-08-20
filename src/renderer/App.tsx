@@ -13,7 +13,6 @@ import RightIconBar from './components/RightIconBar';
 import SettingsOverlay from './components/SettingsOverlay';
 import StatsOverlay from './components/StatsOverlay';
 import StatusBar from './components/StatusBar';
-import SupervisorOverlay from './components/SupervisorOverlay';
 import TaskCreateDialog from './components/TaskCreateDialog';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import TaskSidebar from './components/TaskSidebar';
@@ -557,7 +556,6 @@ export default function App() {
               {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
               {state.showNotes && <NotesOverlay />}
               {state.showStats && <StatsOverlay />}
-              {state.showSupervisor && <SupervisorOverlay />}
               {state.showTriage && <TriageOverlay />}
             </div>
 

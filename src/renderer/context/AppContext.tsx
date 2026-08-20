@@ -54,7 +54,6 @@ export interface AppState {
   showSettings: boolean;
   showNotes: boolean;
   showStats: boolean;
-  showSupervisor: boolean;
   paneStates: Record<string, TaskPaneState>;
   /** Review markdown content keyed by reviewId */
   reviewContent: Record<string, string>;
@@ -110,7 +109,6 @@ export type AppAction =
   | { type: 'TOGGLE_SETTINGS' }
   | { type: 'TOGGLE_NOTES' }
   | { type: 'TOGGLE_STATS' }
-  | { type: 'TOGGLE_SUPERVISOR' }
   | { type: 'SET_DIFF_MODE'; mode: DiffMode }
   | { type: 'SET_DEV_SESSION'; taskId: string; devSessionId: string }
   | { type: 'CLOSE_DEV_SESSION'; taskId: string }
@@ -181,7 +179,6 @@ const initialState: AppState = {
   showSettings: false,
   showNotes: false,
   showStats: false,
-  showSupervisor: false,
   paneStates: {},
   reviewContent: {},
   reviewStatus: {},
@@ -239,7 +236,6 @@ const allOverlaysClosed = {
   showSettings: false,
   showNotes: false,
   showStats: false,
-  showSupervisor: false,
   showTriage: false,
 };
 
@@ -261,7 +257,6 @@ export function isAnyOverlayOpen(state: AppState): boolean {
     state.showSettings ||
     state.showNotes ||
     state.showStats ||
-    state.showSupervisor ||
     state.showTriage
   )
     return true;
@@ -382,8 +377,6 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showNotes: !state.showNotes });
     case 'TOGGLE_STATS':
       return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showStats: !state.showStats });
-    case 'TOGGLE_SUPERVISOR':
-      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showSupervisor: !state.showSupervisor });
     case 'SET_DIFF_MODE': {
       if (!state.activeTaskId) return state;
       const ps = getPaneState(state, state.activeTaskId);

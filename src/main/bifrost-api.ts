@@ -35,7 +35,6 @@ import {
   startReviewActivityWatch,
 } from './review-service';
 import { killSession } from './session-manager';
-import { completeSupervisorItem } from './supervisor-service';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 import { removeWorktree } from './worktree-manager';
 
@@ -513,14 +512,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // Supervisor stop — the item's Claude session finished its turn
-      const hookSupervisorItemId = body.bifrost_supervisor_item_id as string;
-      if (hookEventName === 'Stop' && hookContext === 'supervisor' && hookSupervisorItemId) {
-        completeSupervisorItem(hookSupervisorItemId);
-        jsonResponse(res, { ok: true });
-        return;
-      }
-
       // Review stop — only kill the session if the review file was actually written.
       // The Stop hook fires after every turn, including the first turn where Claude
       // may just acknowledge the prompt without producing output yet.
@@ -779,11 +770,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const triageId = body.bifrost_triage_id as string;
       if (context === 'triage' && triageId) {
         setTriageSessionId(triageId, sessionId);
-        jsonResponse(res, { ok: true });
-        return;
-      }
-      // Supervisor context — no per-item session tracking yet
-      if (context === 'supervisor') {
         jsonResponse(res, { ok: true });
         return;
       }
