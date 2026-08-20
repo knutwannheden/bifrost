@@ -1,8 +1,9 @@
-import serializeModule from '@xterm/addon-serialize';
+import { SerializeAddon } from '@xterm/addon-serialize';
+// @xterm/headless names a "module" build that it does not ship, so every
+// loader takes its CommonJS entry — which exposes only a default binding.
 import headless from '@xterm/headless';
 
 const { Terminal } = headless;
-const { SerializeAddon } = serializeModule;
 
 /**
  * A headless mirror of each session's screen, fed every PTY byte. On attach it
@@ -12,7 +13,7 @@ const { SerializeAddon } = serializeModule;
  */
 interface SessionMirror {
   term: InstanceType<typeof Terminal>;
-  serializer: InstanceType<typeof SerializeAddon>;
+  serializer: SerializeAddon;
   /** Output withheld from the renderer while a snapshot is being taken. */
   held: string[] | null;
 }

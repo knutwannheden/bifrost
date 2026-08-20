@@ -303,9 +303,17 @@ export function useTerminal(
 
     // The attach carries this geometry to the PTY, so record it as sent.
     lastResize.current = { cols: terminal.cols, rows: terminal.rows };
-    window.bifrost.attachSession(sessionId, terminal.cols, terminal.rows).then((alive) => {
-      if (!alive) setLoading(false);
-    });
+    window.bifrost
+      .attachSession(sessionId, terminal.cols, terminal.rows)
+      .then((alive) => {
+        if (!alive) setLoading(false);
+      })
+      .catch((err) => {
+        // No snapshot is coming, so the pane renders live output as it arrives.
+        console.error(`[terminal] attach failed for ${sessionId}:`, err);
+        attached = true;
+        setLoading(false);
+      });
 
     // Strip per-line trailing whitespace from clipboard text. xterm's
     // getTrimmedLength counts cells holding regular spaces (e.g. background-
