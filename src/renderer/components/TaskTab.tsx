@@ -150,7 +150,7 @@ export default function TaskTab({
 
   const tooltipLines = [task.name, task.summary, branchLine].filter(Boolean) as string[];
 
-  // Activity indicator: green pulse when Claude is working, solid green when results waiting
+  // Activity indicator: green pulse while Claude works, solid blue once results wait
   const showPulse = task.claudeActive === true;
   const showSolid = !showPulse && task.hasUnread && !isActive;
 
@@ -224,7 +224,7 @@ export default function TaskTab({
           </span>
         </span>
         {showPulse && !isActive && <span className="activity-pulse absolute top-0 bottom-0 left-0 w-1" />}
-        {showSolid && <span className="absolute top-0 bottom-0 left-0 w-1 bg-success" />}
+        {showSolid && <span className="absolute top-0 bottom-0 left-0 w-1 bg-info" />}
         {isActive && <span className="absolute top-0 bottom-0 left-0 w-1 bg-accent" />}
       </button>
       {showTooltip &&
