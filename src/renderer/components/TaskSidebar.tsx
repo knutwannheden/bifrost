@@ -184,7 +184,7 @@ export default function TaskSidebar() {
             }}
           />
           {!filterFocused && !filter && filterShortcut ? (
-            <span className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none">
+            <span className="absolute right-1.5 top-0 bottom-0 flex items-center pointer-events-none">
               <Kbd>{filterShortcut}</Kbd>
             </span>
           ) : null}
