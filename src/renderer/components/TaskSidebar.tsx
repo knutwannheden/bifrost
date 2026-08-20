@@ -154,7 +154,7 @@ export default function TaskSidebar() {
 
   return (
     <div
-      className="relative flex flex-col shrink-0 bg-surface/50 border-r border-border-default"
+      className="relative flex flex-col shrink-0 bg-surface border-r border-border-default"
       style={{ width: dragWidth ?? width }}
     >
       <div className="p-2 border-b border-border-default">
