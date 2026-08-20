@@ -390,17 +390,19 @@ export function useTerminal(
       }
     });
 
-    // ResizeObserver for auto-fit
-    // Debounce PTY resizes to avoid flooding the process with SIGWINCHes
-    // during rapid window/pane drags — each one causes a full TUI redraw.
+    // Auto-fit once a drag settles: one SIGWINCH per drag rather than one per
+    // frame, each of which costs a full TUI redraw. xterm is reshaped in the
+    // same callback, so the grid Claude writes for is the grid it lands in —
+    // fitting eagerly would leave them disagreeing for the length of the drag,
+    // and its cursor-relative redraws would land on the wrong rows.
     let resizeTimer: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width === 0 || rect.height === 0) return;
-      safeFit(terminal, fitAddon);
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(() => {
         resizeTimer = null;
+        safeFit(terminal, fitAddon);
         sendResizeIfChanged(terminal.cols, terminal.rows);
       }, 100);
     });
