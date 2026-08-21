@@ -42,6 +42,7 @@ import { checkIntegration, installIntegration } from './integration-installer';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { setActiveTaskId } from './notification-service';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
+import { getTaskPrs } from './pr-index';
 import { handleScrapeResponse, sendPrompt } from './prompt-sender';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
@@ -702,6 +703,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     tasks = tasks.map((t) => (idSet.has(t.id) ? reordered[ri++] : t));
     saveTasks(tasks);
   });
+
+  ipcMain.handle(IPC.GET_TASK_PRS, () => getTaskPrs(tasks, loadConfig().repos));
 
   ipcMain.handle(IPC.GET_SESSION_MTIMES, () => {
     const result: Record<string, number> = {};

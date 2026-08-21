@@ -42,6 +42,9 @@
   /* ── Status (Dracula) ──────────────────────────────────────── */
   --color-success: #50fa7b; /* Dracula Green */
   --color-info: #8be9fd; /* Dracula Cyan */
+  /* Text on a filled status colour. The dark theme's statuses are bright, the
+     light theme's are deep, so the readable ink flips with them. */
+  --color-on-status: #21222c;
   --color-danger: #ff5555; /* Dracula Red */
   --color-warning: #ffb86c; /* Dracula Orange */
 
@@ -75,6 +78,7 @@ html.light {
 
   --color-success: #16a34a;
   --color-info: #0891b2; /* cyan, since the light accent is already blue */
+  --color-on-status: #ffffff;
   --color-danger: #dc2626;
   --color-warning: #d97706;
 
@@ -102,6 +106,7 @@ html.light {
   --color-accent-muted: var(--color-accent-muted);
   --color-success: var(--color-success);
   --color-info: var(--color-info);
+  --color-on-status: var(--color-on-status);
   --color-danger: var(--color-danger);
   --color-warning: var(--color-warning);
   --color-highlight: var(--color-highlight);

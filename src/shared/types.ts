@@ -2,6 +2,13 @@ export type TaskStatus = 'running' | 'stopped' | 'error' | 'archived';
 
 export type TaskOutcome = 'merged' | 'abandoned' | 'experimental' | 'superseded' | 'pending';
 
+/** The pull request opened from a task's branch. */
+export interface TaskPr {
+  number: number;
+  state: 'open' | 'draft' | 'merged' | 'closed';
+  url: string;
+}
+
 export interface TaskCuration {
   outcome: TaskOutcome;
   confidence: 'auto' | 'ai' | 'user';

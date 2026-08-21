@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Task } from '../../shared/types';
+import type { Task, TaskPr } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import Highlight from './Highlight';
 import PinIcon from './PinIcon';
+import PrPill from './PrPill';
 import Spinner from './Spinner';
 
 interface TaskTabProps {
@@ -18,6 +19,7 @@ interface TaskTabProps {
   onTogglePin: () => void;
   search: string;
   isSelected: boolean;
+  pr?: TaskPr;
 }
 
 export default function TaskTab({
@@ -32,6 +34,7 @@ export default function TaskTab({
   onTogglePin,
   search,
   isSelected,
+  pr,
 }: TaskTabProps) {
   const { state, dispatch } = useApp();
   const [editing, setEditing] = useState(false);
@@ -187,8 +190,11 @@ export default function TaskTab({
               <Highlight text={task.name} search={search} />
             </span>
           </span>
-          <span className="text-[10px] leading-tight truncate text-muted">
-            <Highlight text={repoName} search={search} />
+          <span className="flex items-center gap-1 text-[10px] leading-tight text-muted">
+            <span className="flex-1 truncate">
+              <Highlight text={repoName} search={search} />
+            </span>
+            {pr ? <PrPill pr={pr} onOpen={() => window.bifrost.openUrl(pr.url)} /> : null}
           </span>
         </span>
         {/* Sits over the label, which masks its right edge on hover: the label

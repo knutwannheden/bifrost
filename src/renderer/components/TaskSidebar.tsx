@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { TaskPr } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { useFlipList } from '../hooks/useFlipList';
@@ -23,6 +24,7 @@ const DEFAULT_COLLAPSED: (typeof GROUPS)[number][] = ['This week', 'Last week', 
 export default function TaskSidebar() {
   const { state, dispatch } = useApp();
   const [mtimes, setMtimes] = useState<Record<string, number>>({});
+  const [prs, setPrs] = useState<Record<string, TaskPr>>({});
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState(0);
@@ -36,6 +38,11 @@ export default function TaskSidebar() {
     const load = () => {
       window.bifrost.getSessionMtimes().then((m) => {
         if (!cancelled) setMtimes(m);
+      });
+      // Main answers from a per-repo cache, so this costs a `gh` call only
+      // once its refresh window has passed.
+      window.bifrost.getTaskPrs().then((p) => {
+        if (!cancelled) setPrs(p);
       });
     };
     load();
@@ -236,6 +243,7 @@ export default function TaskSidebar() {
                     isActive={task.id === state.activeTaskId}
                     search={filter}
                     isSelected={task.id === selectedId}
+                    pr={prs[task.id]}
                     onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
                     onClose={() => {
                       window.bifrost.stopTask(task.id).then((updated) => {

@@ -20,6 +20,7 @@ import type {
   Task,
   TaskCuration,
   TaskOutcome,
+  TaskPr,
   TokenUsageResult,
   TriageEntry,
 } from './types';
@@ -52,6 +53,7 @@ export const IPC = {
   LIST_TASKS: 'task:list',
   REORDER_TASKS: 'tasks:reorder',
   GET_SESSION_MTIMES: 'task:session-mtimes',
+  GET_TASK_PRS: 'task:prs',
 
   // Terminal sessions
   CREATE_DEV_TERMINAL: 'session:create-dev-terminal',
@@ -206,6 +208,8 @@ export interface BifrostAPI {
   listTasks(): Promise<Task[]>;
   reorderTasks(taskIds: string[]): Promise<void>;
   getSessionMtimes(): Promise<Record<string, number>>;
+  /** The pull request on each task's branch, for the tasks that have one. */
+  getTaskPrs(): Promise<Record<string, TaskPr>>;
 
   // Terminal
   createDevTerminal(taskId: string): Promise<string>;
