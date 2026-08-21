@@ -180,8 +180,10 @@ export default function TaskSidebar() {
                 setFilter('');
                 returnFocusToTerminal();
               } else if (e.key === 'Escape') {
-                setFilter('');
-                returnFocusToTerminal();
+                // Tested against the raw value so trailing whitespace still
+                // counts as something to clear before focus leaves.
+                if (filter) setFilter('');
+                else returnFocusToTerminal();
               }
               // Modified strokes stay with the global keymap (Cmd+B, tab switching);
               // bare keys and F2 belong to the filter.
