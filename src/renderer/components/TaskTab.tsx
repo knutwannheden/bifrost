@@ -180,7 +180,7 @@ export default function TaskTab({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <span className="flex flex-col min-w-0 flex-1 overflow-hidden group-hover:mask-r-from-[calc(100%-2.5rem)] group-hover:mask-r-to-[calc(100%-1.5rem)]">
+        <span className="flex flex-col min-w-0 flex-1 overflow-hidden group-hover:mask-r-from-[calc(100%-2rem)] group-hover:mask-r-to-[calc(100%-1.5rem)]">
           <span className="flex items-center gap-1.5">
             {regenerating ? <Spinner size="sm" /> : null}
             {task.hasUnread && !isActive && !showSolid ? (
@@ -190,7 +190,7 @@ export default function TaskTab({
               <Highlight text={task.name} search={search} />
             </span>
           </span>
-          <span className="flex items-center gap-1 text-[10px] leading-tight text-muted">
+          <span className="flex items-center gap-1 pr-8 text-[10px] leading-tight text-muted">
             <span className="flex-1 truncate">
               <Highlight text={repoName} search={search} />
             </span>
