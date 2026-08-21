@@ -191,7 +191,7 @@ export default function TaskTab({
             </span>
           </span>
           <span className="flex items-center gap-1 pr-8 text-[10px] leading-tight text-muted">
-            <span className="flex-1 truncate">
+            <span className="truncate">
               <Highlight text={repoName} search={search} />
             </span>
             {pr ? <PrPill pr={pr} onOpen={() => window.bifrost.openUrl(pr.url)} /> : null}
