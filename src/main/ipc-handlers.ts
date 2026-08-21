@@ -372,11 +372,18 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     inPlace = true;
     taskBranch = baseBranch;
   } else {
-    const created = params.prInfo
-      ? await createWorktreeFromPr(repo.path, name, params.prInfo)
-      : await createWorktree(repo.path, name, baseBranch, params.branchName);
-    worktreePath = created.worktreePath;
-    taskBranch = created.branch;
+    if (params.prInfo) {
+      const created = await createWorktreeFromPr(repo.path, name, params.prInfo);
+      worktreePath = created.worktreePath;
+      taskBranch = created.branch;
+    } else {
+      const created = await createWorktree(repo.path, name, baseBranch, params.branchName);
+      worktreePath = created.worktreePath;
+      taskBranch = created.branch;
+      // Record the ref the worktree actually forked from, so a diff compares
+      // against that rather than a local branch that shares its name.
+      baseBranch = created.baseRef;
+    }
   }
 
   const taskId = randomUUID();

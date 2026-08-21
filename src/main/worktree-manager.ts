@@ -85,47 +85,68 @@ async function resolveAvailableBranchName(repoPath: string, desired: string): Pr
   return name;
 }
 
+/**
+ * The ref a new worktree forks from, refreshed from the remote first. A repo's
+ * default branch is stored as a plain name, so forking from it verbatim starts
+ * the task at whatever the local checkout last pulled. Remoteness is decided by
+ * looking the ref up rather than by shape, since a branch name may itself
+ * contain slashes.
+ */
+async function freshForkPoint(repoPath: string, branch: string): Promise<{ ref: string; remote?: string }> {
+  const has = async (ref: string): Promise<boolean> => {
+    try {
+      await execFile('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], { cwd: repoPath, timeout: 5000 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  let remoteRef: string | null = null;
+  if (await has(`refs/remotes/${branch}`)) remoteRef = branch;
+  else if (await has(`refs/remotes/origin/${branch}`)) remoteRef = `origin/${branch}`;
+  if (!remoteRef) return { ref: branch };
+
+  const remote = remoteRef.slice(0, remoteRef.indexOf('/'));
+  try {
+    await execFile('git', ['fetch', remote, remoteRef.slice(remote.length + 1)], { cwd: repoPath, timeout: 15000 });
+  } catch {
+    /* offline, or the remote refused — fork from the ref already on disk */
+  }
+  return { ref: remoteRef, remote };
+}
+
 export async function createWorktree(
   repoPath: string,
   taskName: string,
   branch: string,
   branchName?: string,
-): Promise<{ worktreePath: string; branch: string }> {
+): Promise<{ worktreePath: string; branch: string; baseRef: string }> {
   const worktreePath = resolveWorktreePath(repoPath, taskName);
 
   await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
   await ensureExcludeEntry(repoPath);
 
-  const remoteMatch = branch.match(/^([^/]+)\/(.+)$/);
-
-  // Fetch the latest remote ref before creating the worktree (best-effort with timeout)
-  if (remoteMatch) {
-    try {
-      await execFile('git', ['fetch', remoteMatch[1], remoteMatch[2]], {
-        cwd: repoPath,
-        timeout: 15000,
-      });
-    } catch {
-      /* fetch failed/timed out — use local ref */
-    }
-  }
-
+  const fork = await freshForkPoint(repoPath, branch);
   const newBranchName = await resolveAvailableBranchName(repoPath, branchName ?? slugify(taskName));
 
-  await execFile('git', ['worktree', 'add', worktreePath, '-b', newBranchName, branch], {
+  await execFile('git', ['worktree', 'add', worktreePath, '-b', newBranchName, fork.ref], {
     cwd: repoPath,
     timeout: 30000,
   });
 
-  // Set upstream tracking when branching from a remote tracking branch
-  if (remoteMatch) {
-    await execFile('git', ['branch', '--set-upstream-to', branch, newBranchName], {
-      cwd: worktreePath,
-      timeout: 10000,
-    });
+  if (fork.remote) {
+    try {
+      await execFile('git', ['branch', '--set-upstream-to', fork.ref, newBranchName], {
+        cwd: worktreePath,
+        timeout: 10000,
+      });
+    } catch {
+      /* tracking is a convenience; the worktree is already usable without it */
+    }
   }
 
-  return { worktreePath, branch: newBranchName };
+  return { worktreePath, branch: newBranchName, baseRef: fork.ref };
 }
 
 export async function createWorktreeFromPr(
@@ -244,7 +265,8 @@ export async function createMultiRepoContainer(
       const branchName = await resolveAvailableBranchName(repo.path, taskSlug);
       branchNames.push(branchName);
 
-      await execFile('git', ['worktree', 'add', worktreePath, '-b', branchName, repo.defaultBranch], {
+      const fork = await freshForkPoint(repo.path, repo.defaultBranch);
+      await execFile('git', ['worktree', 'add', worktreePath, '-b', branchName, fork.ref], {
         cwd: repo.path,
         timeout: 30000,
       });
