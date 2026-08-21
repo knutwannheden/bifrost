@@ -64,7 +64,6 @@ function safeFit(terminal: Terminal, fitAddon: FitAddon): void {
 }
 
 interface TerminalOptions {
-  cursorBlink?: boolean;
   fontSize?: number;
   fontFamily?: string;
   fontWeight?: number;
@@ -118,8 +117,10 @@ export function useTerminal(
     const selectedTheme = resolveTerminalTheme(options?.terminalTheme ?? 'Auto', options?.isDark ?? true);
     const terminal = new Terminal({
       // Claude Code draws no caret of its own: it parks the real cursor at the
-      // insertion point and shows it with DECTCEM.
-      cursorBlink: options?.cursorBlink ?? true,
+      // insertion point and shows it with DECTCEM. It also moves the cursor as
+      // it repaints, and xterm restarts the blink phase on every move
+      // (handleCursorMove), so a blinking cursor keeps no steady rhythm.
+      cursorBlink: false,
       cursorStyle: 'block',
       cursorInactiveStyle: 'outline',
       scrollback: 10_000,
