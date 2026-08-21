@@ -76,7 +76,13 @@ export default function TaskSidebar() {
 
   const filtering = filter.trim().length > 0;
   const matchedIds = filtering
-    ? new Set(sorted.filter((t) => matchesTaskSearch(t, repoNameFor(t), filter)).map((t) => t.id))
+    ? new Set(
+        sorted
+          // The PR number lives beside the task, not on it, so it is passed in.
+          // Written with its hash so both 8559 and #8559 find the same task.
+          .filter((t) => matchesTaskSearch(t, repoNameFor(t), filter, prs[t.id] ? `#${prs[t.id].number}` : ''))
+          .map((t) => t.id),
+      )
     : null;
   // Keeps the row you are looking at from vanishing as you type.
   const shown = matchedIds ? sorted.filter((t) => matchedIds.has(t.id) || t.id === state.activeTaskId) : sorted;

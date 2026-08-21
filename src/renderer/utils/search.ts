@@ -24,6 +24,11 @@ export function matchesTaskSearch(
   task: { name: string; branch?: string; baseBranch: string; summary?: string },
   repoName: string,
   search: string,
+  /** Anything the caller knows about the task that the task itself does not carry. */
+  extra = '',
 ): boolean {
-  return matchesAllTerms(`${task.name} ${task.branch ?? task.baseBranch} ${repoName} ${task.summary ?? ''}`, search);
+  return matchesAllTerms(
+    `${task.name} ${task.branch ?? task.baseBranch} ${repoName} ${task.summary ?? ''} ${extra}`,
+    search,
+  );
 }
