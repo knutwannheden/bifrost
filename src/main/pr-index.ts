@@ -4,7 +4,10 @@ import type { Repo, Task, TaskPr } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
+/** How long an untouched index stands before it is asked again. */
 const REFRESH_MS = 3 * 60 * 1000;
+/** A floor under a marked index, so a run of finishing turns cannot spin gh. */
+const MIN_REFRESH_MS = 20 * 1000;
 const GH_CHECK_MS = 5 * 60 * 1000;
 /** A repo with more open branches than this has older PRs that no live task is on. */
 const PR_LIMIT = 100;
@@ -13,6 +16,8 @@ interface RepoIndex {
   /** PR keyed by the branch it is opened from. */
   byBranch: Map<string, TaskPr>;
   fetchedAt: number;
+  /** Something happened that could have opened a PR. */
+  stale: boolean;
 }
 
 const indexes = new Map<string, RepoIndex>();
@@ -65,14 +70,18 @@ async function refresh(repo: Repo): Promise<RepoIndex> {
   } catch {
     /* not a GitHub repo, unauthenticated, or offline — the repo simply has no PRs to show */
   }
-  const index = { byBranch, fetchedAt: Date.now() };
+  const index = { byBranch, fetchedAt: Date.now(), stale: false };
   indexes.set(repo.id, index);
   return index;
 }
 
-/** Drop a repo's cache so the next lookup asks GitHub again. */
-export function invalidatePrIndex(repoId: string): void {
-  indexes.delete(repoId);
+/**
+ * Note that a repo may have gained a PR. The next lookup past the floor asks
+ * GitHub again, rather than waiting out the full refresh window.
+ */
+export function markPrIndexStale(repoId: string): void {
+  const index = indexes.get(repoId);
+  if (index) index.stale = true;
 }
 
 /** The PR each task's branch has, for every task whose branch has one. */
@@ -86,7 +95,9 @@ export async function getTaskPrs(tasks: Task[], repos: Repo[]): Promise<Record<s
       .filter((r) => wanted.has(r.id))
       .filter((r) => {
         const index = indexes.get(r.id);
-        return !index || now - index.fetchedAt > REFRESH_MS;
+        if (!index) return true;
+        const age = now - index.fetchedAt;
+        return index.stale ? age > MIN_REFRESH_MS : age > REFRESH_MS;
       })
       .map((r) => refresh(r)),
   );

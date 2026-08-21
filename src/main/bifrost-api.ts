@@ -25,6 +25,7 @@ import {
 import { deleteNote, listNotes } from './note-store';
 import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
+import { markPrIndexStale } from './pr-index';
 import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
 import { addRepo } from './repo-manager';
 import { killSession } from './session-manager';
@@ -562,6 +563,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // the hook's message fields (Stop doesn't carry notification content)
       if (hookEventName === 'Stop' && hookContext === 'code') {
         markIdle(task.id);
+        // A turn that just ended is the likeliest moment for a PR to exist.
+        markPrIndexStale(task.repoId);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
         }
