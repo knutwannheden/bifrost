@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { INHERITED_SESSION_VARS } from './session-manager';
 import { readTranscriptExcerpt } from './task-summarizer';
 
 const TITLE_TIMEOUT_MS = 60_000;
@@ -60,8 +61,7 @@ export interface GeneratedTaskTitle {
 function runClaude(input: string, cwd: string): Promise<string | null> {
   return new Promise((resolve) => {
     const env = { ...process.env } as Record<string, string>;
-    // Bifrost may run inside a Claude Code session, where CLAUDECODE makes the CLI refuse to start.
-    delete env.CLAUDECODE;
+    for (const name of INHERITED_SESSION_VARS) delete env[name];
 
     // A one-shot text transform, so the CLI loads no tools, MCP servers, or settings.
     const child = spawn(

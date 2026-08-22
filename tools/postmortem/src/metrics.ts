@@ -19,19 +19,24 @@ export function computeMetrics(
   const hasDiff = diffFiles.size > 0;
   const hasMutations = events.some((e) => e.category === 'mutation');
   const canMeasureTargeting = hasDiff && hasMutations;
+  // Only the file tools name a path. Work done through Bash — sed, heredocs,
+  // cat — leaves none, and a per-file metric computed over no files reports a
+  // clean sheet for a session it never saw. NaN keeps it off the panel.
+  const namesFiles = events.some((e) => e.filePath);
 
   return {
     // Bucketing
     costPerDiffLine: computeCostPerDiffLine(tokenTimeline, diff),
 
     // Clustering dimensions
-    timeToFirstCorrectFile: canMeasureTargeting ? computeTimeToFirstCorrectFile(events, diffFiles) : Number.NaN,
+    timeToFirstCorrectFile:
+      canMeasureTargeting && namesFiles ? computeTimeToFirstCorrectFile(events, diffFiles) : Number.NaN,
     ...computeAimlessBacktracks(events),
     testCycleCount: computeTestCycleCount(events),
-    editWithoutReadRate: computeEditWithoutReadRate(events),
+    editWithoutReadRate: namesFiles ? computeEditWithoutReadRate(events) : Number.NaN,
     humanCorrectionDensity: computeHumanCorrectionDensity(events, entries),
     toolErrorRate: computeToolErrorRate(events),
-    fileFocusScore: computeFileFocusScore(events),
+    fileFocusScore: namesFiles ? computeFileFocusScore(events) : Number.NaN,
   };
 }
 
@@ -121,7 +126,10 @@ function isTestFailure(event: ToolEvent): boolean {
 }
 
 /**
- * Fraction of edited files that were never read before the first edit.
+ * How much of the editing was done blind. Writing a file is excluded: a Write
+ * is how a path comes into existence, and there is nothing to have read. Grep
+ * and Glob are not reads — their file_path is the directory searched, and their
+ * results show matching lines rather than the file.
  */
 function computeEditWithoutReadRate(events: ToolEvent[]): number {
   const readFiles = new Set<string>();
@@ -132,12 +140,14 @@ function computeEditWithoutReadRate(events: ToolEvent[]): number {
     if (event.category === 'navigation' && event.filePath && event.toolName === 'Read') {
       readFiles.add(event.filePath);
     }
-    if (event.category === 'mutation' && event.filePath && !editedFiles.has(event.filePath)) {
-      editedFiles.add(event.filePath);
-      if (!readFiles.has(event.filePath)) {
-        editedWithoutRead.add(event.filePath);
+    if (event.category === 'mutation' && event.filePath && event.toolName !== 'Write') {
+      if (!editedFiles.has(event.filePath)) {
+        editedFiles.add(event.filePath);
+        if (!readFiles.has(event.filePath)) editedWithoutRead.add(event.filePath);
       }
     }
+    // A written file is readable from here on, whoever created it.
+    if (event.toolName === 'Write' && event.filePath) readFiles.add(event.filePath);
   }
 
   if (editedFiles.size === 0) return 0;

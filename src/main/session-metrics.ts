@@ -19,10 +19,11 @@ function projectDirName(worktreePath: string): string {
   return worktreePath.replace(/[/.]/g, '-');
 }
 
+// aimlessBacktracks is computed but not shown: it warns at 40 where real
+// sessions top out around 20, so it can only ever report "fine".
 const METRIC_LABELS: Record<string, string> = {
   costPerDiffLine: 'Cost per diff line',
   timeToFirstCorrectFile: 'Time to first correct file',
-  aimlessBacktracks: 'Aimless backtracks',
   testCycleCount: 'Test cycle count',
   editWithoutReadRate: 'Edit-without-read rate',
   humanCorrectionDensity: 'Human correction density',
@@ -33,6 +34,8 @@ const METRIC_LABELS: Record<string, string> = {
 const CLUSTER_METRICS = [
   'timeToFirstCorrectFile',
   'aimlessBacktracks',
+  // Kept: the trained model's dimensions are fixed, so the z-scores of the
+  // metrics that are shown depend on this one still being supplied.
   'testCycleCount',
   'editWithoutReadRate',
   'humanCorrectionDensity',
@@ -48,7 +51,11 @@ const clusterModel: ClusterModel | null = clusterModelJson as unknown as Cluster
 // Simple cache to avoid recomputing on every request
 const cache = new Map<string, { lineCount: number; result: SessionMetricsResult }>();
 
-export function getSessionMetricsData(worktreePath: string, sessionId?: string): SessionMetricsResult {
+export function getSessionMetricsData(
+  worktreePath: string,
+  sessionId?: string,
+  baseRef = 'main',
+): SessionMetricsResult {
   const empty: SessionMetricsResult = { metrics: [], cluster: null, backtrackDetail: [] };
 
   // Find the JSONL file
@@ -79,7 +86,7 @@ export function getSessionMetricsData(worktreePath: string, sessionId?: string):
   // Check cache
   const text = fs.readFileSync(jsonlPath, 'utf-8');
   const lineCount = text.split('\n').length;
-  const cacheKey = jsonlPath;
+  const cacheKey = `${jsonlPath}:${baseRef}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.lineCount === lineCount) return cached.result;
 
@@ -88,10 +95,11 @@ export function getSessionMetricsData(worktreePath: string, sessionId?: string):
   const events = extractToolEvents(entries);
   const tokenTimeline = extractTokenTimeline(entries);
 
-  // Generate diff (try git diff against default branch)
+  // Against the task's own fork point: a repo whose base is not a local `main`
+  // would otherwise produce no diff, and every metric derived from one is NaN.
   let diffText = '';
   try {
-    diffText = execFileSync('git', ['-C', worktreePath, 'diff', 'main'], {
+    diffText = execFileSync('git', ['-C', worktreePath, 'diff', baseRef], {
       encoding: 'utf-8',
       timeout: 5000,
     });

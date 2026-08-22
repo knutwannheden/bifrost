@@ -887,9 +887,9 @@ end tell`;
   });
 
   // Session Metrics
-  ipcMain.handle(IPC.GET_SESSION_METRICS, (_event, taskId: string) => {
+  ipcMain.handle(IPC.GET_SESSION_METRICS, async (_event, taskId: string) => {
     const task = getTask(taskId);
-    return getSessionMetricsData(task.worktreePath, task.sessionId);
+    return getSessionMetricsData(task.worktreePath, task.sessionId, await resolveBaseBranch(task));
   });
 
   // Terminal title

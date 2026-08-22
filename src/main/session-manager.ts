@@ -12,6 +12,26 @@ import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pty = require('node-pty');
 
+/**
+ * Marks of the Claude Code session Bifrost itself may have been launched from.
+ * A session that inherits them refuses to start, or starts as a child of that
+ * one and writes no transcript — which the metrics, the token chart, title
+ * generation and the sidebar's recency all read. Deliberate configuration such
+ * as CLAUDE_CODE_MAX_OUTPUT_TOKENS is left alone.
+ */
+export const INHERITED_SESSION_VARS = [
+  'CLAUDECODE',
+  'CLAUDE_CODE_CHILD_SESSION',
+  'CLAUDE_CODE_SESSION_ID',
+  'CLAUDE_CODE_BRIDGE_SESSION_ID',
+  'CLAUDE_CODE_MESSAGING_SOCKET',
+  'CLAUDE_CODE_MESSAGING_TOKEN',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CLAUDE_CODE_EXECPATH',
+  'CLAUDE_CODE_TMPDIR',
+  'CLAUDE_TMPDIR',
+];
+
 const sessions = new Map<string, IPty>();
 
 function send(mainWindow: BrowserWindow, sessionId: string, data: string, isReplay: boolean): void {
@@ -247,9 +267,7 @@ export function spawnSession(
   },
 ): void {
   const env = { ...process.env } as Record<string, string>;
-  // Remove CLAUDECODE so claude CLI doesn't refuse to start
-  // when Bifrost itself was launched from a Claude Code session
-  delete env.CLAUDECODE;
+  for (const name of INHERITED_SESSION_VARS) delete env[name];
 
   if (options?.extraEnv) {
     Object.assign(env, options.extraEnv);
