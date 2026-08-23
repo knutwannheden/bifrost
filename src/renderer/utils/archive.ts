@@ -6,7 +6,11 @@ import { nextActiveTaskId } from './next-active-task';
  * Used both for clean worktrees (direct) and after force-archive confirmation.
  */
 export function performArchive(taskId: string, state: AppState, dispatch: React.Dispatch<AppAction>): void {
-  dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, taskId) });
+  // Archiving from a row's menu can target a task the user is not on, and only
+  // the tab being archived out from under them needs replacing.
+  if (state.activeTaskId === taskId) {
+    dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, taskId) });
+  }
   window.bifrost.archiveTask(taskId).then((updated) => {
     dispatch({ type: 'UPDATE_TASK', task: updated });
   });

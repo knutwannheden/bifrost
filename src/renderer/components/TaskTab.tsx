@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Task, TaskPr } from '../../shared/types';
 import { useApp } from '../context/AppContext';
+import { useKeymap } from '../context/KeymapContext';
+import { requestArchive } from '../utils/archive';
 import Highlight from './Highlight';
+import Kbd from './Kbd';
 import PinIcon from './PinIcon';
 import PrPill from './PrPill';
 import Spinner from './Spinner';
@@ -22,6 +25,31 @@ interface TaskTabProps {
   pr?: TaskPr;
 }
 
+function MenuItem({
+  label,
+  shortcut,
+  danger,
+  onClick,
+}: {
+  label: string;
+  shortcut?: string;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`flex w-full items-center gap-4 px-3 py-1.5 text-left text-xs hover:bg-surface-hover transition-colors ${
+        danger ? 'text-danger' : 'text-primary'
+      }`}
+      onClick={onClick}
+    >
+      <span className="flex-1">{label}</span>
+      {shortcut ? <Kbd>{shortcut}</Kbd> : null}
+    </button>
+  );
+}
+
 export default function TaskTab({
   task,
   repoName,
@@ -37,6 +65,7 @@ export default function TaskTab({
   pr,
 }: TaskTabProps) {
   const { state, dispatch } = useApp();
+  const { getDisplayString } = useKeymap();
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(task.name);
   const [showTooltip, setShowTooltip] = useState(false);
@@ -272,6 +301,25 @@ export default function TaskTab({
             >
               Regenerate title
             </button>
+            <div className="my-1 border-t border-border-default" />
+            <MenuItem
+              label="Close"
+              shortcut={getDisplayString('task.close')}
+              onClick={() => {
+                setMenuPos(null);
+                onClose();
+              }}
+            />
+            <MenuItem
+              label="Archive"
+              shortcut={getDisplayString('task.archive')}
+              danger
+              onClick={() => {
+                setMenuPos(null);
+                // Prompts when the worktree still holds work, archives when it does not.
+                requestArchive(task.id, task.name, state, dispatch);
+              }}
+            />
           </div>,
           document.body,
         )}
