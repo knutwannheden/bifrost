@@ -212,9 +212,6 @@ export default function TaskTab({
         <span className="flex flex-col min-w-0 flex-1 overflow-hidden group-hover:mask-r-from-[calc(100%-2rem)] group-hover:mask-r-to-[calc(100%-1.5rem)]">
           <span className="flex items-center gap-1.5">
             {regenerating ? <Spinner size="sm" /> : null}
-            {task.hasUnread && !isActive && !showSolid ? (
-              <span className="w-2 h-2 rounded-full bg-accent shrink-0" />
-            ) : null}
             <span className="text-xs leading-tight truncate">
               <Highlight text={task.name} search={search} />
             </span>
