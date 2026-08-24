@@ -3,7 +3,6 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { getTask, isPendingRestore, restoreTaskSession } from './ipc-handlers';
-import { onTaskIdle as deliverDeferredMessages } from './message-store';
 import { hasSession, waitForSessionReady, writeToSession } from './session-manager';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
@@ -58,7 +57,6 @@ export function markIdle(taskId: string): void {
   }
 
   // Deliver deferred agent message nudges
-  deliverDeferredMessages(taskId);
 }
 
 /** Handle scrape response from renderer. */
@@ -251,26 +249,6 @@ export async function sendPrompt(
   await waitForTurnComplete(taskId);
   sendResult.response = getLastAssistantMessage(taskId) ?? undefined;
   return sendResult;
-}
-
-/**
- * Send a system nudge to a task's PTY. Used by message-store to notify
- * recipients about new agent messages. Unlike sendPrompt, this skips
- * scrape/restore of user input — it's a lightweight PTY write.
- */
-export function sendNudge(taskId: string, text: string, mode: 'direct' | 'interrupt'): void {
-  // Send text and submit separately so Claude's TUI doesn't treat the
-  // chunk as a paste (which would insert \r as a literal newline).
-  const submit = () => {
-    writeToSession(taskId, text);
-    setTimeout(() => writeToSession(taskId, '\r'), 10);
-  };
-  if (mode === 'interrupt') {
-    writeToSession(taskId, '\x1b');
-    setTimeout(submit, 200);
-  } else {
-    submit();
-  }
 }
 
 /** Resolve a taskId from either explicit taskId or callerTaskId. */

@@ -15,13 +15,6 @@ import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
 import { createTaskCore, getTask, getTasks, isPendingRestore, restoreTaskSession, updateTask } from './ipc-handlers';
-import {
-  cleanupTask as cleanupMessages,
-  getUnreadCount,
-  readMessages,
-  replyToMessage,
-  sendMessage,
-} from './message-store';
 import { deleteNote, listNotes } from './note-store';
 import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
@@ -128,41 +121,12 @@ function resolveTaskId(body: Record<string, unknown>): string | undefined {
 }
 
 /**
- * Resolve a task identifier that may be an ID, exact name, or partial name match.
- * Returns the task, or null if not found / ambiguous.
- */
-function findTask(idOrName: string): import('../shared/types').Task | null {
-  // Try exact ID first
-  try {
-    return getTask(idOrName);
-  } catch {
-    // fall through to name matching
-  }
-
-  const allTasks = getTasks();
-  const lower = idOrName.toLowerCase();
-
-  // Exact name match (case-insensitive)
-  const exactName = allTasks.find((t) => t.name.toLowerCase() === lower);
-  if (exactName) return exactName;
-
-  // Partial name/branch match — only if unambiguous
-  const partials = allTasks.filter(
-    (t) => t.name.toLowerCase().includes(lower) || (t.branch ?? t.baseBranch ?? '').toLowerCase().includes(lower),
-  );
-  if (partials.length === 1) return partials[0];
-
-  return null;
-}
-
-/**
  * Kill both of a task's sessions: the main one and its dev terminal. Uses
  * deterministic session IDs so we don't need the in-memory Maps from ipc-handlers.
  */
 function killTaskSessions(taskId: string): void {
   killSession(taskId);
   killSession(`${taskId}-dev`);
-  cleanupMessages(taskId);
 }
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -400,14 +364,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/permission': {
-      // Helper: build additionalContext nudge if there are unread messages
-      const messageContext = (taskId: string): string | undefined => {
-        const count = getUnreadCount(taskId);
-        if (count === 0) return undefined;
-        const s = count === 1 ? '' : 's';
-        return `\u26a1 You have ${count} new Bifrost agent message${s}. Use the Bifrost read_messages MCP tool to read and respond.`;
-      };
-
       const cwd = body.cwd as string;
       const toolName = body.tool_name as string;
       const toolInput = (body.tool_input as Record<string, unknown>) || {};
@@ -420,9 +376,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // If permission management is disabled or permissions are bypassed, let Claude Code handle it
       const config = loadConfig();
       if (!config.managePermissions || config.permissionMode === 'skip-permissions') {
-        const pmTask = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
-        const ctx = pmTask ? messageContext(pmTask.id) : undefined;
-        jsonResponse(res, ctx ? { hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: ctx } } : {});
+        jsonResponse(res, {});
         return;
       }
 
@@ -435,12 +389,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Check existing allow/deny rules before prompting
       const existingDecision = checkExistingRules(cwd, toolName, toolInput);
       if (existingDecision) {
-        const ctx = messageContext(task.id);
         jsonResponse(res, {
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
             permissionDecision: existingDecision,
-            ...(ctx ? { additionalContext: ctx } : {}),
           },
         });
         return;
@@ -481,17 +433,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           markActive(task.id);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
-          }
-          const count = getUnreadCount(task.id);
-          if (count > 0) {
-            const s = count === 1 ? '' : 's';
-            jsonResponse(res, {
-              hookSpecificOutput: {
-                hookEventName: 'UserPromptSubmit',
-                additionalContext: `\u26a1 You have ${count} new Bifrost agent message${s}. Use the Bifrost read_messages MCP tool to read and respond.`,
-              },
-            });
-            return;
           }
         }
         jsonResponse(res, { ok: true });
@@ -716,75 +657,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: true });
       } catch (e) {
         errorResponse(res, (e as Error).message, 404);
-      }
-      return;
-    }
-
-    case '/send-message': {
-      const fromTaskId = body.fromTaskId as string;
-      const fromTaskName = body.fromTaskName as string;
-      const toTaskId = body.toTaskId as string;
-      const text = body.text as string;
-      const type = body.type as 'tell' | 'ask';
-      const mode = (body.mode as string) || 'queue';
-      if (!fromTaskId || !fromTaskName || !toTaskId || !text || !type) {
-        errorResponse(res, 'Missing required fields: fromTaskId, fromTaskName, toTaskId, text, type');
-        return;
-      }
-      const validModes = ['queue', 'direct', 'interrupt'];
-      if (!validModes.includes(mode)) {
-        errorResponse(res, `Invalid mode: ${mode}. Must be one of: ${validModes.join(', ')}`);
-        return;
-      }
-      const recipient = findTask(toTaskId);
-      if (!recipient) {
-        errorResponse(res, `Recipient task "${toTaskId}" not found`, 404);
-        return;
-      }
-      const result = sendMessage(
-        fromTaskId,
-        fromTaskName,
-        recipient.id,
-        text,
-        type,
-        mode as 'queue' | 'direct' | 'interrupt',
-      );
-      if (type === 'ask' && result.replyPromise) {
-        try {
-          const reply = await result.replyPromise;
-          jsonResponse(res, { messageId: result.messageId, reply });
-        } catch (e) {
-          errorResponse(res, (e as Error).message, 408);
-        }
-      } else {
-        jsonResponse(res, { messageId: result.messageId });
-      }
-      return;
-    }
-
-    case '/read-messages': {
-      const targetId = resolveTaskId(body);
-      if (!targetId) {
-        errorResponse(res, 'No taskId provided');
-        return;
-      }
-      const messages = readMessages(targetId);
-      jsonResponse(res, { messages });
-      return;
-    }
-
-    case '/reply-message': {
-      const messageId = body.messageId as string;
-      const text = body.text as string;
-      if (!messageId || !text) {
-        errorResponse(res, 'Missing required fields: messageId, text');
-        return;
-      }
-      try {
-        replyToMessage(messageId, text);
-        jsonResponse(res, { ok: true });
-      } catch (e) {
-        errorResponse(res, (e as Error).message, 400);
       }
       return;
     }

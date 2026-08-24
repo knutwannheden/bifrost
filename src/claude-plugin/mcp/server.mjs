@@ -96,10 +96,30 @@ function formatContextEntry(entry) {
 // MCP Server
 // ---------------------------------------------------------------------------
 
-const server = new McpServer({
-  name: 'bifrost',
-  version: '1.0.0',
-});
+const server = new McpServer(
+  {
+    name: 'bifrost',
+    version: '1.0.0',
+  },
+  {
+    instructions: [
+      'Bifrost runs each task as its own Claude Code session in its own git worktree.',
+      '',
+      'To talk to another task, use the built-in SendMessage tool, not a Bifrost tool.',
+      "It delivers into the recipient's turn, and a reply comes back by copying the",
+      'incoming `from` attribute as your `to`. Find the recipient with ListAgents.',
+      '',
+      'A task Bifrost has not opened yet has no session, so it is absent from',
+      'ListAgents and cannot be messaged. Call wake_task first: it starts the',
+      'session and reports how to address it. list_tasks shows every task, so it is',
+      'where to look when ListAgents does not list the one you want.',
+      '',
+      'A session is named after its task as of when the session started, so a task',
+      'renamed since then is listed under its former name. Trust ListAgents over the',
+      'name you were given.',
+    ].join('\n'),
+  },
+);
 
 server.registerTool(
   'resolve_context',
@@ -308,7 +328,7 @@ server.registerTool(
   {
     title: 'Create Task',
     description:
-      'Create a new Bifrost task. Spawns a git worktree and Claude Code session. The new task runs in the background. Works from any Claude Code session — specify repo by path if not running inside a Bifrost task.',
+      'Create a new Bifrost task. Spawns a git worktree and Claude Code session. The new task runs in the background. Works from any Claude Code session — specify repo by path if not running inside a Bifrost task. Called from inside a task, the new one is told who created it and how to reach them, so it can report back with the built-in SendMessage tool; to follow up on it yourself, find it in ListAgents and use SendMessage rather than waiting here.',
     inputSchema: {
       name: z
         .string()
@@ -541,155 +561,5 @@ server.registerTool(
 // ---------------------------------------------------------------------------
 
 /** Resolve the calling task's name for message attribution. */
-async function getCallerName() {
-  if (!TASK_ID) return undefined;
-  try {
-    const result = await apiCall('/list-tasks', {});
-    const caller = result.tasks.find((t) => t.id === TASK_ID);
-    return caller?.name;
-  } catch {
-    return undefined;
-  }
-}
-
-server.registerTool(
-  'tell_task',
-  {
-    title: 'Tell Task',
-    description:
-      'Prefer the built-in SendMessage tool for talking to another task: it delivers into the recipient\'s turn, and a reply comes back by copying the incoming `from`. Use ListAgents to find the recipient, and wake_task first if it is not listed. This tool is the fallback for a recipient that cannot be woken: it leaves a message in a Bifrost inbox, which the recipient reads with read_messages. Modes: "queue" (default) nudges when the task becomes idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
-    inputSchema: {
-      taskId: z.string().describe('Recipient task ID or name (partial name match supported)'),
-      text: z.string().describe('The message text to send'),
-      mode: z.enum(['queue', 'direct', 'interrupt']).optional().describe('Nudge delivery mode (default: queue).'),
-    },
-  },
-  async ({ taskId, text, mode }) => {
-    if (!TASK_ID) {
-      return {
-        content: [{ type: 'text', text: 'tell_task requires running inside a Bifrost task.' }],
-        isError: true,
-      };
-    }
-    const callerName = (await getCallerName()) || 'unknown';
-    const result = await apiCall('/send-message', {
-      fromTaskId: TASK_ID,
-      fromTaskName: callerName,
-      toTaskId: taskId,
-      text,
-      type: 'tell',
-      mode: mode || 'queue',
-    });
-    return {
-      content: [{ type: 'text', text: `Message sent to task ${taskId} (id: ${result.messageId}).` }],
-    };
-  },
-);
-
-server.registerTool(
-  'ask_task',
-  {
-    title: 'Ask Task',
-    description:
-      'Prefer the built-in SendMessage tool for asking another task something: it delivers into the recipient\'s turn, and the answer comes back as a message. Use ListAgents to find the recipient, and wake_task first if it is not listed. This tool is the fallback for a recipient that cannot be woken: it leaves a question in a Bifrost inbox and blocks until reply_to_task answers (5-minute timeout). Modes: "queue" (default) nudges when idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
-    inputSchema: {
-      taskId: z.string().describe('Recipient task ID or name (partial name match supported)'),
-      text: z.string().describe('The question/message text to send'),
-      mode: z.enum(['queue', 'direct', 'interrupt']).optional().describe('Nudge delivery mode (default: queue).'),
-    },
-  },
-  async ({ taskId, text, mode }) => {
-    if (!TASK_ID) {
-      return {
-        content: [{ type: 'text', text: 'ask_task requires running inside a Bifrost task.' }],
-        isError: true,
-      };
-    }
-    const callerName = (await getCallerName()) || 'unknown';
-    try {
-      const result = await apiCall(
-        '/send-message',
-        {
-          fromTaskId: TASK_ID,
-          fromTaskName: callerName,
-          toTaskId: taskId,
-          text,
-          type: 'ask',
-          mode: mode || 'queue',
-        },
-        { timeout: 0 },
-      );
-      return {
-        content: [{ type: 'text', text: result.reply }],
-      };
-    } catch (e) {
-      return {
-        content: [{ type: 'text', text: `ask_task failed: ${e.message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
-server.registerTool(
-  'read_messages',
-  {
-    title: 'Read Messages',
-    description:
-      'Read unread messages from your inbox. Returns all unread agent messages sent via tell_task or ask_task, and marks them as read. For ask-type messages, use reply_to_task to send a reply back to the sender.',
-    inputSchema: {},
-  },
-  async () => {
-    if (!TASK_ID) {
-      return {
-        content: [{ type: 'text', text: 'read_messages requires running inside a Bifrost task.' }],
-        isError: true,
-      };
-    }
-    const result = await apiCall('/read-messages', { taskId: TASK_ID });
-    if (result.messages.length === 0) {
-      return { content: [{ type: 'text', text: 'No unread messages.' }] };
-    }
-    const lines = result.messages
-      .map((m) => {
-        const tag = m.type === 'ask' ? '[ask — reply required]' : '[tell]';
-        const idInfo = m.type === 'ask' ? ` (messageId: ${m.id})` : '';
-        return `${tag} From "${m.fromTaskName}" (${m.fromTaskId})${idInfo}:\n${m.text}`;
-      })
-      .join('\n\n---\n\n');
-    const hasAsk = result.messages.some((m) => m.type === 'ask');
-    const footer = hasAsk
-      ? '\n\n⚠️ For ask messages: reply ONLY via reply_to_task. Do not produce additional text output after replying.'
-      : '';
-    return { content: [{ type: 'text', text: lines + footer }] };
-  },
-);
-
-server.registerTool(
-  'reply_to_task',
-  {
-    title: 'Reply to Task',
-    description:
-      "Reply to an ask-type message. The reply is delivered back to the sender's ask_task call, unblocking it. Use the messageId from read_messages. After calling this tool, do NOT produce any additional text output — the reply IS the response.",
-    inputSchema: {
-      messageId: z.string().describe('The message ID to reply to (from read_messages)'),
-      text: z.string().describe('The reply text'),
-    },
-  },
-  async ({ messageId, text }) => {
-    try {
-      await apiCall('/reply-message', { messageId, text });
-      return {
-        content: [{ type: 'text', text: `Reply sent for message ${messageId}.` }],
-      };
-    } catch (e) {
-      return {
-        content: [{ type: 'text', text: `Reply failed: ${e.message}` }],
-        isError: true,
-      };
-    }
-  },
-);
-
 const transport = new StdioServerTransport();
 await server.connect(transport);

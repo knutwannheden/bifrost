@@ -456,17 +456,6 @@ export interface SessionMetricsResult {
 
 // Agent messaging types
 
-export interface AgentMessage {
-  id: string;
-  fromTaskId: string;
-  fromTaskName: string;
-  toTaskId: string;
-  text: string;
-  type: 'tell' | 'ask';
-  createdAt: number;
-  read: boolean;
-}
-
 // Notification types
 
 export interface AppNotification {
