@@ -32,6 +32,10 @@ export const INHERITED_SESSION_VARS = [
   'CLAUDE_TMPDIR',
 ];
 
+// Past any session's age or size, so the resume-summary offer never triggers.
+const NEVER_STALE_MINUTES = 100 * 365 * 24 * 60;
+const NEVER_LARGE_TOKENS = 1_000_000_000;
+
 const sessions = new Map<string, IPty>();
 
 function send(mainWindow: BrowserWindow, sessionId: string, data: string, isReplay: boolean): void {
@@ -390,6 +394,12 @@ export function createSession(
 
   const buildEnv = (): Record<string, string> => {
     const e: Record<string, string> = {};
+    // Resuming a stale, large session otherwise offers to summarize it first.
+    // Claude only compacts when that offer is accepted, so putting the offer
+    // out of reach is how a task resumes as-is. Both thresholds have to be
+    // passed for it to appear; both are raised in case that becomes either.
+    e.CLAUDE_CODE_RESUME_THRESHOLD_MINUTES = String(NEVER_STALE_MINUTES);
+    e.CLAUDE_CODE_RESUME_TOKEN_THRESHOLD = String(NEVER_LARGE_TOKENS);
     e.BIFROST_CONTEXT = options?.context ?? 'code';
     if (options?.taskId) e.BIFROST_TASK_ID = options.taskId;
     if (options?.apiPort) e.BIFROST_API_PORT = String(options.apiPort);

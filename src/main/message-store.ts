@@ -27,24 +27,34 @@ function getInbox(taskId: string): AgentMessage[] {
   return inbox;
 }
 
-function nudgeText(count: number): string {
+/**
+ * A tell is a notification and an ask is a question, so the nudge says which
+ * arrived. Asking to "read and respond" regardless had recipients answering
+ * notifications that wanted nothing back.
+ */
+function nudgeText(count: number, awaitingReply: boolean): string {
   const s = count === 1 ? '' : 's';
-  return `You have ${count} new agent message${s}. Use the Bifrost read_messages MCP tool to read and respond to them. Do not produce any other text output.`;
+  const head = `You have ${count} new agent message${s}. Use the Bifrost read_messages MCP tool to read`;
+  return awaitingReply
+    ? `${head} them; at least one is a question, so answer it with reply_to_task. Do not produce any other text output.`
+    : `${head} them. They are notifications rather than requests: take them into account, carry on with what you were doing, and reply_to_task only if you have something worth sending back. Do not produce any other text output.`;
 }
 
 function triggerNudge(taskId: string, mode: NudgeMode): void {
   const unread = getUnreadCount(taskId);
   if (unread === 0) return;
+  const awaitingReply = (inboxes.get(taskId) ?? []).some((m) => !m.read && m.type === 'ask');
+  const text = nudgeText(unread, awaitingReply);
 
   if (mode === 'queue') {
     if (isIdle(taskId)) {
-      sendNudge(taskId, nudgeText(unread), 'direct');
+      sendNudge(taskId, text, 'direct');
     } else {
       deferredNudges.add(taskId);
     }
   } else {
     // 'direct' and 'interrupt' pass through to the PTY
-    sendNudge(taskId, nudgeText(unread), mode);
+    sendNudge(taskId, text, mode);
   }
 }
 
@@ -117,7 +127,8 @@ export function onTaskIdle(taskId: string): void {
 
   const unread = getUnreadCount(taskId);
   if (unread > 0) {
-    sendNudge(taskId, nudgeText(unread), 'direct');
+    const awaitingReply = (inboxes.get(taskId) ?? []).some((m) => !m.read && m.type === 'ask');
+    sendNudge(taskId, nudgeText(unread, awaitingReply), 'direct');
   }
 }
 
