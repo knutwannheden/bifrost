@@ -124,6 +124,34 @@ function resolveTaskId(body: Record<string, unknown>): string | undefined {
  * Kill both of a task's sessions: the main one and its dev terminal. Uses
  * deterministic session IDs so we don't need the in-memory Maps from ipc-handlers.
  */
+/**
+ * Subagents run in the background, so they outlive the turn that spawned them
+ * and a task is still working after its Stop. Counted per task, with the Stop
+ * held until the last one is back.
+ */
+const runningSubagents = new Map<string, number>();
+const stoppedWhileWorking = new Set<string>();
+
+function clearSubagentState(taskId: string): void {
+  runningSubagents.delete(taskId);
+  stoppedWhileWorking.delete(taskId);
+}
+
+/** The end of a task's work: idle, notified, and the sidebar's bar turned. */
+function finishTurn(task: Task): void {
+  clearSubagentState(task.id);
+  markIdle(task.id);
+  // A turn that just ended is the likeliest moment for a PR to exist.
+  markPrIndexStale(task.repoId);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+  }
+  if (!isDebounced(task.id)) {
+    markNotified(task.id);
+    handleBellNotification(task.name);
+  }
+}
+
 function killTaskSessions(taskId: string): void {
   killSession(taskId);
   killSession(`${taskId}-dev`);
@@ -431,6 +459,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (hookEventName === 'UserPromptSubmit' && hookContext === 'code') {
         const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
         if (task) {
+          // A hook can go missing, so each turn starts the count over rather
+          // than inheriting one that would hold the task working forever.
+          clearSubagentState(task.id);
           markActive(task.id);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
@@ -460,6 +491,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
       // PostToolUse / SubagentStart — Claude is actively working, ensure sweep is on
       if (hookEventName === 'PostToolUse' || hookEventName === 'SubagentStart') {
+        if (hookEventName === 'SubagentStart') {
+          runningSubagents.set(task.id, (runningSubagents.get(task.id) ?? 0) + 1);
+        }
         markActive(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
@@ -468,8 +502,18 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
+      // The last subagent back finishes a turn that already stopped waiting.
+      if (hookEventName === 'SubagentStop') {
+        const left = Math.max(0, (runningSubagents.get(task.id) ?? 0) - 1);
+        runningSubagents.set(task.id, left);
+        if (left === 0 && stoppedWhileWorking.has(task.id)) finishTurn(task);
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
       // SessionEnd — session terminated, definitively mark idle
       if (hookEventName === 'SessionEnd') {
+        clearSubagentState(task.id);
         markIdle(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
@@ -481,6 +525,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // StopFailure — mark idle and notify (API/turn error)
       if (hookEventName === 'StopFailure') {
         if (hookContext === 'code') {
+          clearSubagentState(task.id);
           markIdle(task.id);
         }
         if (!isDebounced(task.id)) {
@@ -514,15 +559,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Stop — mark task idle and stop sweep, notify user, but don't send
       // the hook's message fields (Stop doesn't carry notification content)
       if (hookEventName === 'Stop' && hookContext === 'code') {
-        markIdle(task.id);
-        // A turn that just ended is the likeliest moment for a PR to exist.
-        markPrIndexStale(task.repoId);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-        }
-        if (!isDebounced(task.id)) {
-          markNotified(task.id);
-          handleBellNotification(task.name);
+        if ((runningSubagents.get(task.id) ?? 0) > 0) {
+          // Work continues in the subagents; the turn ends when they are back.
+          stoppedWhileWorking.add(task.id);
+        } else {
+          finishTurn(task);
         }
         jsonResponse(res, { ok: true });
         return;
