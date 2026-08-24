@@ -69,6 +69,8 @@ export interface AppState {
   apiPort: number | null;
   archiveConfirm: { taskId: string; taskName: string } | null;
   renamingTaskId: string | null;
+  /** Tasks whose unread result is a turn that failed rather than one that finished. */
+  taskFailed: Record<string, boolean>;
   /** Task ids in the order the sidebar renders them (collapsed groups contribute only the active task's row, if any). */
   visibleTaskIds: string[];
   /** Bumped to move focus into the sidebar's filter box; the value itself carries no meaning. */
@@ -84,7 +86,7 @@ export type AppAction =
   | { type: 'UPDATE_TASK'; task: Task }
   | { type: 'SET_ACTIVE_TASK'; taskId: string | null }
   | { type: 'MARK_TAB_ACTIVE'; taskId: string }
-  | { type: 'SET_TASK_UNREAD'; taskId: string; hasUnread: boolean }
+  | { type: 'SET_TASK_UNREAD'; taskId: string; hasUnread: boolean; failed?: boolean }
   | { type: 'SET_TASK_STATUS'; taskId: string; status: TaskStatus }
   | { type: 'TOGGLE_REPO_MANAGER' }
   | { type: 'SHOW_CREATE_TASK_DIALOG'; show: boolean; repoId?: string; slackUrl?: string }
@@ -171,6 +173,7 @@ const initialState: AppState = {
   renamingTaskId: null,
   visibleTaskIds: [],
   sidebarFilterFocus: 0,
+  taskFailed: {},
 };
 
 export const defaultPaneState: TaskPaneState = {
@@ -295,10 +298,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'SET_TASK_UNREAD': {
       const target = state.tasks.find((t) => t.id === action.taskId);
-      if (target?.hasUnread === action.hasUnread) return state;
+      // Set with the unread flag it describes, so reading a task clears both.
+      const failed = action.hasUnread && action.failed === true;
+      const wasFailed = state.taskFailed[action.taskId] === true;
+      if (target?.hasUnread === action.hasUnread && wasFailed === failed) return state;
+      const { [action.taskId]: _cleared, ...withoutTask } = state.taskFailed;
+      void _cleared;
       return {
         ...state,
         tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, hasUnread: action.hasUnread } : t)),
+        taskFailed: failed ? { ...state.taskFailed, [action.taskId]: true } : withoutTask,
         ...(action.hasUnread && { lastNotifiedTaskId: action.taskId }),
       };
     }
