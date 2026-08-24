@@ -454,8 +454,6 @@ export interface SessionMetricsResult {
   backtrackDetail: Array<{ filePath: string; count: number }>;
 }
 
-// Agent messaging types
-
 // Notification types
 
 export interface AppNotification {

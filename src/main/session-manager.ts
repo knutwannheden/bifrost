@@ -434,10 +434,6 @@ export function createSession(
       }
     : undefined;
 
-  // Recorded here because this is where --name is decided; a session started
-  // before a rename keeps the earlier name, which is how it stays addressable.
-  if (options?.name) sessionNames.set(sessionId, options.name);
-
   const prompt = options?.prompt && !options.resumeSessionId ? options.prompt : undefined;
   spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, {
     extraEnv: buildEnv(),
@@ -445,6 +441,10 @@ export function createSession(
     prompt,
     onBeforeExit,
   });
+  // After the spawn, so a failed one leaves no name behind claiming a session
+  // that was never born. This is where --name is decided, and a session keeps
+  // the name its task had then, which is how it stays addressable.
+  if (options?.name) sessionNames.set(sessionId, options.name);
 }
 
 function findShell(): string {

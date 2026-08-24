@@ -48,6 +48,7 @@ import {
   attachSession,
   createSession,
   createShellSession,
+  getSessionName,
   killSession,
   resizeSession,
   writeToSession,
@@ -293,7 +294,7 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
     apiPort: getApiPort() ?? undefined,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
-    prompt: params.prompt,
+    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId) : undefined,
   });
 
   const task: Task = {
@@ -317,6 +318,22 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
   startWatching(task.id, containerPath, mainWindow, _claudeCallbacks, task.sessionId);
 
   return task;
+}
+
+/**
+ * Tells a new task how to reach whoever asked for it, which it otherwise has
+ * no way to learn. Composed here so it reaches the session's first prompt
+ * without landing in the task's summary, which is shown and searched.
+ */
+function creatorCoordinates(createdByTaskId: string | undefined): string {
+  if (!createdByTaskId) return '';
+  const sessionName = getSessionName(createdByTaskId);
+  if (!sessionName) return '';
+  return (
+    `\n\n---\nThis task was created by Bifrost task ${createdByTaskId}, which is running and reachable. ` +
+    `To report back, ask a question, or hand results over, use the built-in SendMessage tool with to: "${sessionName}". ` +
+    'If that no longer reaches it, find_task on the id above reports the name it is reachable by.'
+  );
 }
 
 export async function createTaskCore(params: CreateTaskParams, mainWindow: BrowserWindow): Promise<Task> {
@@ -394,7 +411,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     apiPort: getApiPort() ?? undefined,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
-    prompt: params.prompt,
+    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId) : undefined,
   });
 
   const task: Task = {

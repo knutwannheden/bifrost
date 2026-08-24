@@ -55,8 +55,6 @@ export function markIdle(taskId: string): void {
     if (queue.length === 0) promptQueues.delete(taskId);
     doSendPrompt(next.text, taskId).then(next.resolve);
   }
-
-  // Deliver deferred agent message nudges
 }
 
 /** Handle scrape response from renderer. */

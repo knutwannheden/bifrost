@@ -566,16 +566,33 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       const lower = query.toLowerCase();
       const all = getTasks();
-      // Ordered by how exactly the query identifies a task, so a directory or a
-      // session id answers with one task rather than everything under it.
-      const found =
-        all.find((t) => t.id === query) ??
-        all.find((t) => t.sessionId === query) ??
-        all.find((t) => t.worktreePath === query) ??
-        all.find((t) => getSessionName(t.id)?.toLowerCase() === lower) ??
-        all.find((t) => t.name.toLowerCase() === lower) ??
-        all.find((t) => t.branch?.toLowerCase() === lower) ??
-        all.find((t) => t.worktreePath.toLowerCase().startsWith(lower));
+      // Most specific first, and a tier that matches more than one task is
+      // reported rather than resolved: naming the wrong task to message is
+      // worse than naming none. A directory is matched by containment, since
+      // the useful query is a session's cwd, at or below the worktree.
+      const tiers: Array<(t: Task) => boolean> = [
+        (t) => t.id === query,
+        (t) => t.sessionId === query,
+        (t) => query === t.worktreePath || query.startsWith(`${t.worktreePath}/`),
+        (t) => getSessionName(t.id)?.toLowerCase() === lower,
+        (t) => t.name.toLowerCase() === lower,
+        (t) => t.branch?.toLowerCase() === lower,
+      ];
+      let found: Task | undefined;
+      for (const matches of tiers) {
+        const hits = all.filter(matches);
+        if (hits.length === 1) {
+          found = hits[0];
+          break;
+        }
+        if (hits.length > 1) {
+          jsonResponse(res, {
+            ok: false,
+            error: `"${query}" matches ${hits.length} tasks: ${hits.map((t) => `${t.name} (${t.id})`).join(', ')}`,
+          });
+          return;
+        }
+      }
       if (!found) {
         jsonResponse(res, { ok: false, error: `Nothing matches "${query}"` });
         return;
@@ -623,11 +640,22 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           jsonResponse(res, { ok: false, error: 'Task has no session and cannot be restored' });
           return;
         }
-        restoreTaskSession(wakeId, mainWindow);
-        if (!(await waitForSessionReady(wakeId))) {
-          jsonResponse(res, { ok: false, error: 'Session did not finish starting up' });
+        try {
+          restoreTaskSession(wakeId, mainWindow);
+        } catch (err) {
+          // The restore drops the task from the pending set before it can fail,
+          // so a task left running with neither is unreachable from here on.
+          console.error(`[api] wake-task: failed to restore ${wakeId}:`, err);
+          updateTask(wakeId, { status: 'error' });
+          jsonResponse(res, { ok: false, error: 'Session failed to start' });
           return;
         }
+      }
+      // Waited for on both paths: a session spawned moments ago exists before
+      // its TUI reads anything, and a name handed back then is not yet usable.
+      if (!(await waitForSessionReady(wakeId))) {
+        jsonResponse(res, { ok: false, error: 'Session did not finish starting up' });
+        return;
       }
       // The name the session actually carries, which is the task's name from
       // when it started rather than its name now.

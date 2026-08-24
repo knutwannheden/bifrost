@@ -347,16 +347,12 @@ server.registerTool(
   async ({ name, repo, prompt }) => {
     let repoId;
     let repoPath;
-    let callerName;
 
     if (TASK_ID) {
       const result = await apiCall('/list-tasks', {});
       const callerTask = result.tasks.find((t) => t.id === TASK_ID);
       if (callerTask) {
         repoId = callerTask.repoId;
-        // The name this session is reachable by, which is the task's name from
-        // when the session started rather than whatever it is called now.
-        callerName = callerTask.sessionName || callerTask.name;
       }
     }
 
@@ -373,17 +369,13 @@ server.registerTool(
       };
     }
 
-    // A new task has no way to find whoever asked for it, and its creator is
-    // awake by definition, so it can be addressed from the first turn.
-    const withCoordinates = callerName
-      ? `${prompt}\n\n---\nThis task was created by Bifrost task ${TASK_ID}, which is running and reachable. To report back, ask a question, or hand results over, use the built-in SendMessage tool with to: "${callerName}". If that no longer reaches it, find_task on the id above reports the name it is reachable by.`
-      : prompt;
-
+    // Bifrost tells the new task who created it and how to reach them; sending
+    // the creator's id is all that takes.
     const result = await apiCall('/create-task', {
       repoId,
       repoPath,
       name,
-      prompt: withCoordinates,
+      prompt,
       createdByTaskId: TASK_ID || undefined,
       async: true,
     });
