@@ -115,8 +115,8 @@ const server = new McpServer(
       'where to look when ListAgents does not list the one you want.',
       '',
       'A session is named after its task as of when the session started, so a task',
-      'renamed since then is listed under its former name. Trust ListAgents over the',
-      'name you were given.',
+      'renamed since then is addressed by its former name. list_tasks, find_task and',
+      'wake_task all report the name a task is actually reachable by.',
     ].join('\n'),
   },
 );
@@ -149,7 +149,7 @@ server.registerTool(
   {
     title: 'List Tasks',
     description:
-      'List Bifrost tasks with their status, branch, and worktree path. By default returns only non-archived tasks (running, stopped, error). Use status="running" to narrow further to live tasks, or status="all" to include archived.',
+      'List Bifrost tasks with their status, branch, and worktree path. This is where to look for a task to message: rows with a "send to" show the name to give the built-in SendMessage tool, and rows without one have no session yet — wake_task starts it. By default returns only non-archived tasks (running, stopped, error). Use status="running" to narrow further to live tasks, or status="all" to include archived.',
     inputSchema: {
       status: z
         .enum(['open', 'running', 'all'])
@@ -166,7 +166,8 @@ server.registerTool(
         ? result.tasks
             .map((t) => {
               const display = t.idle === false ? 'working' : t.idle === true ? 'idle' : t.status;
-              return `- ${t.name} [${display}] (branch: ${t.branch}, id: ${t.id})`;
+              const address = t.sessionName ? `send to: "${t.sessionName}"` : 'no session — wake_task to reach it';
+              return `- ${t.name} [${display}] (branch: ${t.branch}, id: ${t.id}, ${address})`;
             })
             .join('\n')
         : 'No matching Bifrost tasks.';
@@ -353,7 +354,9 @@ server.registerTool(
       const callerTask = result.tasks.find((t) => t.id === TASK_ID);
       if (callerTask) {
         repoId = callerTask.repoId;
-        callerName = callerTask.name;
+        // The name this session is reachable by, which is the task's name from
+        // when the session started rather than whatever it is called now.
+        callerName = callerTask.sessionName || callerTask.name;
       }
     }
 
@@ -371,11 +374,9 @@ server.registerTool(
     }
 
     // A new task has no way to find whoever asked for it, and its creator is
-    // awake by definition. SendMessage addresses by session name, which is the
-    // task's name from when its session started rather than its name now, so
-    // the id travels too and ListAgents settles which row is meant.
+    // awake by definition, so it can be addressed from the first turn.
     const withCoordinates = callerName
-      ? `${prompt}\n\n---\nThis task was created by the Bifrost task "${callerName}" (id: ${TASK_ID}), which is running and reachable. To report back, ask a question, or hand results over, use the built-in SendMessage tool. Find the recipient in ListAgents first: its session is named after the task, but from when the session started, so a renamed task is listed under its former name.`
+      ? `${prompt}\n\n---\nThis task was created by Bifrost task ${TASK_ID}, which is running and reachable. To report back, ask a question, or hand results over, use the built-in SendMessage tool with to: "${callerName}". If that no longer reaches it, find_task on the id above reports the name it is reachable by.`
       : prompt;
 
     const result = await apiCall('/create-task', {
@@ -495,11 +496,43 @@ server.registerTool(
 );
 
 server.registerTool(
+  'find_task',
+  {
+    title: 'Find Task',
+    description:
+      'Identify the Bifrost task behind something you already have: a task id, a Claude session id, a worktree directory, a branch, or a name. Returns the task and, when its session is running, the name to give the built-in SendMessage tool. Use this to work out who you are talking to, or to turn a directory into a task you can message.',
+    inputSchema: {
+      query: z
+        .string()
+        .describe('Task id, session id, worktree path, branch, or task name. Directories may be a prefix.'),
+    },
+  },
+  async ({ query }) => {
+    const result = await apiCall('/find-task', { query });
+    if (!result.ok) {
+      return { content: [{ type: 'text', text: result.error }], isError: true };
+    }
+    const t = result.task;
+    const lines = [
+      `${t.name} (id: ${t.id})`,
+      `status: ${t.status}${t.idle === undefined ? '' : t.idle ? ', idle' : ', working'}`,
+      `branch: ${t.branch ?? t.baseBranch}`,
+      `worktree: ${t.worktreePath}`,
+      t.sessionName
+        ? `send to: "${t.sessionName}" with SendMessage`
+        : 'no session running — wake_task starts one and reports how to address it',
+    ];
+    if (t.createdByTaskId) lines.push(`created by task: ${t.createdByTaskId}`);
+    return { content: [{ type: 'text', text: lines.join('\n') }] };
+  },
+);
+
+server.registerTool(
   'wake_task',
   {
     title: 'Wake Task',
     description:
-      "Start a Bifrost task's Claude session if it is not already running, so it becomes reachable by the built-in SendMessage tool. Bifrost starts a task's session only when the task is first opened, and a task with no session does not appear in ListAgents. Wake it, then address it with SendMessage. A session Bifrost starts is named after the task; one that was already running carries the name the task had when it started, so confirm that one against ListAgents.",
+      "Start a Bifrost task's Claude session if it is not already running, so it becomes reachable by the built-in SendMessage tool. Bifrost starts a task's session only when the task is first opened, and a task with no session does not appear in ListAgents. Returns the name to address it by, which is the name its session carries rather than the task's current name.",
     inputSchema: {
       taskId: z.string().describe('Task ID, from list_tasks'),
     },
@@ -509,9 +542,8 @@ server.registerTool(
     if (!result.ok) {
       return { content: [{ type: 'text', text: `Failed to wake task: ${result.error}` }], isError: true };
     }
-    const text = result.alreadyAwake
-      ? `Session was already running, started under whatever the task was called then; the task is called "${result.name}" now. Find it in ListAgents and address it with SendMessage.`
-      : `Session started as "${result.name}". Address it with SendMessage using to: "${result.name}".`;
+    const state = result.alreadyAwake ? 'was already running' : 'started';
+    const text = `Session ${state}. Address it with SendMessage using to: "${result.name}".`;
     return { content: [{ type: 'text', text }] };
   },
 );

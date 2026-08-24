@@ -21,7 +21,7 @@ import { cancelTaskRequests, checkExistingRules, createRequest } from './permiss
 import { markPrIndexStale } from './pr-index';
 import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
 import { addRepo } from './repo-manager';
-import { hasSession, killSession, waitForSessionReady } from './session-manager';
+import { getSessionName, hasSession, killSession, waitForSessionReady } from './session-manager';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 import { removeWorktree } from './worktree-manager';
 
@@ -209,6 +209,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           baseBranch: t.baseBranch,
           worktreePath: t.worktreePath,
           createdAt: t.createdAt,
+          sessionName: getSessionName(t.id),
         }));
       jsonResponse(res, { tasks });
       return;
@@ -557,6 +558,46 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    case '/find-task': {
+      const query = String((body as { query?: string }).query ?? '').trim();
+      if (!query) {
+        errorResponse(res, 'No query provided');
+        return;
+      }
+      const lower = query.toLowerCase();
+      const all = getTasks();
+      // Ordered by how exactly the query identifies a task, so a directory or a
+      // session id answers with one task rather than everything under it.
+      const found =
+        all.find((t) => t.id === query) ??
+        all.find((t) => t.sessionId === query) ??
+        all.find((t) => t.worktreePath === query) ??
+        all.find((t) => getSessionName(t.id)?.toLowerCase() === lower) ??
+        all.find((t) => t.name.toLowerCase() === lower) ??
+        all.find((t) => t.branch?.toLowerCase() === lower) ??
+        all.find((t) => t.worktreePath.toLowerCase().startsWith(lower));
+      if (!found) {
+        jsonResponse(res, { ok: false, error: `Nothing matches "${query}"` });
+        return;
+      }
+      jsonResponse(res, {
+        ok: true,
+        task: {
+          id: found.id,
+          name: found.name,
+          status: found.status,
+          idle: found.status === 'running' ? isIdle(found.id) : undefined,
+          branch: found.branch,
+          baseBranch: found.baseBranch,
+          worktreePath: found.worktreePath,
+          sessionId: found.sessionId,
+          sessionName: getSessionName(found.id),
+          createdByTaskId: found.createdByTaskId,
+        },
+      });
+      return;
+    }
+
     case '/wake-task': {
       const wakeId = resolveTaskId(body);
       if (!wakeId) {
@@ -588,7 +629,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           return;
         }
       }
-      jsonResponse(res, { ok: true, name: wakeTask.name, alreadyAwake });
+      // The name the session actually carries, which is the task's name from
+      // when it started rather than its name now.
+      jsonResponse(res, { ok: true, name: getSessionName(wakeId) ?? wakeTask.name, alreadyAwake });
       return;
     }
 

@@ -37,6 +37,17 @@ const NEVER_STALE_MINUTES = 100 * 365 * 24 * 60;
 const NEVER_LARGE_TOKENS = 1_000_000_000;
 
 const sessions = new Map<string, IPty>();
+/**
+ * The name each live session was started under. Claude Code's cross-session
+ * addressing is by session name, and a session keeps the name its task had
+ * when it started, so a task renamed since is addressed by its former one.
+ */
+const sessionNames = new Map<string, string>();
+
+/** How a live session is addressed from another session, or undefined if it has none. */
+export function getSessionName(sessionId: string): string | undefined {
+  return sessionNames.get(sessionId);
+}
 
 function send(mainWindow: BrowserWindow, sessionId: string, data: string, isReplay: boolean): void {
   if (!mainWindow.isDestroyed()) {
@@ -423,6 +434,10 @@ export function createSession(
       }
     : undefined;
 
+  // Recorded here because this is where --name is decided; a session started
+  // before a rename keeps the earlier name, which is how it stays addressable.
+  if (options?.name) sessionNames.set(sessionId, options.name);
+
   const prompt = options?.prompt && !options.resumeSessionId ? options.prompt : undefined;
   spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, {
     extraEnv: buildEnv(),
@@ -481,6 +496,7 @@ export function waitForSessionReady(sessionId: string, timeoutMs = 20_000): Prom
 }
 
 function forgetSession(sessionId: string): void {
+  sessionNames.delete(sessionId);
   disposeMirror(sessionId);
   startupBuffers.delete(sessionId);
   fixedGeometry.delete(sessionId);
