@@ -40,7 +40,6 @@ import { scanRecentRepos } from './history-scanner';
 import { openFileInIde, openInIde } from './ide-launcher';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
-import { setActiveTaskId } from './notification-service';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
 import { getTaskPrs } from './pr-index';
 import { handleScrapeResponse, sendPrompt } from './prompt-sender';
@@ -1008,7 +1007,6 @@ end tell`;
   });
 
   ipcMain.handle(IPC.SET_ACTIVE_TASK_ID, (_event, taskId: string | null) => {
-    setActiveTaskId(taskId);
     if (taskId && pendingRestore.has(taskId)) {
       try {
         restoreTaskSession(taskId, mainWindow);

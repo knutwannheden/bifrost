@@ -1,20 +1,12 @@
 import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { app, BrowserWindow, Notification } from 'electron';
+import { loadConfig } from './config';
 
 let mainWindow: BrowserWindow | null = null;
-let activeTaskId: string | null = null;
 
 export function initNotificationService(window: BrowserWindow): void {
   mainWindow = window;
-}
-
-export function setActiveTaskId(taskId: string | null): void {
-  activeTaskId = taskId;
-}
-
-export function getActiveTaskId(): string | null {
-  return activeTaskId;
 }
 
 // Per-task debounce: suppress duplicate notifications within 10s
@@ -30,16 +22,15 @@ export function markNotified(taskId: string): void {
   lastNotification.set(taskId, Date.now());
 }
 
-/** Bell-triggered notification (instant, from xterm.js BEL/OSC). */
-export function handleBellNotification(_taskId: string, taskName: string, isActiveTask: boolean): void {
+/** Sound, OS banner and dock bounce for a task that wants attention. */
+export function handleBellNotification(taskName: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (loadConfig().notifications === false) return;
 
-  const focused = mainWindow.isFocused();
+  // With Bifrost in front, a task that wants attention says so in the sidebar:
+  // the bar goes blue and the row carries it. Sound is for when it cannot.
+  if (mainWindow.isFocused()) return;
 
-  // Skip entirely if the user is focused on this task
-  if (focused && isActiveTask) return;
-
-  // Sound for background tasks or when unfocused
   const bellPath = path.join(__dirname, '../../assets/bell.wav');
   if (process.platform === 'darwin') {
     execFile('afplay', [bellPath], () => {});
@@ -56,9 +47,6 @@ export function handleBellNotification(_taskId: string, taskName: string, isActi
     });
   }
 
-  // OS notification + dock bounce only when window is not focused
-  if (!focused) {
-    new Notification({ title: taskName, body: 'Waiting for input' }).show();
-    app.dock?.bounce('informational');
-  }
+  new Notification({ title: taskName, body: 'Waiting for input' }).show();
+  app.dock?.bounce('informational');
 }

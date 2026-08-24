@@ -23,7 +23,7 @@ import {
   sendMessage,
 } from './message-store';
 import { deleteNote, listNotes } from './note-store';
-import { getActiveTaskId, handleBellNotification, isDebounced, markNotified } from './notification-service';
+import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
 import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
@@ -449,8 +449,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         mainWindow.webContents.send(IPC_STREAM.PERMISSION_PROMPT, promptData);
       }
 
-      // Notify user
-      handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
+      // Notify the user, under the same floor every other trigger observes
+      if (!isDebounced(task.id)) {
+        markNotified(task.id);
+        handleBellNotification(task.name);
+      }
 
       // Hold connection open until resolved
       const result = await response;
@@ -534,7 +537,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         if (hookContext === 'code') {
           markIdle(task.id);
         }
-        handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
+        if (!isDebounced(task.id)) {
+          markNotified(task.id);
+          handleBellNotification(task.name);
+        }
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
           mainWindow.webContents.send(
@@ -570,7 +576,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         }
         if (!isDebounced(task.id)) {
           markNotified(task.id);
-          handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
+          handleBellNotification(task.name);
         }
         jsonResponse(res, { ok: true });
         return;
@@ -595,7 +601,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       markNotified(task.id);
-      handleBellNotification(task.id, task.name, getActiveTaskId() === task.id);
+      handleBellNotification(task.name);
       const message = (body.message as string) || '';
       const title = (body.title as string) || '';
       const notificationType = (body.notification_type as string) || '';
