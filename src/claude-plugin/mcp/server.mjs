@@ -326,12 +326,14 @@ server.registerTool(
   async ({ name, repo, prompt }) => {
     let repoId;
     let repoPath;
+    let callerName;
 
     if (TASK_ID) {
       const result = await apiCall('/list-tasks', {});
       const callerTask = result.tasks.find((t) => t.id === TASK_ID);
       if (callerTask) {
         repoId = callerTask.repoId;
+        callerName = callerTask.name;
       }
     }
 
@@ -348,11 +350,20 @@ server.registerTool(
       };
     }
 
+    // A new task has no way to find whoever asked for it, and its creator is
+    // awake by definition. SendMessage addresses by session name, which is the
+    // task's name from when its session started rather than its name now, so
+    // the id travels too and ListAgents settles which row is meant.
+    const withCoordinates = callerName
+      ? `${prompt}\n\n---\nThis task was created by the Bifrost task "${callerName}" (id: ${TASK_ID}), which is running and reachable. To report back, ask a question, or hand results over, use the built-in SendMessage tool. Find the recipient in ListAgents first: its session is named after the task, but from when the session started, so a renamed task is listed under its former name.`
+      : prompt;
+
     const result = await apiCall('/create-task', {
       repoId,
       repoPath,
       name,
-      prompt,
+      prompt: withCoordinates,
+      createdByTaskId: TASK_ID || undefined,
       async: true,
     });
     const taskName = name || 'new task';
@@ -464,6 +475,28 @@ server.registerTool(
 );
 
 server.registerTool(
+  'wake_task',
+  {
+    title: 'Wake Task',
+    description:
+      "Start a Bifrost task's Claude session if it is not already running, so it becomes reachable by the built-in SendMessage tool. Bifrost starts a task's session only when the task is first opened, and a task with no session does not appear in ListAgents. Wake it, then address it with SendMessage. A session Bifrost starts is named after the task; one that was already running carries the name the task had when it started, so confirm that one against ListAgents.",
+    inputSchema: {
+      taskId: z.string().describe('Task ID, from list_tasks'),
+    },
+  },
+  async ({ taskId }) => {
+    const result = await apiCall('/wake-task', { taskId });
+    if (!result.ok) {
+      return { content: [{ type: 'text', text: `Failed to wake task: ${result.error}` }], isError: true };
+    }
+    const text = result.alreadyAwake
+      ? `Session was already running, started under whatever the task was called then; the task is called "${result.name}" now. Find it in ListAgents and address it with SendMessage.`
+      : `Session started as "${result.name}". Address it with SendMessage using to: "${result.name}".`;
+    return { content: [{ type: 'text', text }] };
+  },
+);
+
+server.registerTool(
   'send_prompt',
   {
     title: 'Send Prompt',
@@ -524,7 +557,7 @@ server.registerTool(
   {
     title: 'Tell Task',
     description:
-      'Send a message to another Bifrost task\'s inbox. The recipient is notified and can read the message using read_messages. The message includes your task identity. Returns immediately. Modes: "queue" (default) nudges when the task becomes idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
+      'Prefer the built-in SendMessage tool for talking to another task: it delivers into the recipient\'s turn, and a reply comes back by copying the incoming `from`. Use ListAgents to find the recipient, and wake_task first if it is not listed. This tool is the fallback for a recipient that cannot be woken: it leaves a message in a Bifrost inbox, which the recipient reads with read_messages. Modes: "queue" (default) nudges when the task becomes idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
     inputSchema: {
       taskId: z.string().describe('Recipient task ID or name (partial name match supported)'),
       text: z.string().describe('The message text to send'),
@@ -558,7 +591,7 @@ server.registerTool(
   {
     title: 'Ask Task',
     description:
-      'Send a message to another Bifrost task\'s inbox and wait for a reply. The recipient reads the message via read_messages and replies using reply_to_task. Blocks until the reply arrives (5-minute timeout). The message includes your task identity. Modes: "queue" (default) nudges when idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
+      'Prefer the built-in SendMessage tool for asking another task something: it delivers into the recipient\'s turn, and the answer comes back as a message. Use ListAgents to find the recipient, and wake_task first if it is not listed. This tool is the fallback for a recipient that cannot be woken: it leaves a question in a Bifrost inbox and blocks until reply_to_task answers (5-minute timeout). Modes: "queue" (default) nudges when idle, "direct" nudges immediately (buffered if busy), "interrupt" stops the task\'s current work to nudge.',
     inputSchema: {
       taskId: z.string().describe('Recipient task ID or name (partial name match supported)'),
       text: z.string().describe('The question/message text to send'),

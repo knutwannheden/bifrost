@@ -307,6 +307,7 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
     hasUnread: false,
     createdAt: Date.now(),
     ...(params.prompt ? { summary: params.prompt } : {}),
+    ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
   };
 
   tasks.push(task);
@@ -408,6 +409,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     createdAt: Date.now(),
     ...(inPlace && { inPlace: true }),
     ...(params.prompt ? { summary: params.prompt } : {}),
+    ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
   };
 
   tasks.push(task);

@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { BrowserWindow } from 'electron';
-import type { Repo } from '../shared/types';
+import type { Repo, Task } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
@@ -14,7 +14,7 @@ import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
 import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
-import { createTaskCore, getTask, getTasks, updateTask } from './ipc-handlers';
+import { createTaskCore, getTask, getTasks, isPendingRestore, restoreTaskSession, updateTask } from './ipc-handlers';
 import {
   cleanupTask as cleanupMessages,
   getUnreadCount,
@@ -28,7 +28,7 @@ import { cancelTaskRequests, checkExistingRules, createRequest } from './permiss
 import { markPrIndexStale } from './pr-index';
 import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
 import { addRepo } from './repo-manager';
-import { killSession } from './session-manager';
+import { hasSession, killSession, waitForSessionReady } from './session-manager';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 import { removeWorktree } from './worktree-manager';
 
@@ -251,13 +251,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/create-task': {
-      const { repoId, repoPath, name, branch, branchName, prompt } = body as {
+      const { repoId, repoPath, name, branch, branchName, prompt, createdByTaskId } = body as {
         repoId?: string;
         repoPath?: string;
         name?: string;
         branch?: string;
         branchName?: string;
         prompt?: string;
+        createdByTaskId?: string;
       };
       if (!repoId && !repoPath) {
         errorResponse(res, 'either repoId or repoPath is required');
@@ -270,7 +271,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (isAsync) {
         // Return immediately with a pending response, create in background
         jsonResponse(res, { ok: true, pending: true });
-        createTaskCore({ repoId, repoPath, name, branch, branchName, prompt }, mainWindow!)
+        createTaskCore({ repoId, repoPath, name, branch, branchName, prompt, createdByTaskId }, mainWindow!)
           .then((task) => {
             mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
             const callerTriageId = body.bifrost_triage_id as string;
@@ -283,7 +284,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           });
       } else {
         try {
-          const task = await createTaskCore({ repoId, repoPath, name, branch, branchName, prompt }, mainWindow!);
+          const task = await createTaskCore(
+            { repoId, repoPath, name, branch, branchName, prompt, createdByTaskId },
+            mainWindow!,
+          );
           mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
 
           // Track task created by triage session
@@ -609,6 +613,41 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType);
       }
       jsonResponse(res, { ok: true });
+      return;
+    }
+
+    case '/wake-task': {
+      const wakeId = resolveTaskId(body);
+      if (!wakeId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      let wakeTask: Task;
+      try {
+        wakeTask = getTask(wakeId);
+      } catch {
+        errorResponse(res, `Task ${wakeId} not found`, 404);
+        return;
+      }
+      if (wakeTask.status !== 'running') {
+        jsonResponse(res, { ok: false, error: `Task is ${wakeTask.status}, not running` });
+        return;
+      }
+      // A session Bifrost has not spawned yet is invisible to ListAgents, so
+      // waking one is what makes it addressable.
+      const alreadyAwake = hasSession(wakeId);
+      if (!alreadyAwake) {
+        if (!isPendingRestore(wakeId) || !mainWindow || mainWindow.isDestroyed()) {
+          jsonResponse(res, { ok: false, error: 'Task has no session and cannot be restored' });
+          return;
+        }
+        restoreTaskSession(wakeId, mainWindow);
+        if (!(await waitForSessionReady(wakeId))) {
+          jsonResponse(res, { ok: false, error: 'Session did not finish starting up' });
+          return;
+        }
+      }
+      jsonResponse(res, { ok: true, name: wakeTask.name, alreadyAwake });
       return;
     }
 

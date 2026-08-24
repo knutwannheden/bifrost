@@ -61,6 +61,8 @@ export interface Task {
   archivedAt?: number;
   /** Last known terminal title (from OSC 0/2) */
   terminalTitle?: string;
+  /** The task whose agent asked for this one, by id: a name can be changed, an id cannot. */
+  createdByTaskId?: string;
   /** Auto-generated one-sentence summary of what the task is doing */
   summary?: string;
   /** True if this task has no managed worktree (e.g. resumed external session) */
@@ -153,6 +155,8 @@ export interface CreateTaskParams {
   inPlace?: boolean;
   /** Initial prompt sent to Claude as the first message */
   prompt?: string;
+  /** The task whose agent asked for this one, when one did */
+  createdByTaskId?: string;
   /** Repo IDs for multi-repo task — when set, repoId/branch/inPlace/prInfo are ignored */
   multiRepoIds?: string[];
 }

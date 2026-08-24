@@ -21,6 +21,7 @@ function rowToTask(row: Row): Task {
   if (row.archived_at != null) task.archivedAt = row.archived_at;
   if (row.terminal_title != null) task.terminalTitle = row.terminal_title;
   if (row.summary != null) task.summary = row.summary;
+  if (row.created_by_task_id != null) task.createdByTaskId = row.created_by_task_id;
   if (row.is_external) task.isExternal = true;
   if (row.in_place) task.inPlace = true;
   if (row.session_history != null) task.sessionHistory = JSON.parse(row.session_history);
@@ -47,8 +48,9 @@ const UPSERT_SQL = `INSERT OR REPLACE INTO tasks (
   id, name, repo_id, base_branch, branch, worktree_path, session_id, status, has_unread,
   created_at, archived_at, terminal_title, summary, is_external, in_place,
   session_history, claude_active, cur_outcome, cur_confidence, cur_reason,
-  cur_pr_state, cur_branch_merged, cur_classified_at, cur_user_override, cur_user_note
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  cur_pr_state, cur_branch_merged, cur_classified_at, cur_user_override, cur_user_note,
+  created_by_task_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function taskParams(t: Task) {
   return [
@@ -77,6 +79,7 @@ function taskParams(t: Task) {
     t.curation?.classifiedAt ?? null,
     t.curation?.userOverride ?? null,
     t.curation?.userNote ?? null,
+    t.createdByTaskId ?? null,
   ];
 }
 
