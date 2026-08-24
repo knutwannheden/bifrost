@@ -141,10 +141,10 @@ body {
   width: 100vw;
 }
 
-/* Marks a task as working. Animating opacity keeps the whole pulse on the
-   compositor, with no main-thread repaints. */
+/* Marks something as in flight. Carries no colour of its own, so each user
+   sets one and none of them fight this rule's specificity. Animating opacity
+   keeps the whole pulse on the compositor, with no main-thread repaints. */
 .activity-pulse {
-  background: var(--color-success);
   animation: activity-pulse 1.6s ease-in-out infinite;
   will-change: opacity;
 }

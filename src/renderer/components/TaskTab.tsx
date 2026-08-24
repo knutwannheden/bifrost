@@ -258,7 +258,7 @@ export default function TaskTab({
             &times;
           </span>
         </span>
-        {showPulse && !isActive && <span className="activity-pulse absolute top-0 bottom-0 left-0 w-1" />}
+        {showPulse && !isActive && <span className="activity-pulse absolute top-0 bottom-0 left-0 w-1 bg-success" />}
         {showSolid && <span className={`absolute top-0 bottom-0 left-0 w-1 ${failed ? 'bg-danger' : 'bg-info'}`} />}
         {isActive && <span className="absolute top-0 bottom-0 left-0 w-1 bg-accent" />}
       </button>

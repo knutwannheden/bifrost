@@ -7,6 +7,11 @@ export interface TaskPr {
   number: number;
   state: 'open' | 'draft' | 'merged' | 'closed';
   url: string;
+  /**
+   * Where an open PR stands: its checks, then whether GitHub would merge it.
+   * Absent once a PR is merged or closed, when there is nothing left to wait on.
+   */
+  progress?: 'running' | 'failing' | 'ready' | 'blocked';
 }
 
 export interface TaskCuration {

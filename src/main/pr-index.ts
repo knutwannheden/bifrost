@@ -44,6 +44,39 @@ interface GhPr {
   url: string;
 }
 
+interface GhCheck {
+  status?: string;
+  conclusion?: string;
+  state?: string;
+}
+
+interface GhOpenPr {
+  number: number;
+  mergeStateStatus?: string;
+  reviewDecision?: string;
+  statusCheckRollup?: GhCheck[];
+}
+
+/**
+ * What an open PR is waiting on, most urgent first: a run in flight, then a
+ * failure, then whether GitHub would merge it as it stands.
+ */
+function progressOf(pr: GhOpenPr): TaskPr['progress'] {
+  const checks = pr.statusCheckRollup ?? [];
+  const running = checks.some((c) => {
+    const state = (c.status ?? c.state ?? '').toUpperCase();
+    return state === 'QUEUED' || state === 'IN_PROGRESS' || state === 'PENDING' || state === 'WAITING';
+  });
+  if (running) return 'running';
+  const failed = checks.some((c) => {
+    const state = (c.conclusion ?? c.state ?? '').toUpperCase();
+    return state === 'FAILURE' || state === 'TIMED_OUT' || state === 'CANCELLED' || state === 'ERROR';
+  });
+  if (failed) return 'failing';
+  if (pr.reviewDecision === 'CHANGES_REQUESTED') return 'blocked';
+  return pr.mergeStateStatus === 'CLEAN' ? 'ready' : 'blocked';
+}
+
 /**
  * One `gh pr list` covers a repo's whole task set, where `gh pr view` would
  * cost a subprocess and a round trip per task.
@@ -70,6 +103,28 @@ async function refresh(repo: Repo): Promise<RepoIndex> {
   } catch {
     /* not a GitHub repo, unauthenticated, or offline — the repo simply has no PRs to show */
   }
+  // Asked for separately: mergeStateStatus and the check rollup triple the time
+  // of the listing above, and only an open PR has anything left to wait on.
+  if ([...byBranch.values()].some((pr) => pr.state === 'open' || pr.state === 'draft')) {
+    try {
+      const { stdout } = await execFile(
+        'gh',
+        // biome-ignore format: one flag per pair reads better than the wrapped form
+        ['pr', 'list', '--author', '@me', '--state', 'open',
+         '--limit', String(PR_LIMIT), '--json', 'number,mergeStateStatus,reviewDecision,statusCheckRollup'],
+        { cwd: repo.path, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
+      );
+      const progress = new Map<number, TaskPr['progress']>();
+      for (const open of JSON.parse(stdout) as GhOpenPr[]) progress.set(open.number, progressOf(open));
+      for (const pr of byBranch.values()) {
+        const p = progress.get(pr.number);
+        if (p) pr.progress = p;
+      }
+    } catch {
+      /* the pill still carries the number; it just says nothing about progress */
+    }
+  }
+
   const index = { byBranch, fetchedAt: Date.now(), stale: false };
   indexes.set(repo.id, index);
   return index;
