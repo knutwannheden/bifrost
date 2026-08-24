@@ -53,6 +53,7 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
   'action.openIde': { id: 'action.openIde', label: 'Open in IDE', category: 'actions', requiresTask: true },
   'action.openPr': { id: 'action.openPr', label: 'Open PR in GitHub', category: 'actions', requiresTask: true },
   'action.find': { id: 'action.find', label: 'Find in terminal', category: 'actions', requiresTask: true },
+  'action.copyRef': { id: 'action.copyRef', label: 'Copy task reference', category: 'actions', requiresTask: true },
   'action.scrollUp': { id: 'action.scrollUp', label: 'Scroll terminal up', category: 'actions', requiresTask: true },
   'action.scrollDown': {
     id: 'action.scrollDown',
@@ -162,7 +163,7 @@ export const DEFAULT_KEYMAP: KeyBinding[] = [
   kb('action.find', 'Cmd+F'),
   kb('action.scrollUp', 'Cmd+ArrowUp'),
   kb('action.scrollDown', 'Cmd+ArrowDown'),
-  kb('action.capture', 'Cmd+Shift+C'),
+  kb('action.copyRef', 'Cmd+Shift+C'),
   kb('app.shortcuts', 'Cmd+K'),
   kb('app.settings', 'Cmd+,'),
 ];

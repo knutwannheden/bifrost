@@ -7,6 +7,7 @@ import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
 import { nextActiveTaskId } from '../utils/next-active-task';
 import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
+import { taskReference } from '../utils/task-reference';
 import { terminalRegistry } from './useTerminal';
 
 const RECORD_SYMBOL = '\u23FA'; // ⏺
@@ -417,6 +418,18 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           // Handled locally by TerminalPane — no-op here
           break;
 
+        case 'action.copyRef': {
+          const refTask = s.tasks.find((t) => t.id === s.activeTaskId);
+          const reference = refTask ? taskReference(refTask, s.repos) : null;
+          if (!reference) {
+            dispatch({ type: 'SHOW_TOAST', message: 'No reference for this task' });
+            break;
+          }
+          navigator.clipboard.writeText(reference);
+          dispatch({ type: 'SHOW_TOAST', message: `${reference} copied` });
+          break;
+        }
+
         case 'action.scrollUp':
         case 'action.scrollDown': {
           if (!s.activeTaskId) break;
@@ -596,11 +609,6 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
       const mod = isModKey(e);
       const matchingBindings = currentKeymap.filter((b) => strokeMatchesEvent(b.strokes[0], e, mod));
       if (matchingBindings.length === 0) return;
-
-      // Cmd+Shift+C: skip if already handled by DiffOverlay
-      if (matchingBindings.length === 1 && matchingBindings[0].actionId === 'action.capture' && e.defaultPrevented) {
-        return;
-      }
 
       e.preventDefault();
 

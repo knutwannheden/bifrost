@@ -4,6 +4,7 @@ import type { Task, TaskPr } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
+import { taskReference } from '../utils/task-reference';
 import Highlight from './Highlight';
 import Kbd from './Kbd';
 import PinIcon from './PinIcon';
@@ -300,6 +301,20 @@ export default function TaskTab({
             >
               Regenerate title
             </button>
+            <MenuItem
+              label="Copy reference"
+              shortcut={getDisplayString('action.copyRef')}
+              onClick={() => {
+                setMenuPos(null);
+                const reference = taskReference(task, state.repos);
+                if (!reference) {
+                  dispatch({ type: 'SHOW_TOAST', message: 'No reference for this task' });
+                  return;
+                }
+                navigator.clipboard.writeText(reference);
+                dispatch({ type: 'SHOW_TOAST', message: `${reference} copied` });
+              }}
+            />
             <div className="my-1 border-t border-border-default" />
             <MenuItem
               label="Close"
