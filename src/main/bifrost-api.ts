@@ -204,26 +204,49 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/list-tasks': {
-      const filter = (body as { status?: 'open' | 'running' | 'all' }).status ?? 'open';
-      const tasks = getTasks()
+      const {
+        status: filter = 'open',
+        query: listQuery,
+        repo: repoFilter,
+        limit: listLimit,
+      } = body as { status?: 'open' | 'running' | 'all'; query?: string; repo?: string; limit?: number };
+      const listRepos = loadConfig().repos;
+      const q = listQuery?.trim().toLowerCase();
+      const rq = repoFilter?.trim().toLowerCase();
+      const matching = getTasks()
         .filter((t) => {
-          if (filter === 'all') return true;
           if (filter === 'running') return t.status === 'running';
-          return t.status !== 'archived';
+          if (filter !== 'all' && t.status === 'archived') return false;
+          return true;
         })
-        .map((t) => ({
-          id: t.id,
-          name: t.name,
-          repoId: t.repoId,
-          status: t.status,
-          idle: t.status === 'running' ? isIdle(t.id) : undefined,
-          branch: t.branch,
-          baseBranch: t.baseBranch,
-          worktreePath: t.worktreePath,
-          createdAt: t.createdAt,
-          sessionName: getSessionName(t.id),
-        }));
-      jsonResponse(res, { tasks });
+        .filter((t) => {
+          if (!rq) return true;
+          const repo = listRepos.find((r: Repo) => r.id === t.repoId);
+          return !!repo && `${repo.name} ${repo.githubPath ?? ''} ${repo.path}`.toLowerCase().includes(rq);
+        })
+        .filter((t) => {
+          if (!q) return true;
+          const repo = listRepos.find((r: Repo) => r.id === t.repoId);
+          const hay =
+            `${t.name} ${t.branch ?? ''} ${t.baseBranch} ${t.worktreePath} ${getSessionName(t.id) ?? ''} ${repo?.name ?? ''}`.toLowerCase();
+          return q.split(/\s+/).every((term) => hay.includes(term));
+        })
+        // Newest first, so a capped list keeps the tasks still in play.
+        .sort((a, b) => b.createdAt - a.createdAt);
+      const cap = Math.max(1, Math.min(listLimit ?? 50, 500));
+      const tasks = matching.slice(0, cap).map((t) => ({
+        id: t.id,
+        name: t.name,
+        repoId: t.repoId,
+        status: t.status,
+        idle: t.status === 'running' ? isIdle(t.id) : undefined,
+        branch: t.branch,
+        baseBranch: t.baseBranch,
+        worktreePath: t.worktreePath,
+        createdAt: t.createdAt,
+        sessionName: getSessionName(t.id),
+      }));
+      jsonResponse(res, { tasks, total: matching.length, truncated: matching.length > tasks.length });
       return;
     }
 
@@ -627,6 +650,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         task: {
           id: found.id,
           name: found.name,
+          repoId: found.repoId,
           status: found.status,
           idle: found.status === 'running' ? isIdle(found.id) : undefined,
           branch: found.branch,

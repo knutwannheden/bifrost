@@ -101,7 +101,7 @@ server.registerTool(
   {
     title: 'List Tasks',
     description:
-      'List Bifrost tasks with their status, branch, and worktree path. This is where to look for a task to message: rows with a "send to" show the name to give the built-in SendMessage tool, and rows without one have no session yet — wake_task starts it. By default returns only non-archived tasks (running, stopped, error). Use status="running" to narrow further to live tasks, or status="all" to include archived.',
+      'List Bifrost tasks with their status, branch, and worktree path. This is where to look for a task to message: rows with a "send to" show the name to give the built-in SendMessage tool, and rows without one have no session yet — wake_task starts it. There are thousands of tasks, so narrow with query and repo rather than listing everything; newest come first and the rest are cut at limit. To identify one task you already have a handle for, find_task is cheaper.',
     inputSchema: {
       status: z
         .enum(['open', 'running', 'all'])
@@ -109,10 +109,18 @@ server.registerTool(
         .describe(
           'Filter by task status. "open" (default) excludes archived; "running" only live tasks; "all" includes archived.',
         ),
+      query: z
+        .string()
+        .optional()
+        .describe(
+          'Match against task name, branch, worktree path, session name and repo. Space-separated terms all have to match.',
+        ),
+      repo: z.string().optional().describe('Only tasks in repos whose name, GitHub path or directory contains this.'),
+      limit: z.number().optional().describe('How many to return, newest first (default 50, max 500).'),
     },
   },
-  async ({ status }) => {
-    const result = await apiCall('/list-tasks', { status: status ?? 'open' });
+  async ({ status, query, repo, limit }) => {
+    const result = await apiCall('/list-tasks', { status: status ?? 'open', query, repo, limit });
     const text =
       result.tasks.length > 0
         ? result.tasks
@@ -123,7 +131,10 @@ server.registerTool(
             })
             .join('\n')
         : 'No matching Bifrost tasks.';
-    return { content: [{ type: 'text', text }] };
+    const note = result.truncated
+      ? `\n\n${result.tasks.length} of ${result.total} shown — narrow with query/repo, or raise limit.`
+      : '';
+    return { content: [{ type: 'text', text: text + note }] };
   },
 );
 
@@ -278,10 +289,10 @@ server.registerTool(
     let repoPath;
 
     if (TASK_ID) {
-      const result = await apiCall('/list-tasks', {});
-      const callerTask = result.tasks.find((t) => t.id === TASK_ID);
-      if (callerTask) {
-        repoId = callerTask.repoId;
+      // The capped list need not include the caller, so look it up by id.
+      const caller = await apiCall('/find-task', { query: TASK_ID });
+      if (caller.ok) {
+        repoId = caller.task.repoId;
       }
     }
 
@@ -421,7 +432,7 @@ server.registerTool(
   {
     title: 'Find Task',
     description:
-      'Identify the Bifrost task behind something you already have: a task id, a Claude session id, a worktree directory, a branch, or a name. Returns the task and, when its session is running, the name to give the built-in SendMessage tool. Use this to work out who you are talking to, or to turn a directory into a task you can message.',
+      'Identify the Bifrost task behind something you already have: a task id, a Claude session id, a worktree directory, a branch, a current name, or the name a renamed task used to have. Returns the task and, when its session is running, the name to give the built-in SendMessage tool. Use this to work out who you are talking to, or to turn a directory into a task you can message.',
     inputSchema: {
       query: z
         .string()
@@ -440,7 +451,9 @@ server.registerTool(
       `branch: ${t.branch ?? t.baseBranch}`,
       `worktree: ${t.worktreePath}`,
       t.sessionName
-        ? `send to: "${t.sessionName}" with SendMessage`
+        ? `send to: "${t.sessionName}" with SendMessage${
+            t.sessionName === t.name ? '' : ' (its session name; the task has been renamed since)'
+          }`
         : 'no session running — wake_task starts one and reports how to address it',
     ];
     if (t.createdByTaskId) lines.push(`created by task: ${t.createdByTaskId}`);
