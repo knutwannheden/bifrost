@@ -8,6 +8,7 @@ import { nextActiveTaskId } from '../utils/next-active-task';
 import { repoDisplayName, shortPath } from '../utils/paths';
 import { matchesTaskSearch } from '../utils/search';
 import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
+import CloseButton from './CloseButton';
 import FormInput from './FormInput';
 import Kbd from './Kbd';
 import TaskTab from './TaskTab';
@@ -203,7 +204,18 @@ export default function TaskSidebar() {
               if (!e.metaKey && !e.ctrlKey) e.stopPropagation();
             }}
           />
-          {!filterFocused && !filter && filterShortcut ? (
+          {/* One slot: the shortcut while there is nothing to clear, the clear
+              button once there is. */}
+          {filter ? (
+            <span className="absolute right-1.5 top-0 bottom-0 flex items-center">
+              <CloseButton
+                onClick={() => {
+                  setFilter('');
+                  filterRef.current?.focus();
+                }}
+              />
+            </span>
+          ) : !filterFocused && filterShortcut ? (
             <span className="absolute right-1.5 top-0 bottom-0 flex items-center pointer-events-none">
               <Kbd>{filterShortcut}</Kbd>
             </span>
