@@ -24,7 +24,7 @@ If you haven't read all sections, you're about to inherit hidden problems. Stop 
 
 1. Use `list_tasks` to get the list of tasks. Match `$1` (user argument) against task names — fuzzy/substring matching.
 2. If no match or ambiguous, show full task list and ask user to pick one.
-3. Use `get_handoff` MCP tool with task ID.
+3. Read `~/.bifrost/tasks/{task-id}/handoff.md`.
 4. If no handoff exists, tell the user and stop.
 5. **Read and display the ENTIRE handoff** (all sections above).
 6. Ask user to confirm before starting work.

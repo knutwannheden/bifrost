@@ -266,29 +266,6 @@ server.registerTool(
 );
 
 server.registerTool(
-  'get_handoff',
-  {
-    title: 'Get Handoff',
-    description:
-      "Read a handoff document from a Bifrost task. Returns the markdown content written by another session's /handoff command.",
-    inputSchema: {
-      taskId: z.string().describe('The task ID to read the handoff from'),
-    },
-  },
-  async ({ taskId }) => {
-    const handoffPath = path.join(os.homedir(), '.bifrost', 'tasks', taskId, 'handoff.md');
-    try {
-      const content = fs.readFileSync(handoffPath, 'utf-8');
-      return { content: [{ type: 'text', text: content }] };
-    } catch {
-      return {
-        content: [{ type: 'text', text: `No handoff found for task ${taskId}.` }],
-      };
-    }
-  },
-);
-
-server.registerTool(
   'list_repos',
   {
     title: 'List Repos',
