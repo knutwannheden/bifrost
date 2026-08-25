@@ -12,7 +12,6 @@ const execFile = promisify(execFileCb);
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
-import { resolve as resolveContext } from './context-store';
 import { getDiff } from './diff-service';
 import { createTaskCore, getTask, getTasks, isPendingRestore, restoreTaskSession, updateTask } from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
@@ -166,21 +165,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const body = await readJsonBody(req);
 
   switch (req.url) {
-    case '/resolve-context': {
-      const id = body.id as number;
-      if (typeof id !== 'number') {
-        errorResponse(res, 'Missing or invalid id');
-        return;
-      }
-      const entry = resolveContext(id);
-      if (!entry) {
-        errorResponse(res, `Context #${id} not found or expired`, 404);
-        return;
-      }
-      jsonResponse(res, entry);
-      return;
-    }
-
     case '/list-repos': {
       const config = loadConfig();
       const repos = config.repos.map(

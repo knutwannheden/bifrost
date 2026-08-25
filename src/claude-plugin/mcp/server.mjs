@@ -68,31 +68,6 @@ function apiCall(endpoint, body, { timeout = 60000 } = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Context formatting
-// ---------------------------------------------------------------------------
-
-function formatContextEntry(entry) {
-  const header = `[Bifrost #${entry.id}] (${entry.type}, task: ${entry.taskName})`;
-
-  switch (entry.type) {
-    case 'terminal':
-      return `${header}:\n\n${entry.content}`;
-    case 'diff':
-      return `${header}:\n\n${entry.content}`;
-    case 'activity':
-      return `${header}:\n\n${entry.content}`;
-    case 'transcript': {
-      // resolvedContent from JSONL > selectedText > captured terminal text
-      const content = entry.resolvedContent || entry.selectedText || entry.content || '(no content)';
-      const selection = entry.selectedText && entry.resolvedContent ? `\n\nSelected text: ${entry.selectedText}` : '';
-      return `${header} [from Claude session JSONL]:\n\n${content}${selection}`;
-    }
-    default:
-      return `${header}:\n\n${entry.content || '(no content)'}`;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // MCP Server
 // ---------------------------------------------------------------------------
 
@@ -118,29 +93,6 @@ const server = new McpServer(
       'renamed since then is addressed by its former name. list_tasks, find_task and',
       'wake_task all report the name a task is actually reachable by.',
     ].join('\n'),
-  },
-);
-
-server.registerTool(
-  'resolve_context',
-  {
-    title: 'Resolve Context',
-    description:
-      'Resolve a Bifrost context reference [Bifrost #N] to its content. Use when user messages contain [Bifrost #N] patterns.',
-    inputSchema: {
-      id: z.number().describe('The context reference number N from [Bifrost #N]'),
-    },
-  },
-  async ({ id }) => {
-    const entry = await apiCall('/resolve-context', { id });
-    return {
-      content: [
-        {
-          type: 'text',
-          text: formatContextEntry(entry),
-        },
-      ],
-    };
   },
 );
 
