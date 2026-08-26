@@ -66,10 +66,10 @@ import {
   createMultiRepoContainer,
   createWorktree,
   createWorktreeFromPr,
-  isWorktreeDisposable,
   removeWorktree,
   restoreWorktree,
   slugify,
+  worktreeBranch,
 } from './worktree-manager';
 
 // In-memory task list, synced to disk
@@ -148,10 +148,9 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
   if (task.status === 'running') {
     killSession(taskId);
   }
-  const archived = updateTask(taskId, {
-    status: 'archived',
-    archivedAt: Date.now(),
-  });
+  const updates: Partial<Task> = { status: 'archived', archivedAt: Date.now() };
+  let removal: (() => Promise<void>) | null = null;
+
   if (!task.isExternal && fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
@@ -164,10 +163,24 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
       }
       config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
       saveConfig(config);
-    } else if (!task.inPlace && repo && (await isWorktreeDisposable(task.worktreePath, task.baseBranch))) {
-      // Archiving keeps a worktree that still holds work, so reopening it finds
-      // the directory exactly as it was left.
-      removeWorktree(repo.path, task.worktreePath).catch(() => {});
+    } else if (!task.inPlace && repo) {
+      // The branch holds the commits, so reopening builds the worktree back from
+      // it — which is why uncommitted work is worth a confirmation and commits
+      // are not. A detached HEAD has no branch to build from, so it stays.
+      const branch = await worktreeBranch(task.worktreePath);
+      if (branch) {
+        updates.branch = branch;
+        removal = () => removeWorktree(repo.path, task.worktreePath);
+      }
+    }
+  }
+
+  const archived = updateTask(taskId, updates);
+  if (removal) {
+    try {
+      await removal();
+    } catch (err) {
+      console.error(`[archive] could not remove worktree ${task.worktreePath}:`, err);
     }
   }
   return archived;

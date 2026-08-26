@@ -10,9 +10,9 @@ const execFile = promisify(execFileCb);
 
 /**
  * Whether a worktree holds nothing its base branch does not: no staged,
- * unstaged or untracked changes, and no commits ahead. Only such a directory
- * can be recreated exactly, so only such a directory is safe to remove.
- * Anything unreadable answers false, so a failed check never costs a worktree.
+ * unstaged or untracked changes, and no commits ahead. Such a task produced
+ * nothing to look at, which is what lets the curator archive it unattended.
+ * Anything unreadable answers false, so a failed check leaves the task alone.
  */
 export async function isWorktreeDisposable(worktreePath: string, baseRef: string): Promise<boolean> {
   if (!baseRef || !fs.existsSync(worktreePath)) return false;
@@ -218,6 +218,19 @@ export async function restoreWorktree(repoPath: string, taskName: string, branch
   }
 
   return worktreePath;
+}
+
+/** The branch a worktree's HEAD is on, or null when it is detached. */
+export async function worktreeBranch(worktreePath: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFile('git', ['--no-optional-locks', 'symbolic-ref', '--quiet', '--short', 'HEAD'], {
+      cwd: worktreePath,
+      timeout: 5000,
+    });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {

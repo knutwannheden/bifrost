@@ -14,6 +14,7 @@ import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
 import { getDiff } from './diff-service';
 import {
+  archiveTaskCore,
   createTaskCore,
   getTask,
   getTasks,
@@ -30,7 +31,6 @@ import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromp
 import { addRepo } from './repo-manager';
 import { getSessionName, hasSession, killSession, waitForSessionReady } from './session-manager';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
-import { removeWorktree } from './worktree-manager';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -355,16 +355,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
             }
           }
 
-          const updated = updateTask(taskId, { status: 'archived', archivedAt: Date.now() });
-
-          // Remove worktree in the background
-          if (!task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
-            const config = loadConfig();
-            const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-            if (repo) {
-              removeWorktree(repo.path, task.worktreePath).catch(() => {});
-            }
-          }
+          // The UI archives through this same call, so multi-repo cleanup and
+          // the detached-worktree guard hold for an agent's archive as well.
+          const updated = await archiveTaskCore(taskId);
 
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, taskId, true);
