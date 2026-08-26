@@ -56,7 +56,7 @@ import {
 import { getSessionMetricsData } from './session-metrics';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
-import { loadTasks, saveTasks } from './task-store';
+import { loadTasks, saveTasks, saveTurnBoundary } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
 import { generateTaskTitle } from './title-generator';
 import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
@@ -89,6 +89,13 @@ export function getTask(taskId: string): Task {
   const task = tasks.find((t) => t.id === taskId);
   if (!task) throw new Error(`Task not found: ${taskId}`);
   return task;
+}
+
+export function markTurnBoundary(taskId: string, at: number): void {
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task) return;
+  task.lastTurnBoundaryAt = at;
+  saveTurnBoundary(taskId, at);
 }
 
 export function updateTask(taskId: string, updates: Partial<Task>): Task {

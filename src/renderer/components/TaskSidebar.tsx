@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { TaskPr } from '../../shared/types';
+import type { Task, TaskPr } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { useFlipList } from '../hooks/useFlipList';
@@ -67,8 +67,10 @@ export default function TaskSidebar() {
 
   const openTasks = state.tasks.filter((t) => t.status === 'running');
 
-  const recency = (id: string, createdAt: number) => mtimes[id] ?? createdAt;
-  const sorted = [...openTasks].sort((a, b) => recency(b.id, b.createdAt) - recency(a.id, a.createdAt));
+  // A transcript's mtime moves with every write inside a turn, so a boundary
+  // wins wherever there is one and the rest fall back to their last write.
+  const recency = (t: Task) => t.lastTurnBoundaryAt ?? mtimes[t.id] ?? t.createdAt;
+  const sorted = [...openTasks].sort((a, b) => recency(b) - recency(a));
 
   const repoNameFor = (task: (typeof sorted)[number]) => {
     const repo = state.repos.find((r) => r.id === task.repoId);
@@ -92,7 +94,7 @@ export default function TaskSidebar() {
 
   const groups = new Map<string, typeof sorted>();
   for (const task of shown) {
-    const bucket = pinnedIds.includes(task.id) ? PINNED : getTimeBucket(recency(task.id, task.createdAt));
+    const bucket = pinnedIds.includes(task.id) ? PINNED : getTimeBucket(recency(task));
     const list = groups.get(bucket);
     if (list) list.push(task);
     else groups.set(bucket, [task]);

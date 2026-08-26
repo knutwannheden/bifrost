@@ -215,6 +215,11 @@ const api: BifrostAPI = {
     ipcRenderer.on(IPC_STREAM.CLAUDE_ACTIVE, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.CLAUDE_ACTIVE, handler);
   },
+  onTaskTurnBoundary: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, at: number) => callback(taskId, at);
+    ipcRenderer.on(IPC_STREAM.TASK_TURN_BOUNDARY, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TASK_TURN_BOUNDARY, handler);
+  },
 
   // Prompt sender
   sendPrompt: (taskId, text, mode) => ipcRenderer.invoke(IPC.SEND_PROMPT, taskId, text, mode),

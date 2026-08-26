@@ -170,6 +170,7 @@ export const IPC_STREAM = {
   TRIAGE_ACTIVITY: 'triage:activity',
   TRIAGE_WAITING: 'triage:waiting',
   CLAUDE_ACTIVE: 'claude:active',
+  TASK_TURN_BOUNDARY: 'task:turn-boundary',
   SCRAPE_PROMPT_REQUEST: 'prompt:scrape-request',
   TERMINAL_UNLOCK: 'terminal:unlock',
   CURATOR_UPDATE: 'curator:update',
@@ -328,6 +329,7 @@ export interface BifrostAPI {
 
   // Claude activity
   onClaudeActive(callback: (taskId: string, active: boolean) => void): () => void;
+  onTaskTurnBoundary(callback: (taskId: string, at: number) => void): () => void;
 
   // Prompt sender
   sendPrompt(

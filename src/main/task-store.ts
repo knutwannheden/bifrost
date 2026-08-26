@@ -26,6 +26,7 @@ function rowToTask(row: Row): Task {
   if (row.in_place) task.inPlace = true;
   if (row.session_history != null) task.sessionHistory = JSON.parse(row.session_history);
   if (row.claude_active) task.claudeActive = true;
+  if (row.last_turn_boundary_at != null) task.lastTurnBoundaryAt = row.last_turn_boundary_at;
 
   if (row.cur_outcome != null) {
     const curation: TaskCuration = {
@@ -49,8 +50,8 @@ const UPSERT_SQL = `INSERT OR REPLACE INTO tasks (
   created_at, archived_at, terminal_title, summary, is_external, in_place,
   session_history, claude_active, cur_outcome, cur_confidence, cur_reason,
   cur_pr_state, cur_branch_merged, cur_classified_at, cur_user_override, cur_user_note,
-  created_by_task_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  created_by_task_id, last_turn_boundary_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function taskParams(t: Task) {
   return [
@@ -80,7 +81,13 @@ function taskParams(t: Task) {
     t.curation?.userOverride ?? null,
     t.curation?.userNote ?? null,
     t.createdByTaskId ?? null,
+    t.lastTurnBoundaryAt ?? null,
   ];
+}
+
+/** Stamped several times a turn, so it writes one row rather than the table. */
+export function saveTurnBoundary(taskId: string, at: number): void {
+  getDb().prepare('UPDATE tasks SET last_turn_boundary_at = ? WHERE id = ?').run(at, taskId);
 }
 
 export function loadTasks(): Task[] {

@@ -133,6 +133,7 @@ export type AppAction =
   | { type: 'START_RENAME_TASK'; taskId: string }
   | { type: 'CLEAR_RENAME_TASK' }
   | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean }
+  | { type: 'SET_TURN_BOUNDARY'; taskId: string; at: number }
   | { type: 'SET_VISIBLE_TASK_IDS'; taskIds: string[] }
   | { type: 'FOCUS_SIDEBAR_FILTER' };
 
@@ -481,6 +482,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, claudeActive: action.active } : t)),
+      };
+    case 'SET_TURN_BOUNDARY':
+      return {
+        ...state,
+        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, lastTurnBoundaryAt: action.at } : t)),
       };
     case 'SET_VISIBLE_TASK_IDS': {
       const { taskIds } = action;

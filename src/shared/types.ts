@@ -78,6 +78,8 @@ export interface Task {
   sessionHistory?: string[];
   /** True while Claude is actively working (writing JSONL output) */
   claudeActive?: boolean;
+  /** When the task last started, paused for input, or ended a turn. Orders the sidebar. */
+  lastTurnBoundaryAt?: number;
   curation?: TaskCuration;
 }
 

@@ -140,6 +140,13 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
+  useEffect(() => {
+    const unsub = window.bifrost.onTaskTurnBoundary((taskId, at) => {
+      dispatch({ type: 'SET_TURN_BOUNDARY', taskId, at });
+    });
+    return unsub;
+  }, [dispatch]);
+
   // Handle scrape-prompt requests from main process (prompt-sender).
   // Lock terminal input during the send to prevent user keystrokes from interfering.
   useEffect(() => {

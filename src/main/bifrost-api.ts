@@ -13,7 +13,15 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
 import { getDiff } from './diff-service';
-import { createTaskCore, getTask, getTasks, isPendingRestore, restoreTaskSession, updateTask } from './ipc-handlers';
+import {
+  createTaskCore,
+  getTask,
+  getTasks,
+  isPendingRestore,
+  markTurnBoundary,
+  restoreTaskSession,
+  updateTask,
+} from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
 import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
@@ -136,8 +144,18 @@ function clearSubagentState(taskId: string): void {
   stoppedWhileWorking.delete(taskId);
 }
 
+/** The sidebar orders by these, so the writes inside a turn leave rows put. */
+function turnBoundary(taskId: string): void {
+  const at = Date.now();
+  markTurnBoundary(taskId, at);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.TASK_TURN_BOUNDARY, taskId, at);
+  }
+}
+
 /** The end of a task's work: idle, notified, and the sidebar's bar turned. */
 function finishTurn(task: Task): void {
+  turnBoundary(task.id);
   clearSubagentState(task.id);
   markIdle(task.id);
   // A turn that just ended is the likeliest moment for a PR to exist.
@@ -470,6 +488,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           // than inheriting one that would hold the task working forever.
           clearSubagentState(task.id);
           markActive(task.id);
+          turnBoundary(task.id);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
           }
@@ -534,6 +553,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         if (hookContext === 'code') {
           clearSubagentState(task.id);
           markIdle(task.id);
+          turnBoundary(task.id);
         }
         if (!isDebounced(task.id)) {
           markNotified(task.id);
@@ -586,6 +606,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (hookContext === 'code') {
         // Claude is waiting for input
         markIdle(task.id);
+        turnBoundary(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
         }
