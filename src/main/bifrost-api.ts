@@ -27,9 +27,16 @@ import { deleteNote, listNotes } from './note-store';
 import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
-import { initPromptSender, isIdle, markActive, markIdle, sendPrompt as sendPromptToTask } from './prompt-sender';
+import {
+  initPromptSender,
+  isIdle,
+  markActive,
+  markIdle,
+  sendPrompt as sendPromptToTask,
+  workingTaskIds,
+} from './prompt-sender';
 import { addRepo } from './repo-manager';
-import { getSessionName, hasSession, killSession, waitForSessionReady } from './session-manager';
+import { getSessionName, hasSession, killSession, sessionOutputAt, waitForSessionReady } from './session-manager';
 import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 
 let mainWindow: BrowserWindow | null = null;
@@ -68,6 +75,30 @@ export function isSessionStale(worktreePath: string, sessionId?: string): boolea
 export function initApi(window: BrowserWindow): void {
   mainWindow = window;
   initPromptSender(window);
+  setInterval(sweepStaleWork, SWEEP_MS).unref();
+}
+
+const SWEEP_MS = 15_000;
+// Claude redraws an elapsed-time counter for as long as it is working, so a
+// session that has written nothing for this long is not working, whatever the
+// hooks last said. Well clear of a slow redraw, well under a coffee break.
+const SILENT_MS = 45_000;
+
+/**
+ * A missed hook leaves a task pulsing green with nothing to correct it — a turn
+ * ended while Bifrost was restarting, a curl timed out, a session was killed.
+ * The PTY settles the question independently of any of that.
+ */
+function sweepStaleWork(): void {
+  const now = Date.now();
+  for (const taskId of workingTaskIds()) {
+    const at = sessionOutputAt(taskId);
+    if (at != null && now - at < SILENT_MS) continue;
+    markIdle(taskId);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, taskId, false);
+    }
+  }
 }
 
 const PORT_START = 7623;

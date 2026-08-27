@@ -113,7 +113,15 @@ function createReadyGate(sessionId: string): void {
 }
 
 /** Restart the quiet-period countdown; the last output before silence wins. */
+/** Last PTY write per session: Claude animates while it works, so silence is telling. */
+const lastOutputAt = new Map<string, number>();
+
+export function sessionOutputAt(sessionId: string): number | undefined {
+  return lastOutputAt.get(sessionId);
+}
+
 function noteSessionOutput(sessionId: string): void {
+  lastOutputAt.set(sessionId, Date.now());
   const gate = sessionReady.get(sessionId);
   if (!gate || gate.ready) return;
   if (gate.timer) clearTimeout(gate.timer);
@@ -390,6 +398,14 @@ export function createSession(
     onResumeFailed?: () => void;
   },
 ): void {
+  // A session comes up with nothing in flight, whatever the last thing Bifrost
+  // heard about the old one was — a restored task that reads as working has
+  // only inherited that from before the restart.
+  lastOutputAt.set(sessionId, Date.now());
+  if (options?.taskId && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, options.taskId, false);
+  }
+
   const buildArgs = (resume: boolean): string[] => {
     // Its consent prompt blocks startup until answered, which strands sessions
     // that are driven by an agent rather than watched in a tab.
@@ -536,6 +552,7 @@ export function killSession(sessionId: string): void {
   if (session) {
     session.kill('SIGTERM');
     sessions.delete(sessionId);
+    lastOutputAt.delete(sessionId);
     forgetSession(sessionId);
     disposeReadyGate(sessionId);
   }
