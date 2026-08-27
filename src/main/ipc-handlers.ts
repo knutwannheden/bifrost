@@ -98,6 +98,9 @@ export function markTurnBoundary(taskId: string, at: number): void {
   saveTurnBoundary(taskId, at);
 }
 
+/** Worktree removals still running, so a reopen can wait for its own. */
+const cleanups = new Map<string, Promise<void>>();
+
 /**
  * The hooks reach Bifrost only while it runs, so the transcripts supply both
  * the turns taken meanwhile and every task's first position.
@@ -171,11 +174,7 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
     if (repo?.multiTaskId === task.id) {
       // Multi-repo cleanup: remove constituent worktrees, container dir, and container repo
-      try {
-        await cleanupMultiRepoContainer(task.worktreePath);
-      } catch {
-        /* best effort */
-      }
+      removal = () => cleanupMultiRepoContainer(task.worktreePath);
       config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
       saveConfig(config);
     } else if (!task.inPlace && repo) {
@@ -192,11 +191,14 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
 
   const archived = updateTask(taskId, updates);
   if (removal) {
-    try {
-      await removal();
-    } catch (err) {
-      console.error(`[archive] could not remove worktree ${task.worktreePath}:`, err);
-    }
+    // Deleting a checkout runs to seconds, and the task is archived either way,
+    // so the caller is answered now and reopening waits on this instead.
+    const done = removal()
+      .catch((err) => console.error(`[archive] could not remove worktree ${task.worktreePath}:`, err))
+      .finally(() => {
+        if (cleanups.get(taskId) === done) cleanups.delete(taskId);
+      });
+    cleanups.set(taskId, done);
   }
   return archived;
 }
@@ -287,11 +289,16 @@ async function destroyTask(taskId: string): Promise<void> {
       config.repos = config.repos.filter((r: Repo) => r.id !== repo.id);
       saveConfig(config);
     } else if (!task.inPlace && repo) {
-      try {
-        await removeWorktree(repo.path, task.worktreePath);
-      } catch {
-        /* Worktree may already be removed */
-      }
+      // Backgrounded for the same reason as archiving: the row should not wait
+      // on a directory delete, and the task is gone from the list either way.
+      cleanups.set(
+        taskId,
+        removeWorktree(repo.path, task.worktreePath)
+          .catch(() => {
+            /* Worktree may already be removed */
+          })
+          .finally(() => cleanups.delete(taskId)),
+      );
     }
   }
   tasks = tasks.filter((t) => t.id !== taskId);
@@ -653,6 +660,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.REOPEN_TASK, async (_event, taskId: string) => {
+    await cleanups.get(taskId);
     const task = getTask(taskId);
 
     // Multi-repo tasks cannot be reopened (container is deleted on archive)

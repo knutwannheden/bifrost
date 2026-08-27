@@ -2,8 +2,8 @@ import type { AppAction, AppState } from '../context/AppContext';
 import { nextActiveTaskId } from './next-active-task';
 
 /**
- * Archive a task immediately: switch active tab then remove worktree.
- * Used both for clean worktrees (direct) and after force-archive confirmation.
+ * Archive a task, direct or from the force-archive confirmation. The row goes
+ * at once and main answers with the stored task; a failure puts the row back.
  */
 export function performArchive(taskId: string, state: AppState, dispatch: React.Dispatch<AppAction>): void {
   // Archiving from a row's menu can target a task the user is not on, and only
@@ -11,9 +11,16 @@ export function performArchive(taskId: string, state: AppState, dispatch: React.
   if (state.activeTaskId === taskId) {
     dispatch({ type: 'SET_ACTIVE_TASK', taskId: nextActiveTaskId(state, taskId) });
   }
-  window.bifrost.archiveTask(taskId).then((updated) => {
-    dispatch({ type: 'UPDATE_TASK', task: updated });
-  });
+  const previous = state.tasks.find((t) => t.id === taskId);
+  dispatch({ type: 'SET_TASK_STATUS', taskId, status: 'archived' });
+  window.bifrost
+    .archiveTask(taskId)
+    .then((updated) => {
+      dispatch({ type: 'UPDATE_TASK', task: updated });
+    })
+    .catch(() => {
+      if (previous) dispatch({ type: 'UPDATE_TASK', task: previous });
+    });
 }
 
 /**
