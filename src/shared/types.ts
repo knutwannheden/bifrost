@@ -12,6 +12,8 @@ export interface TaskPr {
    * Absent once a PR is merged or closed, when there is nothing left to wait on.
    */
   progress?: 'running' | 'failing' | 'ready' | 'blocked';
+  /** The run behind a 'running' or 'failing' progress, when GitHub named one. */
+  checkUrl?: string;
 }
 
 export interface TaskCuration {

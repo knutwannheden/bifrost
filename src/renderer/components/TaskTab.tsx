@@ -223,7 +223,7 @@ export default function TaskTab({
             <span className="truncate">
               <Highlight text={repoName} search={search} />
             </span>
-            {pr ? <PrPill pr={pr} onOpen={() => window.bifrost.openUrl(pr.url)} /> : null}
+            {pr ? <PrPill pr={pr} onOpen={(url) => window.bifrost.openUrl(url)} /> : null}
           </span>
         </span>
         {/* Sits over the label, which masks its right edge on hover: the label

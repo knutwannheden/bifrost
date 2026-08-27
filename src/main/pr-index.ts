@@ -48,6 +48,9 @@ interface GhCheck {
   status?: string;
   conclusion?: string;
   state?: string;
+  /** A GitHub Actions job carries detailsUrl; a third-party status carries targetUrl. */
+  detailsUrl?: string;
+  targetUrl?: string;
 }
 
 interface GhOpenPr {
@@ -57,24 +60,22 @@ interface GhOpenPr {
   statusCheckRollup?: GhCheck[];
 }
 
+const RUNNING_STATES = new Set(['QUEUED', 'IN_PROGRESS', 'PENDING', 'WAITING']);
+const FAILED_STATES = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ERROR']);
+
 /**
  * What an open PR is waiting on, most urgent first: a run in flight, then a
- * failure, then whether GitHub would merge it as it stands.
+ * failure, then whether GitHub would merge it as it stands. The check that
+ * decided it comes along, so the dot can lead to the run rather than the PR.
  */
-function progressOf(pr: GhOpenPr): TaskPr['progress'] {
+function progressOf(pr: GhOpenPr): Pick<TaskPr, 'progress' | 'checkUrl'> {
   const checks = pr.statusCheckRollup ?? [];
-  const running = checks.some((c) => {
-    const state = (c.status ?? c.state ?? '').toUpperCase();
-    return state === 'QUEUED' || state === 'IN_PROGRESS' || state === 'PENDING' || state === 'WAITING';
-  });
-  if (running) return 'running';
-  const failed = checks.some((c) => {
-    const state = (c.conclusion ?? c.state ?? '').toUpperCase();
-    return state === 'FAILURE' || state === 'TIMED_OUT' || state === 'CANCELLED' || state === 'ERROR';
-  });
-  if (failed) return 'failing';
-  if (pr.reviewDecision === 'CHANGES_REQUESTED') return 'blocked';
-  return pr.mergeStateStatus === 'CLEAN' ? 'ready' : 'blocked';
+  const running = checks.find((c) => RUNNING_STATES.has((c.status ?? c.state ?? '').toUpperCase()));
+  if (running) return { progress: 'running', checkUrl: running.detailsUrl ?? running.targetUrl };
+  const failed = checks.find((c) => FAILED_STATES.has((c.conclusion ?? c.state ?? '').toUpperCase()));
+  if (failed) return { progress: 'failing', checkUrl: failed.detailsUrl ?? failed.targetUrl };
+  if (pr.reviewDecision === 'CHANGES_REQUESTED') return { progress: 'blocked' };
+  return { progress: pr.mergeStateStatus === 'CLEAN' ? 'ready' : 'blocked' };
 }
 
 /**
@@ -114,11 +115,13 @@ async function refresh(repo: Repo): Promise<RepoIndex> {
          '--limit', String(PR_LIMIT), '--json', 'number,mergeStateStatus,reviewDecision,statusCheckRollup'],
         { cwd: repo.path, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
       );
-      const progress = new Map<number, TaskPr['progress']>();
+      const progress = new Map<number, ReturnType<typeof progressOf>>();
       for (const open of JSON.parse(stdout) as GhOpenPr[]) progress.set(open.number, progressOf(open));
       for (const pr of byBranch.values()) {
         const p = progress.get(pr.number);
-        if (p) pr.progress = p;
+        if (!p) continue;
+        pr.progress = p.progress;
+        if (p.checkUrl) pr.checkUrl = p.checkUrl;
       }
     } catch {
       /* the pill still carries the number; it just says nothing about progress */
