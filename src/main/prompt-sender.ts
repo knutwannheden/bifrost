@@ -66,6 +66,11 @@ export function handleScrapeResponse(requestId: string, text: string): void {
   }
 }
 
+/** Tasks with a turn in flight, which quitting is about to cut off. */
+export function workingTaskIds(): string[] {
+  return [...activeSet];
+}
+
 export function isIdle(taskId: string): boolean {
   return !activeSet.has(taskId);
 }

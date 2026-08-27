@@ -184,10 +184,11 @@ export default function TaskTab({
   const tooltipLines = [task.name, task.summary, branchLine].filter(Boolean) as string[];
 
   // Activity indicator: green pulse while Claude works, then a solid bar for a
-  // result waiting — blue for a turn that finished, red for one that failed.
+  // turn that ended — blue where it finished, red where it failed or was cut off.
   const showPulse = task.claudeActive === true;
-  const showSolid = !showPulse && task.hasUnread && !isActive;
-  const failed = state.taskFailed[task.id] === true;
+  const interrupted = task.interruptedAt != null;
+  const showSolid = !showPulse && (task.hasUnread || interrupted) && !isActive;
+  const failed = state.taskFailed[task.id] === true || interrupted;
 
   return (
     <>

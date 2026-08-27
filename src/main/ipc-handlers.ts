@@ -42,7 +42,7 @@ import { checkIntegration, installIntegration } from './integration-installer';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
 import { getTaskPrs } from './pr-index';
-import { handleScrapeResponse, sendPrompt } from './prompt-sender';
+import { handleScrapeResponse, sendPrompt, workingTaskIds } from './prompt-sender';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
   attachSession,
@@ -56,7 +56,7 @@ import {
 import { getSessionMetricsData } from './session-metrics';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
-import { loadTasks, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store';
+import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
 import { generateTaskTitle } from './title-generator';
 import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
@@ -96,6 +96,30 @@ export function markTurnBoundary(taskId: string, at: number): void {
   if (!task) return;
   task.lastTurnBoundaryAt = at;
   saveTurnBoundary(taskId, at);
+  // A turn of any kind means the task is going again, whatever cut the last one off.
+  if (task.interruptedAt != null) clearInterrupted(taskId);
+}
+
+export function clearInterrupted(taskId: string): void {
+  const task = tasks.find((t) => t.id === taskId);
+  if (!task?.interruptedAt) return;
+  task.interruptedAt = undefined;
+  saveInterrupted([taskId], null);
+}
+
+/**
+ * Quitting kills every session, and a turn in flight dies with its Bash child —
+ * which is the "Exit code 137" the task reads back on reopening. Recorded here
+ * so the task can be offered the chance to pick it up.
+ */
+export function markSessionsInterrupted(): void {
+  const at = Date.now();
+  const working = workingTaskIds().filter((id) => tasks.some((t) => t.id === id));
+  for (const id of working) {
+    const task = tasks.find((t) => t.id === id);
+    if (task) task.interruptedAt = at;
+  }
+  if (working.length > 0) saveInterrupted(working, at);
 }
 
 /** Worktree removals still running, so a reopen can wait for its own. */
@@ -723,6 +747,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
       hasUnread: false,
       archivedAt: undefined,
     });
+  });
+
+  ipcMain.handle(IPC.CLEAR_INTERRUPTED, (_event, taskId: string) => {
+    clearInterrupted(taskId);
   });
 
   ipcMain.handle(IPC.RENAME_TASK, (_event, taskId: string, name: string) => {

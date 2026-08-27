@@ -11,7 +11,7 @@ const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
 let db: Database.Database | null = null;
 
-const CURRENT_VERSION = 5;
+const CURRENT_VERSION = 6;
 
 // SQLite schema — TEXT for strings, INTEGER for booleans/timestamps, JSON text for arrays
 const SCHEMA_SQL = `
@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   cur_user_override TEXT,
   cur_user_note     TEXT,
   created_by_task_id TEXT,
-  last_turn_boundary_at INTEGER
+  last_turn_boundary_at INTEGER,
+  interrupted_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repo_id);
@@ -373,6 +374,13 @@ function runMigrations(): void {
         d.prepare('UPDATE schema_version SET version = ?').run(5);
       })();
       console.log('[db] Migration v5: added tasks.last_turn_boundary_at');
+    }
+    if (row.version < 6) {
+      d.transaction(() => {
+        d.exec('ALTER TABLE tasks ADD COLUMN interrupted_at INTEGER');
+        d.prepare('UPDATE schema_version SET version = ?').run(6);
+      })();
+      console.log('[db] Migration v6: added tasks.interrupted_at');
     }
   }
 }

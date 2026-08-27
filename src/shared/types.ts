@@ -84,6 +84,8 @@ export interface Task {
   claudeActive?: boolean;
   /** When the task last started, paused for input, or ended a turn. Orders the sidebar. */
   lastTurnBoundaryAt?: number;
+  /** When a turn in flight was cut off by Bifrost quitting. Cleared by the next turn. */
+  interruptedAt?: number;
   curation?: TaskCuration;
 }
 

@@ -9,7 +9,7 @@ import { initApi, startApi, stopApi } from './bifrost-api';
 import { loadConfig, saveConfig } from './config';
 import { closeDatabase, openDatabase } from './db';
 import { ensureHooks } from './integration-installer';
-import { registerIpcHandlers } from './ipc-handlers';
+import { markSessionsInterrupted, registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
 import { killAllSessions } from './session-manager';
 import { startPolling } from './slack-service';
@@ -310,6 +310,7 @@ app.on('ready', async () => {
 
 app.on('before-quit', async () => {
   stopAllWatching();
+  markSessionsInterrupted();
   killAllSessions();
   await stopApi();
   closeDatabase();

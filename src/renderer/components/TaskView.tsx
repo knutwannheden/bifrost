@@ -3,6 +3,7 @@ import type { PrerequisiteStatus } from '../../shared/types';
 import type { PaneTarget } from '../context/AppContext';
 import { defaultPaneState, useApp } from '../context/AppContext';
 import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
+import InterruptedBanner from './InterruptedBanner';
 import Kbd from './Kbd';
 import SectionHeader from './SectionHeader';
 import Spinner from './Spinner';
@@ -210,6 +211,7 @@ export default function TaskView() {
 
         return (
           <div key={task.id} className="absolute inset-0 flex flex-col" style={{ display: isActive ? 'flex' : 'none' }}>
+            <InterruptedBanner task={task} />
             {/* Claude pane — always rendered, hidden via CSS to preserve xterm state */}
             <div
               style={{

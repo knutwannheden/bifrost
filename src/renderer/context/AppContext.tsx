@@ -486,7 +486,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_TURN_BOUNDARY':
       return {
         ...state,
-        tasks: state.tasks.map((t) => (t.id === action.taskId ? { ...t, lastTurnBoundaryAt: action.at } : t)),
+        tasks: state.tasks.map((t) =>
+          // Main clears the interruption on the same event; mirrored so the
+          // banner goes with the turn rather than on the next load.
+          t.id === action.taskId ? { ...t, lastTurnBoundaryAt: action.at, interruptedAt: undefined } : t,
+        ),
       };
     case 'SET_VISIBLE_TASK_IDS': {
       const { taskIds } = action;
