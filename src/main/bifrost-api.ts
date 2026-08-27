@@ -176,6 +176,28 @@ function awaitUser(task: Task): void {
   }
 }
 
+/**
+ * The task a hook came from. Its id travels in the session's environment and is
+ * exact; a cwd only says where the agent is standing, and it follows the agent
+ * into subdirectories. The deepest worktree containing the path owns it, since
+ * a repo worked on in place contains the worktrees of every other task in it.
+ */
+function hookTask(body: Record<string, unknown>): Task | undefined {
+  const taskId = body.bifrost_task_id as string | undefined;
+  if (taskId) {
+    const byId = getTasks().find((t) => t.id === taskId && t.status !== 'archived');
+    if (byId) return byId;
+  }
+  const cwd = (body.cwd as string) ?? '';
+  let deepest: Task | undefined;
+  for (const t of getTasks()) {
+    if (t.status !== 'running') continue;
+    if (cwd !== t.worktreePath && !cwd.startsWith(`${t.worktreePath}/`)) continue;
+    if (!deepest || t.worktreePath.length > deepest.worktreePath.length) deepest = t;
+  }
+  return deepest;
+}
+
 /** The sidebar orders by these, so the writes inside a turn leave rows put. */
 function turnBoundary(taskId: string): void {
   const at = Date.now();
@@ -455,7 +477,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Ahead of the managed-permission path, which most sessions return from
       // straight away: this is the moment the question reaches the user.
       if (WAITS_FOR_USER.has(toolName)) {
-        const asking = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+        const asking = hookTask(body);
         if (asking) awaitUser(asking);
       }
 
@@ -466,7 +488,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+      const task = hookTask(body);
       if (!task) {
         jsonResponse(res, {});
         return;
@@ -514,7 +536,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
       // UserPromptSubmit — signal Claude is actively working + inject message nudge
       if (hookEventName === 'UserPromptSubmit' && hookContext === 'code') {
-        const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+        const task = hookTask(body);
         if (task) {
           // A hook can go missing, so each turn starts the count over rather
           // than inheriting one that would hold the task working forever.
@@ -541,7 +563,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      const task = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+      const task = hookTask(body);
       if (!task) {
         errorResponse(res, 'No matching task', 404);
         return;
@@ -869,7 +891,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
               return undefined;
             }
           })()
-        : getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+        : hookTask(body);
       if (!task) {
         jsonResponse(res, { ok: false, reason: 'no matching task' });
         return;
