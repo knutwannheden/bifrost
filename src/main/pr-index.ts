@@ -68,6 +68,12 @@ const FAILED_STATES = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ERROR']);
  * failure, then whether GitHub would merge it as it stands. The check that
  * decided it comes along, so the dot can lead to the run rather than the PR.
  */
+const REVIEWS: Record<string, TaskPr['review']> = {
+  APPROVED: 'approved',
+  CHANGES_REQUESTED: 'changes-requested',
+  REVIEW_REQUIRED: 'awaiting',
+};
+
 function progressOf(pr: GhOpenPr): Pick<TaskPr, 'progress' | 'checkUrl'> {
   const checks = pr.statusCheckRollup ?? [];
   const running = checks.find((c) => RUNNING_STATES.has((c.status ?? c.state ?? '').toUpperCase()));
@@ -115,13 +121,16 @@ async function refresh(repo: Repo): Promise<RepoIndex> {
          '--limit', String(PR_LIMIT), '--json', 'number,mergeStateStatus,reviewDecision,statusCheckRollup'],
         { cwd: repo.path, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
       );
-      const progress = new Map<number, ReturnType<typeof progressOf>>();
-      for (const open of JSON.parse(stdout) as GhOpenPr[]) progress.set(open.number, progressOf(open));
+      const progress = new Map<number, ReturnType<typeof progressOf> & Pick<TaskPr, 'review'>>();
+      for (const open of JSON.parse(stdout) as GhOpenPr[]) {
+        progress.set(open.number, { ...progressOf(open), review: REVIEWS[open.reviewDecision ?? ''] });
+      }
       for (const pr of byBranch.values()) {
         const p = progress.get(pr.number);
         if (!p) continue;
         pr.progress = p.progress;
         if (p.checkUrl) pr.checkUrl = p.checkUrl;
+        if (p.review) pr.review = p.review;
       }
     } catch {
       /* the pill still carries the number; it just says nothing about progress */

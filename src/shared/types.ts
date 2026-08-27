@@ -14,6 +14,8 @@ export interface TaskPr {
   progress?: 'running' | 'failing' | 'ready' | 'blocked';
   /** The run behind a 'running' or 'failing' progress, when GitHub named one. */
   checkUrl?: string;
+  /** Absent where the repo asks for no review and none was given. */
+  review?: 'approved' | 'changes-requested' | 'awaiting';
 }
 
 export interface TaskCuration {
