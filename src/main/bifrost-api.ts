@@ -123,6 +123,28 @@ function clearSubagentState(taskId: string): void {
   stoppedWhileWorking.delete(taskId);
 }
 
+/**
+ * Tools that hand the turn to the user. Claude Code's own notification for
+ * these is scheduled on a delay, so a question answered promptly never raises
+ * one and the task would sit green as though it were still working.
+ */
+const WAITS_FOR_USER = new Set(['AskUserQuestion', 'ExitPlanMode']);
+
+/** Claude has stopped and wants something: idle, ordered, and the row turned. */
+function awaitUser(task: Task): void {
+  markIdle(task.id);
+  turnBoundary(task.id);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+  }
+  if (isDebounced(task.id)) return;
+  markNotified(task.id);
+  handleBellNotification(task.name);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, '', '', 'question');
+  }
+}
+
 /** The sidebar orders by these, so the writes inside a turn leave rows put. */
 function turnBoundary(taskId: string): void {
   const at = Date.now();
@@ -399,6 +421,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
+      // Ahead of the managed-permission path, which most sessions return from
+      // straight away: this is the moment the question reaches the user.
+      if (WAITS_FOR_USER.has(toolName)) {
+        const asking = getTasks().find((t) => t.status === 'running' && t.worktreePath === cwd);
+        if (asking) awaitUser(asking);
+      }
+
       // If permission management is disabled or permissions are bypassed, let Claude Code handle it
       const config = loadConfig();
       if (!config.managePermissions || config.permissionMode === 'skip-permissions') {
@@ -563,6 +592,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           stoppedWhileWorking.add(task.id);
         } else {
           finishTurn(task);
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // The question is answered, so the turn is Claude's again.
+      if (hookEventName === 'PostToolUse' && hookContext === 'code' && WAITS_FOR_USER.has(body.tool_name as string)) {
+        markActive(task.id);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
         }
         jsonResponse(res, { ok: true });
         return;
