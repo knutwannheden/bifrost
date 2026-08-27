@@ -65,27 +65,6 @@ export function isSessionStale(worktreePath: string, sessionId?: string): boolea
   return false;
 }
 
-/**
- * Get the mtime of the most recently modified JSONL transcript for a worktree.
- * Returns epoch ms, or null if none can be found.
- */
-export function getSessionMtime(worktreePath: string): number | null {
-  const encoded = worktreePath.replace(/[/.]/g, '-');
-  const projectPath = path.join(os.homedir(), '.claude', 'projects', encoded);
-
-  if (!fs.existsSync(projectPath)) return null;
-
-  try {
-    const mtimes = fs
-      .readdirSync(projectPath)
-      .filter((f) => f.endsWith('.jsonl'))
-      .map((f) => fs.statSync(path.join(projectPath, f)).mtimeMs);
-    return mtimes.length > 0 ? Math.max(...mtimes) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function initApi(window: BrowserWindow): void {
   mainWindow = window;
   initPromptSender(window);

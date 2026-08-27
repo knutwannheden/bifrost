@@ -24,7 +24,6 @@ const DEFAULT_COLLAPSED: (typeof GROUPS)[number][] = ['This week', 'Last week', 
 
 export default function TaskSidebar() {
   const { state, dispatch } = useApp();
-  const [mtimes, setMtimes] = useState<Record<string, number>>({});
   const [prs, setPrs] = useState<Record<string, TaskPr>>({});
   const [dragWidth, setDragWidth] = useState<number | null>(null);
   const [filter, setFilter] = useState('');
@@ -37,9 +36,6 @@ export default function TaskSidebar() {
   useEffect(() => {
     let cancelled = false;
     const load = () => {
-      window.bifrost.getSessionMtimes().then((m) => {
-        if (!cancelled) setMtimes(m);
-      });
       // Main answers from a per-repo cache, so this costs a `gh` call only
       // once its refresh window has passed.
       window.bifrost.getTaskPrs().then((p) => {
@@ -67,9 +63,7 @@ export default function TaskSidebar() {
 
   const openTasks = state.tasks.filter((t) => t.status === 'running');
 
-  // A transcript's mtime moves with every write inside a turn, so a boundary
-  // wins wherever there is one and the rest fall back to their last write.
-  const recency = (t: Task) => t.lastTurnBoundaryAt ?? mtimes[t.id] ?? t.createdAt;
+  const recency = (t: Task) => t.lastTurnBoundaryAt ?? t.createdAt;
   const sorted = [...openTasks].sort((a, b) => recency(b) - recency(a));
 
   const repoNameFor = (task: (typeof sorted)[number]) => {

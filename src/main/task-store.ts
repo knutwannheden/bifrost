@@ -90,6 +90,15 @@ export function saveTurnBoundary(taskId: string, at: number): void {
   getDb().prepare('UPDATE tasks SET last_turn_boundary_at = ? WHERE id = ?').run(at, taskId);
 }
 
+/** One transaction, since startup seeds every task at once. */
+export function saveTurnBoundaries(stamps: Array<[string, number]>): void {
+  const d = getDb();
+  const stmt = d.prepare('UPDATE tasks SET last_turn_boundary_at = ? WHERE id = ?');
+  d.transaction(() => {
+    for (const [taskId, at] of stamps) stmt.run(at, taskId);
+  })();
+}
+
 export function loadTasks(): Task[] {
   const rows = getDb().prepare<unknown[], Row>('SELECT * FROM tasks ORDER BY created_at').all();
   return rows.map(rowToTask);

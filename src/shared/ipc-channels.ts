@@ -52,7 +52,6 @@ export const IPC = {
   DELETE_TASK: 'task:delete',
   LIST_TASKS: 'task:list',
   REORDER_TASKS: 'tasks:reorder',
-  GET_SESSION_MTIMES: 'task:session-mtimes',
   GET_TASK_PRS: 'task:prs',
 
   // Terminal sessions
@@ -208,7 +207,6 @@ export interface BifrostAPI {
   deleteTask(taskId: string): Promise<void>;
   listTasks(): Promise<Task[]>;
   reorderTasks(taskIds: string[]): Promise<void>;
-  getSessionMtimes(): Promise<Record<string, number>>;
   /** The pull request on each task's branch, for the tasks that have one. */
   getTaskPrs(): Promise<Record<string, TaskPr>>;
 

@@ -27,7 +27,6 @@ const api: BifrostAPI = {
   deleteTask: (taskId) => ipcRenderer.invoke(IPC.DELETE_TASK, taskId),
   listTasks: () => ipcRenderer.invoke(IPC.LIST_TASKS),
   reorderTasks: (taskIds) => ipcRenderer.invoke(IPC.REORDER_TASKS, taskIds),
-  getSessionMtimes: () => ipcRenderer.invoke(IPC.GET_SESSION_MTIMES),
   getTaskPrs: () => ipcRenderer.invoke(IPC.GET_TASK_PRS),
 
   // Terminal

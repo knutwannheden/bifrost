@@ -236,6 +236,59 @@ export interface ClaudeWatcherCallbacks {
   onSummary?: (taskId: string, summary: string) => void;
 }
 
+/** How far back a tail read looks for the last entry that carries a timestamp. */
+const TAIL_BYTES = 64 * 1024;
+
+function lastEntryAt(filePath: string): number | null {
+  let chunk: string;
+  try {
+    const size = fs.statSync(filePath).size;
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const start = Math.max(0, size - TAIL_BYTES);
+      const buf = Buffer.alloc(Math.min(size, TAIL_BYTES));
+      fs.readSync(fd, buf, 0, buf.length, start);
+      chunk = buf.toString('utf-8');
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+  const lines = chunk.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    // Transcripts end in records carrying no timestamp — bridge registrations,
+    // cost state — so the walk continues back to the last one that has it.
+    if (!lines[i].includes('"timestamp"')) continue;
+    try {
+      const at = Date.parse((JSON.parse(lines[i]) as { timestamp?: string }).timestamp ?? '');
+      if (!Number.isNaN(at)) return at;
+    } catch {
+      /* a torn first line of the window, or a record mid-write */
+    }
+  }
+  return null;
+}
+
+/**
+ * When a worktree's Claude sessions last said anything. Read from the entries
+ * themselves: a file's mtime also moves for bookkeeping no one asked for.
+ */
+export function lastConversationAt(worktreePath: string): number | null {
+  const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectDirName(worktreePath));
+  let newest: number | null = null;
+  try {
+    for (const name of fs.readdirSync(projectDir)) {
+      if (!name.endsWith('.jsonl')) continue;
+      const at = lastEntryAt(path.join(projectDir, name));
+      if (at != null && (newest == null || at > newest)) newest = at;
+    }
+  } catch {
+    /* no project directory: this worktree has no sessions */
+  }
+  return newest;
+}
+
 export function startClaudeWatching(
   taskId: string,
   worktreePath: string,

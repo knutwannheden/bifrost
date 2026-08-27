@@ -28,9 +28,9 @@ import {
   startWatching,
   stopWatching,
 } from './activity-watcher';
-import { getApiPort, getSessionMtime, isSessionStale } from './bifrost-api';
+import { getApiPort, isSessionStale } from './bifrost-api';
 import { scanClaudeSessions } from './claude-session-scanner';
-import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
+import { getRecentClaudeEntries, getTokenUsageData, lastConversationAt } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
 import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
 import { getCuratorState, initCurator, runCuratorNow } from './curator-service';
@@ -56,7 +56,7 @@ import {
 import { getSessionMetricsData } from './session-metrics';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
-import { loadTasks, saveTasks, saveTurnBoundary } from './task-store';
+import { loadTasks, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store';
 import { getInstalledOllamaModels } from './task-summarizer';
 import { generateTaskTitle } from './title-generator';
 import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
@@ -96,6 +96,21 @@ export function markTurnBoundary(taskId: string, at: number): void {
   if (!task) return;
   task.lastTurnBoundaryAt = at;
   saveTurnBoundary(taskId, at);
+}
+
+/**
+ * The hooks reach Bifrost only while it runs, so the transcripts supply both
+ * the turns taken meanwhile and every task's first position.
+ */
+function seedTurnBoundaries(loaded: Task[]): void {
+  const stamps: Array<[string, number]> = [];
+  for (const task of loaded) {
+    const at = lastConversationAt(task.worktreePath);
+    if (at == null || at <= (task.lastTurnBoundaryAt ?? 0)) continue;
+    task.lastTurnBoundaryAt = at;
+    stamps.push([task.id, at]);
+  }
+  saveTurnBoundaries(stamps);
 }
 
 export function updateTask(taskId: string, updates: Partial<Task>): Task {
@@ -488,6 +503,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Load persisted tasks on startup, restore sessions for previously-running tasks
   const persisted = loadTasks();
+  seedTurnBoundaries(persisted);
   const tasksToRestore = persisted.filter((t) => t.status === 'running');
 
   tasks = persisted.map((t) => (t.status === 'running' ? { ...t, status: 'stopped' as const } : t));
@@ -743,15 +759,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.GET_TASK_PRS, () => getTaskPrs(tasks, loadConfig().repos));
-
-  ipcMain.handle(IPC.GET_SESSION_MTIMES, () => {
-    const result: Record<string, number> = {};
-    for (const task of tasks) {
-      const mtime = getSessionMtime(task.worktreePath);
-      if (mtime != null) result[task.id] = mtime;
-    }
-    return result;
-  });
 
   ipcMain.handle(IPC.CREATE_DEV_TERMINAL, (_event, taskId: string) => {
     const task = getTask(taskId);

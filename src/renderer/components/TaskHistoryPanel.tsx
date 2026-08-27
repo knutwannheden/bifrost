@@ -284,7 +284,6 @@ export default function TaskHistoryPanel() {
   const [sessions, setSessions] = useState<ClaudeSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [diffStatsMap, setDiffStatsMap] = useState<Map<string, DiffStats>>(new Map());
-  const [sessionMtimes, setSessionMtimes] = useState<Record<string, number>>({});
   const [branchConfirm, setBranchConfirm] = useState<{ task: Task; currentBranch: string } | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -316,15 +315,6 @@ export default function TaskHistoryPanel() {
     }
   }, [state.tasks, isSessionsMode]);
 
-  // Fetch session JSONL mtimes for chronological ordering
-  useEffect(() => {
-    if (isSessionsMode) return;
-    window.bifrost
-      .getSessionMtimes()
-      .then(setSessionMtimes)
-      .catch(() => {});
-  }, [isSessionsMode]);
-
   // Load sessions when switching to sessions tab
   useEffect(() => {
     if (isSessionsMode && sessions.length === 0) {
@@ -353,7 +343,7 @@ export default function TaskHistoryPanel() {
           }
           return true;
         })
-        .sort((a, b) => (sessionMtimes[b.id] ?? b.createdAt) - (sessionMtimes[a.id] ?? a.createdAt));
+        .sort((a, b) => (b.lastTurnBoundaryAt ?? b.createdAt) - (a.lastTurnBoundaryAt ?? a.createdAt));
 
   const filteredSessions = isSessionsMode
     ? sessions.filter((s) => matchesAllTerms(`${s.cwd} ${s.slug ?? ''}`, search))
@@ -365,7 +355,7 @@ export default function TaskHistoryPanel() {
     ? (() => {
         const map = new Map<string, Task[]>();
         for (const task of filteredTasks) {
-          const bucket = getTimeBucket(sessionMtimes[task.id] ?? task.createdAt);
+          const bucket = getTimeBucket(task.lastTurnBoundaryAt ?? task.createdAt);
           let group = map.get(bucket);
           if (!group) {
             group = [];
