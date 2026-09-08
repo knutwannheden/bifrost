@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClaudeSession, DiffStats, Task, TaskOutcome } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useInstantSearch } from '../hooks/useInstantSearch';
@@ -7,6 +7,7 @@ import { type TabDef, useTabMnemonics } from '../hooks/useTabMnemonics';
 import { requestArchive } from '../utils/archive';
 import { formatDate, formatRelative } from '../utils/format-time';
 import { allOutcomes, outcomeBadgeColors, outcomeLabels, taskStatusColor, taskStatusLabel } from '../utils/outcome';
+import { PAGE_SIZE, visibleCountFor } from '../utils/paging';
 import { shortPath } from '../utils/paths';
 import { altSymbol } from '../utils/platform';
 import { matchesAllTerms, matchesTaskSearch } from '../utils/search';
@@ -101,8 +102,8 @@ const FILTER_TABS: TabDef<Filter>[] = [
 interface TaskRowProps {
   task: Task;
   idx: number;
-  focusedIdx: number;
-  editingId: string | null;
+  isFocused: boolean;
+  isEditing: boolean;
   editName: string;
   diffStats?: DiffStats | null;
   search: string;
@@ -111,7 +112,7 @@ interface TaskRowProps {
   itemRefs: React.MutableRefObject<(HTMLDivElement | null)[]>;
   handleActivate: (task: Task) => void;
   startRename: (task: Task) => void;
-  submitRename: (taskId: string) => void;
+  submitRename: (taskId: string, name: string) => void;
   setEditingId: (id: string | null) => void;
   handleReopen: (task: Task) => void;
   handleArchive: (task: Task) => void;
@@ -123,11 +124,13 @@ interface TaskRowProps {
   onOutcomeOverride: (taskId: string, outcome: TaskOutcome) => void;
 }
 
-function TaskRow({
+// An arrow key changes the focus of two rows, and the list runs to thousands:
+// memo is what keeps a keystroke off all the others.
+const TaskRow = memo(function TaskRow({
   task,
   idx,
-  focusedIdx,
-  editingId,
+  isFocused,
+  isEditing,
   editName,
   diffStats,
   search,
@@ -152,29 +155,31 @@ function TaskRow({
       ref={(el) => {
         itemRefs.current[idx] = el;
       }}
+      // Read by the diff-stats observer; archived rows carry no diff badge.
+      data-task-id={task.status === 'archived' ? undefined : task.id}
       onMouseEnter={() => setFocusedIdx(idx)}
       onClick={() => handleActivate(task)}
       className={`rounded border p-3 cursor-default transition-colors ${
-        idx === focusedIdx
+        isFocused
           ? 'bg-surface-alt border-accent-muted ring-1 ring-accent-muted'
           : 'bg-surface-alt/50 border-border-input/50'
       }`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          {editingId === task.id ? (
+          {isEditing ? (
             <FormInput
               autoFocus
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') submitRename(task.id);
+                if (e.key === 'Enter') submitRename(task.id, editName);
                 if (e.key === 'Escape') {
                   e.stopPropagation();
                   setEditingId(null);
                 }
               }}
-              onBlur={() => submitRename(task.id)}
+              onBlur={() => submitRename(task.id, editName)}
               className="px-2 py-0.5 w-48"
             />
           ) : (
@@ -202,7 +207,7 @@ function TaskRow({
             tabIndex={-1}
             className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded-sm transition-colors"
           >
-            <ActionLabel text="Rename" showHint={idx === focusedIdx} />
+            <ActionLabel text="Rename" showHint={isFocused} />
           </button>
           {canReopen(task) && (
             <button
@@ -214,7 +219,7 @@ function TaskRow({
               tabIndex={-1}
               className="px-1.5 py-0.5 text-xs text-accent-hover hover:brightness-125 hover:bg-surface-hover rounded-sm transition-colors"
             >
-              <ActionLabel text="Reopen" hintIndex={2} showHint={idx === focusedIdx} />
+              <ActionLabel text="Reopen" hintIndex={2} showHint={isFocused} />
             </button>
           )}
           {canArchive(task) && (
@@ -227,7 +232,7 @@ function TaskRow({
               tabIndex={-1}
               className="px-1.5 py-0.5 text-xs text-secondary hover:text-primary hover:bg-surface-hover rounded-sm transition-colors"
             >
-              <ActionLabel text="Archive" showHint={idx === focusedIdx} />
+              <ActionLabel text="Archive" showHint={isFocused} />
             </button>
           )}
           <button
@@ -243,7 +248,7 @@ function TaskRow({
             tabIndex={-1}
             className="px-1.5 py-0.5 text-xs text-danger hover:brightness-125 hover:bg-surface-hover rounded-sm transition-colors"
           >
-            <ActionLabel text="Delete" showHint={idx === focusedIdx} />
+            <ActionLabel text="Delete" showHint={isFocused} />
           </button>
         </div>
       </div>
@@ -270,7 +275,7 @@ function TaskRow({
       </div>
     </div>
   );
-}
+});
 
 export default function TaskHistoryPanel() {
   const { state, dispatch } = useApp();
@@ -285,35 +290,54 @@ export default function TaskHistoryPanel() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [diffStatsMap, setDiffStatsMap] = useState<Map<string, DiffStats>>(new Map());
   const [branchConfirm, setBranchConfirm] = useState<{ task: Task; currentBranch: string } | null>(null);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const overlayRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const listRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const requestedStatsRef = useRef<Set<string>>(new Set());
+  const pendingStatsRef = useRef<Map<string, DiffStats>>(new Map());
+  const statsFlushRef = useRef<number | null>(null);
 
   const isSessionsMode = filter === 'sessions';
 
-  // Fetch diff stats for visible tasks
-  useEffect(() => {
-    if (isSessionsMode) return;
-    const tasksToFetch = state.tasks.filter((t) => t.status !== 'archived' && !diffStatsMap.has(t.id));
-    if (tasksToFetch.length === 0) return;
+  // Stats land in one state update per frame: each update re-renders the whole
+  // list, and a screenful of rows arrives as a dozen separate resolutions.
+  const queueDiffStats = useCallback((taskId: string, stats: DiffStats) => {
+    pendingStatsRef.current.set(taskId, stats);
+    if (statsFlushRef.current !== null) return;
+    statsFlushRef.current = requestAnimationFrame(() => {
+      statsFlushRef.current = null;
+      const batch = pendingStatsRef.current;
+      pendingStatsRef.current = new Map();
+      setDiffStatsMap((prev) => new Map([...prev, ...batch]));
+    });
+  }, []);
 
-    for (const task of tasksToFetch) {
+  // A task with no changes yields no stats, so the request — not the result —
+  // is what marks a task done; otherwise those tasks are asked about forever.
+  const requestDiffStats = useCallback(
+    (taskId: string) => {
+      if (requestedStatsRef.current.has(taskId)) return;
+      requestedStatsRef.current.add(taskId);
       window.bifrost
-        .getDiffStats(task.id)
+        .getDiffStats(taskId)
         .then((stats) => {
-          if (stats) {
-            setDiffStatsMap((prev) => {
-              const next = new Map(prev);
-              next.set(task.id, stats);
-              return next;
-            });
-          }
+          if (stats) queueDiffStats(taskId, stats);
         })
         .catch(() => {
-          // ignore errors
+          // a task whose stats cannot be read shows no badge
         });
-    }
-  }, [state.tasks, isSessionsMode]);
+    },
+    [queueDiffStats],
+  );
+
+  useEffect(
+    () => () => {
+      if (statsFlushRef.current !== null) cancelAnimationFrame(statsFlushRef.current);
+    },
+    [],
+  );
 
   // Load sessions when switching to sessions tab
   useEffect(() => {
@@ -331,52 +355,94 @@ export default function TaskHistoryPanel() {
     }
   }, [isSessionsMode]);
 
-  const filteredTasks = isSessionsMode
-    ? []
-    : state.tasks
-        .filter((t) => {
-          if (filter === 'active' && t.status === 'archived') return false;
-          if (filter === 'archived' && t.status !== 'archived') return false;
-          if (search) {
-            const repo = state.repos.find((r) => r.id === t.repoId);
-            return matchesTaskSearch(t, repo?.name ?? '', search);
-          }
-          return true;
-        })
-        .sort((a, b) => (b.lastTurnBoundaryAt ?? b.createdAt) - (a.lastTurnBoundaryAt ?? a.createdAt));
-
-  const filteredSessions = isSessionsMode
-    ? sessions.filter((s) => matchesAllTerms(`${s.cwd} ${s.slug ?? ''}`, search))
-    : [];
-
-  const repoName = (repoId: string) => state.repos.find((r) => r.id === repoId)?.name ?? '';
-
-  const taskGroups = !isSessionsMode
-    ? (() => {
-        const map = new Map<string, Task[]>();
-        for (const task of filteredTasks) {
-          const bucket = getTimeBucket(task.lastTurnBoundaryAt ?? task.createdAt);
-          let group = map.get(bucket);
-          if (!group) {
-            group = [];
-            map.set(bucket, group);
-          }
-          group.push(task);
+  // Stats cost two git invocations per task, so only rows the user can see ask
+  // for them. Rows that mount later have to be observed too, hence the re-run
+  // on every list change; repeat sightings are deduplicated by requestDiffStats.
+  useEffect(() => {
+    if (isSessionsMode) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const taskId = (entry.target as HTMLElement).dataset.taskId;
+          if (entry.isIntersecting && taskId) requestDiffStats(taskId);
         }
-        return TIME_BUCKETS.filter((b) => map.has(b)).map((b) => ({ name: b, tasks: map.get(b)! }));
-      })()
-    : [];
+      },
+      { root: listRef.current, rootMargin: '200px' },
+    );
+    for (const el of itemRefs.current) {
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, [isSessionsMode, filter, search, state.tasks, visibleCount, requestDiffStats]);
 
-  // Build a flat list of tasks in grouped order for navigation
-  const flatTaskList = taskGroups.flatMap((g) => g.tasks);
+  const flatTaskList = useMemo(
+    () =>
+      isSessionsMode
+        ? []
+        : state.tasks
+            .filter((t) => {
+              if (filter === 'active' && t.status === 'archived') return false;
+              if (filter === 'archived' && t.status !== 'archived') return false;
+              if (search) {
+                const repo = state.repos.find((r) => r.id === t.repoId);
+                return matchesTaskSearch(t, repo?.name ?? '', search);
+              }
+              return true;
+            })
+            .sort((a, b) => (b.lastTurnBoundaryAt ?? b.createdAt) - (a.lastTurnBoundaryAt ?? a.createdAt)),
+    [isSessionsMode, state.tasks, state.repos, filter, search],
+  );
+
+  const filteredSessions = useMemo(
+    () => (isSessionsMode ? sessions.filter((s) => matchesAllTerms(`${s.cwd} ${s.slug ?? ''}`, search)) : []),
+    [isSessionsMode, sessions, search],
+  );
+
+  const repoName = useCallback((repoId: string) => state.repos.find((r) => r.id === repoId)?.name ?? '', [state.repos]);
+
+  // Buckets run newest-first over a newest-first list, so a prefix of the tasks
+  // groups the same way the whole list would.
+  const taskGroups = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const task of flatTaskList.slice(0, visibleCount)) {
+      const bucket = getTimeBucket(task.lastTurnBoundaryAt ?? task.createdAt);
+      let group = map.get(bucket);
+      if (!group) {
+        group = [];
+        map.set(bucket, group);
+      }
+      group.push(task);
+    }
+    return TIME_BUCKETS.filter((b) => map.has(b)).map((b) => ({ name: b, tasks: map.get(b)! }));
+  }, [flatTaskList, visibleCount]);
 
   const listLength = isSessionsMode ? filteredSessions.length : flatTaskList.length;
 
-  // Reset focus and branch confirm when filter or search changes
+  // Reset focus, paging and branch confirm when filter or search changes
   useEffect(() => {
     setFocusedIdx(0);
+    setVisibleCount(PAGE_SIZE);
     setBranchConfirm(null);
   }, [filter, search]);
+
+  useEffect(() => {
+    setVisibleCount((c) => visibleCountFor(focusedIdx, c, flatTaskList.length));
+  }, [focusedIdx, flatTaskList.length]);
+
+  // The sentinel sits below the last row: seeing it means the user scrolled to
+  // the end. Re-observing after each growth fills a tall window page by page.
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setVisibleCount((c) => c + PAGE_SIZE);
+      },
+      { root: listRef.current, rootMargin: '400px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [visibleCount, flatTaskList]);
 
   // Clamp focus index when list shrinks
   useEffect(() => {
@@ -394,78 +460,109 @@ export default function TaskHistoryPanel() {
 
   const close = useCallback(() => dispatch({ type: 'TOGGLE_TASK_HISTORY' }), [dispatch]);
 
-  const doReopen = async (task: Task) => {
-    setError(null);
-    setBranchConfirm(null);
-    try {
-      const updated = await window.bifrost.reopenTask(task.id);
-      dispatch({ type: 'UPDATE_TASK', task: updated });
-      dispatch({ type: 'SET_ACTIVE_TASK', taskId: updated.id });
-      close();
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to reopen task');
-    }
-  };
-
-  const handleReopen = async (task: Task) => {
-    setError(null);
-    if (task.inPlace) {
+  // Every handler a row receives is stable, or memoizing the rows buys nothing.
+  const doReopen = useCallback(
+    async (task: Task) => {
+      setError(null);
+      setBranchConfirm(null);
       try {
-        const currentBranch = await window.bifrost.getCurrentBranch(task.repoId);
-        if (task.branch && currentBranch !== task.branch) {
-          setBranchConfirm({ task, currentBranch });
-          return;
-        }
-      } catch {
-        // If we can't detect the branch, proceed with reopen
+        const updated = await window.bifrost.reopenTask(task.id);
+        dispatch({ type: 'UPDATE_TASK', task: updated });
+        dispatch({ type: 'SET_ACTIVE_TASK', taskId: updated.id });
+        close();
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to reopen task');
       }
-    }
-    doReopen(task);
-  };
+    },
+    [dispatch, close],
+  );
 
-  const handleArchive = (task: Task) => {
-    setError(null);
-    requestArchive(task.id, task.name, state, dispatch);
-  };
+  const handleReopen = useCallback(
+    async (task: Task) => {
+      setError(null);
+      if (task.inPlace) {
+        try {
+          const currentBranch = await window.bifrost.getCurrentBranch(task.repoId);
+          if (task.branch && currentBranch !== task.branch) {
+            setBranchConfirm({ task, currentBranch });
+            return;
+          }
+        } catch {
+          // If we can't detect the branch, proceed with reopen
+        }
+      }
+      doReopen(task);
+    },
+    [doReopen],
+  );
 
-  const handleDelete = async (task: Task) => {
-    setError(null);
-    try {
-      await window.bifrost.deleteTask(task.id);
-      dispatch({ type: 'REMOVE_TASK', taskId: task.id });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to delete task');
-    }
-  };
+  const handleArchive = useCallback(
+    (task: Task) => {
+      setError(null);
+      requestArchive(task.id, task.name, state, dispatch);
+    },
+    [state, dispatch],
+  );
 
-  const startRename = (task: Task) => {
+  const handleDelete = useCallback(
+    async (task: Task) => {
+      setError(null);
+      try {
+        await window.bifrost.deleteTask(task.id);
+        dispatch({ type: 'REMOVE_TASK', taskId: task.id });
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to delete task');
+      }
+    },
+    [dispatch],
+  );
+
+  const startRename = useCallback((task: Task) => {
     setEditingId(task.id);
     setEditName(task.name);
-  };
+  }, []);
 
-  const submitRename = async (taskId: string) => {
-    if (!editName.trim()) {
+  // The row passes the name it holds, which keeps this out of every row's props
+  // as the user types.
+  const submitRename = useCallback(
+    async (taskId: string, name: string) => {
+      if (!name.trim()) {
+        setEditingId(null);
+        return;
+      }
+      setError(null);
+      try {
+        const updated = await window.bifrost.renameTask(taskId, name.trim());
+        dispatch({ type: 'UPDATE_TASK', task: updated });
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to rename task');
+      }
       setEditingId(null);
-      return;
-    }
-    setError(null);
-    try {
-      const updated = await window.bifrost.renameTask(taskId, editName.trim());
-      dispatch({ type: 'UPDATE_TASK', task: updated });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to rename task');
-    }
-    setEditingId(null);
-  };
+    },
+    [dispatch],
+  );
 
-  const handleActivate = (task: Task) => {
-    if (task.status === 'running') {
-      dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
-      close();
-    } else if (canReopen(task)) {
-      handleReopen(task);
-    }
-  };
+  const canReopen = useCallback(
+    (task: Task) => {
+      if (task.status !== 'archived' && task.status !== 'stopped') return false;
+      const repo = state.repos.find((r) => r.id === task.repoId);
+      return !repo?.multiTaskId;
+    },
+    [state.repos],
+  );
+  const canArchive = useCallback((task: Task) => task.status === 'running' || task.status === 'stopped', []);
+
+  const handleActivate = useCallback(
+    (task: Task) => {
+      if (task.status === 'running') {
+        dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id });
+        close();
+      } else if (canReopen(task)) {
+        handleReopen(task);
+      }
+    },
+    [dispatch, close, canReopen, handleReopen],
+  );
 
   const handleResumeSession = async (session: ClaudeSession) => {
     setError(null);
@@ -479,21 +576,17 @@ export default function TaskHistoryPanel() {
     }
   };
 
-  const canReopen = (task: Task) => {
-    if (task.status !== 'archived' && task.status !== 'stopped') return false;
-    const repo = state.repos.find((r) => r.id === task.repoId);
-    return !repo?.multiTaskId;
-  };
-  const canArchive = (task: Task) => task.status === 'running' || task.status === 'stopped';
-
-  const handleOutcomeOverride = async (taskId: string, outcome: TaskOutcome) => {
-    try {
-      const updated = await window.bifrost.setCuratorOutcome(taskId, outcome);
-      dispatch({ type: 'UPDATE_TASK', task: updated });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to set outcome');
-    }
-  };
+  const handleOutcomeOverride = useCallback(
+    async (taskId: string, outcome: TaskOutcome) => {
+      try {
+        const updated = await window.bifrost.setCuratorOutcome(taskId, outcome);
+        dispatch({ type: 'UPDATE_TASK', task: updated });
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to set outcome');
+      }
+    },
+    [dispatch],
+  );
 
   useEffect(() => {
     return window.bifrost.onCuratorUpdate((taskId, curation) => {
@@ -683,9 +776,9 @@ export default function TaskHistoryPanel() {
                           key={task.id}
                           task={task}
                           idx={idx}
-                          focusedIdx={focusedIdx}
-                          editingId={editingId}
-                          editName={editName}
+                          isFocused={idx === focusedIdx}
+                          isEditing={editingId === task.id}
+                          editName={editingId === task.id ? editName : ''}
                           diffStats={diffStatsMap.get(task.id)}
                           search={search}
                           setEditName={setEditName}
@@ -709,6 +802,11 @@ export default function TaskHistoryPanel() {
                   </div>
                 ));
               })()}
+              {visibleCount < flatTaskList.length && (
+                <div ref={sentinelRef} className="text-xs text-muted text-center py-2">
+                  {flatTaskList.length - visibleCount} more
+                </div>
+              )}
             </>
           )}
         </div>

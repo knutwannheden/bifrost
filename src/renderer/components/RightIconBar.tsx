@@ -57,7 +57,7 @@ function ActivityIcon() {
   );
 }
 
-function TriageIcon() {
+function ConsoleIcon() {
   return (
     <svg
       width="22"
@@ -71,6 +71,24 @@ function TriageIcon() {
     >
       <path d="M8 14v-4M8 10L4 4h8L8 10z" />
       <circle cx="8" cy="6" r="0.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ChangeFeedIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 3h10M3 6h6M3 9h10M3 12h6" />
+      <path d="M12.5 10.5v4M10.5 12.5h4" />
     </svg>
   );
 }
@@ -153,10 +171,12 @@ export default function RightIconBar() {
   const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
 
-  const triageItems = Object.values(state.triages);
-  const hasTriageWaiting = triageItems.some((t) => t.waiting);
-  const hasTriageRunning = triageItems.some((t) => t.status === 'running');
-  const triageBadge = hasTriageWaiting ? ('amber' as const) : hasTriageRunning ? ('green' as const) : undefined;
+  const toggleChangeFeed = () => {
+    if (!state.config) return;
+    const updated = { ...state.config, changeFeedOpen: !state.config.changeFeedOpen };
+    dispatch({ type: 'SET_CONFIG', config: updated });
+    window.bifrost.saveConfig(updated);
+  };
 
   const toggleDiffMode = (mode: DiffMode) => {
     if (isDiffActive && diffMode === mode) {
@@ -201,13 +221,21 @@ export default function RightIconBar() {
       </IconButton>
 
       <IconButton
-        label="Triage"
-        shortcut={getDisplayString('view.triage')}
-        active={state.showTriage}
-        badge={triageBadge}
-        onClick={() => dispatch({ type: 'SHOW_TRIAGE' })}
+        label="Change feed"
+        shortcut={getDisplayString('view.changeFeed')}
+        active={state.config?.changeFeedOpen ?? false}
+        onClick={toggleChangeFeed}
       >
-        <TriageIcon />
+        <ChangeFeedIcon />
+      </IconButton>
+
+      <IconButton
+        label="Console"
+        shortcut={getDisplayString('view.console')}
+        active={state.showConsole}
+        onClick={() => dispatch({ type: 'SHOW_CONSOLE' })}
+      >
+        <ConsoleIcon />
       </IconButton>
 
       <div className="flex-1" />

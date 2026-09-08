@@ -7,6 +7,49 @@ import type { DiffResult, DiffStats } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
+async function revParse(worktreePath: string, ref: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFile('git', ['rev-parse', '--verify', '--quiet', ref], {
+      cwd: worktreePath,
+      timeout: 5000,
+    });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The ref to measure a branch against. A local branch name resolves, so a task
+ * recorded as forked from `main` would otherwise be compared against whatever
+ * the local ref happens to point at rather than what the remote holds.
+ */
+export async function resolveBaseRef(worktreePath: string, baseBranch: string): Promise<string | null> {
+  if (baseBranch.includes('/')) return (await revParse(worktreePath, baseBranch)) ? baseBranch : null;
+  for (const candidate of [`origin/${baseBranch}`, `upstream/${baseBranch}`, baseBranch]) {
+    if (await revParse(worktreePath, candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * The commit a branch's changes are measured from. Merging the base in leaves
+ * the working tree holding the base's commits while HEAD still predates them,
+ * so during a merge the tree — not HEAD — says what has already been absorbed.
+ */
+export async function resolveDiffBase(worktreePath: string, baseRef: string): Promise<string | null> {
+  const mergeHead = await revParse(worktreePath, 'MERGE_HEAD');
+  try {
+    const { stdout } = await execFile('git', ['merge-base', baseRef, mergeHead ?? 'HEAD'], {
+      cwd: worktreePath,
+      timeout: 10000,
+    });
+    return stdout.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getDiff(
   worktreePath: string,
   baseBranch?: string,
@@ -15,13 +58,10 @@ export async function getDiff(
   try {
     // Determine git diff command based on scope
     let diffArgs: string[];
-    if (scope === 'all' && baseBranch) {
-      // Diff merge-base against working tree (committed + staged + unstaged)
-      const { stdout: mergeBaseOut } = await execFile('git', ['merge-base', baseBranch, 'HEAD'], {
-        cwd: worktreePath,
-        timeout: 10000,
-      });
-      diffArgs = ['--no-optional-locks', 'diff', mergeBaseOut.trim()];
+    const base = scope === 'all' && baseBranch ? await resolveDiffBase(worktreePath, baseBranch) : null;
+    if (base) {
+      // Base against working tree: committed, staged and unstaged alike
+      diffArgs = ['--no-optional-locks', 'diff', base];
     } else {
       diffArgs = ['--no-optional-locks', 'diff', 'HEAD'];
     }
@@ -129,16 +169,19 @@ export async function getFileStatuses(
     /* ignore */
   }
 
-  // Committed changes since base branch
+  // Committed changes since the base, measured from the same commit as the diff
   if (baseBranch) {
-    try {
-      const { stdout } = await execFile('git', ['--no-optional-locks', 'diff', '--name-only', `${baseBranch}...HEAD`], {
-        cwd: worktreePath,
-        timeout: 10000,
-      });
-      for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'committed');
-    } catch {
-      /* ignore */
+    const base = await resolveDiffBase(worktreePath, baseBranch);
+    if (base) {
+      try {
+        const { stdout } = await execFile('git', ['--no-optional-locks', 'diff', '--name-only', base, 'HEAD'], {
+          cwd: worktreePath,
+          timeout: 10000,
+        });
+        for (const f of stdout.trim().split('\n').filter(Boolean)) addStage(f, 'committed');
+      } catch {
+        /* ignore */
+      }
     }
   }
 
@@ -150,22 +193,19 @@ export async function getDiffStats(
   baseBranch?: string,
   scope: 'working' | 'all' = 'working',
 ): Promise<DiffStats | null> {
+  // A task outlives its worktree; git would fail here at the cost of a spawn.
+  if (!fs.existsSync(worktreePath)) return null;
+
   try {
     let additions = 0;
     let deletions = 0;
     let filesChanged = 0;
 
     // Determine diff base based on scope
-    let diffArgs: string[];
-    if (scope === 'all' && baseBranch) {
-      const { stdout: mergeBaseOut } = await execFile('git', ['merge-base', baseBranch, 'HEAD'], {
-        cwd: worktreePath,
-        timeout: 10000,
-      });
-      diffArgs = ['--no-optional-locks', 'diff', '--shortstat', mergeBaseOut.trim()];
-    } else {
-      diffArgs = ['--no-optional-locks', 'diff', '--shortstat', 'HEAD'];
-    }
+    const base = scope === 'all' && baseBranch ? await resolveDiffBase(worktreePath, baseBranch) : null;
+    const diffArgs = base
+      ? ['--no-optional-locks', 'diff', '--shortstat', base]
+      : ['--no-optional-locks', 'diff', '--shortstat', 'HEAD'];
 
     // Get stats for tracked changes
     try {

@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BifrostConfig, DEFAULT_CONFIG } from '../shared/types';
+import { type BifrostConfig, DEFAULT_CONFIG } from '../shared/types.ts';
+
+export { mergeRendererConfig } from './config-merge.ts';
 
 const CONFIG_DIR = path.join(os.homedir(), '.bifrost');
 const CONFIG_PATH = path.join(CONFIG_DIR, 'config.json');

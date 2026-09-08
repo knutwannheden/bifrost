@@ -15,11 +15,13 @@ import { loadConfig, saveConfig } from './config';
 import { getDiff } from './diff-service';
 import {
   archiveTaskCore,
+  broadcastRepos,
   createTaskCore,
   getTask,
   getTasks,
   isPendingRestore,
   markTurnBoundary,
+  reopenTaskCore,
   restoreTaskSession,
   updateTask,
 } from './ipc-handlers';
@@ -36,8 +38,8 @@ import {
   workingTaskIds,
 } from './prompt-sender';
 import { addRepo } from './repo-manager';
+import { normalizeRepoPath } from './repo-path';
 import { getSessionName, hasSession, killSession, sessionOutputAt, waitForSessionReady } from './session-manager';
-import { addTriageTaskId, completeTriage, setTriageSessionId } from './triage-service';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -260,7 +262,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       try {
         const config = loadConfig();
-        const existing = config.repos.find((r: { path: string }) => r.path === path.resolve(repoPath));
+        const existing = config.repos.find((r: { path: string }) => r.path === normalizeRepoPath(repoPath));
         if (existing) {
           jsonResponse(res, existing);
           return;
@@ -268,6 +270,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         const repo = await addRepo({ type: 'local', path: repoPath });
         config.repos.push(repo);
         saveConfig(config);
+        broadcastRepos(mainWindow, config.repos);
         jsonResponse(res, repo);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
@@ -346,8 +349,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         createTaskCore({ repoId, repoPath, name, branch, branchName, prompt, createdByTaskId }, mainWindow!)
           .then((task) => {
             mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
-            const callerTriageId = body.bifrost_triage_id as string;
-            if (callerTriageId) addTriageTaskId(callerTriageId, task.id);
           })
           .catch((e) => {
             const msg = (e as Error).message;
@@ -361,12 +362,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
             mainWindow!,
           );
           mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
-
-          // Track task created by triage session
-          const callerTriageId = body.bifrost_triage_id as string;
-          if (callerTriageId) {
-            addTriageTaskId(callerTriageId, task.id);
-          }
 
           jsonResponse(res, task);
         } catch (e) {
@@ -547,18 +542,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
             mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
           }
         }
-        jsonResponse(res, { ok: true });
-        return;
-      }
-
-      // Triage stop — notify renderer and complete the session
-      const hookTriageId = body.bifrost_triage_id as string;
-      if (hookContext === 'triage' && hookTriageId) {
-        const hookMessage = (body.last_assistant_message as string) || '';
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.TRIAGE_WAITING, hookTriageId, hookMessage);
-        }
-        completeTriage(hookTriageId);
         jsonResponse(res, { ok: true });
         return;
       }
@@ -763,7 +746,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       if (wakeTask.status !== 'running') {
-        jsonResponse(res, { ok: false, error: `Task is ${wakeTask.status}, not running` });
+        jsonResponse(res, {
+          ok: false,
+          error: `Task is ${wakeTask.status}, not running. Use open_task to reopen it.`,
+        });
         return;
       }
       // A session Bifrost has not spawned yet is invisible to ListAgents, so
@@ -794,6 +780,56 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // The name the session actually carries, which is the task's name from
       // when it started rather than its name now.
       jsonResponse(res, { ok: true, name: getSessionName(wakeId) ?? wakeTask.name, alreadyAwake });
+      return;
+    }
+
+    case '/open-task': {
+      const openId = resolveTaskId(body);
+      if (!openId) {
+        errorResponse(res, 'No taskId provided');
+        return;
+      }
+      let openTask: Task;
+      try {
+        openTask = getTask(openId);
+      } catch {
+        errorResponse(res, `Task ${openId} not found`, 404);
+        return;
+      }
+      // A task already carrying a session is answered with its address, so a
+      // caller that cannot tell a live task from an archived one still gets one.
+      const wasOpen = openTask.status === 'running' && hasSession(openId);
+      if (!wasOpen) {
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          jsonResponse(res, { ok: false, error: 'Bifrost window is gone' });
+          return;
+        }
+        try {
+          // A task still holding its worktree from before the restart needs the
+          // session it is waiting for, not a reopen.
+          if (isPendingRestore(openId)) {
+            restoreTaskSession(openId, mainWindow);
+            openTask = getTask(openId);
+          } else {
+            openTask = await reopenTaskCore(openId, mainWindow);
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Task could not be opened';
+          console.error(`[api] open-task: failed to open ${openId}:`, err);
+          jsonResponse(res, { ok: false, error: message });
+          return;
+        }
+      }
+      if (!(await waitForSessionReady(openId))) {
+        jsonResponse(res, { ok: false, error: 'Session did not finish starting up' });
+        return;
+      }
+      jsonResponse(res, {
+        ok: true,
+        name: getSessionName(openId) ?? openTask.name,
+        wasOpen,
+        worktreePath: openTask.worktreePath,
+      });
       return;
     }
 
@@ -875,10 +911,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         errorResponse(res, 'Missing session_id or cwd');
         return;
       }
-      // Triage context — capture session ID for activity polling
-      const triageId = body.bifrost_triage_id as string;
-      if (context === 'triage' && triageId) {
-        setTriageSessionId(triageId, sessionId);
+      // The console has no task, so a hook from it has nothing to record.
+      if (context === 'console') {
         jsonResponse(res, { ok: true });
         return;
       }

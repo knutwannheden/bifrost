@@ -8,38 +8,46 @@ const STATE_BG: Record<TaskPr['state'], string> = {
   closed: 'bg-danger',
 };
 
-const PROGRESS_BG: Record<NonNullable<TaskPr['progress']>, string> = {
+// Each half answers its own question, so neither borrows the other's colour.
+const MERGE_BG: Record<NonNullable<TaskPr['merge']>, string> = {
+  conflicts: 'bg-danger',
+  'changes-requested': 'bg-danger',
+  behind: 'bg-warning',
+  'awaiting-review': 'bg-muted',
+  blocked: 'bg-muted',
+  mergeable: 'bg-success',
+};
+
+const MERGE_LABEL: Record<NonNullable<TaskPr['merge']>, string> = {
+  conflicts: 'merge conflicts',
+  'changes-requested': 'changes requested',
+  behind: 'behind base branch',
+  'awaiting-review': 'awaiting review',
+  blocked: 'not mergeable',
+  mergeable: 'ready to merge',
+};
+
+const CI_BG: Record<NonNullable<TaskPr['ci']>, string> = {
   running: 'bg-warning',
   failing: 'bg-danger',
-  ready: 'bg-success',
-  blocked: 'bg-muted',
+  passing: 'bg-success',
 };
 
-const PROGRESS_LABEL: Record<NonNullable<TaskPr['progress']>, string> = {
+const CI_LABEL: Record<NonNullable<TaskPr['ci']>, string> = {
   running: 'checks running',
   failing: 'checks failing',
-  ready: 'ready to merge',
-  blocked: 'not ready to merge',
+  passing: 'checks passing',
 };
 
-const REVIEW_BG: Record<NonNullable<TaskPr['review']>, string> = {
-  approved: 'bg-success',
-  'changes-requested': 'bg-danger',
-  awaiting: 'bg-muted',
-};
-
-const REVIEW_LABEL: Record<NonNullable<TaskPr['review']>, string> = {
-  approved: 'approved',
-  'changes-requested': 'changes requested',
-  awaiting: 'awaiting review',
-};
+/** An unanswered half reads as empty rather than as a verdict of its own. */
+const EMPTY_HALF = 'bg-transparent border border-border-default';
 
 export default function PrPill({ pr, onOpen }: { pr: TaskPr; onOpen: (url: string) => void }) {
-  const { progress, review } = pr;
+  const { merge, ci } = pr;
   // The pill opens the PR and the dot opens what it is reporting on: the run
   // that decided it where GitHub named one, the checks listing otherwise.
   const checksUrl = pr.checkUrl ?? `${pr.url}/checks`;
-  const label = [progress && PROGRESS_LABEL[progress], review && REVIEW_LABEL[review]].filter(Boolean).join(' · ');
+  const label = [merge && MERGE_LABEL[merge], ci && CI_LABEL[ci]].filter(Boolean).join(' · ') || 'no checks yet';
 
   return (
     <>
@@ -56,32 +64,30 @@ export default function PrPill({ pr, onOpen }: { pr: TaskPr; onOpen: (url: strin
       >
         #{pr.number}
       </span>
-      {/* Kept out of the pill so the PR's state and how it is faring stay two
-          facts rather than one colour doing both. The halves are divided so
-          that checks and review still read separately when they agree. */}
-      {progress || review ? (
-        // biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside the row's <button>
-        <span
-          role="button"
-          tabIndex={-1}
-          title={`${label} — open checks`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpen(checksUrl);
-          }}
-          // Padding out to a hittable target without moving it or its neighbours.
-          className="-m-1 shrink-0 cursor-pointer p-1 hover:opacity-70 transition-opacity"
-        >
-          <span className="flex h-1.5 overflow-hidden rounded-full">
-            {progress ? (
-              <span className={`w-1.5 ${PROGRESS_BG[progress]} ${progress === 'running' ? 'activity-pulse' : ''}`} />
-            ) : null}
-            {review ? (
-              <span className={`w-1.5 ${REVIEW_BG[review]} ${progress ? 'border-l border-border-default' : ''}`} />
-            ) : null}
-          </span>
+      {/* Kept out of the pill so the PR's lifecycle and how it is faring stay
+          two facts rather than one colour doing both. Both halves are always
+          drawn, so the dot's shape does not shift as a PR progresses. */}
+      {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside the row's <button> */}
+      <span
+        role="button"
+        tabIndex={-1}
+        title={`${label} — open checks`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(checksUrl);
+        }}
+        // Padding out to a hittable target without moving it or its neighbours.
+        className="-m-1 shrink-0 cursor-pointer p-1 hover:opacity-70 transition-opacity"
+      >
+        <span className="flex h-1.5 overflow-hidden rounded-full">
+          <span className={`w-1.5 ${merge ? MERGE_BG[merge] : EMPTY_HALF}`} />
+          <span
+            className={`w-1.5 border-l border-border-default ${ci ? CI_BG[ci] : EMPTY_HALF} ${
+              ci === 'running' ? 'activity-pulse' : ''
+            }`}
+          />
         </span>
-      ) : null}
+      </span>
     </>
   );
 }

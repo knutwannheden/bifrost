@@ -30,10 +30,9 @@ Pass the repo as a filesystem path (e.g. `~/git/org/repo`) or GitHub slug (e.g. 
 ## 3. Draft task name and prompt
 
 - **Name**: A short task title, max ~50 characters (e.g. "Add dark mode support"). Shown in tabs and history. The branch and worktree names are auto-generated — do NOT pass a branch name.
-- **Prompt**: A concise, actionable prompt for the new task's Claude session. Include:
-  - The core objective
-  - Relevant context from the current conversation (design decisions, constraints, key details)
-  - Any specific instructions the user mentioned
+- **Prompt**: A concise, actionable prompt for the new task's Claude session, built from two halves:
+  - **What only you know** — the core objective, design decisions and the reasoning behind them, what was ruled out, constraints the user stated, anything in this conversation the new task cannot look up.
+  - **Pointers to the rest** — file paths, issue and PR numbers, branch names, failing run ids, with a line on what to look for in each. The new task has its own tools and a fresh context window; it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy.
 
 Keep the prompt to a few paragraphs — actionable instructions, not a transcript dump.
 
@@ -64,5 +63,7 @@ Tell the user the task was created and is running in a new Bifrost tab.
 | "I can describe what I did instead" | Description without code = task has to reverse-engineer it. |
 | "New task can check my branch" | True, but they still need the absolute path or branch name in the prompt. |
 | "This is minor context they'll figure out" | "I'll figure it out later" = task grinds to halt. Spell it out now. |
+| "I'll paste in the issue text or the file contents" | The new task can fetch those. Give the number or path, and say what matters in it. |
+| "I'll summarize what the review said" | Keep your conclusion, drop the retelling. Point at the thread and let them read it. |
 
 **All of these mean: Include absolute paths, branch names, or commit your work before creating the task.**

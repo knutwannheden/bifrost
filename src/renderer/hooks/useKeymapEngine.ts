@@ -5,6 +5,8 @@ import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
 import { defaultPaneState, getActiveDiffState, isAnyOverlayOpen } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
+import { focusTaskTerminal } from '../utils/focus-terminal';
+import { changeFeedHasFocus, ownsKeystrokes } from '../utils/keyboard-target';
 import { nextActiveTaskId } from '../utils/next-active-task';
 import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
 import { taskReference } from '../utils/task-reference';
@@ -327,11 +329,11 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           dispatch({ type: 'TOGGLE_NOTES' });
           break;
 
-        case 'view.triage':
-          if (s.showTriage) {
-            dispatch({ type: 'CLOSE_TRIAGE' });
+        case 'view.console':
+          if (s.showConsole) {
+            dispatch({ type: 'CLOSE_CONSOLE' });
           } else {
-            dispatch({ type: 'SHOW_TRIAGE' });
+            dispatch({ type: 'SHOW_CONSOLE' });
           }
           break;
 
@@ -358,11 +360,39 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
         }
 
+        case 'view.changeFeed': {
+          if (!s.config) break;
+          // The same key reaches the dock and dismisses it: it opens and focuses,
+          // focuses when open, and closes only from inside.
+          if (s.config.changeFeedOpen && changeFeedHasFocus()) {
+            const updated = { ...s.config, changeFeedOpen: false };
+            dispatch({ type: 'SET_CONFIG', config: updated });
+            window.bifrost.saveConfig(updated);
+            // Closing unmounts whatever held focus, so the terminal has to be
+            // given it back or keystrokes land on the document body.
+            focusTaskTerminal(s, s.activeTaskId);
+            break;
+          }
+          if (!s.config.changeFeedOpen) {
+            const updated = { ...s.config, changeFeedOpen: true };
+            dispatch({ type: 'SET_CONFIG', config: updated });
+            window.bifrost.saveConfig(updated);
+          }
+          dispatch({ type: 'FOCUS_CHANGE_FEED' });
+          break;
+        }
+
         case 'action.openIde': {
           const activeTask = s.tasks.find((t) => t.id === s.activeTaskId);
           if (!activeTask) break;
 
           const openFile = async () => {
+            if (changeFeedHasFocus() && s.changeFeedSelection) {
+              const { filePath, line } = s.changeFeedSelection;
+              window.bifrost.openInIde(activeTask.worktreePath, filePath, line);
+              return;
+            }
+
             const domSelection = window.getSelection()?.toString()?.trim();
             if (domSelection) {
               const extracted = extractFilePath(domSelection);
@@ -461,23 +491,9 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
                 if (!content?.trim()) return;
                 params = { type: 'diff', content, ...taskMeta };
               } else {
-                const entries = await window.bifrost.getActivityLog(activeTask.id);
-                const parts: string[] = [];
-                for (const e of entries) {
-                  if (e.type === 'commit') {
-                    parts.push(`[commit] ${e.commitMessage}`);
-                  } else if (e.type === 'file_change' && e.filePath) {
-                    const diff = await window.bifrost.getFileDiff(activeTask.worktreePath, e.filePath);
-                    parts.push(`[file] ${e.filePath}\n${diff}`);
-                  } else if (e.type === 'claude_event') {
-                    parts.push(`[${e.claudeEventKind}] ${e.claudeText || ''}`);
-                  } else {
-                    parts.push(`[${e.type}]`);
-                  }
-                }
-                const content = parts.join('\n\n');
-                if (!content.trim()) return;
-                params = { type: 'activity', content, ...taskMeta };
+                // Only a git diff has a body worth capturing; the other modes
+                // are charts, and a selection in one is handled above.
+                return;
               }
             } else {
               const ps = s.paneStates[activeTask.id] ?? defaultPaneState;
@@ -586,12 +602,9 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
         }
       }
 
-      // Skip shortcuts when typing in an overlay input/textarea/select
+      // Skip shortcuts when typing in an overlay's own input
       const target = e.target as HTMLElement;
-      const inOverlayInput =
-        isAnyOverlayOpen(stateRef.current) &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
-      if (inOverlayInput) return;
+      if (isAnyOverlayOpen(stateRef.current) && ownsKeystrokes(target)) return;
 
       const key = e.key.toLowerCase();
       const s = stateRef.current;

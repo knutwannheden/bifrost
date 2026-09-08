@@ -8,6 +8,9 @@ import type {
   CuratorState,
   DiffResult,
   DiffStats,
+  DiskReclaimResult,
+  DiskReclaimScan,
+  FeedItem,
   GitLogEntry,
   Note,
   PermissionDecision,
@@ -22,8 +25,7 @@ import type {
   TaskOutcome,
   TaskPr,
   TokenUsageResult,
-  TriageEntry,
-} from './types';
+} from './types.ts';
 
 // Request-response channels (invoke/handle)
 export const IPC = {
@@ -74,12 +76,12 @@ export const IPC = {
   OPEN_IN_TERMINAL: 'shell:open-in-terminal',
 
   // Activity Log
-  GET_ACTIVITY_LOG: 'activity:get-log',
   CLEAR_ACTIVITY_LOG: 'activity:clear',
   GET_FILE_DIFF: 'activity:file-diff',
 
   // Token Usage
   GET_TOKEN_USAGE: 'token:get-usage',
+  CHANGE_FEED_LOAD: 'change-feed:load',
 
   // IDE
   OPEN_IN_IDE: 'ide:open',
@@ -101,7 +103,6 @@ export const IPC = {
   CHECK_INTEGRATION: 'integration:check',
   INSTALL_INTEGRATION: 'integration:install',
   CHECK_PREREQUISITES: 'integration:prerequisites',
-  INSTALL_OLLAMA_MODEL: 'integration:install-ollama-model',
 
   // Notifications
   SET_ACTIVE_TASK_ID: 'notify:set-active-task',
@@ -137,12 +138,9 @@ export const IPC = {
   SLACK_START_OAUTH: 'slack:start-oauth',
   SLACK_DISCONNECT: 'slack:disconnect',
 
-  // Triage
-  START_TRIAGE: 'triage:start',
-  CANCEL_TRIAGE: 'triage:cancel',
-  LIST_TRIAGES: 'triage:list',
-  DELETE_TRIAGE: 'triage:delete',
-  ENTER_TRIAGE: 'triage:enter',
+  // Console
+  CONSOLE_SESSION: 'console:session',
+  CONSOLE_RESET: 'console:reset',
 
   // Prompt sender
   SEND_PROMPT: 'prompt:send',
@@ -152,6 +150,8 @@ export const IPC = {
   CURATOR_GET_STATE: 'curator:get-state',
   CURATOR_SET_OUTCOME: 'curator:set-outcome',
   CURATOR_RUN_NOW: 'curator:run-now',
+  DISK_RECLAIM_SCAN: 'disk-reclaim:scan',
+  DISK_RECLAIM_APPLY: 'disk-reclaim:apply',
 } as const;
 
 // Streaming channels (send/on)
@@ -159,6 +159,7 @@ export const IPC_STREAM = {
   SESSION_DATA: 'session:data',
   SESSION_EXIT: 'session:exit',
   ACTIVITY_ENTRY: 'activity:entry',
+  CHANGE_FEED_ITEMS: 'change-feed:items',
   TASK_SUMMARY: 'task:summary',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
@@ -167,13 +168,13 @@ export const IPC_STREAM = {
   TASK_CREATED: 'task:created',
   TASK_CLOSED: 'task:closed',
   SLACK_REACTION: 'slack:reaction',
-  TRIAGE_ACTIVITY: 'triage:activity',
-  TRIAGE_WAITING: 'triage:waiting',
   CLAUDE_ACTIVE: 'claude:active',
   TASK_TURN_BOUNDARY: 'task:turn-boundary',
   SCRAPE_PROMPT_REQUEST: 'prompt:scrape-request',
   TERMINAL_UNLOCK: 'terminal:unlock',
   CURATOR_UPDATE: 'curator:update',
+  DISK_RECLAIM_READY: 'disk-reclaim:ready',
+  REPOS_CHANGED: 'repos:changed',
   TOAST: 'ui:toast',
 } as const;
 
@@ -236,13 +237,15 @@ export interface BifrostAPI {
   onZoomChanged(callback: (pct: number) => void): () => void;
 
   // Activity Log
-  getActivityLog(taskId: string): Promise<ActivityEntry[]>;
-  clearActivityLog(taskId: string): Promise<void>;
   getFileDiff(worktreePath: string, filePath: string): Promise<string>;
   onActivityEntry(callback: (entry: ActivityEntry) => void): () => void;
 
   // Token Usage
   getTokenUsage(taskId: string): Promise<TokenUsageResult>;
+
+  // Change feed
+  loadChangeFeed(taskId: string): Promise<FeedItem[]>;
+  onChangeFeed(callback: (taskId: string, items: FeedItem[]) => void): () => void;
 
   // Terminal title
   setTerminalTitle(taskId: string, title: string): Promise<void>;
@@ -267,7 +270,6 @@ export interface BifrostAPI {
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;
   installIntegration(): Promise<void>;
   checkPrerequisites(): Promise<import('../shared/types').PrerequisiteStatus>;
-  installOllamaModel(model: string): Promise<void>;
 
   // Dialog
   selectDirectory(): Promise<string | null>;
@@ -318,14 +320,9 @@ export interface BifrostAPI {
     callback: (channelId: string, messageTs: string, messageUrl: string, messagePreview: string) => void,
   ): () => void;
 
-  // Triage
-  startTriage(prompt: string): Promise<{ triageId: string; ptySessionId: string }>;
-  cancelTriage(triageId: string): Promise<void>;
-  listTriages(): Promise<TriageEntry[]>;
-  deleteTriage(triageId: string): Promise<void>;
-  enterTriage(triageId: string): Promise<{ ptySessionId: string } | null>;
-  onTriageActivity(callback: (triageId: string, activity: string) => void): () => void;
-  onTriageWaiting(callback: (triageId: string, message: string) => void): () => void;
+  // Console
+  consoleSession(): Promise<string>;
+  resetConsole(): Promise<string>;
 
   // Claude activity
   onClaudeActive(callback: (taskId: string, active: boolean) => void): () => void;
@@ -345,6 +342,10 @@ export interface BifrostAPI {
   getCuratorState(): Promise<CuratorState>;
   setCuratorOutcome(taskId: string, outcome: TaskOutcome, note?: string): Promise<Task>;
   runCuratorNow(): Promise<void>;
+  scanDiskReclaim(): Promise<DiskReclaimScan>;
+  applyDiskReclaim(worktreePaths: string[]): Promise<DiskReclaimResult>;
+  onDiskReclaimReady(callback: (scan: DiskReclaimScan) => void): () => void;
+  onReposChanged(callback: (repos: Repo[]) => void): () => void;
   onCuratorUpdate(callback: (taskId: string, curation: TaskCuration) => void): () => void;
 
   // Toast (main → renderer)

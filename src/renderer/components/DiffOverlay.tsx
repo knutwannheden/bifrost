@@ -883,7 +883,7 @@ export default function DiffOverlay() {
           window.bifrost.openInIde(activeTask.worktreePath, filePath);
           return;
         }
-        // No file from focused entry — let useKeyboard handle it
+        // No file from the focused entry; the keymap engine takes it from here.
       }
     }
 

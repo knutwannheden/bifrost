@@ -2,6 +2,8 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "preserve",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,

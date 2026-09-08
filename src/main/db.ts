@@ -11,7 +11,7 @@ const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
 let db: Database.Database | null = null;
 
-const CURRENT_VERSION = 6;
+const CURRENT_VERSION = 7;
 
 // SQLite schema — TEXT for strings, INTEGER for booleans/timestamps, JSON text for arrays
 const SCHEMA_SQL = `
@@ -48,18 +48,6 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repo_id);
 
-CREATE TABLE IF NOT EXISTS triages (
-  id                TEXT PRIMARY KEY,
-  prompt            TEXT NOT NULL,
-  created_at        INTEGER NOT NULL,
-  status            TEXT NOT NULL,
-  completed_at      INTEGER,
-  task_ids          TEXT,
-  last_activity     TEXT,
-  summary           TEXT,
-  claude_session_id TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_triages_status ON triages(status);
 
 CREATE TABLE IF NOT EXISTS notes (
   id          TEXT PRIMARY KEY,
@@ -69,21 +57,6 @@ CREATE TABLE IF NOT EXISTS notes (
   addressed   INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_notes_repo ON notes(repo_id);
-
-CREATE TABLE IF NOT EXISTS activity_entries (
-  id                TEXT PRIMARY KEY,
-  task_id           TEXT NOT NULL,
-  timestamp         INTEGER NOT NULL,
-  type              TEXT NOT NULL,
-  file_path         TEXT,
-  commit_sha        TEXT,
-  commit_message    TEXT,
-  claude_event_kind TEXT,
-  claude_text       TEXT,
-  claude_tool_name  TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_activity_task ON activity_entries(task_id);
-CREATE INDEX IF NOT EXISTS idx_activity_task_ts ON activity_entries(task_id, timestamp);
 
 -- No code reads the supervisor tables; they stay because dropping them costs
 -- a migration and buys nothing.
@@ -343,9 +316,14 @@ function runMigrations(): void {
     d.prepare('INSERT INTO schema_version VALUES (?)').run(CURRENT_VERSION);
     console.log(`[db] Initialized schema at version ${CURRENT_VERSION}`);
   } else if (row.version < CURRENT_VERSION) {
-    if (row.version < 2) {
-      d.exec('ALTER TABLE activity_entries DROP COLUMN diff');
-      console.log('[db] Migration v2: dropped diff column from activity_entries');
+    if (row.version < 7) {
+      // The activity log is served from memory; nothing reads these rows. The
+      // vacuum is what returns the pages, and it bars the transaction its
+      // neighbours below run in.
+      d.exec('DROP TABLE IF EXISTS activity_entries');
+      d.prepare('UPDATE schema_version SET version = ?').run(7);
+      d.exec('VACUUM');
+      console.log('[db] Migration v7: dropped activity_entries');
     }
     if (row.version < 3) {
       // Atomic: an interrupted run rolls back cleanly, so schema_version always

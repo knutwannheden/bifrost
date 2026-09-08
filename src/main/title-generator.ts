@@ -1,5 +1,4 @@
-import { spawn } from 'node:child_process';
-import { INHERITED_SESSION_VARS } from './session-manager';
+import { runOneShot } from './claude-oneshot';
 import { readTranscriptExcerpt } from './task-summarizer';
 
 const TITLE_TIMEOUT_MS = 60_000;
@@ -58,81 +57,9 @@ export interface GeneratedTaskTitle {
   branch: string;
 }
 
-function runClaude(input: string, cwd: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    const env = { ...process.env } as Record<string, string>;
-    for (const name of INHERITED_SESSION_VARS) delete env[name];
-
-    // A one-shot text transform, so the CLI loads no tools, MCP servers, or settings.
-    const child = spawn(
-      'claude',
-      [
-        '-p',
-        '--output-format',
-        'json',
-        '--json-schema',
-        JSON.stringify(OUTPUT_SCHEMA),
-        '--model',
-        MODEL,
-        '--allowed-tools',
-        '',
-        '--strict-mcp-config',
-        '--setting-sources',
-        '',
-        '--no-chrome',
-        '--dangerously-skip-permissions',
-      ],
-      { cwd, env },
-    );
-
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-    const finish = (result: string | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      resolve(result);
-    };
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM');
-      finish(null);
-    }, TITLE_TIMEOUT_MS);
-
-    child.stdout.on('data', (c: Buffer) => {
-      stdout += c.toString();
-    });
-    // Drained even though unused on success: an unread pipe fills once the CLI
-    // writes past the OS buffer (~64KB) and blocks the child until the timeout.
-    child.stderr.on('data', (c: Buffer) => {
-      stderr += c.toString();
-    });
-    child.on('error', (err) => {
-      console.error('[title-generator] failed to spawn claude:', err);
-      finish(null);
-    });
-    child.on('close', (code) => {
-      if (code !== 0) {
-        // --output-format json reports failures as JSON on stdout, so stderr is
-        // routinely empty and carries none of the reason.
-        console.error(
-          `[title-generator] claude exited with code ${code}`,
-          `\n  stdout: ${stdout.trim().slice(0, 2000) || '(empty)'}`,
-          `\n  stderr: ${stderr.trim().slice(0, 500) || '(empty)'}`,
-        );
-      }
-      finish(code === 0 ? stdout : null);
-    });
-
-    child.stdin.on('error', () => finish(null));
-    child.stdin.end(`${PROMPT}\n\nSession transcript:\n${input}`);
-  });
-}
-
-function parseResult(stdout: string): GeneratedTaskTitle | null {
+function parseResult(out: Partial<GeneratedTaskTitle> | null): GeneratedTaskTitle | null {
+  if (!out) return null;
   try {
-    const out = JSON.parse(stdout).structured_output as Partial<GeneratedTaskTitle> | undefined;
-    if (!out) return null;
     const title = out.title?.trim();
     const description = out.description?.trim();
     const branch = out.branch
@@ -157,6 +84,13 @@ export async function generateTaskTitle(
 ): Promise<GeneratedTaskTitle | null> {
   const input = readTranscriptExcerpt(worktreePath, options?.sessionId);
   if (!input) return null;
-  const stdout = await runClaude(capExcerpt(input), worktreePath);
-  return stdout ? parseResult(stdout) : null;
+  const out = await runOneShot<Partial<GeneratedTaskTitle>>({
+    prompt: PROMPT,
+    input: `Session transcript:\n${capExcerpt(input)}`,
+    model: MODEL,
+    schema: OUTPUT_SCHEMA,
+    timeoutMs: TITLE_TIMEOUT_MS,
+    label: 'title-generator',
+  });
+  return parseResult(out);
 }

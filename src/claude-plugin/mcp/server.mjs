@@ -86,8 +86,9 @@ const server = new McpServer(
       '',
       'A task Bifrost has not opened yet has no session, so it is absent from',
       'ListAgents and cannot be messaged. Call wake_task first: it starts the',
-      'session and reports how to address it. list_tasks shows every task, so it is',
-      'where to look when ListAgents does not list the one you want.',
+      'session and reports how to address it. A task that is archived or stopped',
+      'has to be reopened instead, which is open_task. list_tasks shows every task,',
+      'so it is where to look when ListAgents does not list the one you want.',
       '',
       'A session is named after its task as of when the session started, so a task',
       'renamed since then is addressed by its former name. list_tasks, find_task and',
@@ -126,7 +127,8 @@ server.registerTool(
         ? result.tasks
             .map((t) => {
               const display = t.idle === false ? 'working' : t.idle === true ? 'idle' : t.status;
-              const address = t.sessionName ? `send to: "${t.sessionName}"` : 'no session — wake_task to reach it';
+              const reach = t.status === 'running' ? 'wake_task to reach it' : 'open_task to reopen it';
+              const address = t.sessionName ? `send to: "${t.sessionName}"` : `no session — ${reach}`;
               return `- ${t.name} [${display}] (branch: ${t.branch}, id: ${t.id}, ${address})`;
             })
             .join('\n')
@@ -281,7 +283,11 @@ server.registerTool(
         .describe(
           "Path to the git repository (e.g. '~/git/org/repo') or GitHub slug (e.g. 'org/repo'). Required when not running inside a Bifrost task.",
         ),
-      prompt: z.string().describe("The prompt/instructions for the new task's Claude session."),
+      prompt: z
+        .string()
+        .describe(
+          "The prompt for the new task's Claude session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. It starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out.",
+        ),
     },
   },
   async ({ name, repo, prompt }) => {
@@ -466,7 +472,7 @@ server.registerTool(
   {
     title: 'Wake Task',
     description:
-      "Start a Bifrost task's Claude session if it is not already running, so it becomes reachable by the built-in SendMessage tool. Bifrost starts a task's session only when the task is first opened, and a task with no session does not appear in ListAgents. Returns the name to address it by, which is the name its session carries rather than the task's current name.",
+      "Start a Bifrost task's Claude session if it is not already running, so it becomes reachable by the built-in SendMessage tool. Bifrost starts a task's session only when the task is first opened, and a task with no session does not appear in ListAgents. Returns the name to address it by, which is the name its session carries rather than the task's current name. Only for tasks that are still open; an archived or stopped task is reopened with open_task.",
     inputSchema: {
       taskId: z.string().describe('Task ID, from list_tasks'),
     },
@@ -478,6 +484,27 @@ server.registerTool(
     }
     const state = result.alreadyAwake ? 'was already running' : 'started';
     const text = `Session ${state}. Address it with SendMessage using to: "${result.name}".`;
+    return { content: [{ type: 'text', text }] };
+  },
+);
+
+server.registerTool(
+  'open_task',
+  {
+    title: 'Open Task',
+    description:
+      "Reopen an archived or stopped Bifrost task and start its Claude session, so it becomes reachable by the built-in SendMessage tool. Rebuilds the worktree from the task's branch when archiving removed it, clears the archived state, and returns the name to address the session by. A task that is already open is left alone and its address returned, so this is safe to call without checking status first. Multi-repo tasks cannot be reopened, and neither can external or in-place tasks whose directory is gone.",
+    inputSchema: {
+      taskId: z.string().describe('Task ID, from list_tasks (use status "all" to see archived ones)'),
+    },
+  },
+  async ({ taskId }) => {
+    const result = await apiCall('/open-task', { taskId });
+    if (!result.ok) {
+      return { content: [{ type: 'text', text: `Failed to open task: ${result.error}` }], isError: true };
+    }
+    const state = result.wasOpen ? 'was already open' : `reopened at ${result.worktreePath}`;
+    const text = `Task ${state}. Address it with SendMessage using to: "${result.name}".`;
     return { content: [{ type: 'text', text }] };
   },
 );

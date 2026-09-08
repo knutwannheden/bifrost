@@ -1,55 +1,9 @@
-import { execSync } from 'node:child_process';
 import fs from 'node:fs';
-import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { runOneShot } from './claude-oneshot';
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-
-const SUMMARY_TIMEOUT_MS = 30_000;
-
-/** Cached set of installed ollama model names (refreshed periodically). */
-let ollamaModelsCache: Set<string> | null = null;
-let ollamaModelsCacheTime = 0;
-const OLLAMA_CACHE_TTL_MS = 60_000;
-
-export function getInstalledOllamaModels(): Set<string> {
-  const now = Date.now();
-  if (ollamaModelsCache && now - ollamaModelsCacheTime < OLLAMA_CACHE_TTL_MS) {
-    return ollamaModelsCache;
-  }
-  try {
-    const output = execSync('ollama list', { timeout: 5000, encoding: 'utf-8' });
-    const models = new Set<string>();
-    for (const line of output.split('\n').slice(1)) {
-      const name = line.split(/\s+/)[0];
-      if (name) models.add(name);
-    }
-    ollamaModelsCache = models;
-    ollamaModelsCacheTime = now;
-    return models;
-  } catch {
-    ollamaModelsCache = new Set();
-    ollamaModelsCacheTime = now;
-    return ollamaModelsCache;
-  }
-}
-
-const SUMMARY_PROMPT = `You are summarizing a Claude Code session transcript. The input is a sequence of JSONL lines from the session.
-
-Each line is a JSON object with a "type" field:
-- "user": A message from the user. The "message.content" field contains the user's text or tool results.
-- "assistant": A response from Claude. The "message.content" array may contain "text" (prose), "thinking" (internal reasoning), or "tool_use" (tool invocations) blocks.
-
-The input contains the first few and last few user/assistant exchanges to give you both the initial intent and the current state of the work.
-
-Output exactly two short plain-text sentences on a single line, no markdown, no bullet points, no numbering. The first sentence should capture the goal or intent. The second should describe the current focus or state of the work. Start with an action verb (e.g. "Implementing...", "Fixing...", "Investigating...").
-
-CRITICAL: Write the summary DIRECTLY. Do NOT repeat or reference these instructions. Do NOT start with "Summarize...", "Provide...", "The assistant is...", "A Claude Code session...", "The user...". Just state what the session is about.
-
-GOOD: "Fixing RPC serialization for C# nullable types. Currently investigating a deserialization failure in the .nettrace parser."
-BAD: "Summarize a session about RPC changes. The assistant is reviewing code."
-BAD: "Provide an in-depth summary of RPC and C# changes."`;
 
 /**
  * Derive the Claude projects directory name from a worktree path.
@@ -152,60 +106,53 @@ export function countJsonlLines(worktreePath: string, sessionId?: string): numbe
   }
 }
 
-/**
- * Try to summarize using ollama's HTTP API. Returns summary or null.
- */
-function tryOllama(model: string, input: string): Promise<string | null> {
-  return new Promise<string | null>((resolve) => {
-    const body = JSON.stringify({
-      model,
-      prompt: `${SUMMARY_PROMPT}\n\n${input}`,
-      stream: false,
-    });
-
-    const req = http.request(
-      {
-        hostname: '127.0.0.1',
-        port: 11434,
-        path: '/api/generate',
-        method: 'POST',
-        timeout: SUMMARY_TIMEOUT_MS,
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (c: Buffer) => chunks.push(c));
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(Buffer.concat(chunks).toString());
-            const text = (json.response as string)?.trim();
-            resolve(text || null);
-          } catch {
-            resolve(null);
-          }
-        });
-      },
-    );
-
-    req.on('timeout', () => {
-      req.destroy();
-      resolve(null);
-    });
-    req.on('error', () => resolve(null));
-    req.write(body);
-    req.end();
-  });
+/** First and last exchanges of a task's Claude transcript, or null when there is none. */
+export function readTranscriptExcerpt(worktreePath: string, sessionId?: string): string | null {
+  const jsonlPath = resolveJsonlPath(worktreePath, sessionId);
+  if (!jsonlPath) return null;
+  return readHeadTail(jsonlPath) || null;
 }
 
-export interface SummarizeOptions {
-  sessionId?: string;
-  ollamaModels?: string[];
+/** Summaries run on every turn of every task, so they go to the cheapest model. */
+const SUMMARY_MODEL = 'claude-haiku-4-5-20251001';
+const SUMMARY_TIMEOUT_MS = 60_000;
+
+const SUMMARY_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string', description: 'One sentence, fewer than 120 characters.' },
+  },
+  required: ['summary'],
+  additionalProperties: false,
+} as const;
+
+const SUMMARY_PROMPT = `You are summarizing a Claude Code session for someone scanning a list of them.
+
+The input is a sequence of JSONL lines from the session transcript: "user" lines are the operator's
+messages, "assistant" lines are Claude's replies, and the excerpt covers the first and last exchanges.
+
+Say what the session is doing now, in one sentence a reader can tell apart from a dozen neighbours.
+Name the concrete system, file, or symbol at issue. Do not claim the work is finished, do not restate
+the task's title, and write no preamble, quotes, or trailing punctuation.`;
+
+/**
+ * A sentence describing where a task has got to, or null when there is no
+ * transcript or the model does not answer. One at a time, and at most one
+ * queued per task: a turn ending in every task at once would otherwise put a
+ * process per task on the machine.
+ */
+export function summarizeTask(worktreePath: string, options?: { sessionId?: string }): Promise<string | null> {
+  const taskId = options?.sessionId ?? worktreePath;
+  return new Promise<string | null>((resolve) => {
+    summarizeQueue.set(taskId, { taskId, worktreePath, sessionId: options?.sessionId, resolve });
+    processQueue();
+  });
 }
 
 interface SummarizeRequest {
   taskId: string;
   worktreePath: string;
-  options?: SummarizeOptions;
+  sessionId?: string;
   resolve: (result: string | null) => void;
 }
 
@@ -220,7 +167,7 @@ async function processQueue(): Promise<void> {
 
   summarizeRunning = true;
   try {
-    next.resolve(await runSummarize(next.worktreePath, next.options));
+    next.resolve(await runSummarize(next.worktreePath, next.sessionId));
   } catch {
     next.resolve(null);
   } finally {
@@ -229,35 +176,16 @@ async function processQueue(): Promise<void> {
   }
 }
 
-/** First and last exchanges of a task's Claude transcript, or null when there is none. */
-export function readTranscriptExcerpt(worktreePath: string, sessionId?: string): string | null {
-  const jsonlPath = resolveJsonlPath(worktreePath, sessionId);
-  if (!jsonlPath) return null;
-  return readHeadTail(jsonlPath) || null;
-}
-
-async function runSummarize(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
-  const input = readTranscriptExcerpt(worktreePath, options?.sessionId);
+async function runSummarize(worktreePath: string, sessionId?: string): Promise<string | null> {
+  const input = readTranscriptExcerpt(worktreePath, sessionId);
   if (!input) return null;
-
-  const installed = getInstalledOllamaModels();
-  const model = (options?.ollamaModels ?? []).find(
-    (m) => installed.has(m) || installed.has(m.includes(':') ? m : `${m}:latest`),
-  );
-  if (!model) return null;
-  return tryOllama(model, input);
-}
-
-/**
- * Summarize a task by feeding the JSONL transcript head+tail to ollama.
- * Returns the summary, or null on failure or when no ollama model is available.
- * Requests are queued with at most one entry per task. Only one summarization
- * runs at a time to avoid spawning many ollama processes.
- */
-export function summarizeTask(worktreePath: string, options?: SummarizeOptions): Promise<string | null> {
-  const taskId = options?.sessionId ?? worktreePath;
-  return new Promise<string | null>((resolve) => {
-    summarizeQueue.set(taskId, { taskId, worktreePath, options, resolve });
-    processQueue();
+  const out = await runOneShot<{ summary?: string }>({
+    prompt: SUMMARY_PROMPT,
+    input: `Session transcript:\n${input}`,
+    model: SUMMARY_MODEL,
+    schema: SUMMARY_SCHEMA,
+    timeoutMs: SUMMARY_TIMEOUT_MS,
+    label: 'task-summarizer',
   });
+  return out?.summary?.trim() || null;
 }

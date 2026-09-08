@@ -12,7 +12,6 @@ import {
   startClaudeWatching,
   stopClaudeWatching,
 } from './claude-watcher';
-import { getDb } from './db';
 import { type FsWatchHandle, watchDir } from './fs-watcher';
 
 const execFile = promisify(execFileCb);
@@ -64,78 +63,7 @@ function resolveGitDir(worktreePath: string): string | null {
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
-type Row = Record<string, any>;
-
-function rowToEntry(row: Row): ActivityEntry {
-  const entry: ActivityEntry = {
-    id: row.id,
-    taskId: row.task_id,
-    timestamp: row.timestamp,
-    type: row.type,
-  };
-  if (row.file_path != null) entry.filePath = row.file_path;
-  if (row.commit_sha != null) entry.commitSha = row.commit_sha;
-  if (row.commit_message != null) entry.commitMessage = row.commit_message;
-  if (row.claude_event_kind != null) entry.claudeEventKind = row.claude_event_kind;
-  if (row.claude_text != null) entry.claudeText = row.claude_text;
-  if (row.claude_tool_name != null) entry.claudeToolName = row.claude_tool_name;
-  return entry;
-}
-
-const INSERT_SQL = `INSERT INTO activity_entries (id, task_id, timestamp, type, file_path, commit_sha,
-  commit_message, claude_event_kind, claude_text, claude_tool_name)
- VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-
-function persistEntry(entry: ActivityEntry): void {
-  getDb()
-    .prepare(INSERT_SQL)
-    .run(
-      entry.id,
-      entry.taskId,
-      entry.timestamp,
-      entry.type,
-      entry.filePath ?? null,
-      entry.commitSha ?? null,
-      entry.commitMessage ?? null,
-      entry.claudeEventKind ?? null,
-      entry.claudeText ?? null,
-      entry.claudeToolName ?? null,
-    );
-}
-
-function clearPersistedEntries(taskId: string): void {
-  getDb().prepare('DELETE FROM activity_entries WHERE task_id = ?').run(taskId);
-}
-
-function replacePersistedEntries(taskId: string, entries: ActivityEntry[]): void {
-  const d = getDb();
-  const replace = d.transaction(() => {
-    d.prepare('DELETE FROM activity_entries WHERE task_id = ?').run(taskId);
-    const stmt = d.prepare(INSERT_SQL);
-    for (const entry of entries) {
-      stmt.run(
-        entry.id,
-        entry.taskId,
-        entry.timestamp,
-        entry.type,
-        entry.filePath ?? null,
-        entry.commitSha ?? null,
-        entry.commitMessage ?? null,
-        entry.claudeEventKind ?? null,
-        entry.claudeText ?? null,
-        entry.claudeToolName ?? null,
-      );
-    }
-  });
-  replace();
-}
-
-function loadEntries(taskId: string): ActivityEntry[] {
-  return getDb()
-    .prepare<unknown[], Row>('SELECT * FROM activity_entries WHERE task_id = ? ORDER BY timestamp')
-    .all(taskId)
-    .map(rowToEntry);
-}
+type UnusedRow = Record<string, any>;
 
 interface TaskWatcher {
   /** Safety-net poll; the filesystem watches below drive the hot path. */
@@ -203,8 +131,8 @@ export function startWatching(
   // Stop any existing watcher for this task
   stopWatching(taskId);
 
-  // Load persisted entries synchronously
-  const entries = loadEntries(taskId);
+  // The log covers the watcher's own lifetime; nothing of it is kept on disk.
+  const entries: ActivityEntry[] = [];
 
   const tw: TaskWatcher = {
     safetyTimer: null as unknown as ReturnType<typeof setInterval>,
@@ -251,7 +179,6 @@ export function startWatching(
         tw.entries = [commitEntry];
         tw.headSha = currentSha;
         tw.knownFiles.clear();
-        replacePersistedEntries(taskId, tw.entries);
         mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
         return;
       }
@@ -283,7 +210,6 @@ export function startWatching(
             filePath: file,
           };
           tw.entries.push(entry);
-          persistEntry(entry);
           mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
         }
       }
@@ -356,7 +282,7 @@ export function stopAllWatching(): void {
 
 export function getActivityLog(taskId: string, worktreePath: string): ActivityEntry[] {
   const tw = watchers.get(taskId);
-  const fileEntries = tw ? tw.entries : loadEntries(taskId);
+  const fileEntries = tw ? tw.entries : [];
 
   // Also include recent Claude JSONL entries (read directly from source)
   const claudeEntries = getRecentClaudeEntries(taskId, worktreePath);
@@ -369,7 +295,7 @@ export function getActivityLog(taskId: string, worktreePath: string): ActivityEn
 
 export function getLastChangedFile(taskId: string): string | null {
   const tw = watchers.get(taskId);
-  const entries = tw ? tw.entries : loadEntries(taskId);
+  const entries = tw ? tw.entries : [];
   for (let i = entries.length - 1; i >= 0; i--) {
     const filePath = entries[i].filePath;
     if (entries[i].type === 'file_change' && filePath) {
@@ -377,14 +303,6 @@ export function getLastChangedFile(taskId: string): string | null {
     }
   }
   return null;
-}
-
-export function clearActivityLog(taskId: string): void {
-  const tw = watchers.get(taskId);
-  if (tw) {
-    tw.entries = [];
-  }
-  clearPersistedEntries(taskId);
 }
 
 export async function getFileDiffOnDemand(worktreePath: string, filePath: string): Promise<string> {

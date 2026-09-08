@@ -105,27 +105,6 @@ export default function TaskView() {
     }
   }, [dispatch]);
 
-  const handleInstallModel = useCallback(
-    async (model: string) => {
-      setInstalling(model);
-      try {
-        await window.bifrost.installOllamaModel(model);
-        setPrereqs((p) =>
-          p ? { ...p, ollamaModels: p.ollamaModels.map((m) => (m.name === model ? { ...m, installed: true } : m)) } : p,
-        );
-        dispatch({ type: 'SHOW_TOAST', message: `Model ${model} installed` });
-      } catch (err) {
-        dispatch({
-          type: 'SHOW_TOAST',
-          message: `Install failed: ${err instanceof Error ? err.message : String(err)}`,
-        });
-      } finally {
-        setInstalling(null);
-      }
-    },
-    [dispatch],
-  );
-
   // Set window title from task name when active task changes
   useEffect(() => {
     if (activeTask) {
@@ -150,12 +129,7 @@ export default function TaskView() {
 
           {prereqs && (
             <div className="mb-6 text-left">
-              <PrerequisiteChecklist
-                prereqs={prereqs}
-                installing={installing}
-                onInstallPlugin={handleInstallPlugin}
-                onInstallModel={handleInstallModel}
-              />
+              <PrerequisiteChecklist prereqs={prereqs} installing={installing} onInstallPlugin={handleInstallPlugin} />
             </div>
           )}
 
@@ -308,15 +282,13 @@ function PrerequisiteChecklist({
   prereqs,
   installing,
   onInstallPlugin,
-  onInstallModel,
 }: {
   prereqs: PrerequisiteStatus;
   installing: string | null;
   onInstallPlugin: () => void;
-  onInstallModel: (model: string) => void;
 }) {
   const allRequiredOk = prereqs.git && prereqs.claude && prereqs.plugin.installed;
-  const allOptionalOk = prereqs.gh && prereqs.ollama && prereqs.ollamaModels.every((m) => m.installed);
+  const allOptionalOk = prereqs.gh;
 
   // Hide checklist entirely when everything is installed and no updates available
   if (allRequiredOk && !prereqs.plugin.updateAvailable && allOptionalOk) return null;
@@ -370,7 +342,7 @@ function PrerequisiteChecklist({
       )}
 
       {/* Optional */}
-      {(!prereqs.gh || !prereqs.ollama || prereqs.ollamaModels.some((m) => !m.installed)) && (
+      {!prereqs.gh && (
         <div>
           <SectionHeader className="mb-1.5">Optional</SectionHeader>
           <div className="space-y-1">
@@ -385,31 +357,6 @@ function PrerequisiteChecklist({
                 </span>
               </div>
             )}
-            {!prereqs.ollama && (
-              <div className="flex items-center gap-2 text-xs">
-                <CheckIcon ok={false} />
-                <span className="text-primary">
-                  ollama{' '}
-                  <span className="text-muted">
-                    — <ExternalLink href="https://ollama.com">local models</ExternalLink> for task summaries
-                  </span>
-                </span>
-              </div>
-            )}
-            {prereqs.ollama &&
-              prereqs.ollamaModels
-                .filter((m) => !m.installed)
-                .map((m) => (
-                  <div key={m.name} className="flex items-center gap-2 text-xs pl-4">
-                    <CheckIcon ok={false} />
-                    <span className="text-primary font-mono">{m.name}</span>
-                    <InstallButton
-                      label="Pull"
-                      spinning={installing === m.name}
-                      onClick={() => onInstallModel(m.name)}
-                    />
-                  </div>
-                ))}
           </div>
         </div>
       )}

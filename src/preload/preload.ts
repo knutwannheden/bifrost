@@ -65,8 +65,6 @@ const api: BifrostAPI = {
   },
 
   // Activity Log
-  getActivityLog: (taskId) => ipcRenderer.invoke(IPC.GET_ACTIVITY_LOG, taskId),
-  clearActivityLog: (taskId) => ipcRenderer.invoke(IPC.CLEAR_ACTIVITY_LOG, taskId),
   getFileDiff: (worktreePath, filePath) => ipcRenderer.invoke(IPC.GET_FILE_DIFF, worktreePath, filePath),
   onActivityEntry: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, entry: import('../shared/types').ActivityEntry) =>
@@ -77,6 +75,15 @@ const api: BifrostAPI = {
 
   // Token Usage
   getTokenUsage: (taskId) => ipcRenderer.invoke(IPC.GET_TOKEN_USAGE, taskId),
+
+  // Change feed
+  loadChangeFeed: (taskId) => ipcRenderer.invoke(IPC.CHANGE_FEED_LOAD, taskId),
+  onChangeFeed: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string, items: import('../shared/types').FeedItem[]) =>
+      callback(taskId, items);
+    ipcRenderer.on(IPC_STREAM.CHANGE_FEED_ITEMS, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.CHANGE_FEED_ITEMS, handler);
+  },
 
   // Terminal title
   setTerminalTitle: (taskId, title) => ipcRenderer.invoke(IPC.SET_TERMINAL_TITLE, taskId, title),
@@ -100,7 +107,6 @@ const api: BifrostAPI = {
   checkIntegration: () => ipcRenderer.invoke(IPC.CHECK_INTEGRATION),
   installIntegration: () => ipcRenderer.invoke(IPC.INSTALL_INTEGRATION),
   checkPrerequisites: () => ipcRenderer.invoke(IPC.CHECK_PREREQUISITES),
-  installOllamaModel: (model) => ipcRenderer.invoke(IPC.INSTALL_OLLAMA_MODEL, model),
 
   // Dialog
   selectDirectory: () => ipcRenderer.invoke(IPC.SELECT_DIRECTORY),
@@ -190,25 +196,6 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.SLACK_REACTION, handler);
   },
 
-  // Triage
-  startTriage: (prompt) => ipcRenderer.invoke(IPC.START_TRIAGE, prompt),
-  cancelTriage: (triageId) => ipcRenderer.invoke(IPC.CANCEL_TRIAGE, triageId),
-  listTriages: () => ipcRenderer.invoke(IPC.LIST_TRIAGES),
-  deleteTriage: (triageId) => ipcRenderer.invoke(IPC.DELETE_TRIAGE, triageId),
-  enterTriage: (triageId) => ipcRenderer.invoke(IPC.ENTER_TRIAGE, triageId),
-  onTriageActivity: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, triageId: string, activity: string) =>
-      callback(triageId, activity);
-    ipcRenderer.on(IPC_STREAM.TRIAGE_ACTIVITY, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.TRIAGE_ACTIVITY, handler);
-  },
-  onTriageWaiting: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, triageId: string, message: string) =>
-      callback(triageId, message);
-    ipcRenderer.on(IPC_STREAM.TRIAGE_WAITING, handler);
-    return () => ipcRenderer.removeListener(IPC_STREAM.TRIAGE_WAITING, handler);
-  },
-
   // Claude activity
   onClaudeActive: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string, active: boolean) => callback(taskId, active);
@@ -236,10 +223,26 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.TERMINAL_UNLOCK, handler);
   },
 
+  consoleSession: () => ipcRenderer.invoke(IPC.CONSOLE_SESSION),
+  resetConsole: () => ipcRenderer.invoke(IPC.CONSOLE_RESET),
+
   // Curator
   getCuratorState: () => ipcRenderer.invoke(IPC.CURATOR_GET_STATE),
   setCuratorOutcome: (taskId, outcome, note?) => ipcRenderer.invoke(IPC.CURATOR_SET_OUTCOME, taskId, outcome, note),
   runCuratorNow: () => ipcRenderer.invoke(IPC.CURATOR_RUN_NOW),
+  scanDiskReclaim: () => ipcRenderer.invoke(IPC.DISK_RECLAIM_SCAN),
+  applyDiskReclaim: (worktreePaths) => ipcRenderer.invoke(IPC.DISK_RECLAIM_APPLY, worktreePaths),
+  onReposChanged: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, repos: import('../shared/types').Repo[]) => callback(repos);
+    ipcRenderer.on(IPC_STREAM.REPOS_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.REPOS_CHANGED, handler);
+  },
+  onDiskReclaimReady: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, scan: import('../shared/types').DiskReclaimScan) =>
+      callback(scan);
+    ipcRenderer.on(IPC_STREAM.DISK_RECLAIM_READY, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.DISK_RECLAIM_READY, handler);
+  },
   onCuratorUpdate: (callback) => {
     const handler = (
       _event: Electron.IpcRendererEvent,

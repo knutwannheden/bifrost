@@ -10,9 +10,6 @@ d['bifrost_context'] = os.environ.get('BIFROST_CONTEXT', 'code')
 task_id = os.environ.get('BIFROST_TASK_ID', '')
 if task_id:
     d['bifrost_task_id'] = task_id
-triage_id = os.environ.get('BIFROST_TRIAGE_ID', '')
-if triage_id:
-    d['bifrost_triage_id'] = triage_id
 print(json.dumps(d))
 " 2>/dev/null)"
 [ -z "$ENRICHED" ] && exit 0

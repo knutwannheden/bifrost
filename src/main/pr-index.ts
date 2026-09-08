@@ -1,6 +1,7 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Repo, Task, TaskPr } from '../shared/types';
+import { type GhPrFacts, verdictsFor } from './pr-verdicts';
 
 const execFile = promisify(execFileCb);
 
@@ -60,30 +61,6 @@ interface GhOpenPr {
   statusCheckRollup?: GhCheck[];
 }
 
-const RUNNING_STATES = new Set(['QUEUED', 'IN_PROGRESS', 'PENDING', 'WAITING']);
-const FAILED_STATES = new Set(['FAILURE', 'TIMED_OUT', 'CANCELLED', 'ERROR']);
-
-/**
- * What an open PR is waiting on, most urgent first: a run in flight, then a
- * failure, then whether GitHub would merge it as it stands. The check that
- * decided it comes along, so the dot can lead to the run rather than the PR.
- */
-const REVIEWS: Record<string, TaskPr['review']> = {
-  APPROVED: 'approved',
-  CHANGES_REQUESTED: 'changes-requested',
-  REVIEW_REQUIRED: 'awaiting',
-};
-
-function progressOf(pr: GhOpenPr): Pick<TaskPr, 'progress' | 'checkUrl'> {
-  const checks = pr.statusCheckRollup ?? [];
-  const running = checks.find((c) => RUNNING_STATES.has((c.status ?? c.state ?? '').toUpperCase()));
-  if (running) return { progress: 'running', checkUrl: running.detailsUrl ?? running.targetUrl };
-  const failed = checks.find((c) => FAILED_STATES.has((c.conclusion ?? c.state ?? '').toUpperCase()));
-  if (failed) return { progress: 'failing', checkUrl: failed.detailsUrl ?? failed.targetUrl };
-  if (pr.reviewDecision === 'CHANGES_REQUESTED') return { progress: 'blocked' };
-  return { progress: pr.mergeStateStatus === 'CLEAN' ? 'ready' : 'blocked' };
-}
-
 /**
  * One `gh pr list` covers a repo's whole task set, where `gh pr view` would
  * cost a subprocess and a round trip per task.
@@ -104,7 +81,13 @@ async function refresh(repo: Repo): Promise<RepoIndex> {
       const state = pr.isDraft && pr.state.toUpperCase() === 'OPEN' ? 'draft' : pr.state.toLowerCase();
       // gh lists newest first, so an older PR never displaces the current one.
       if (!byBranch.has(pr.headRefName)) {
-        byBranch.set(pr.headRefName, { number: pr.number, state: state as TaskPr['state'], url: pr.url });
+        byBranch.set(pr.headRefName, {
+          number: pr.number,
+          state: state as TaskPr['state'],
+          url: pr.url,
+          merge: null,
+          ci: null,
+        });
       }
     }
   } catch {
@@ -121,16 +104,17 @@ async function refresh(repo: Repo): Promise<RepoIndex> {
          '--limit', String(PR_LIMIT), '--json', 'number,mergeStateStatus,reviewDecision,statusCheckRollup'],
         { cwd: repo.path, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 },
       );
-      const progress = new Map<number, ReturnType<typeof progressOf> & Pick<TaskPr, 'review'>>();
+      const verdicts = new Map<number, ReturnType<typeof verdictsFor>>();
       for (const open of JSON.parse(stdout) as GhOpenPr[]) {
-        progress.set(open.number, { ...progressOf(open), review: REVIEWS[open.reviewDecision ?? ''] });
+        verdicts.set(open.number, verdictsFor({ ...open, state: 'OPEN', isDraft: false } as GhPrFacts));
       }
       for (const pr of byBranch.values()) {
-        const p = progress.get(pr.number);
-        if (!p) continue;
-        pr.progress = p.progress;
-        if (p.checkUrl) pr.checkUrl = p.checkUrl;
-        if (p.review) pr.review = p.review;
+        const v = verdicts.get(pr.number);
+        if (!v) continue;
+        // The listing already settled draft and closed; only an open PR gets here.
+        if (pr.state === 'open') pr.merge = v.merge;
+        pr.ci = v.ci;
+        if (v.checkUrl) pr.checkUrl = v.checkUrl;
       }
     } catch {
       /* the pill still carries the number; it just says nothing about progress */

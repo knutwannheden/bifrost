@@ -275,36 +275,16 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
-      key: 'experimentalFeatures',
+      key: 'changeFeedAttributedOnly',
       category: 'General',
-      label: 'Experimental features',
-      description: 'Enable experimental features',
-      tooltip: 'When enabled, experimental features become available.',
-      render: (config, update) => (
-        <ToggleSwitch checked={config.experimentalFeatures} onChange={(v) => update({ experimentalFeatures: v })} />
-      ),
-    },
-    {
-      key: 'ollamaModels',
-      category: 'General',
-      label: 'Ollama models',
-      description: 'Models to try for task summarization, in priority order',
+      label: 'Change feed: only attributed edits',
+      description: 'Show a file change only if one of the agent\u2019s commands was running',
       tooltip:
-        'Comma-separated list of ollama model names. Bifrost tries each in order for task summarization, falling back to Claude Haiku if none are available.',
+        'The feed reads the worktree to catch edits made through the shell, which leave no tool call. With this on, a change is shown only while one of the session\u2019s own commands was running, which keeps out editor saves, formatters and build output \u2014 at the cost of dropping a write that lands after its command exits.',
       render: (config, update) => (
-        <FormInput
-          type="text"
-          value={(config.ollamaModels ?? []).join(', ')}
-          onChange={(e) =>
-            update({
-              ollamaModels: e.target.value
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean),
-            })
-          }
-          className="px-2 py-1 w-48"
-          placeholder="phi4-mini, gemma3:1b"
+        <ToggleSwitch
+          checked={config.changeFeedAttributedOnly !== false}
+          onChange={(v) => update({ changeFeedAttributedOnly: v })}
         />
       ),
     },

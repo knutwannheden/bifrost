@@ -5,17 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { AddRepoParams, BifrostConfig, Repo } from '../shared/types';
+import { trustDirectory } from './claude-trust';
+import { normalizeRepoPath } from './repo-path';
 
 const execFile = promisify(execFileCb);
 
 export async function addRepo(params: AddRepoParams): Promise<Repo> {
   if (params.type === 'local') {
-    let repoPath = params.path ?? '';
-    // Expand leading ~ to home directory
-    if (repoPath.startsWith('~/') || repoPath === '~') {
-      repoPath = path.join(os.homedir(), repoPath.slice(1));
-    }
-    repoPath = path.resolve(repoPath);
+    const repoPath = normalizeRepoPath(params.path ?? '');
     const gitDir = path.join(repoPath, '.git');
     if (!fs.existsSync(gitDir)) {
       throw new Error(`Not a git repository: ${repoPath}`);
@@ -24,6 +21,9 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
     const defaultBranch = await getDefaultBranch(repoPath);
     const name = path.basename(repoPath);
     const githubPath = await getGitHubPath(repoPath);
+    // A repo the user just handed to Bifrost is one they trust, and a session
+    // stopped on the workspace prompt is one no agent can get past.
+    trustDirectory(repoPath);
 
     return {
       id: randomUUID(),
@@ -42,6 +42,7 @@ export async function addRepo(params: AddRepoParams): Promise<Repo> {
     await execFile('git', ['clone', url, clonePath], { timeout: 120000 });
     const defaultBranch = await getDefaultBranch(clonePath);
     const githubPath = await getGitHubPath(clonePath);
+    trustDirectory(clonePath);
 
     return {
       id: randomUUID(),

@@ -12,7 +12,8 @@ import type {
   TokenTurnType,
   TokenUsageResult,
 } from '../shared/types';
-import { loadConfig } from './config';
+import { summarizeToolInput } from './change-feed';
+import { dropChangeFeed, pollChangeFeed } from './change-feed-service';
 import { type FsWatchHandle, watchDir } from './fs-watcher';
 import { summarizeTask } from './task-summarizer';
 
@@ -133,30 +134,6 @@ function parseJsonlLine(line: string, taskId: string): ActivityEntry | null {
   }
 
   return null;
-}
-
-function summarizeToolInput(toolName: string, input: Record<string, unknown>): string {
-  if (!input) return '';
-  switch (toolName) {
-    case 'Edit':
-    case 'Write':
-    case 'Read':
-      return (input.file_path as string) || '';
-    case 'Bash':
-      return ((input.command as string) || '').slice(0, 120);
-    case 'Glob':
-      return (input.pattern as string) || '';
-    case 'Grep':
-      return `/${(input.pattern as string) || ''}/ ${input.path || ''}`;
-    case 'Task':
-      return (input.description as string) || '';
-    case 'AskUserQuestion': {
-      const qs = input.questions as Array<{ question: string }> | undefined;
-      return qs?.map((q) => q.question).join('\n') ?? '';
-    }
-    default:
-      return '';
-  }
 }
 
 /** Fuller tool detail for token usage (not truncated like summarizeToolInput) */
@@ -346,6 +323,7 @@ export function startClaudeWatching(
 
   const processNewLines = (): void => {
     const files = getWatchFiles();
+    const feedLines: string[] = [];
 
     for (const filePath of files) {
       // For new files not yet tracked, start from end (skip existing content)
@@ -370,22 +348,27 @@ export function startClaudeWatching(
         }
       }
 
+      feedLines.push(...lines);
+
       if (lines.length > 0) {
         w.lineCount += lines.length;
         const { onSummary } = callbacks ?? {};
-        if (onSummary && w.lineCount >= 1 && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
+        if (onSummary && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
           w.lastSummaryAt = w.lineCount;
-          const config = loadConfig();
-          summarizeTask(worktreePath, { sessionId: w.sessionId, ollamaModels: config.ollamaModels })
+          summarizeTask(worktreePath, { sessionId: w.sessionId })
             .then((summary) => {
               if (summary) onSummary(taskId, summary);
             })
             .catch(() => {
-              /* ignore */
+              /* a task without a summary is the same task */
             });
         }
       }
     }
+
+    // Runs even with nothing new in the session's own transcript: subagents and
+    // shell writes leave their traces elsewhere, and the feed collects them here.
+    pollChangeFeed(taskId, worktreePath, feedLines, w.sessionId, mainWindow);
   };
 
   // Subscribe to the project dir once it exists. Claude Code creates it lazily,
@@ -823,4 +806,5 @@ export function stopClaudeWatching(taskId: string): void {
     void w.fsWatch?.close();
     watchers.delete(taskId);
   }
+  dropChangeFeed(taskId);
 }

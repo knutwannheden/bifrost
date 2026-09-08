@@ -20,21 +20,17 @@ import type {
   Repo,
   Task,
 } from '../shared/types';
-import {
-  clearActivityLog,
-  getActivityLog,
-  getFileDiffOnDemand,
-  getLastChangedFile,
-  startWatching,
-  stopWatching,
-} from './activity-watcher';
+import { getFileDiffOnDemand, getLastChangedFile, startWatching, stopWatching } from './activity-watcher';
 import { getApiPort, isSessionStale } from './bifrost-api';
+import { forgetChangeFeed, initChangeFeed, loadChangeFeed, setActiveFeedTask } from './change-feed-service';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { getRecentClaudeEntries, getTokenUsageData, lastConversationAt } from './claude-watcher';
-import { loadConfig, saveConfig } from './config';
+import { loadConfig, mergeRendererConfig, saveConfig } from './config';
+import { getConsoleSession, initConsole, resetConsole } from './console-service';
 import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
 import { getCuratorState, initCurator, runCuratorNow } from './curator-service';
-import { getDiff, getDiffStats, getFileStatuses } from './diff-service';
+import { getDiff, getDiffStats, getFileStatuses, resolveBaseRef } from './diff-service';
+import { applyReclaim, initDiskReclaim, scanReclaimable } from './disk-reclaim-service';
 import { getGitLog } from './git-log-service';
 import { scanRecentRepos } from './history-scanner';
 import { openFileInIde, openInIde } from './ide-launcher';
@@ -57,10 +53,7 @@ import { getSessionMetricsData } from './session-metrics';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
 import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store';
-import { getInstalledOllamaModels } from './task-summarizer';
 import { generateTaskTitle } from './title-generator';
-import { backfillTriageHistory, cancelTriage, enterTriage, startTriage } from './triage-service';
-import { deleteTriage as deleteTriageEntry, listTriages } from './triage-store';
 import {
   cleanupMultiRepoContainer,
   createMultiRepoContainer,
@@ -80,6 +73,13 @@ let _claudeCallbacks: { onSummary: (taskId: string, summary: string) => void } |
 
 // Tasks whose sessions are deferred until their tab is activated
 const pendingRestore = new Set<string>();
+
+/** The window keeps its own repo list, so a change here has to reach it. */
+export function broadcastRepos(window: BrowserWindow | null, repos: Repo[]): void {
+  if (window && !window.isDestroyed()) {
+    window.webContents.send(IPC_STREAM.REPOS_CHANGED, repos);
+  }
+}
 
 export function getTasks(): Task[] {
   return tasks;
@@ -190,6 +190,7 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
   if (task.status === 'running') {
     killSession(taskId);
   }
+  forgetChangeFeed(taskId);
   const updates: Partial<Task> = { status: 'archived', archivedAt: Date.now() };
   let removal: (() => Promise<void>) | null = null;
 
@@ -244,26 +245,16 @@ async function resolveBaseBranch(task: Task): Promise<string | undefined> {
 async function resolveBaseBranchInner(task: Task): Promise<string | undefined> {
   // task.baseBranch is the ref the worktree was forked from — the actual fork point
   if (task.baseBranch) {
-    try {
-      await execFile('git', ['rev-parse', '--verify', task.baseBranch], { cwd: task.worktreePath, timeout: 5000 });
-      return task.baseBranch;
-    } catch {
-      /* ref doesn't exist */
-    }
+    const ref = await resolveBaseRef(task.worktreePath, task.baseBranch);
+    if (ref) return ref;
   }
 
-  // Fallback: repo's configured default branch (remote-tracking refs preferred)
+  // Fallback: repo's configured default branch
   const config = loadConfig();
   const repo = config.repos.find((r: Repo) => r.id === task.repoId);
   if (repo?.defaultBranch) {
-    for (const candidate of [`origin/${repo.defaultBranch}`, `upstream/${repo.defaultBranch}`, repo.defaultBranch]) {
-      try {
-        await execFile('git', ['rev-parse', '--verify', candidate], { cwd: task.worktreePath, timeout: 5000 });
-        return candidate;
-      } catch {
-        /* ref doesn't exist */
-      }
-    }
+    const ref = await resolveBaseRef(task.worktreePath, repo.defaultBranch);
+    if (ref) return ref;
   }
 
   // Fallback: origin/HEAD
@@ -528,7 +519,76 @@ export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): v
   startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
 }
 
+/** Bring an archived or stopped task back: worktree, session and watcher. */
+export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow): Promise<Task> {
+  await cleanups.get(taskId);
+  const task = getTask(taskId);
+
+  // Multi-repo tasks cannot be reopened (container is deleted on archive)
+  const multiRepoGuardConfig = loadConfig();
+  const multiRepoGuardRepo = multiRepoGuardConfig.repos.find((r: Repo) => r.id === task.repoId);
+  if (multiRepoGuardRepo?.multiTaskId) {
+    throw new Error('Multi-repo tasks cannot be reopened after archiving');
+  }
+
+  let worktreePath = task.worktreePath;
+  let branch = task.branch;
+
+  // Restore worktree from branch if it was removed during archive
+  if (!fs.existsSync(worktreePath)) {
+    if (task.isExternal || task.inPlace) {
+      throw new Error(`Directory no longer exists: ${worktreePath}`);
+    }
+    const config = loadConfig();
+    const repo = config.repos.find((r: Repo) => r.id === task.repoId);
+    if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
+    worktreePath = await restoreWorktree(repo.path, task.name, task.branch);
+  }
+
+  // Re-detect current branch for in-place tasks (user may have switched)
+  if (task.inPlace) {
+    try {
+      const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: worktreePath });
+      branch = stdout.trim();
+    } catch {
+      // ignore — keep existing branch
+    }
+  }
+
+  const reopenConfig = loadConfig();
+
+  // Check if stored sessionId is stale; if so, clear it so user can select a session
+  let resumeSessionId = task.sessionId;
+  if (resumeSessionId && isSessionStale(worktreePath, resumeSessionId)) {
+    resumeSessionId = undefined;
+    updateTask(taskId, { sessionId: undefined });
+  }
+
+  createSession(taskId, worktreePath, mainWindow, {
+    resumeSessionId,
+    taskId,
+    name: task.name,
+    apiPort: getApiPort() ?? undefined,
+    permissionMode: reopenConfig.permissionMode,
+    agentTeams: reopenConfig.agentTeams,
+    onResumeFailed: resumeSessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
+  });
+
+  if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
+  startWatching(taskId, worktreePath, mainWindow, _claudeCallbacks, resumeSessionId);
+
+  return updateTask(taskId, {
+    worktreePath,
+    branch,
+    status: 'running',
+    hasUnread: false,
+    archivedAt: undefined,
+  });
+}
+
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
+  initChangeFeed(mainWindow);
+
   // Load persisted context entries from DB
   loadPersistedContexts();
 
@@ -580,7 +640,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Config
   ipcMain.handle(IPC.LOAD_CONFIG, () => loadConfig());
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => {
-    saveConfig(config);
+    saveConfig(mergeRendererConfig(config, loadConfig()));
     restartPolling(mainWindow);
   });
   ipcMain.handle(IPC.SET_IDE, (_event, ide: 'code' | 'idea' | 'zed') => {
@@ -595,6 +655,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const config = loadConfig();
     config.repos.push(repo);
     saveConfig(config);
+    broadcastRepos(mainWindow, config.repos);
     return repo;
   });
 
@@ -602,6 +663,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const config = loadConfig();
     const updated = removeRepo(repoId, config);
     saveConfig(updated);
+    broadcastRepos(mainWindow, updated.repos);
   });
 
   ipcMain.handle(IPC.LIST_REPOS, () => {
@@ -683,71 +745,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
-  ipcMain.handle(IPC.REOPEN_TASK, async (_event, taskId: string) => {
-    await cleanups.get(taskId);
-    const task = getTask(taskId);
-
-    // Multi-repo tasks cannot be reopened (container is deleted on archive)
-    const multiRepoGuardConfig = loadConfig();
-    const multiRepoGuardRepo = multiRepoGuardConfig.repos.find((r: Repo) => r.id === task.repoId);
-    if (multiRepoGuardRepo?.multiTaskId) {
-      throw new Error('Multi-repo tasks cannot be reopened after archiving');
-    }
-
-    let worktreePath = task.worktreePath;
-    let branch = task.branch;
-
-    // Restore worktree from branch if it was removed during archive
-    if (!fs.existsSync(worktreePath)) {
-      if (task.isExternal || task.inPlace) {
-        throw new Error(`Directory no longer exists: ${worktreePath}`);
-      }
-      const config = loadConfig();
-      const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-      if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
-      worktreePath = await restoreWorktree(repo.path, task.name, task.branch);
-    }
-
-    // Re-detect current branch for in-place tasks (user may have switched)
-    if (task.inPlace) {
-      try {
-        const { stdout } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: worktreePath });
-        branch = stdout.trim();
-      } catch {
-        // ignore — keep existing branch
-      }
-    }
-
-    const reopenConfig = loadConfig();
-
-    // Check if stored sessionId is stale; if so, clear it so user can select a session
-    let resumeSessionId = task.sessionId;
-    if (resumeSessionId && isSessionStale(worktreePath, resumeSessionId)) {
-      resumeSessionId = undefined;
-      updateTask(taskId, { sessionId: undefined });
-    }
-
-    createSession(taskId, worktreePath, mainWindow, {
-      resumeSessionId,
-      taskId,
-      name: task.name,
-      apiPort: getApiPort() ?? undefined,
-      permissionMode: reopenConfig.permissionMode,
-      agentTeams: reopenConfig.agentTeams,
-      onResumeFailed: resumeSessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
-    });
-
-    // Restart file watcher
-    startWatching(taskId, worktreePath, mainWindow, claudeCallbacks, resumeSessionId);
-
-    return updateTask(taskId, {
-      worktreePath,
-      branch,
-      status: 'running',
-      hasUnread: false,
-      archivedAt: undefined,
-    });
-  });
+  ipcMain.handle(IPC.REOPEN_TASK, (_event, taskId: string) => reopenTaskCore(taskId, mainWindow));
 
   ipcMain.handle(IPC.CLEAR_INTERRUPTED, (_event, taskId: string) => {
     clearInterrupted(taskId);
@@ -948,14 +946,6 @@ end tell`;
   });
 
   // Activity Log
-  ipcMain.handle(IPC.GET_ACTIVITY_LOG, (_event, taskId: string) => {
-    const task = getTask(taskId);
-    return getActivityLog(taskId, task.worktreePath);
-  });
-
-  ipcMain.handle(IPC.CLEAR_ACTIVITY_LOG, (_event, taskId: string) => {
-    clearActivityLog(taskId);
-  });
 
   ipcMain.handle(IPC.GET_FILE_DIFF, (_event, worktreePath: string, filePath: string) => {
     return getFileDiffOnDemand(worktreePath, filePath);
@@ -965,6 +955,12 @@ end tell`;
   ipcMain.handle(IPC.GET_TOKEN_USAGE, (_event, taskId: string) => {
     const task = getTask(taskId);
     return getTokenUsageData(task.worktreePath, task.sessionId);
+  });
+
+  ipcMain.handle(IPC.CHANGE_FEED_LOAD, (_event, taskId: string) => {
+    const task = getTask(taskId);
+    setActiveFeedTask(taskId);
+    return loadChangeFeed(taskId, task.worktreePath, task.sessionId);
   });
 
   // Session Metrics
@@ -1060,8 +1056,7 @@ end tell`;
   ipcMain.handle(IPC.INSTALL_INTEGRATION, () => installIntegration());
 
   ipcMain.handle(IPC.CHECK_PREREQUISITES, async () => {
-    const config = loadConfig();
-    const [gitOk, claudeOk, ghOk, ollamaOk] = await Promise.all([
+    const [gitOk, claudeOk, ghOk] = await Promise.all([
       execFile('git', ['--version'], { timeout: 5000 })
         .then(() => true)
         .catch(() => false),
@@ -1071,21 +1066,9 @@ end tell`;
       execFile('gh', ['--version'], { timeout: 5000, killSignal: 'SIGKILL' })
         .then(() => true)
         .catch(() => false),
-      execFile('ollama', ['--version'], { timeout: 5000 })
-        .then(() => true)
-        .catch(() => false),
     ]);
     const plugin = checkIntegration();
-    const installedModels = ollamaOk ? getInstalledOllamaModels() : new Set<string>();
-    const ollamaModels = (config.ollamaModels ?? []).map((name) => ({
-      name,
-      installed: installedModels.has(name) || [...installedModels].some((m) => m.startsWith(`${name}:`)),
-    }));
-    return { git: gitOk, claude: claudeOk, plugin, gh: ghOk, ollama: ollamaOk, ollamaModels };
-  });
-
-  ipcMain.handle(IPC.INSTALL_OLLAMA_MODEL, async (_event, model: string) => {
-    await execFile('ollama', ['pull', model], { timeout: 300_000 });
+    return { git: gitOk, claude: claudeOk, plugin, gh: ghOk };
   });
 
   ipcMain.handle(IPC.SET_ACTIVE_TASK_ID, (_event, taskId: string | null) => {
@@ -1251,7 +1234,8 @@ end tell`;
   );
 
   initCurator(mainWindow);
-  backfillTriageHistory();
+  initDiskReclaim(mainWindow);
+  initConsole(mainWindow);
 
   // Curator
   ipcMain.handle(IPC.CURATOR_GET_STATE, () => getCuratorState());
@@ -1267,27 +1251,17 @@ end tell`;
   });
   ipcMain.handle(IPC.CURATOR_RUN_NOW, () => runCuratorNow());
 
+  // Console
+  ipcMain.handle(IPC.CONSOLE_SESSION, () => getConsoleSession());
+  ipcMain.handle(IPC.CONSOLE_RESET, () => resetConsole());
+
+  // Disk reclaim
+  ipcMain.handle(IPC.DISK_RECLAIM_SCAN, () => scanReclaimable());
+  ipcMain.handle(IPC.DISK_RECLAIM_APPLY, (_event, worktreePaths: string[]) => applyReclaim(worktreePaths));
+
   // Slack
   ipcMain.handle(IPC.SLACK_START_OAUTH, () => startOAuth(mainWindow));
   ipcMain.handle(IPC.SLACK_DISCONNECT, () => disconnectSlack());
-
-  // Triage
-  ipcMain.handle(IPC.START_TRIAGE, (_event, prompt: string) => {
-    return startTriage(prompt, mainWindow);
-  });
-  ipcMain.handle(IPC.CANCEL_TRIAGE, (_event, triageId: string) => {
-    cancelTriage(triageId);
-  });
-  ipcMain.handle(IPC.LIST_TRIAGES, () => {
-    return listTriages();
-  });
-  ipcMain.handle(IPC.DELETE_TRIAGE, (_event, triageId: string) => {
-    deleteTriageEntry(triageId);
-  });
-  ipcMain.handle(IPC.ENTER_TRIAGE, (_event, triageId: string) => {
-    return enterTriage(triageId, mainWindow);
-  });
-
   // Prompt sender
   ipcMain.handle(
     IPC.SEND_PROMPT,

@@ -3,6 +3,7 @@ import type { ContextRotEntry, EscalationEntry, StatsData } from '../../shared/t
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { useTabMnemonics } from '../hooks/useTabMnemonics';
+import { formatBytes } from '../utils/format-bytes';
 import FlaskIcon from './FlaskIcon';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
@@ -35,13 +36,6 @@ function sinceForRange(range: TimeRange): number | undefined {
   if (range === '24h') return Date.now() - 24 * 60 * 60 * 1000;
   if (range === 'week') return Date.now() - 7 * 24 * 60 * 60 * 1000;
   return undefined;
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
-  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
-  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(1)} KB`;
-  return `${bytes} B`;
 }
 
 function BarChart({ entries, done }: { entries: { name: string; count: number }[]; done: boolean }) {

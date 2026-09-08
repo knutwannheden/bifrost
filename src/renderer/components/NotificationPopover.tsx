@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { formatBytes } from '../utils/format-bytes';
 import PrimaryButton from './PrimaryButton';
 
 export default function NotificationPopover() {
@@ -45,6 +46,27 @@ export default function NotificationPopover() {
       const url = handler.slice('slack-create-task:'.length);
       dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
       dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true, slackUrl: url });
+      return;
+    }
+    if (handler === 'free-disk') {
+      const scan = state.diskReclaim;
+      if (!scan) return;
+      dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
+      dispatch({ type: 'SHOW_TOAST', message: 'Freeing disk space...' });
+      window.bifrost
+        .applyDiskReclaim(scan.candidates.map((c) => c.worktreePath))
+        .then((result) => {
+          dispatch({ type: 'SET_DISK_RECLAIM', scan: null });
+          // Anything that started being worked on since the scan is skipped, so
+          // the freed total is what actually went, not what was offered.
+          const parts = [`Freed ${formatBytes(result.freedKb * 1024)}`, `${result.removed} worktrees`];
+          if (result.archivedTasks > 0) parts.push(`${result.archivedTasks} tasks archived`);
+          if (result.skipped > 0) parts.push(`${result.skipped} skipped`);
+          dispatch({ type: 'SHOW_TOAST', message: `${parts.join(' \u00b7 ')}.` });
+        })
+        .catch(() => {
+          dispatch({ type: 'SHOW_TOAST', message: 'Could not free disk space.' });
+        });
       return;
     }
     if (handler === 'install-plugin') {

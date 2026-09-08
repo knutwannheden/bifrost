@@ -2,6 +2,8 @@ import React, { useEffect, useRef } from 'react';
 import type { BifrostAPI } from '../shared/ipc-channels';
 import type { BifrostConfig } from '../shared/types';
 import ActionLabel from './components/ActionLabel';
+import ChangeFeedPanel from './components/ChangeFeedPanel';
+import ConsoleOverlay from './components/ConsoleOverlay';
 import DiffOverlay from './components/DiffOverlay';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
 import NotesOverlay from './components/NotesOverlay';
@@ -11,13 +13,13 @@ import PrimaryButton from './components/PrimaryButton';
 import RepoManager from './components/RepoManager';
 import RightIconBar from './components/RightIconBar';
 import SettingsOverlay from './components/SettingsOverlay';
+import SimpleMarkdown from './components/SimpleMarkdown';
 import StatsOverlay from './components/StatsOverlay';
 import StatusBar from './components/StatusBar';
 import TaskCreateDialog from './components/TaskCreateDialog';
 import TaskHistoryPanel from './components/TaskHistoryPanel';
 import TaskSidebar from './components/TaskSidebar';
 import TaskView from './components/TaskView';
-import TriageOverlay from './components/TriageOverlay';
 import type { AppAction, AppState, PaneTarget } from './context/AppContext';
 import { defaultPaneState, useApp } from './context/AppContext';
 import { KeymapProvider } from './context/KeymapContext';
@@ -26,6 +28,7 @@ import { lockTerminalInput, unlockTerminalInput } from './hooks/useTerminal';
 import { useTheme } from './hooks/useTheme';
 import { performArchive, requestArchive } from './utils/archive';
 import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
+import { formatBytes } from './utils/format-bytes';
 import { nextActiveTaskId } from './utils/next-active-task';
 import { modSymbol } from './utils/platform';
 import { scrapePartialPrompt } from './utils/scrape-prompt';
@@ -35,44 +38,6 @@ declare global {
   interface Window {
     bifrost: BifrostAPI;
   }
-}
-
-/** Render basic inline markdown: bold, italic, inline code, and newlines. */
-function SimpleMarkdown({ text }: { text: string }) {
-  const lines = text.split('\n');
-  return (
-    <div className="whitespace-pre-wrap">
-      {lines.map((line, i) => (
-        <React.Fragment key={i}>
-          {i > 0 && <br />}
-          {renderInline(line)}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
-
-function renderInline(text: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  // Match **bold**, *italic*, `code`
-  const re = /(\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`)/g;
-  let last = 0;
-  let match: RegExpExecArray | null = re.exec(text);
-  while (match !== null) {
-    if (match.index > last) parts.push(text.slice(last, match.index));
-    if (match[2]) parts.push(<strong key={match.index}>{match[2]}</strong>);
-    else if (match[3]) parts.push(<em key={match.index}>{match[3]}</em>);
-    else if (match[4])
-      parts.push(
-        <code key={match.index} className="bg-surface-alt px-1 rounded-sm text-xs">
-          {match[4]}
-        </code>,
-      );
-    last = match.index + match[0].length;
-    match = re.exec(text);
-  }
-  if (last < text.length) parts.push(text.slice(last));
-  return parts;
 }
 
 /** Rendered inside KeymapProvider so useKeymapEngine can read resolved keymap via context */
@@ -106,19 +71,6 @@ export default function App() {
   // Listen for session exit to update task status
   useEffect(() => {
     const unsub = window.bifrost.onSessionExit((sessionId, code) => {
-      // Check if it's a triage session exit
-      if (sessionId.startsWith('triage-')) {
-        const triageEntry = Object.entries(state.triages).find(([, t]) => t.ptySessionId === sessionId);
-        if (triageEntry) {
-          const [triageId] = triageEntry;
-          dispatch({
-            type: 'UPDATE_TRIAGE',
-            id: triageId,
-            updates: { status: code === 0 ? 'done' : 'error', waiting: false },
-          });
-        }
-        return;
-      }
       const task = state.tasks.find((t) => t.sessionId === sessionId);
       if (task && task.status !== 'archived') {
         dispatch({ type: 'SET_TASK_STATUS', taskId: task.id, status: 'stopped' });
@@ -130,7 +82,7 @@ export default function App() {
       }
     });
     return unsub;
-  }, [state.tasks, state.triages, dispatch]);
+  }, [state.tasks, dispatch]);
 
   // Listen for Claude active/inactive signals
   useEffect(() => {
@@ -180,8 +132,6 @@ export default function App() {
       dispatch({ type: 'ADD_TASK', task });
       dispatch({ type: 'SET_TASK_UNREAD', taskId: task.id, hasUnread: true });
       dispatch({ type: 'SHOW_TOAST', message: `New task: **${task.name}**` });
-      // Auto-close triage overlay when a task is created via triage
-      dispatch({ type: 'CLOSE_TRIAGE' });
     });
     return unsub;
   }, [dispatch]);
@@ -190,6 +140,36 @@ export default function App() {
   useEffect(() => {
     const unsub = window.bifrost.onToast((message, duration) => {
       dispatch({ type: 'SHOW_TOAST', message, duration });
+    });
+    return unsub;
+  }, [dispatch]);
+
+  // Repos change from outside the window too — the MCP add_repo tool writes one
+  // straight to the config the dialog reads from.
+  useEffect(() => {
+    const unsub = window.bifrost.onReposChanged((repos) => {
+      dispatch({ type: 'SET_REPOS', repos });
+    });
+    return unsub;
+  }, [dispatch]);
+
+  // A reclaim scan finishing is the only thing that raises this notification;
+  // the scan itself is scheduled in the main process.
+  useEffect(() => {
+    const unsub = window.bifrost.onDiskReclaimReady((scan) => {
+      dispatch({ type: 'SET_DISK_RECLAIM', scan });
+      dispatch({
+        type: 'PUSH_NOTIFICATION',
+        notification: {
+          id: 'disk-reclaim',
+          type: 'disk-reclaim',
+          title: `Reclaim ${formatBytes(scan.totalKb * 1024)}`,
+          message: `${scan.candidates.length} worktree${scan.candidates.length > 1 ? 's are' : ' is'} clean, pushed and idle. Branches and commits are kept.`,
+          action: { label: `Free ${formatBytes(scan.totalKb * 1024)}`, handler: 'free-disk' },
+          read: false,
+          timestamp: Date.now(),
+        },
+      });
     });
     return unsub;
   }, [dispatch]);
@@ -280,32 +260,6 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
-  // Listen for triage activity updates
-  useEffect(() => {
-    const unsub = window.bifrost.onTriageActivity((triageId, activity) => {
-      dispatch({ type: 'SET_TRIAGE_ACTIVITY', triageId, activity });
-    });
-    return unsub;
-  }, [dispatch]);
-
-  // Listen for triage waiting notifications
-  useEffect(() => {
-    const unsub = window.bifrost.onTriageWaiting((triageId, message) => {
-      dispatch({ type: 'SET_TRIAGE_WAITING', triageId });
-      const preview = message ? message.split('\n').slice(0, 2).join('\n') : 'Triage waiting for input';
-      dispatch({
-        type: 'SHOW_TOAST',
-        message: `**Triage**\n${preview}`,
-        duration: 5000,
-        action: {
-          label: 'Open',
-          callback: () => dispatch({ type: 'SHOW_TRIAGE' }),
-        },
-      });
-    });
-    return unsub;
-  }, [dispatch]);
-
   // Listen for permission prompts from main process
   useEffect(() => {
     const unsub = window.bifrost.onPermissionPrompt((request) => {
@@ -367,8 +321,8 @@ export default function App() {
                 callback: () => dispatch({ type: 'SHOW_CREATE_TASK_DIALOG', show: true }),
               },
               {
-                label: 'Triage',
-                callback: () => dispatch({ type: 'SHOW_TRIAGE', prompt: text }),
+                label: 'Console',
+                callback: () => dispatch({ type: 'SHOW_CONSOLE' }),
               },
             ],
           });
@@ -550,12 +504,14 @@ export default function App() {
               {state.showKeyboardShortcuts && <KeyboardShortcutsPanel />}
               {state.showNotes && <NotesOverlay />}
               {state.showStats && <StatsOverlay />}
-              {state.showTriage && <TriageOverlay />}
+              {state.showConsole && <ConsoleOverlay />}
             </div>
 
             {/* Status bar */}
             <StatusBar activeTask={activeTask} config={state.config} onToggleIde={handleToggleIde} />
           </div>
+
+          <ChangeFeedPanel />
 
           {/* Right icon bar */}
           <RightIconBar />

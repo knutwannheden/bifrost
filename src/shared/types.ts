@@ -8,14 +8,14 @@ export interface TaskPr {
   state: 'open' | 'draft' | 'merged' | 'closed';
   url: string;
   /**
-   * Where an open PR stands: its checks, then whether GitHub would merge it.
-   * Absent once a PR is merged or closed, when there is nothing left to wait on.
+   * Whether it can land. Null where there is nothing to weigh — a draft, or a
+   * PR already merged or closed — and drawn as an empty half.
    */
-  progress?: 'running' | 'failing' | 'ready' | 'blocked';
-  /** The run behind a 'running' or 'failing' progress, when GitHub named one. */
+  merge: 'conflicts' | 'changes-requested' | 'behind' | 'awaiting-review' | 'blocked' | 'mergeable' | null;
+  /** How the checks are faring; null when none ran. */
+  ci: 'failing' | 'running' | 'passing' | null;
+  /** The run behind a 'running' or 'failing' ci, when GitHub named one. */
   checkUrl?: string;
-  /** Absent where the repo asks for no review and none was given. */
-  review?: 'approved' | 'changes-requested' | 'awaiting';
 }
 
 export interface TaskCuration {
@@ -128,7 +128,6 @@ export interface BifrostConfig {
   agentTeams: boolean;
   managePermissions: boolean;
   experimentalFeatures: boolean;
-  ollamaModels: string[];
   theme: 'system' | 'dark' | 'light';
   terminalTheme: string;
   /**
@@ -138,9 +137,22 @@ export interface BifrostConfig {
    * only clears on resize — see useTerminal.ts).
    */
   terminalRenderer?: 'dom' | 'webgl';
+  /** When the disk-reclaim scan last ran, so it runs at most daily. */
+  lastDiskScanAt?: number;
   /** Sidebar width in pixels; unset means the default. */
   sidebarWidth?: number;
   sidebarHidden?: boolean;
+  /** The change feed dock, which starts closed and keeps its width once resized. */
+  changeFeedOpen?: boolean;
+  changeFeedWidth?: number;
+  /**
+   * Whether the feed shows a worktree change only while one of the session's own
+   * shell commands was running. Off, it shows every change git reports, and an
+   * editor save or a build lands in the feed alongside the agent's work.
+   */
+  changeFeedAttributedOnly?: boolean;
+  /** Globs whose changes the feed leaves out; unset means the built-in list. */
+  changeFeedIgnore?: string[];
   /** Names from TIME_BUCKETS whose groups are folded shut. */
   collapsedBuckets?: string[];
   /** Tasks lifted out of their time group into the sidebar's Pinned group. */
@@ -148,7 +160,7 @@ export interface BifrostConfig {
   slack?: SlackConfig;
   keybindings?: Record<string, string | null>;
   prompts?: {
-    triage?: string;
+    console?: string;
   };
   macros?: Macro[];
 }
@@ -209,6 +221,61 @@ export interface ActivityEntry {
   claudeText?: string;
   claudeToolName?: string;
 }
+
+/** One unified-diff hunk: lines prefixed with ' ', '+' or '-'. */
+export interface FeedHunk {
+  /** The hunk's first line number in the file as it stands after the change. */
+  newStart: number;
+  lines: string[];
+}
+
+interface FeedItemBase {
+  id: string;
+  taskId: string;
+  timestamp: number;
+}
+
+export interface FeedNarration extends FeedItemBase {
+  kind: 'narration';
+  text: string;
+  /** Reasoning rather than a statement, and shown as the quieter of the two. */
+  thinking?: boolean;
+}
+
+export interface FeedChange extends FeedItemBase {
+  kind: 'change';
+  /** Absolute path, as the tool reported it. */
+  filePath: string;
+  /** Path relative to the worktree, for display and for openInIde. */
+  relPath: string;
+  hunks: FeedHunk[];
+  added: number;
+  removed: number;
+  /** How many edits this card merges. */
+  editCount: number;
+  /** A Write that created the file; `hunks` then holds its opening lines. */
+  created: boolean;
+  /** The card renders a capped number of lines and the change ran past it. */
+  truncated: boolean;
+  /** The subagent that made the change, when one did. */
+  agentLabel?: string;
+  /**
+   * The shell command that was running when the change appeared, for a change
+   * found in the worktree rather than in a tool result. It stands in for the
+   * narration such a change has none of.
+   */
+  command?: string;
+}
+
+export interface FeedTick extends FeedItemBase {
+  kind: 'tick';
+  tool: string;
+  detail: string;
+  /** How many consecutive calls to this tool fold into the line. */
+  count: number;
+}
+
+export type FeedItem = FeedNarration | FeedChange | FeedTick;
 
 export interface TokenTurnTool {
   name: string;
@@ -383,7 +450,6 @@ export const DEFAULT_CONFIG: BifrostConfig = {
   agentTeams: false,
   managePermissions: true,
   experimentalFeatures: false,
-  ollamaModels: ['phi4-mini', 'gemma3:1b'],
   theme: 'system',
   terminalTheme: 'Auto',
   terminalRenderer: 'dom',
@@ -412,22 +478,6 @@ export interface PermissionDecision {
   rulePattern?: string;
 }
 
-export interface TriageEntry {
-  id: string;
-  prompt: string;
-  createdAt: number;
-  status: 'running' | 'done' | 'error' | 'cancelled';
-  completedAt?: number;
-  /** Task IDs created by this triage */
-  taskIds?: string[];
-  /** Last activity text from the Claude session */
-  lastActivity?: string;
-  /** Final assistant text summary captured on completion */
-  summary?: string;
-  /** Claude session ID for resuming the conversation */
-  claudeSessionId?: string;
-}
-
 export interface SlackConfig {
   clientId: string;
   clientSecret: string;
@@ -443,8 +493,6 @@ export interface PrerequisiteStatus {
   claude: boolean;
   plugin: { installed: boolean; updateAvailable: boolean };
   gh: boolean;
-  ollama: boolean;
-  ollamaModels: { name: string; installed: boolean }[];
 }
 
 // Session metrics (postmortem analysis)
@@ -469,9 +517,37 @@ export interface SessionMetricsResult {
 
 // Notification types
 
+export interface DiskReclaimCandidate {
+  worktreePath: string;
+  repoId: string;
+  repoName: string;
+  branch?: string;
+  taskId?: string;
+  taskName?: string;
+  sizeKb: number;
+  idleDays: number;
+  prMerged: boolean;
+}
+
+export interface DiskReclaimScan {
+  scannedAt: number;
+  candidates: DiskReclaimCandidate[];
+  totalKb: number;
+  /** Worktrees a gate held back, so the notification can say what it left alone. */
+  keptDirty: number;
+}
+
+export interface DiskReclaimResult {
+  freedKb: number;
+  removed: number;
+  archivedTasks: number;
+  /** Candidates that stopped qualifying between the scan and the click. */
+  skipped: number;
+}
+
 export interface AppNotification {
   id: string;
-  type: 'plugin-update' | 'restart-sessions' | 'info' | 'slack-reaction';
+  type: 'plugin-update' | 'restart-sessions' | 'info' | 'slack-reaction' | 'disk-reclaim';
   title: string;
   message: string;
   action?: { label: string; handler: string };

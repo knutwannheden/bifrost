@@ -189,6 +189,9 @@ export default function TaskTab({
   const interrupted = task.interruptedAt != null;
   const showSolid = !showPulse && (task.hasUnread || interrupted) && !isActive;
   const failed = state.taskFailed[task.id] === true || interrupted;
+  // The bar carries one colour at a time, so a task working on top of output
+  // nobody has read yet holds the top of its pulse still to say so.
+  const holdCap = showPulse && !isActive && task.hasUnread;
 
   return (
     <>
@@ -259,7 +262,12 @@ export default function TaskTab({
             &times;
           </span>
         </span>
-        {showPulse && !isActive && <span className="activity-pulse absolute top-0 bottom-0 left-0 w-1 bg-success" />}
+        {showPulse && !isActive && (
+          <span
+            className={`activity-pulse absolute bottom-0 left-0 w-1 bg-success ${holdCap ? 'top-[7px]' : 'top-0'}`}
+          />
+        )}
+        {holdCap && <span className="absolute top-0 left-0 h-1.5 w-1 bg-success" />}
         {showSolid && <span className={`absolute top-0 bottom-0 left-0 w-1 ${failed ? 'bg-danger' : 'bg-info'}`} />}
         {isActive && <span className="absolute top-0 bottom-0 left-0 w-1 bg-accent" />}
       </button>

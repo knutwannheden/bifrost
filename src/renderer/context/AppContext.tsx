@@ -2,25 +2,15 @@ import React, { createContext, useContext, useEffect, useReducer } from 'react';
 import type {
   AppNotification,
   BifrostConfig,
+  DiskReclaimScan,
   PermissionPromptData,
   Repo,
   Task,
   TaskStatus,
-  TriageEntry,
 } from '../../shared/types';
 
 export type DiffMode = 'git' | 'activity' | 'log' | 'metrics';
 export type PaneTarget = 'claude' | 'dev';
-export type TriageTab = 'new' | 'history';
-
-export interface TriageItem {
-  prompt: string;
-  status: 'idle' | 'running' | 'done' | 'error' | 'cancelled';
-  ptySessionId: string | null;
-  activity: string[];
-  waiting: boolean;
-  expanded: boolean;
-}
 
 export interface TaskPaneState {
   devSessionId: string | null;
@@ -34,6 +24,8 @@ export interface TaskPaneState {
 export interface AppState {
   repos: Repo[];
   tasks: Task[];
+  /** The last reclaim scan, so its notification's button knows what to free. */
+  diskReclaim: DiskReclaimScan | null;
   tasksLoaded: boolean;
   activeTaskId: string | null;
   /** Tab the user previously dwelled on (≥ commit threshold). Cmd+- target. */
@@ -59,11 +51,7 @@ export interface AppState {
   toastDuration: number;
   toastAction: { label: string; callback: () => void }[] | null;
   permissionQueue: PermissionPromptData[];
-  showTriage: boolean;
-  triages: Record<string, TriageItem>;
-  triageDraftPrompt: string;
-  triageTab: TriageTab;
-  triageHistory: TriageEntry[];
+  showConsole: boolean;
   notifications: AppNotification[];
   showNotificationPopover: boolean;
   apiPort: number | null;
@@ -75,6 +63,10 @@ export interface AppState {
   visibleTaskIds: string[];
   /** Bumped to move focus into the sidebar's filter box; the value itself carries no meaning. */
   sidebarFilterFocus: number;
+  /** Bumped to move focus into the change feed dock. */
+  changeFeedFocus: number;
+  /** What the change feed has selected, so Cmd+O can open it. */
+  changeFeedSelection: { filePath: string; line?: number } | null;
 }
 
 export type AppAction =
@@ -114,32 +106,28 @@ export type AppAction =
   | { type: 'PUSH_PERMISSION'; request: PermissionPromptData }
   | { type: 'SHIFT_PERMISSION' }
   | { type: 'PUSH_NOTIFICATION'; notification: AppNotification }
+  | { type: 'SET_DISK_RECLAIM'; scan: DiskReclaimScan | null }
   | { type: 'DISMISS_NOTIFICATION'; id: string }
   | { type: 'TOGGLE_NOTIFICATION_POPOVER' }
   | { type: 'SET_TASK_SUMMARY'; taskId: string; summary: string }
   | { type: 'REORDER_TASKS'; taskIds: string[] }
   | { type: 'SHOW_ARCHIVE_CONFIRM'; taskId: string; taskName: string }
   | { type: 'HIDE_ARCHIVE_CONFIRM' }
-  | { type: 'SHOW_TRIAGE'; prompt?: string }
-  | { type: 'CLOSE_TRIAGE' }
-  | { type: 'SET_TRIAGE_TAB'; tab: TriageTab }
-  | { type: 'SET_TRIAGE_DRAFT_PROMPT'; prompt: string }
-  | { type: 'ADD_TRIAGE'; id: string; item: TriageItem }
-  | { type: 'UPDATE_TRIAGE'; id: string; updates: Partial<TriageItem> }
-  | { type: 'REMOVE_TRIAGE'; id: string }
-  | { type: 'SET_TRIAGE_ACTIVITY'; triageId: string; activity: string }
-  | { type: 'SET_TRIAGE_WAITING'; triageId: string }
-  | { type: 'SET_TRIAGE_HISTORY'; history: TriageEntry[] }
+  | { type: 'SHOW_CONSOLE' }
+  | { type: 'CLOSE_CONSOLE' }
   | { type: 'START_RENAME_TASK'; taskId: string }
   | { type: 'CLEAR_RENAME_TASK' }
   | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean }
   | { type: 'SET_TURN_BOUNDARY'; taskId: string; at: number }
   | { type: 'SET_VISIBLE_TASK_IDS'; taskIds: string[] }
-  | { type: 'FOCUS_SIDEBAR_FILTER' };
+  | { type: 'FOCUS_SIDEBAR_FILTER' }
+  | { type: 'FOCUS_CHANGE_FEED' }
+  | { type: 'SET_CHANGE_FEED_SELECTION'; selection: { filePath: string; line?: number } | null };
 
 const initialState: AppState = {
   repos: [],
   tasks: [],
+  diskReclaim: null,
   tasksLoaded: false,
   activeTaskId: null,
   previousActiveTaskId: null,
@@ -161,11 +149,7 @@ const initialState: AppState = {
   toastHint: null,
   toastDuration: 2000,
   toastAction: null,
-  showTriage: false,
-  triages: {},
-  triageDraftPrompt: '',
-  triageTab: 'new' as TriageTab,
-  triageHistory: [],
+  showConsole: false,
   permissionQueue: [],
   notifications: [],
   showNotificationPopover: false,
@@ -174,6 +158,8 @@ const initialState: AppState = {
   renamingTaskId: null,
   visibleTaskIds: [],
   sidebarFilterFocus: 0,
+  changeFeedFocus: 0,
+  changeFeedSelection: null,
   taskFailed: {},
 };
 
@@ -207,7 +193,7 @@ const allOverlaysClosed = {
   showSettings: false,
   showNotes: false,
   showStats: false,
-  showTriage: false,
+  showConsole: false,
 };
 
 /** Close the active task's diff overlay */
@@ -228,7 +214,7 @@ export function isAnyOverlayOpen(state: AppState): boolean {
     state.showSettings ||
     state.showNotes ||
     state.showStats ||
-    state.showTriage
+    state.showConsole
   )
     return true;
   if (state.activeTaskId) {
@@ -250,7 +236,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_CONFIG':
       return { ...state, config: action.config, repos: action.config.repos };
     case 'SET_REPOS':
-      return { ...state, repos: action.repos };
+      return {
+        ...state,
+        repos: action.repos,
+        config: state.config ? { ...state.config, repos: action.repos } : state.config,
+      };
     case 'SET_TASKS': {
       // Restore persisted active task, or auto-select first running task
       const persisted = localStorage.getItem('bifrost:activeTaskId');
@@ -409,6 +399,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, permissionQueue: [...state.permissionQueue, action.request] };
     case 'SHIFT_PERMISSION':
       return { ...state, permissionQueue: state.permissionQueue.slice(1) };
+    case 'SET_DISK_RECLAIM':
+      return { ...state, diskReclaim: action.scan };
+
     case 'PUSH_NOTIFICATION':
       if (state.notifications.some((n) => n.type === action.notification.type && n.type !== 'info')) {
         return state;
@@ -432,52 +425,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, renamingTaskId: action.taskId };
     case 'CLEAR_RENAME_TASK':
       return { ...state, renamingTaskId: null };
-    case 'SHOW_TRIAGE':
-      return closeActiveTaskDiff({
-        ...state,
-        ...allOverlaysClosed,
-        showTriage: true,
-        triageDraftPrompt: action.prompt ?? state.triageDraftPrompt,
-      });
-    case 'CLOSE_TRIAGE':
-      return { ...state, showTriage: false };
-    case 'SET_TRIAGE_TAB':
-      return { ...state, triageTab: action.tab };
-    case 'SET_TRIAGE_DRAFT_PROMPT':
-      return { ...state, triageDraftPrompt: action.prompt };
-    case 'ADD_TRIAGE':
-      return { ...state, triages: { ...state.triages, [action.id]: action.item } };
-    case 'UPDATE_TRIAGE': {
-      const existing = state.triages[action.id];
-      if (!existing) return state;
-      return { ...state, triages: { ...state.triages, [action.id]: { ...existing, ...action.updates } } };
-    }
-    case 'REMOVE_TRIAGE': {
-      const { [action.id]: _removed, ...rest } = state.triages;
-      void _removed;
-      return { ...state, triages: rest };
-    }
-    case 'SET_TRIAGE_ACTIVITY': {
-      const t = state.triages[action.triageId];
-      if (!t) return state;
-      return {
-        ...state,
-        triages: {
-          ...state.triages,
-          [action.triageId]: { ...t, activity: [...t.activity, action.activity] },
-        },
-      };
-    }
-    case 'SET_TRIAGE_WAITING': {
-      const tw = state.triages[action.triageId];
-      if (!tw) return state;
-      return {
-        ...state,
-        triages: { ...state.triages, [action.triageId]: { ...tw, waiting: true } },
-      };
-    }
-    case 'SET_TRIAGE_HISTORY':
-      return { ...state, triageHistory: action.history };
+    case 'SHOW_CONSOLE':
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showConsole: true });
+    case 'CLOSE_CONSOLE':
+      return { ...state, showConsole: false };
     case 'SET_CLAUDE_ACTIVE':
       return {
         ...state,
@@ -501,6 +452,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'FOCUS_SIDEBAR_FILTER':
       return { ...state, sidebarFilterFocus: state.sidebarFilterFocus + 1 };
+    case 'FOCUS_CHANGE_FEED':
+      return { ...state, changeFeedFocus: state.changeFeedFocus + 1 };
+    case 'SET_CHANGE_FEED_SELECTION':
+      return { ...state, changeFeedSelection: action.selection };
     default:
       return state;
   }

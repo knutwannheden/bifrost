@@ -47,6 +47,7 @@
   --color-on-status: #21222c;
   --color-danger: #ff5555; /* Dracula Red */
   --color-warning: #ffb86c; /* Dracula Orange */
+  --color-code: #8be9fd; /* Dracula Cyan */
 
   /* ── Special ────────────────────────────────────────────────── */
   --color-highlight: rgba(241, 250, 140, 0.3); /* Dracula Yellow/30 */
@@ -81,6 +82,7 @@ html.light {
   --color-on-status: #ffffff;
   --color-danger: #dc2626;
   --color-warning: #d97706;
+  --color-code: #0e7490;
 
   --color-highlight: rgba(234, 179, 8, 0.2);
 
@@ -109,6 +111,7 @@ html.light {
   --color-on-status: var(--color-on-status);
   --color-danger: var(--color-danger);
   --color-warning: var(--color-warning);
+  --color-code: var(--color-code);
   --color-highlight: var(--color-highlight);
   --color-diff-add: var(--color-diff-add);
   --color-diff-remove: var(--color-diff-remove);
