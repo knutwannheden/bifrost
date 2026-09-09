@@ -68,7 +68,7 @@ Use `--squash` by default. If merge fails:
 
 ### 5. Archive the Bifrost task
 
-After successful merge, call the `close_or_archive_task` MCP tool with the task ID and `archive: true`.
+After successful merge, call the `close_or_archive_task` MCP tool with `archive: true` and no `taskId` — it defaults to the task you are running in. Pass a `taskId` only when the user named a different task.
 
 ### 6. Report
 

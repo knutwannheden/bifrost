@@ -351,7 +351,7 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
     apiPort: getApiPort() ?? undefined,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
-    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId) : undefined,
+    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
   });
 
   const task: Task = {
@@ -379,17 +379,20 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
 
 /**
  * Tells a new task how to reach whoever asked for it, which it otherwise has
- * no way to learn. Composed here so it reaches the session's first prompt
+ * no way to learn, and names the task's own id alongside so the two are not
+ * confused. Composed here so it reaches the session's first prompt
  * without landing in the task's summary, which is shown and searched.
  */
-function creatorCoordinates(createdByTaskId: string | undefined): string {
+function creatorCoordinates(createdByTaskId: string | undefined, taskId: string): string {
   if (!createdByTaskId) return '';
   const sessionName = getSessionName(createdByTaskId);
   if (!sessionName) return '';
   return (
-    `\n\n---\nThis task was created by Bifrost task ${createdByTaskId}, which is running and reachable. ` +
+    `\n\n---\nThis task is Bifrost task ${taskId}. Bifrost's task tools act on it whenever taskId is omitted, ` +
+    'so leave taskId out to act on this task.\n' +
+    `Bifrost task ${createdByTaskId} is a different task: it created this one, and it is running and reachable. ` +
     `To report back, ask a question, or hand results over, use the built-in SendMessage tool with to: "${sessionName}". ` +
-    'If that no longer reaches it, find_task on the id above reports the name it is reachable by.'
+    'If that no longer reaches it, find_task on that id reports the name it is reachable by.'
   );
 }
 
@@ -468,7 +471,7 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
     apiPort: getApiPort() ?? undefined,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
-    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId) : undefined,
+    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
   });
 
   const task: Task = {

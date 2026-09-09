@@ -396,7 +396,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
                 timeout: 5000,
               });
               if (stdout.trim().length > 0) {
-                errorResponse(res, 'Worktree has uncommitted changes. Use force=true to archive anyway.', 409);
+                errorResponse(
+                  res,
+                  'Worktree has uncommitted changes, and archiving deletes them. Close it instead (archive=false) to keep the worktree, or ask the user before passing force=true.',
+                  409,
+                );
                 return;
               }
             } catch {
