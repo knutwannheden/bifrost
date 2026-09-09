@@ -12,6 +12,7 @@ import {
   resizeMirror,
   snapshotMirror,
 } from '../src/main/session-mirror.ts';
+import { applyUnicodeWidths } from '../src/shared/terminal-unicode.ts';
 
 const { Terminal } = headless;
 const ESC = String.fromCharCode(27);
@@ -30,6 +31,7 @@ const CHUNKS = [
 /** What a terminal of this width displays after being written these chunks. */
 async function display(cols: number, chunks: string[]): Promise<string> {
   const term = new Terminal({ cols, rows: ROWS, scrollback: 1000, allowProposedApi: true });
+  applyUnicodeWidths(term);
   for (const chunk of chunks) await new Promise<void>((r) => term.write(chunk, r));
   const buffer = term.buffer.active;
   const lines: string[] = [];

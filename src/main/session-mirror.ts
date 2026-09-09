@@ -2,6 +2,7 @@ import { SerializeAddon } from '@xterm/addon-serialize';
 // @xterm/headless names a "module" build that it does not ship, so every
 // loader takes its CommonJS entry — which exposes only a default binding.
 import headless from '@xterm/headless';
+import { applyUnicodeWidths } from '../shared/terminal-unicode.ts';
 
 const { Terminal } = headless;
 
@@ -32,6 +33,7 @@ const SCROLLBACK = 1000;
 
 export function createMirror(sessionId: string, cols: number, rows: number): void {
   const term = new Terminal({ cols, rows, scrollback: SCROLLBACK, allowProposedApi: true });
+  applyUnicodeWidths(term);
   const serializer = new SerializeAddon();
   term.loadAddon(serializer);
   mirrors.set(sessionId, { term, serializer, held: null, abandonSnapshot: null, pendingResize: null });

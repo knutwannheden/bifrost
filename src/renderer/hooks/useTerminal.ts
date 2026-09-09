@@ -6,9 +6,12 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
+import { applyUnicodeWidths } from '../../shared/terminal-unicode';
 import { resolveTerminalTheme } from '../terminal-themes';
 import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
+import { decodeOsc52 } from '../utils/osc52';
 import { isMac, isModKey } from '../utils/platform';
+import { createLeadingCoalescer, type LeadingCoalescer } from '../utils/resize-scheduler';
 
 // Global registry so keyboard shortcuts can access terminal instances
 export const terminalRegistry = new Map<string, Terminal>();
@@ -123,6 +126,8 @@ export function useTerminal(
       cursorBlink: false,
       cursorStyle: 'block',
       cursorInactiveStyle: 'outline',
+      // Unlocks terminal.unicode, which applyUnicodeWidths writes to.
+      allowProposedApi: true,
       scrollback: 10_000,
       fontWeight: options?.fontWeight ?? 300,
       fontSize: options?.fontSize ?? 14,
@@ -146,7 +151,18 @@ export function useTerminal(
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.loadAddon(searchAddon);
+    applyUnicodeWidths(terminal);
     terminal.open(containerRef.current);
+
+    // Copy requests the session makes on the user's behalf (OSC 52).
+    terminal.parser.registerOscHandler(52, (payload) => {
+      const text = decodeOsc52(payload);
+      if (text === null) return false;
+      navigator.clipboard.writeText(text).catch(() => {
+        /* clipboard unavailable — the session's copy is dropped */
+      });
+      return true;
+    });
 
     // Renderer selection. The built-in DOM renderer (used when this is not
     // 'webgl') has no texture atlas and so cannot exhibit the atlas-ghosting
@@ -419,26 +435,19 @@ export function useTerminal(
       }
     });
 
-    // Auto-fit once a drag settles: one SIGWINCH per drag rather than one per
-    // frame, each of which costs a full TUI redraw. xterm is reshaped in the
-    // same callback, so the grid Claude writes for is the grid it lands in —
-    // fitting eagerly would leave them disagreeing for the length of the drag,
-    // and its cursor-relative redraws would land on the wrong rows.
-    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
+    // Each fit reshapes xterm and the PTY together, so the grid Claude writes
+    // for is the grid it lands in. See createLeadingCoalescer for the cadence.
+    const dragFit = createLeadingCoalescer(runFit, 100);
     const resizeObserver = new ResizeObserver((entries) => {
       const rect = entries[0]?.contentRect;
       if (!rect || rect.width === 0 || rect.height === 0) return;
-      if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        resizeTimer = null;
-        runFit();
-      }, 100);
+      dragFit.request();
     });
     resizeObserver.observe(containerRef.current);
 
     return () => {
       fontSettleCancelled = true;
-      if (resizeTimer) clearTimeout(resizeTimer);
+      dragFit.cancel();
       containerRef.current?.removeEventListener('copy', onCopy, { capture: true });
       containerRef.current?.removeEventListener('paste', onPaste, { capture: true });
       resizeObserver.disconnect();
@@ -456,26 +465,26 @@ export function useTerminal(
     // an existing instance), so the A/B toggle takes effect without a restart.
   }, [sessionId, containerRef, sendResizeIfChanged, options?.renderer]);
 
-  // Debounced fit+resize to avoid flooding the PTY with SIGWINCHes
-  // when multiple config changes or tab switches fire in quick succession.
-  // A SIGWINCH mid-render can corrupt Claude Code's TUI output.
-  const pendingResize = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const debouncedFitResize = useCallback(
-    (delay = 50) => {
-      if (pendingResize.current) clearTimeout(pendingResize.current);
-      pendingResize.current = setTimeout(() => {
-        pendingResize.current = null;
-        if (!terminalRef.current || !fitAddonRef.current || !sessionId) return;
-        if (!attachSettled.current) {
-          deferredFit.current = true;
-          return;
-        }
-        safeFit(terminalRef.current, fitAddonRef.current);
-        sendResizeIfChanged(terminalRef.current.cols, terminalRef.current.rows);
-      }, delay);
-    },
-    [sessionId, sendResizeIfChanged],
-  );
+  // Fit+resize for config changes and tab switches; a SIGWINCH mid-render can
+  // corrupt Claude Code's TUI output, so a run of them coalesces.
+  const fitNow = useCallback(() => {
+    if (!terminalRef.current || !fitAddonRef.current || !sessionId) return;
+    if (!attachSettled.current) {
+      deferredFit.current = true;
+      return;
+    }
+    safeFit(terminalRef.current, fitAddonRef.current);
+    sendResizeIfChanged(terminalRef.current.cols, terminalRef.current.rows);
+  }, [sessionId, sendResizeIfChanged]);
+  const fitNowRef = useRef(fitNow);
+  fitNowRef.current = fitNow;
+
+  const settingsFit = useRef<LeadingCoalescer | null>(null);
+  if (settingsFit.current === null) {
+    settingsFit.current = createLeadingCoalescer(() => fitNowRef.current(), 50);
+  }
+  useEffect(() => () => settingsFit.current?.cancel(), []);
+  const debouncedFitResize = useCallback(() => settingsFit.current?.request(), []);
 
   // Update fontSize dynamically when config changes
   const fontSize = options?.fontSize ?? 14;
