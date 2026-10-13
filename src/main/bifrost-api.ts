@@ -10,6 +10,14 @@ import type { Repo, Task } from '../shared/types';
 const execFile = promisify(execFileCb);
 
 import { IPC_STREAM } from '../shared/ipc-channels';
+import {
+  forgetTask,
+  subagentStarted,
+  subagentStopped,
+  subagentsRunning,
+  sweepHeldTurns,
+  turnEnded,
+} from './activity-state';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
 import { getDiff } from './diff-service';
@@ -89,11 +97,21 @@ const SILENT_MS = 45_000;
 /**
  * A missed hook leaves a task pulsing green with nothing to correct it — a turn
  * ended while Bifrost was restarting, a curl timed out, a session was killed.
- * The PTY settles the question independently of any of that.
+ * The PTY settles the question independently of any of that. A task holding
+ * subagents open is exempt: Bifrost has its own record of that work, so silence
+ * does not settle anything.
  */
 function sweepStaleWork(): void {
   const now = Date.now();
+  for (const taskId of sweepHeldTurns(now)) {
+    try {
+      finishTurn(getTask(taskId));
+    } catch {
+      /* the task is gone, and with it the turn to finish */
+    }
+  }
   for (const taskId of workingTaskIds()) {
+    if (subagentsRunning(taskId, now)) continue;
     const at = sessionOutputAt(taskId);
     if (at != null && now - at < SILENT_MS) continue;
     markIdle(taskId);
@@ -144,19 +162,6 @@ function resolveTaskId(body: Record<string, unknown>): string | undefined {
  * deterministic session IDs so we don't need the in-memory Maps from ipc-handlers.
  */
 /**
- * Subagents run in the background, so they outlive the turn that spawned them
- * and a task is still working after its Stop. Counted per task, with the Stop
- * held until the last one is back.
- */
-const runningSubagents = new Map<string, number>();
-const stoppedWhileWorking = new Set<string>();
-
-function clearSubagentState(taskId: string): void {
-  runningSubagents.delete(taskId);
-  stoppedWhileWorking.delete(taskId);
-}
-
-/**
  * Tools that hand the turn to the user. Claude Code's own notification for
  * these is scheduled on a delay, so a question answered promptly never raises
  * one and the task would sit green as though it were still working.
@@ -165,10 +170,12 @@ const WAITS_FOR_USER = new Set(['AskUserQuestion', 'ExitPlanMode']);
 
 /** Claude has stopped and wants something: idle, ordered, and the row turned. */
 function awaitUser(task: Task): void {
-  markIdle(task.id);
-  turnBoundary(task.id);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+  if (turnEnded(task.id)) {
+    markIdle(task.id);
+    turnBoundary(task.id);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+    }
   }
   if (isDebounced(task.id)) return;
   markNotified(task.id);
@@ -212,7 +219,7 @@ function turnBoundary(taskId: string): void {
 /** The end of a task's work: idle, notified, and the sidebar's bar turned. */
 function finishTurn(task: Task): void {
   turnBoundary(task.id);
-  clearSubagentState(task.id);
+  forgetTask(task.id);
   markIdle(task.id);
   // A turn that just ended is the likeliest moment for a PR to exist.
   markPrIndexStale(task.repoId);
@@ -539,7 +546,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         if (task) {
           // A hook can go missing, so each turn starts the count over rather
           // than inheriting one that would hold the task working forever.
-          clearSubagentState(task.id);
+          forgetTask(task.id);
           markActive(task.id);
           turnBoundary(task.id);
           if (mainWindow && !mainWindow.isDestroyed()) {
@@ -559,7 +566,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // PostToolUse / SubagentStart — Claude is actively working, ensure sweep is on
       if (hookEventName === 'PostToolUse' || hookEventName === 'SubagentStart') {
         if (hookEventName === 'SubagentStart') {
-          runningSubagents.set(task.id, (runningSubagents.get(task.id) ?? 0) + 1);
+          subagentStarted(task.id);
         }
         markActive(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -571,16 +578,14 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
       // The last subagent back finishes a turn that already stopped waiting.
       if (hookEventName === 'SubagentStop') {
-        const left = Math.max(0, (runningSubagents.get(task.id) ?? 0) - 1);
-        runningSubagents.set(task.id, left);
-        if (left === 0 && stoppedWhileWorking.has(task.id)) finishTurn(task);
+        if (subagentStopped(task.id)) finishTurn(task);
         jsonResponse(res, { ok: true });
         return;
       }
 
       // SessionEnd — session terminated, definitively mark idle
       if (hookEventName === 'SessionEnd') {
-        clearSubagentState(task.id);
+        forgetTask(task.id);
         markIdle(task.id);
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
@@ -592,7 +597,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // StopFailure — mark idle and notify (API/turn error)
       if (hookEventName === 'StopFailure') {
         if (hookContext === 'code') {
-          clearSubagentState(task.id);
+          forgetTask(task.id);
           markIdle(task.id);
           turnBoundary(task.id);
         }
@@ -627,22 +632,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Stop — mark task idle and stop sweep, notify user, but don't send
       // the hook's message fields (Stop doesn't carry notification content)
       if (hookEventName === 'Stop' && hookContext === 'code') {
-        if ((runningSubagents.get(task.id) ?? 0) > 0) {
-          // Work continues in the subagents; the turn ends when they are back.
-          stoppedWhileWorking.add(task.id);
-        } else {
-          finishTurn(task);
-        }
-        jsonResponse(res, { ok: true });
-        return;
-      }
-
-      // The question is answered, so the turn is Claude's again.
-      if (hookEventName === 'PostToolUse' && hookContext === 'code' && WAITS_FOR_USER.has(body.tool_name as string)) {
-        markActive(task.id);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
-        }
+        if (turnEnded(task.id)) finishTurn(task);
         jsonResponse(res, { ok: true });
         return;
       }
@@ -654,7 +644,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      if (hookContext === 'code') {
+      if (hookContext === 'code' && turnEnded(task.id)) {
         // Claude is waiting for input
         markIdle(task.id);
         turnBoundary(task.id);
