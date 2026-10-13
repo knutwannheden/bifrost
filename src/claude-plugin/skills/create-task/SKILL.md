@@ -36,6 +36,8 @@ Pass the repo as a filesystem path (e.g. `~/git/org/repo`) or GitHub slug (e.g. 
 
 Keep the prompt to a few paragraphs — actionable instructions, not a transcript dump.
 
+**Write it from what you already have.** Making the task well-posed is the job; researching it is not. If answering something would mean opening a file, running `git log` or `gh`, or checking whether a failure still reproduces, that is a pointer: name the file, the command or the symptom and let the new task run it. Stop once the task is unambiguous rather than once it is settled, and mark what you did not check — "unverified: may already be fixed on main".
+
 **Important**: The new task runs in a fresh git worktree branched from the main branch. If the prompt references files that haven't been merged yet (e.g. files created in your current worktree), provide the absolute path to the file or the repo path and branch name so the new task can locate them.
 
 ## 4. Confirm if needed
@@ -65,5 +67,9 @@ Tell the user the task was created and is running in a new Bifrost tab.
 | "This is minor context they'll figure out" | "I'll figure it out later" = task grinds to halt. Spell it out now. |
 | "I'll paste in the issue text or the file contents" | The new task can fetch those. Give the number or path, and say what matters in it. |
 | "I'll summarize what the review said" | Keep your conclusion, drop the retelling. Point at the thread and let them read it. |
+| "Let me check whether this is still broken first" | The new task checks, in a context window it has all of. Write "unverified" and hand it over. |
+| "I'll find the exact line numbers for them" | The file and the symbol are enough. They have grep; you have a prompt to write. |
+| "I should read the file before describing the change" | That spends your context to save theirs, which is backwards. |
+| "A little more analysis makes the prompt better" | Past unambiguous it only makes it longer. Well-posed, not well-researched. |
 
-**All of these mean: Include absolute paths, branch names, or commit your work before creating the task.**
+**All of these mean: point precisely — absolute paths, branch names, committed work — and stop there.**

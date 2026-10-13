@@ -286,7 +286,7 @@ server.registerTool(
       prompt: z
         .string()
         .describe(
-          "The prompt for the new task's Claude session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. It starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out.",
+          "The prompt for the new task's Claude session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. It starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out. Write it from what you already have: researching it with file reads and commands spends your context to fill one that is empty anyway. Hand over what you would have looked up, and mark what you did not check as unverified.",
         ),
     },
   },
