@@ -431,14 +431,21 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
         }
 
-        case 'action.openPr': {
+        case 'action.openPr':
+        case 'action.copyPrUrl': {
           const activeTask = s.tasks.find((t) => t.id === s.activeTaskId);
           if (!activeTask) break;
+          const copy = actionId === 'action.copyPrUrl';
           window.bifrost.getPrUrl(activeTask.id).then((url) => {
-            if (url) {
-              window.bifrost.openUrl(url);
-            } else {
+            if (!url) {
               dispatch({ type: 'SHOW_TOAST', message: 'No PR found for this branch' });
+              return;
+            }
+            if (copy) {
+              navigator.clipboard.writeText(url);
+              dispatch({ type: 'SHOW_TOAST', message: 'PR URL copied' });
+            } else {
+              window.bifrost.openUrl(url);
             }
           });
           break;
