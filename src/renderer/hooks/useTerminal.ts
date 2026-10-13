@@ -128,6 +128,10 @@ export function useTerminal(
       cursorInactiveStyle: 'outline',
       // Unlocks terminal.unicode, which applyUnicodeWidths writes to.
       allowProposedApi: true,
+      // The Kitty keyboard protocol, which an application opts into with CSI > u.
+      // It carries modifiers on keys the legacy encoding has no room for, so a
+      // session receives Ctrl+Enter as itself rather than as a bare CR.
+      vtExtensions: { kittyKeyboard: true },
       scrollback: 10_000,
       fontWeight: options?.fontWeight ?? 300,
       fontSize: options?.fontSize ?? 14,
@@ -265,6 +269,13 @@ export function useTerminal(
           }
           return false;
         }
+      }
+      // On macOS a Cmd chord belongs to the app and the OS, never to the session.
+      // Returning false leaves the browser's own clipboard handling to run, and
+      // keeps the Kitty protocol from encoding the chord as a super-modified key.
+      if (isMac && e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (e.type === 'keydown' && e.key.toLowerCase() === 'a') terminal.selectAll();
+        return false;
       }
       // Option+Left/Right: word navigation (ESC b / ESC f)
       // Option+/: hippie-expand (dabbrev-expand)
