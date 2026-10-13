@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import type { PrerequisiteStatus } from '../../shared/types';
+import type { PrerequisiteStatus, Task } from '../../shared/types';
 import type { PaneTarget } from '../context/AppContext';
 import { defaultPaneState, useApp } from '../context/AppContext';
 import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
 import InterruptedBanner from './InterruptedBanner';
 import Kbd from './Kbd';
+import PrimaryButton from './PrimaryButton';
 import SectionHeader from './SectionHeader';
 import Spinner from './Spinner';
 import TerminalPane from './TerminalPane';
@@ -35,6 +36,34 @@ const tips = [
   'Copy a GitHub PR or issue URL to your clipboard \u2014 Bifrost will detect it automatically.',
 ];
 
+/** The pane for a closed task, whose worktree is kept until the task is archived. */
+function ClosedTaskPane({ task }: { task: Task }) {
+  const { dispatch } = useApp();
+  const [reopening, setReopening] = useState(false);
+
+  const reopen = async () => {
+    setReopening(true);
+    try {
+      const updated = await window.bifrost.reopenTask(task.id);
+      if (updated) dispatch({ type: 'UPDATE_TASK', task: updated });
+    } catch {
+      setReopening(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3">
+      <div className="text-sm text-muted text-center">
+        This task is closed. Its worktree is kept until the task is archived.
+        <span className="mt-1 block font-mono text-xs">{task.worktreePath}</span>
+      </div>
+      <PrimaryButton autoFocus onClick={reopen} disabled={reopening}>
+        {reopening ? 'Reopening\u2026' : 'Reopen task'}
+      </PrimaryButton>
+    </div>
+  );
+}
+
 export default function TaskView() {
   const { state, dispatch } = useApp();
   const [splitRatio, setSplitRatio] = useState(0.7);
@@ -42,7 +71,7 @@ export default function TaskView() {
   const [installing, setInstalling] = useState<string | null>(null);
   const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * tips.length));
 
-  const openTasks = state.tasks.filter((t) => t.status === 'running');
+  const openTasks = state.tasks.filter((t) => t.status !== 'archived');
   const activeTask = openTasks.find((t) => t.id === state.activeTaskId);
 
   const handlePaneFocus = useCallback(
@@ -182,6 +211,18 @@ export default function TaskView() {
 
         const showClaude = !ps.claudeHidden;
         const showDev = !!ps.devSessionId && !ps.devHidden;
+
+        if (task.status === 'stopped') {
+          return (
+            <div
+              key={task.id}
+              className="absolute inset-0 flex flex-col"
+              style={{ display: isActive ? 'flex' : 'none' }}
+            >
+              <ClosedTaskPane task={task} />
+            </div>
+          );
+        }
 
         return (
           <div key={task.id} className="absolute inset-0 flex flex-col" style={{ display: isActive ? 'flex' : 'none' }}>

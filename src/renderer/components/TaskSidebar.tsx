@@ -61,7 +61,7 @@ export default function TaskSidebar() {
   const collapsed = config?.collapsedBuckets ?? DEFAULT_COLLAPSED;
   const width = config?.sidebarWidth ?? DEFAULT_WIDTH;
 
-  const openTasks = state.tasks.filter((t) => t.status === 'running');
+  const openTasks = state.tasks.filter((t) => t.status !== 'archived');
 
   const recency = (t: Task) => t.lastTurnBoundaryAt ?? t.createdAt;
   const sorted = [...openTasks].sort((a, b) => recency(b) - recency(a));

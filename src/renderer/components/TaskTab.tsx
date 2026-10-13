@@ -199,7 +199,7 @@ export default function TaskTab({
         ref={buttonRef}
         className={`group relative flex w-full items-center px-3 py-1.5 text-left transition-colors ${
           isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
-        } ${isSelected ? 'ring-1 ring-inset ring-accent' : ''}`}
+        } ${isSelected ? 'ring-1 ring-inset ring-accent' : ''} ${task.status === 'stopped' ? 'opacity-60' : ''}`}
         style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
         onClick={onClick}
         onMouseDown={(e) => {
