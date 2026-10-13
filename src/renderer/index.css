@@ -17,6 +17,10 @@
  * and apply it via a class or media query on <html>.
  */
 :root {
+  /* Scrollbars and other native widgets take their palette from here, not
+     from the tokens below. */
+  color-scheme: dark;
+
   /* ── Backgrounds (Dracula) ──────────────────────────────────── */
   --color-app: #282a36; /* Dracula Background */
   --color-surface: #21222c; /* Dracula darker panel variant */
@@ -59,6 +63,7 @@
 
 /* ── Light theme ─────────────────────────────────────────────── */
 html.light {
+  color-scheme: light;
   --color-app: #f8f9fa;
   --color-surface: #ffffff;
   --color-surface-alt: #e9ecef;
