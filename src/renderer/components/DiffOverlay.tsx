@@ -87,27 +87,29 @@ function FileSection({ data }: { data: HighlightedFile }) {
         </div>
       ) : (
         <div className="border border-t-0 border-border-default rounded-b overflow-x-auto font-mono">
-          {file.hunks.map((hunk, hi) => (
-            <React.Fragment key={hi}>
-              {hi > 0 && (
-                <div className="border-t border-border-default/50 bg-surface/50 px-3 py-0.5 text-xs text-accent-hover">
-                  {hunk.header}
-                </div>
-              )}
-              {hunk.lines.map((line, li) => {
-                const idx = lineIdx++;
-                return (
-                  <DiffLineRow
-                    key={`${hi}-${li}`}
-                    line={line}
-                    tokens={
-                      tokensByLine[idx] ?? [{ content: line.content, color: isDarkTheme() ? '#f8f8f2' : '#24292e' }]
-                    }
-                  />
-                );
-              })}
-            </React.Fragment>
-          ))}
+          <div className="min-w-max">
+            {file.hunks.map((hunk, hi) => (
+              <React.Fragment key={hi}>
+                {hi > 0 && (
+                  <div className="border-t border-border-default/50 bg-surface/50 px-3 py-0.5 text-xs text-accent-hover">
+                    {hunk.header}
+                  </div>
+                )}
+                {hunk.lines.map((line, li) => {
+                  const idx = lineIdx++;
+                  return (
+                    <DiffLineRow
+                      key={`${hi}-${li}`}
+                      line={line}
+                      tokens={
+                        tokensByLine[idx] ?? [{ content: line.content, color: isDarkTheme() ? '#f8f8f2' : '#24292e' }]
+                      }
+                    />
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -148,9 +150,8 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
     const filePath = file.newPath || file.oldPath;
     const ext = extFromPath(filePath);
     const filename = filePath.split('/').pop() || '';
-    const allLines = file.hunks.flatMap((h) => h.lines);
     highlightLines(
-      allLines.map((l) => l.content),
+      file.hunks.map((h) => h.lines.map((l) => l.content)),
       ext,
       isDarkTheme(),
       filename,

@@ -28,17 +28,18 @@ interface RenderLine {
   newLineNo: number;
 }
 
-function renderLines(change: FeedChange): RenderLine[] {
-  const out: RenderLine[] = [];
-  for (const hunk of change.hunks) {
+/** The card's lines, kept in hunks so the highlighter can take them one at a time. */
+function renderLines(change: FeedChange): RenderLine[][] {
+  return change.hunks.map((hunk) => {
     let no = hunk.newStart;
+    const out: RenderLine[] = [];
     for (const line of hunk.lines) {
       const sign = line[0] === '+' || line[0] === '-' ? line[0] : ' ';
       out.push({ sign, content: line.slice(1), newLineNo: no });
       if (sign !== '-') no++;
     }
-  }
-  return out;
+    return out;
+  });
 }
 
 const signStyles = {
@@ -62,7 +63,8 @@ function ChangeCard({
   onSelect: () => void;
   onOpen: (line?: number) => void;
 }) {
-  const lines = useMemo(() => renderLines(change), [change]);
+  const hunks = useMemo(() => renderLines(change), [change]);
+  const lines = useMemo(() => hunks.flat(), [hunks]);
   const [tokens, setTokens] = useState<HighlightedToken[][] | null>(null);
 
   useEffect(() => {
@@ -71,7 +73,7 @@ function ChangeCard({
     const ext = change.relPath.split('.').pop() ?? '';
     const filename = change.relPath.split('/').pop();
     highlightLines(
-      lines.map((l) => l.content),
+      hunks.map((h) => h.map((l) => l.content)),
       ext,
       isDarkTheme(),
       filename,
@@ -81,7 +83,7 @@ function ChangeCard({
     return () => {
       cancelled = true;
     };
-  }, [expanded, lines, change.relPath]);
+  }, [expanded, hunks, change.relPath]);
 
   const fallback = isDarkTheme() ? '#f8f8f2' : '#24292e';
 
@@ -126,31 +128,33 @@ function ChangeCard({
 
       {expanded && (
         <div className="border-t border-border-default/60 overflow-x-auto font-mono">
-          {lines.map((line, i) => {
-            const { bg, color } = signStyles[line.sign];
-            return (
-              <button
-                key={i}
-                onClick={() => {
-                  onSelect();
-                  onOpen(line.newLineNo);
-                }}
-                className={`flex w-full text-left leading-5 ${bg} hover:bg-surface-hover transition-colors`}
-              >
-                <span className="w-10 pr-2 text-right select-none text-faint text-xs leading-5 shrink-0">
-                  {line.sign === '-' ? '' : line.newLineNo}
-                </span>
-                <span className="flex-1 text-xs leading-5 whitespace-pre">
-                  <span className={`${color} inline-block w-3 text-center`}>{line.sign}</span>
-                  {(tokens?.[i] ?? [{ content: line.content, color: fallback }]).map((t, ti) => (
-                    <span key={ti} style={{ color: t.color }}>
-                      {t.content}
-                    </span>
-                  ))}
-                </span>
-              </button>
-            );
-          })}
+          <div className="min-w-max">
+            {lines.map((line, i) => {
+              const { bg, color } = signStyles[line.sign];
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    onSelect();
+                    onOpen(line.newLineNo);
+                  }}
+                  className={`flex w-full text-left leading-5 ${bg} hover:bg-surface-hover transition-colors`}
+                >
+                  <span className="w-10 pr-2 text-right select-none text-faint text-xs leading-5 shrink-0">
+                    {line.sign === '-' ? '' : line.newLineNo}
+                  </span>
+                  <span className="flex-1 text-xs leading-5 whitespace-pre">
+                    <span className={`${color} inline-block w-3 text-center`}>{line.sign}</span>
+                    {(tokens?.[i] ?? [{ content: line.content, color: fallback }]).map((t, ti) => (
+                      <span key={ti} style={{ color: t.color }}>
+                        {t.content}
+                      </span>
+                    ))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           {change.truncated && <div className="px-3 py-1 text-xs text-muted italic">…change continues</div>}
         </div>
       )}

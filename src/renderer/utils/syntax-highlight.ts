@@ -116,8 +116,14 @@ export interface HighlightedToken {
 const FALLBACK_DARK = '#f8f8f2'; /* Dracula Foreground */
 const FALLBACK_LIGHT = '#24292e';
 
+/**
+ * Tokens for the lines of a diff, one array per line with the hunks flattened,
+ * which is how callers index the result. Each hunk is highlighted on its own,
+ * because the file between two hunks is not shown: a comment or string whose
+ * close falls in that gap stays open for every line after it.
+ */
 export async function highlightLines(
-  lines: string[],
+  hunks: string[][],
   ext: string,
   dark = true,
   filename?: string,
@@ -125,27 +131,24 @@ export async function highlightLines(
   const lang = (filename && nameToLang[filename]) || extToLang[ext];
   const fallback = dark ? FALLBACK_DARK : FALLBACK_LIGHT;
   const shikiTheme = dark ? 'github-dark' : 'github-light';
+  const plain = () => hunks.flat().map((line) => [{ content: line, color: fallback }]);
 
-  if (!lang) {
-    return lines.map((line) => [{ content: line, color: fallback }]);
-  }
+  if (!lang) return plain();
 
   try {
     const highlighter = await getHighlighter();
-    const code = lines.join('\n');
-    const result = highlighter.codeToTokens(code, {
-      lang: lang as BundledLanguage,
-      theme: shikiTheme,
-    });
-
-    return result.tokens.map((lineTokens) =>
-      lineTokens.map((token) => ({
-        content: token.content,
-        color: token.color ?? fallback,
-      })),
+    return hunks.flatMap((lines) =>
+      highlighter
+        .codeToTokens(lines.join('\n'), { lang: lang as BundledLanguage, theme: shikiTheme })
+        .tokens.map((lineTokens) =>
+          lineTokens.map((token) => ({
+            content: token.content,
+            color: token.color ?? fallback,
+          })),
+        ),
     );
   } catch (err) {
     console.warn('[syntax-highlight] Shiki highlighting failed:', err);
-    return lines.map((line) => [{ content: line, color: fallback }]);
+    return plain();
   }
 }
