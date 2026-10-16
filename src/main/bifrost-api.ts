@@ -30,7 +30,9 @@ import {
   isPendingRestore,
   markTurnBoundary,
   reopenTaskCore,
+  resolveTaskTarget,
   restoreTaskSession,
+  type TaskTarget,
   updateTask,
 } from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
@@ -333,27 +335,39 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/create-task': {
-      const { repoId, repoPath, name, branch, branchName, prompt, createdByTaskId } = body as {
+      const { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId } = body as {
         repoId?: string;
         repoPath?: string;
+        worktreePath?: string;
         name?: string;
         branch?: string;
         branchName?: string;
         prompt?: string;
         createdByTaskId?: string;
       };
-      if (!repoId && !repoPath) {
-        errorResponse(res, 'either repoId or repoPath is required');
+      if (!repoId && !repoPath && !worktreePath) {
+        errorResponse(res, 'either repoId, repoPath or worktreePath is required');
         return;
       }
       const isAsync = body.async === true;
       console.log(
         `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? `${prompt.length} chars` : 'none'}`,
       );
+      const params = { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId };
+      // An async caller is answered before the work runs, so the arguments are
+      // settled first and a bad one comes back as a failed request.
+      let target: TaskTarget;
+      try {
+        target = await resolveTaskTarget(params);
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 400);
+        return;
+      }
+
       if (isAsync) {
         // Return immediately with a pending response, create in background
         jsonResponse(res, { ok: true, pending: true });
-        createTaskCore({ repoId, repoPath, name, branch, branchName, prompt, createdByTaskId }, mainWindow!)
+        createTaskCore(params, mainWindow!, target)
           .then((task) => {
             mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
           })
@@ -364,10 +378,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           });
       } else {
         try {
-          const task = await createTaskCore(
-            { repoId, repoPath, name, branch, branchName, prompt, createdByTaskId },
-            mainWindow!,
-          );
+          const task = await createTaskCore(params, mainWindow!, target);
           mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
 
           jsonResponse(res, task);

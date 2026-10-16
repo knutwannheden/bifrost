@@ -1,7 +1,6 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
@@ -39,7 +38,7 @@ import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
 import { getTaskPrs } from './pr-index';
 import { handleScrapeResponse, sendPrompt, workingTaskIds } from './prompt-sender';
-import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
+import { addRepo, getRemotes, getRepoBranches, matchRepo, removeRepo } from './repo-manager';
 import {
   attachSession,
   createSession,
@@ -59,6 +58,7 @@ import {
   createMultiRepoContainer,
   createWorktree,
   createWorktreeFromPr,
+  inspectWorktree,
   removeWorktree,
   restoreWorktree,
   slugify,
@@ -396,34 +396,67 @@ function creatorCoordinates(createdByTaskId: string | undefined, taskId: string)
   );
 }
 
-export async function createTaskCore(params: CreateTaskParams, mainWindow: BrowserWindow): Promise<Task> {
+/** The task holding a working directory, which only one may do at a time. */
+function activeTaskAt(worktreePath: string): Task | undefined {
+  return tasks.find((t) => t.status !== 'archived' && t.worktreePath === worktreePath);
+}
+
+/** The repo a task runs against, with the worktree it was handed when it has one. */
+export interface TaskTarget {
+  repo: Repo;
+  adopted?: { worktreePath: string; branch: string | null };
+}
+
+/**
+ * The repo and worktree a caller's arguments name, adding a repo Bifrost does
+ * not have yet. Arguments naming no repo, or a worktree another task holds,
+ * throw here.
+ */
+export async function resolveTaskTarget(params: CreateTaskParams): Promise<TaskTarget> {
+  const config = loadConfig();
+
+  // A worktree names the repo it belongs to, so it settles the repo whatever
+  // else the caller passed.
+  const adopted = params.worktreePath ? await inspectWorktree(params.worktreePath) : undefined;
+  const input = adopted?.repoPath ?? params.repoPath;
+
+  let repo: Repo | undefined;
+  if (input) {
+    repo = matchRepo(config.repos, input) ?? undefined;
+    if (!repo) {
+      repo = await addRepo({ type: 'local', path: input });
+      config.repos.push(repo);
+      saveConfig(config);
+    }
+  } else {
+    repo = config.repos.find((r: Repo) => r.id === params.repoId);
+  }
+  if (!repo) throw new Error(`Repo not found: ${params.repoId ?? input}`);
+
+  if (adopted) {
+    const conflict = activeTaskAt(adopted.worktreePath);
+    if (conflict) {
+      throw new Error(`An active task "${conflict.name}" already uses ${adopted.worktreePath}`);
+    }
+  }
+
+  return { repo, adopted };
+}
+
+export async function createTaskCore(
+  params: CreateTaskParams,
+  mainWindow: BrowserWindow,
+  target?: TaskTarget,
+): Promise<Task> {
   if (params.multiRepoIds?.length) {
     return createMultiRepoTask(params, mainWindow);
   }
 
   const config = loadConfig();
-  let repo: Repo | undefined;
+  const { repo, adopted } = target ?? (await resolveTaskTarget(params));
 
-  if (params.repoPath) {
-    const input = params.repoPath;
-    // Try matching as GitHub path (e.g. "org/repo")
-    repo = config.repos.find((r: Repo) => r.githubPath === input);
-    if (!repo) {
-      // Resolve as filesystem path — find existing or auto-add
-      const resolved = path.resolve(input.replace(/^~(\/|$)/, `${os.homedir()}$1`));
-      repo = config.repos.find((r: Repo) => r.path === resolved);
-      if (!repo) {
-        repo = await addRepo({ type: 'local', path: resolved });
-        config.repos.push(repo);
-        saveConfig(config);
-      }
-    }
-  } else {
-    repo = config.repos.find((r: Repo) => r.id === params.repoId);
-  }
-  if (!repo) throw new Error(`Repo not found: ${params.repoId ?? params.repoPath}`);
-
-  const name = params.branchName || params.name || generateTaskName();
+  // An adopted worktree's branch says what the work is.
+  const name = params.branchName || params.name || adopted?.branch || generateTaskName();
 
   let worktreePath: string;
   let baseBranch = repo.defaultBranch;
@@ -439,8 +472,14 @@ export async function createTaskCore(params: CreateTaskParams, mainWindow: Brows
   let inPlace = false;
 
   let taskBranch: string | undefined;
-  if (params.inPlace) {
-    const conflict = tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path);
+  if (adopted) {
+    worktreePath = adopted.worktreePath;
+    taskBranch = adopted.branch ?? undefined;
+    // Archiving may not remove the repo's primary checkout, and a path can name
+    // it as readily as any other worktree.
+    inPlace = adopted.worktreePath === repo.path;
+  } else if (params.inPlace) {
+    const conflict = activeTaskAt(repo.path);
     if (conflict) {
       throw new Error(`An active task "${conflict.name}" already uses the main worktree for this repo`);
     }

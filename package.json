@@ -25,7 +25,9 @@
     "check:activity-state": "node scripts/check-activity-state.mts",
     "check:syntax-highlight": "node scripts/check-syntax-highlight.mts",
     "check:inline-diff": "node scripts/check-inline-diff.mts",
+    "check:repo-match": "node scripts/check-repo-match.mts",
     "check:worktree-scan": "node scripts/check-worktree-scan.mts",
+    "check:worktree-adopt": "node scripts/check-worktree-adopt.mts",
     "test": "npm --prefix tools/postmortem test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

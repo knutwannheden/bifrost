@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { Repo } from '../shared/types';
-import { getRemotes } from './repo-manager';
+import { getRemotes } from './repo-manager.ts';
+import { normalizeRepoPath } from './repo-path.ts';
 
 const execFile = promisify(execFileCb);
 
@@ -231,6 +232,41 @@ export async function worktreeBranch(worktreePath: string): Promise<string | nul
   } catch {
     return null;
   }
+}
+
+/**
+ * The repo, root and branch of a worktree that already exists, for a task that
+ * runs in it rather than in one Bifrost creates. The two paths agree when the
+ * directory is the repo's primary checkout.
+ */
+export async function inspectWorktree(
+  dir: string,
+): Promise<{ repoPath: string; worktreePath: string; branch: string | null }> {
+  const target = normalizeRepoPath(dir);
+  let worktreePath: string;
+  let listed: string;
+  try {
+    const top = await execFile('git', ['--no-optional-locks', 'rev-parse', '--show-toplevel'], {
+      cwd: target,
+      timeout: 5000,
+    });
+    worktreePath = top.stdout.trim();
+    const list = await execFile('git', ['--no-optional-locks', 'worktree', 'list', '--porcelain'], {
+      cwd: target,
+      timeout: 5000,
+    });
+    listed = list.stdout;
+  } catch (err) {
+    throw new Error(`Not a git worktree: ${target}`, { cause: err });
+  }
+
+  // git lists the primary checkout first, whichever worktree the command ran in.
+  const first = listed.split('\n').find((line) => line.startsWith('worktree '));
+  return {
+    repoPath: first ? first.slice('worktree '.length) : worktreePath,
+    worktreePath,
+    branch: await worktreeBranch(worktreePath),
+  };
 }
 
 export async function removeWorktree(repoPath: string, worktreePath: string): Promise<void> {

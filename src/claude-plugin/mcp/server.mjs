@@ -271,7 +271,7 @@ server.registerTool(
   {
     title: 'Create Task',
     description:
-      'Create a new Bifrost task. Spawns a git worktree and Claude Code session. The new task runs in the background. Works from any Claude Code session — specify repo by path if not running inside a Bifrost task. Called from inside a task, the new one is told who created it and how to reach them, so it can report back with the built-in SendMessage tool; to follow up on it yourself, find it in ListAgents and use SendMessage rather than waiting here.',
+      'Create a new Bifrost task. Spawns a Claude Code session in a git worktree, fresh or one that already exists. The new task runs in the background. Works from any Claude Code session — specify repo by path if not running inside a Bifrost task. Called from inside a task, the new one is told who created it and how to reach them, so it can report back with the built-in SendMessage tool; to follow up on it yourself, find it in ListAgents and use SendMessage rather than waiting here.',
     inputSchema: {
       name: z
         .string()
@@ -281,16 +281,22 @@ server.registerTool(
         .string()
         .optional()
         .describe(
-          "Path to the git repository (e.g. '~/git/org/repo') or GitHub slug (e.g. 'org/repo'). Required when not running inside a Bifrost task.",
+          "Which repository to create the task in: the name Bifrost lists for it (e.g. 'my-repo'), a GitHub slug (e.g. 'org/my-repo'), or an absolute path (e.g. '~/git/org/my-repo'). A name shared by two repos is refused and names both slugs, so pass the slug for those. Required when not running inside a Bifrost task, unless 'worktree' is given.",
+        ),
+      worktree: z
+        .string()
+        .optional()
+        .describe(
+          "Path to a git worktree that already exists (e.g. '~/git/org/repo/.worktrees/feature'), for the task to run in instead of a fresh one. The task starts on the branch that worktree has checked out, with its uncommitted changes in place, so use this to hand over work already set up there. The repo is read from the worktree, which makes 'repo' unnecessary and overrides it. Archiving the task removes the worktree, leaving its branch, except where the path is the repo's primary checkout.",
         ),
       prompt: z
         .string()
         .describe(
-          "The prompt for the new task's Claude session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. It starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out. Write it from what you already have: researching it with file reads and commands spends your context to fill one that is empty anyway. Hand over what you would have looked up, and mark what you did not check as unverified.",
+          "The prompt for the new task's Claude session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. Unless you pass 'worktree', it starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out. Write it from what you already have: researching it with file reads and commands spends your context to fill one that is empty anyway. Hand over what you would have looked up, and mark what you did not check as unverified.",
         ),
     },
   },
-  async ({ name, repo, prompt }) => {
+  async ({ name, repo, worktree, prompt }) => {
     let repoId;
     let repoPath;
 
@@ -308,9 +314,20 @@ server.registerTool(
       repoPath = repo;
     }
 
-    if (!repoId && !repoPath) {
+    // Bifrost reads the repo off the worktree, which is more specific than either.
+    if (worktree) {
+      repoId = undefined;
+      repoPath = undefined;
+    }
+
+    if (!repoId && !repoPath && !worktree) {
       return {
-        content: [{ type: 'text', text: "No repo specified. Provide a 'repo' path or run inside a Bifrost task." }],
+        content: [
+          {
+            type: 'text',
+            text: "No repo specified. Provide a 'repo' path or a 'worktree' path, or run inside a Bifrost task.",
+          },
+        ],
         isError: true,
       };
     }
@@ -320,6 +337,7 @@ server.registerTool(
     const result = await apiCall('/create-task', {
       repoId,
       repoPath,
+      worktreePath: worktree,
       name,
       prompt,
       createdByTaskId: TASK_ID || undefined,

@@ -10,12 +10,13 @@ Create a new Bifrost task, synthesizing context from the current conversation in
 
 **NEW TASK = FRESH WORKTREE FROM MAIN BRANCH**
 
-The new task gets a git worktree based on `main`, NOT your current branch. Uncommitted files and unmerged branches do not exist in the new task.
+By default the new task gets a git worktree based on `main`, NOT your current branch. Uncommitted files and unmerged branches do not exist in the new task.
 
 **If you reference uncommitted code:**
 - Use absolute file paths with full context
 - Or reference the current branch by name (new task can `git checkout <branch>`)
 - Or commit your work first, then create the task
+- Or pass `worktree`: a worktree that already holds the work, which the task runs in as it stands
 
 Not doing this = new task gets broken references and cannot proceed.
 
@@ -25,7 +26,9 @@ Extract what the user wants the new task to accomplish from `$1` (the skill argu
 
 ## 2. Resolve repo
 
-Pass the repo as a filesystem path (e.g. `~/git/org/repo`) or GitHub slug (e.g. `org/repo`) via the `repo` parameter. The tool resolves and auto-adds unknown repos. If the task targets the current repo, `repo` can be omitted. Only fall back to `list_repos` if no repo context is available from the conversation.
+Pass the repo via the `repo` parameter, as the name Bifrost lists for it, a GitHub slug (e.g. `org/repo`), or an absolute path (e.g. `~/git/org/repo`). An absolute path Bifrost does not know yet is added. If the task targets the current repo, `repo` can be omitted. Only fall back to `list_repos` if no repo context is available from the conversation.
+
+For work already set up in a worktree — one you created, or one a closed task left behind — pass that directory as `worktree` instead. The repo comes from it, and the task starts on the branch it has checked out.
 
 ## 3. Draft task name and prompt
 
@@ -38,7 +41,7 @@ Keep the prompt to a few paragraphs — actionable instructions, not a transcrip
 
 **Write it from what you already have.** Making the task well-posed is the job; researching it is not. If answering something would mean opening a file, running `git log` or `gh`, or checking whether a failure still reproduces, that is a pointer: name the file, the command or the symptom and let the new task run it. Stop once the task is unambiguous rather than once it is settled, and mark what you did not check — "unverified: may already be fixed on main".
 
-**Important**: The new task runs in a fresh git worktree branched from the main branch. If the prompt references files that haven't been merged yet (e.g. files created in your current worktree), provide the absolute path to the file or the repo path and branch name so the new task can locate them.
+**Important**: Unless you pass `worktree`, the new task runs in a fresh git worktree branched from the main branch. If the prompt references files that haven't been merged yet (e.g. files created in your current worktree), provide the absolute path to the file or the repo path and branch name so the new task can locate them.
 
 ## 4. Confirm if needed
 
@@ -49,7 +52,8 @@ If the user's intent was fully and clearly specified in the arguments, proceed d
 Call the `create_task` MCP tool with these parameters:
 - `name`: the task title from step 3
 - `prompt`: the drafted prompt from step 3
-- `repo`: the resolved repo path from step 2 (omit if same repo as current task)
+- `repo`: the repo from step 2 — name, slug or absolute path (omit if same repo as current task)
+- `worktree`: the existing worktree from step 2, when the work is already set up in one (omit otherwise)
 
 **IMPORTANT**: The parameter is called `prompt`, NOT `text`. Do NOT use `text` — that is a different tool's parameter.
 

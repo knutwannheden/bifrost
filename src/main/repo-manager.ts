@@ -5,10 +5,38 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { AddRepoParams, BifrostConfig, Repo } from '../shared/types';
-import { trustDirectory } from './claude-trust';
-import { normalizeRepoPath } from './repo-path';
+import { trustDirectory } from './claude-trust.ts';
+import { normalizeRepoPath } from './repo-path.ts';
 
 const execFile = promisify(execFileCb);
+
+/**
+ * Which configured repo a caller's `repo` string names, or null for an absolute
+ * path no repo holds. A name two directories share is an error rather than a
+ * guess, and so is a bare word, which as a relative path would name a directory
+ * under wherever the process happens to run.
+ */
+export function matchRepo(repos: readonly Repo[], input: string): Repo | null {
+  const bySlug = repos.find((r) => r.githubPath === input);
+  if (bySlug) return bySlug;
+
+  const byName = repos.filter((r) => r.name === input);
+  if (byName.length > 0) {
+    if (new Set(byName.map((r) => r.path)).size > 1) {
+      const slugs = byName.map((r) => r.githubPath ?? r.path).join(', ');
+      throw new Error(`Repo name "${input}" matches ${byName.length} repos — use a GitHub slug: ${slugs}`);
+    }
+    return byName[0];
+  }
+
+  if (!path.isAbsolute(input) && !input.startsWith('~')) {
+    throw new Error(
+      `Unknown repo "${input}" — give a configured repo name, a GitHub slug like "org/repo", or an absolute path`,
+    );
+  }
+  const resolved = normalizeRepoPath(input);
+  return repos.find((r) => r.path === resolved) ?? null;
+}
 
 export async function addRepo(params: AddRepoParams): Promise<Repo> {
   if (params.type === 'local') {

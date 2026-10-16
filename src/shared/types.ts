@@ -171,13 +171,16 @@ export interface CreateTaskParams {
   repoPath?: string;
   /** Task name — auto-generated from prompt if omitted */
   name?: string;
-  branch: string;
+  /** Ref the worktree forks from, falling back to the repo's default branch */
+  branch?: string;
   /** Desired git branch name for the worktree (auto-derived from task name if omitted) */
   branchName?: string;
   /** PR info for PR-sourced tasks — triggers fetch + upstream setup */
   prInfo?: PrInfo;
   /** Use the main repo directory instead of creating a separate worktree */
   inPlace?: boolean;
+  /** An existing worktree to run the task in, which also settles the repo */
+  worktreePath?: string;
   /** Initial prompt sent to Claude as the first message */
   prompt?: string;
   /** The task whose agent asked for this one, when one did */
