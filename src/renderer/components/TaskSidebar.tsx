@@ -152,6 +152,12 @@ export default function TaskSidebar() {
     };
   }, []);
 
+  /** Opening a task is what the filter was for, so the list goes back to all of them. */
+  const openTask = (taskId: string) => {
+    dispatch({ type: 'SET_ACTIVE_TASK', taskId });
+    setFilter('');
+  };
+
   const returnFocusToTerminal = () => {
     filterRef.current?.blur();
     const taskId = state.activeTaskId;
@@ -186,8 +192,8 @@ export default function TaskSidebar() {
                   setSelected((i) => (Math.min(i, count - 1) + step + count) % count);
                 }
               } else if (e.key === 'Enter') {
-                if (selectedId) dispatch({ type: 'SET_ACTIVE_TASK', taskId: selectedId });
-                setFilter('');
+                if (selectedId) openTask(selectedId);
+                else setFilter('');
                 returnFocusToTerminal();
               } else if (e.key === 'Escape') {
                 // Tested against the raw value so trailing whitespace still
@@ -258,7 +264,7 @@ export default function TaskSidebar() {
                     search={filter}
                     isSelected={task.id === selectedId}
                     pr={prs[task.id]}
-                    onClick={() => dispatch({ type: 'SET_ACTIVE_TASK', taskId: task.id })}
+                    onClick={() => openTask(task.id)}
                     onClose={() => {
                       window.bifrost.stopTask(task.id).then((updated) => {
                         dispatch({ type: 'UPDATE_TASK', task: updated });
