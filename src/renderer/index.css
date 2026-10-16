@@ -59,6 +59,8 @@
   /* ── Diff ─────────────────────────────────────────────────── */
   --color-diff-add: #1a3a2a;
   --color-diff-remove: #3a1a1a;
+  --color-diff-add-word: #2a6b40;
+  --color-diff-remove-word: #7a2a2a;
 }
 
 /* ── Light theme ─────────────────────────────────────────────── */
@@ -93,6 +95,8 @@ html.light {
 
   --color-diff-add: #d4edda;
   --color-diff-remove: #f8d7da;
+  --color-diff-add-word: #a8e2b8;
+  --color-diff-remove-word: #f5a8b0;
 }
 
 /* ── Map CSS variables to Tailwind utilities ─────────────────── */
@@ -120,6 +124,8 @@ html.light {
   --color-highlight: var(--color-highlight);
   --color-diff-add: var(--color-diff-add);
   --color-diff-remove: var(--color-diff-remove);
+  --color-diff-add-word: var(--color-diff-add-word);
+  --color-diff-remove-word: var(--color-diff-remove-word);
 
   --animate-fade-in: fade-in 0.15s ease-out;
 

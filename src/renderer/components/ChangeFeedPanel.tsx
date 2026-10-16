@@ -5,7 +5,9 @@ import { useKeymap } from '../context/KeymapContext';
 import { isDarkTheme } from '../hooks/useTheme';
 import { messageTargetName } from '../utils/agent-address';
 import { focusTaskTerminal } from '../utils/focus-terminal';
+import { type WordRange, wordRanges } from '../utils/inline-diff';
 import { type HighlightedToken, highlightLines } from '../utils/syntax-highlight';
+import DiffLineTokens from './DiffLineTokens';
 import DiffStatsBadge from './DiffStatsBadge';
 import Kbd from './Kbd';
 import OverlayFooter from './OverlayFooter';
@@ -23,7 +25,7 @@ const PIN_SLACK_PX = 24;
 
 /** The line's number in the file after the change, and its diff role. */
 interface RenderLine {
-  sign: '+' | '-' | ' ';
+  type: 'add' | 'remove' | 'context';
   content: string;
   newLineNo: number;
 }
@@ -34,18 +36,18 @@ function renderLines(change: FeedChange): RenderLine[][] {
     let no = hunk.newStart;
     const out: RenderLine[] = [];
     for (const line of hunk.lines) {
-      const sign = line[0] === '+' || line[0] === '-' ? line[0] : ' ';
-      out.push({ sign, content: line.slice(1), newLineNo: no });
-      if (sign !== '-') no++;
+      const type = line[0] === '+' ? 'add' : line[0] === '-' ? 'remove' : 'context';
+      out.push({ type, content: line.slice(1), newLineNo: no });
+      if (type !== 'remove') no++;
     }
     return out;
   });
 }
 
-const signStyles = {
-  '+': { bg: 'bg-diff-add', color: 'text-success' },
-  '-': { bg: 'bg-diff-remove', color: 'text-danger' },
-  ' ': { bg: '', color: 'text-faint' },
+const lineStyles = {
+  add: { bg: 'bg-diff-add', wordBg: 'bg-diff-add-word', color: 'text-success', sign: '+' },
+  remove: { bg: 'bg-diff-remove', wordBg: 'bg-diff-remove-word', color: 'text-danger', sign: '-' },
+  context: { bg: '', wordBg: '', color: 'text-faint', sign: ' ' },
 } as const;
 
 function ChangeCard({
@@ -65,6 +67,7 @@ function ChangeCard({
 }) {
   const hunks = useMemo(() => renderLines(change), [change]);
   const lines = useMemo(() => hunks.flat(), [hunks]);
+  const ranges = useMemo<(WordRange[] | null)[]>(() => (expanded ? wordRanges(hunks) : []), [expanded, hunks]);
   const [tokens, setTokens] = useState<HighlightedToken[][] | null>(null);
 
   useEffect(() => {
@@ -130,7 +133,7 @@ function ChangeCard({
         <div className="border-t border-border-default/60 overflow-x-auto font-mono">
           <div className="min-w-max">
             {lines.map((line, i) => {
-              const { bg, color } = signStyles[line.sign];
+              const { bg, wordBg, color, sign } = lineStyles[line.type];
               return (
                 <button
                   key={i}
@@ -141,15 +144,15 @@ function ChangeCard({
                   className={`flex w-full text-left leading-5 ${bg} hover:bg-surface-hover transition-colors`}
                 >
                   <span className="w-10 pr-2 text-right select-none text-faint text-xs leading-5 shrink-0">
-                    {line.sign === '-' ? '' : line.newLineNo}
+                    {line.type === 'remove' ? '' : line.newLineNo}
                   </span>
                   <span className="flex-1 text-xs leading-5 whitespace-pre">
-                    <span className={`${color} inline-block w-3 text-center`}>{line.sign}</span>
-                    {(tokens?.[i] ?? [{ content: line.content, color: fallback }]).map((t, ti) => (
-                      <span key={ti} style={{ color: t.color }}>
-                        {t.content}
-                      </span>
-                    ))}
+                    <span className={`${color} inline-block w-3 text-center`}>{sign}</span>
+                    <DiffLineTokens
+                      tokens={tokens?.[i] ?? [{ content: line.content, color: fallback }]}
+                      ranges={ranges[i] ?? null}
+                      changedBg={wordBg}
+                    />
                   </span>
                 </button>
               );

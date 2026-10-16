@@ -12,11 +12,13 @@ import { useTokenUsage } from '../hooks/useTokenUsage';
 import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
 import { diffFileStats, extFromPath, parseDiff } from '../utils/diff-parser';
 import { formatRelative } from '../utils/format-time';
+import { type WordRange, wordRanges } from '../utils/inline-diff';
 import { isModKey } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import type { HighlightedToken } from '../utils/syntax-highlight';
 import { highlightLines } from '../utils/syntax-highlight';
 import CloseButton from './CloseButton';
+import DiffLineTokens from './DiffLineTokens';
 import DiffStatsBadge from './DiffStatsBadge';
 import Highlight from './Highlight';
 import PillToggle, { type PillOption } from './PillToggle';
@@ -29,6 +31,8 @@ interface HighlightedFile {
   file: DiffFile;
   /** One token array per line across all hunks, in order */
   tokensByLine: HighlightedToken[][];
+  /** The words each of those lines differs from its counterpart by */
+  rangesByLine: (WordRange[] | null)[];
 }
 
 function plainTokens(lines: DiffLine[]): HighlightedToken[][] {
@@ -47,14 +51,22 @@ function LineNumber({ num }: { num: number | null }) {
   );
 }
 
-const lineStyles: Record<DiffLine['type'], { bg: string; signColor: string; sign: string }> = {
-  add: { bg: 'bg-diff-add', signColor: 'text-success', sign: '+' },
-  remove: { bg: 'bg-diff-remove', signColor: 'text-danger', sign: '-' },
-  context: { bg: '', signColor: 'text-faint', sign: ' ' },
+const lineStyles: Record<DiffLine['type'], { bg: string; wordBg: string; signColor: string; sign: string }> = {
+  add: { bg: 'bg-diff-add', wordBg: 'bg-diff-add-word', signColor: 'text-success', sign: '+' },
+  remove: { bg: 'bg-diff-remove', wordBg: 'bg-diff-remove-word', signColor: 'text-danger', sign: '-' },
+  context: { bg: '', wordBg: '', signColor: 'text-faint', sign: ' ' },
 };
 
-function DiffLineRow({ line, tokens }: { line: DiffLine; tokens: HighlightedToken[] }) {
-  const { bg: bgClass, signColor, sign } = lineStyles[line.type];
+function DiffLineRow({
+  line,
+  tokens,
+  ranges,
+}: {
+  line: DiffLine;
+  tokens: HighlightedToken[];
+  ranges: WordRange[] | null;
+}) {
+  const { bg: bgClass, wordBg, signColor, sign } = lineStyles[line.type];
 
   return (
     <div className={`flex leading-5 ${bgClass}`}>
@@ -62,18 +74,14 @@ function DiffLineRow({ line, tokens }: { line: DiffLine; tokens: HighlightedToke
       <LineNumber num={line.newLineNo} />
       <span className="flex-1 text-xs leading-5 whitespace-pre">
         <span className={`${signColor} inline-block w-4 text-center`}>{sign}</span>
-        {tokens.map((token, i) => (
-          <span key={i} style={{ color: token.color }}>
-            {token.content}
-          </span>
-        ))}
+        <DiffLineTokens tokens={tokens} ranges={ranges} changedBg={wordBg} />
       </span>
     </div>
   );
 }
 
 function FileSection({ data }: { data: HighlightedFile }) {
-  const { file, tokensByLine } = data;
+  const { file, tokensByLine, rangesByLine } = data;
   let lineIdx = 0;
 
   return (
@@ -104,6 +112,7 @@ function FileSection({ data }: { data: HighlightedFile }) {
                       tokens={
                         tokensByLine[idx] ?? [{ content: line.content, color: isDarkTheme() ? '#f8f8f2' : '#24292e' }]
                       }
+                      ranges={rangesByLine[idx] ?? null}
                     />
                   );
                 })}
@@ -121,6 +130,7 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
   const [visible, setVisible] = useState(false);
   const [tokens, setTokens] = useState<HighlightedToken[][] | null>(null);
   const observerRef = useRef<HTMLDivElement | null>(null);
+  const ranges = useMemo(() => (visible ? wordRanges(file.hunks.map((h) => h.lines)) : []), [visible, file]);
 
   // Effect 1: detect when the section scrolls near the viewport
   useEffect(() => {
@@ -196,7 +206,7 @@ function LazyFileSection({ file, sectionRef }: { file: DiffFile; sectionRef?: (e
         sectionRef?.(el);
       }}
     >
-      <FileSection data={{ file, tokensByLine: displayTokens }} />
+      <FileSection data={{ file, tokensByLine: displayTokens, rangesByLine: ranges }} />
     </div>
   );
 }

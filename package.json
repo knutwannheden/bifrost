@@ -24,6 +24,7 @@
     "check:change-feed": "node scripts/check-change-feed.mts",
     "check:activity-state": "node scripts/check-activity-state.mts",
     "check:syntax-highlight": "node scripts/check-syntax-highlight.mts",
+    "check:inline-diff": "node scripts/check-inline-diff.mts",
     "check:worktree-scan": "node scripts/check-worktree-scan.mts",
     "test": "npm --prefix tools/postmortem test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
