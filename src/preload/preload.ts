@@ -155,6 +155,12 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.HOOK_NOTIFICATION, handler);
   },
 
+  onConsoleNotification: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, message: string, title: string) => callback(message, title);
+    ipcRenderer.on(IPC_STREAM.CONSOLE_NOTIFICATION, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.CONSOLE_NOTIFICATION, handler);
+  },
+
   // Permission prompts
   onPermissionPrompt: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, request: import('../shared/types').PermissionPromptData) =>

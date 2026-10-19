@@ -52,6 +52,8 @@ export interface AppState {
   toastAction: { label: string; callback: () => void }[] | null;
   permissionQueue: PermissionPromptData[];
   showConsole: boolean;
+  /** The console wants the user, until they open it. */
+  consoleUnread: boolean;
   notifications: AppNotification[];
   showNotificationPopover: boolean;
   apiPort: number | null;
@@ -115,6 +117,7 @@ export type AppAction =
   | { type: 'HIDE_ARCHIVE_CONFIRM' }
   | { type: 'SHOW_CONSOLE' }
   | { type: 'CLOSE_CONSOLE' }
+  | { type: 'SET_CONSOLE_UNREAD'; unread: boolean }
   | { type: 'START_RENAME_TASK'; taskId: string }
   | { type: 'CLEAR_RENAME_TASK' }
   | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean }
@@ -150,6 +153,7 @@ const initialState: AppState = {
   toastDuration: 2000,
   toastAction: null,
   showConsole: false,
+  consoleUnread: false,
   permissionQueue: [],
   notifications: [],
   showNotificationPopover: false,
@@ -194,6 +198,7 @@ const allOverlaysClosed = {
   showNotes: false,
   showStats: false,
   showConsole: false,
+  consoleUnread: false,
 };
 
 /** Close the active task's diff overlay */
@@ -426,7 +431,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'CLEAR_RENAME_TASK':
       return { ...state, renamingTaskId: null };
     case 'SHOW_CONSOLE':
-      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showConsole: true });
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, showConsole: true, consoleUnread: false });
+    case 'SET_CONSOLE_UNREAD':
+      return { ...state, consoleUnread: action.unread };
     case 'CLOSE_CONSOLE':
       return { ...state, showConsole: false };
     case 'SET_CLAUDE_ACTIVE':

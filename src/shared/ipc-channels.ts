@@ -163,6 +163,7 @@ export const IPC_STREAM = {
   TASK_SUMMARY: 'task:summary',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
+  CONSOLE_NOTIFICATION: 'console:notification',
   PERMISSION_PROMPT: 'permission:prompt',
   STATS_UPDATE: 'stats:update',
   TASK_CREATED: 'task:created',
@@ -295,6 +296,8 @@ export interface BifrostAPI {
   onHookNotification(
     callback: (taskId: string, taskName: string, message: string, title: string, notificationType: string) => void,
   ): () => void;
+
+  onConsoleNotification(callback: (message: string, title: string) => void): () => void;
 
   // Permission prompts
   onPermissionPrompt(callback: (request: PermissionPromptData) => void): () => void;

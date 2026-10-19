@@ -233,6 +233,7 @@ export default function RightIconBar() {
         label="Console"
         shortcut={getDisplayString('view.console')}
         active={state.showConsole}
+        badge={state.consoleUnread ? 'blue' : undefined}
         onClick={() => dispatch({ type: 'SHOW_CONSOLE' })}
       >
         <ConsoleIcon />

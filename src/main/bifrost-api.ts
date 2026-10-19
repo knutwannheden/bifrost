@@ -20,6 +20,7 @@ import {
 } from './activity-state';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { loadConfig, saveConfig } from './config';
+import { CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
 import {
   archiveTaskCore,
@@ -562,6 +563,27 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           turnBoundary(task.id);
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
+          }
+        }
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // The console has no worktree and no task to attribute an event to, so it
+      // is answered here. Stop ends a turn and Notification means it has been
+      // waiting. Either way it wants the user, and the debounce collapses the
+      // two when both arrive.
+      if (hookContext === 'console') {
+        const wantsUser = hookEventName === 'Stop' || hookEventName === 'Notification';
+        if (wantsUser && !isDebounced(CONSOLE_SESSION_ID)) {
+          markNotified(CONSOLE_SESSION_ID);
+          handleBellNotification('Console');
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(
+              IPC_STREAM.CONSOLE_NOTIFICATION,
+              (body.message as string) || '',
+              (body.title as string) || '',
+            );
           }
         }
         jsonResponse(res, { ok: true });
