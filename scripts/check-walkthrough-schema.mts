@@ -38,9 +38,15 @@ check(
 
 const file = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`);
 file[9] = 'const target = 1;';
-file[29] = 'const target = 1;';
+file[35] = 'const target = 1;';
 check('a quote at the claimed line is taken as given', locateQuote(file, 10, '  const target = 1;') === 10);
-check('a misnumbered quote resolves to the nearest occurrence', locateQuote(file, 13, 'const target = 1;') === 10);
+check(
+  'a misnumbered quote resolves to the only occurrence near its claim',
+  locateQuote(file, 13, 'const target = 1;') === 10,
+);
+
+const braces = Array.from({ length: 40 }, (_, i) => (i % 3 === 0 ? '}' : `line ${i + 1}`));
+check('a misnumbered quote that recurs nearby is not repaired', locateQuote(braces, 20, '}') === null);
 
 const short = ['a', 'b', 'c'];
 check(

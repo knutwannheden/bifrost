@@ -87,7 +87,7 @@ The producer is the agent: `submit_walkthrough` takes an optional `findings` arr
 }
 ```
 
-The model is never asked to produce a snippet or a commit. It produces `path`, `side`, `lines` and a verbatim `quote` of the first anchored line; the validator in the main process checks the quote against the line at `lines[0]` on that side of the real diff, searches the file's hunks for it when the numbers are off, and fills `commit` and `snippet` from `git show <commit>:<path>`. A quote found nowhere leaves the step without an anchor and marked `unverified`. Models misnumber lines often enough that the quote check is not optional.
+The model is never asked to produce a snippet or a commit. It produces `path`, `side`, `lines` and a verbatim `quote` of the first anchored line; the validator in the main process checks the quote against the line at `lines[0]` on that side of the real diff, moves the range to the quote's line when that line is the only one holding it within 20 lines of the claim, and fills `commit` and `snippet` from `git show <commit>:<path>`. A quote found nowhere near, or found more than once, leaves the step without an anchor and marked `unverified`, because a quote like `}` cannot say which line was meant. Models misnumber lines often enough that the quote check is not optional.
 
 To keep misnumbering rare, the generator's input is the diff with explicit numbers on every line — `  41|  43| ctx`, `  42|   -|-removed`, `   -|  44|+added` — so the model copies rather than counts.
 

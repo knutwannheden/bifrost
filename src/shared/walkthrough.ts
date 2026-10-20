@@ -178,18 +178,25 @@ export function numberDiff(files: DiffFile[]): string {
   return out.join('\n');
 }
 
-/** The 1-based line holding `quote`: the claimed one if it does, else the nearest that does. */
+/** How far from its claimed line a quote is looked for. */
+const REPAIR_WINDOW = 20;
+
+/**
+ * The 1-based line holding `quote`: the claimed one if it does, else the only
+ * one within REPAIR_WINDOW lines that does. A quote recurring near the claim,
+ * like a closing brace, cannot say which line was meant.
+ */
 export function locateQuote(lines: string[], claimed: number, quote: string): number | null {
   const want = quote.trim();
   const at = (n: number) => lines[n - 1]?.trim() === want;
   if (at(claimed)) return claimed;
   // A blank quote would match every blank line, which is no evidence at all.
   if (!want) return null;
-  let best: number | null = null;
-  for (let n = 1; n <= lines.length; n++) {
-    if (at(n) && (best === null || Math.abs(n - claimed) < Math.abs(best - claimed))) best = n;
+  const near: number[] = [];
+  for (let n = Math.max(1, claimed - REPAIR_WINDOW); n <= Math.min(lines.length, claimed + REPAIR_WINDOW); n++) {
+    if (at(n)) near.push(n);
   }
-  return best;
+  return near.length === 1 ? near[0] : null;
 }
 
 const CONTEXT = 3;
