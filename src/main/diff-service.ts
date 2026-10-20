@@ -123,6 +123,20 @@ export async function getDiff(
   }
 }
 
+/** The committed change between two commits, renames detected, independent of the working tree. */
+export async function getRangeDiff(worktreePath: string, base: string, head: string): Promise<string> {
+  const { stdout } = await execFile(
+    'git',
+    ['--no-optional-locks', 'diff', '-M', '--no-color', '--no-ext-diff', base, head],
+    {
+      cwd: worktreePath,
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 30000,
+    },
+  );
+  return stdout;
+}
+
 export type GitFileStage = 'unstaged' | 'staged' | 'committed' | 'untracked';
 
 export async function getFileStatuses(
