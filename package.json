@@ -28,7 +28,7 @@
     "check:repo-match": "node scripts/check-repo-match.mts",
     "check:worktree-scan": "node scripts/check-worktree-scan.mts",
     "check:worktree-adopt": "node scripts/check-worktree-adopt.mts",
-    "test": "npm --prefix tools/postmortem test",
+    "test": "npm --prefix tools/postmortem test && npm --prefix tools/headroom test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [],
