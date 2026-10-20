@@ -53,6 +53,17 @@ const api: BifrostAPI = {
   getDiffStats: (taskId, scope) => ipcRenderer.invoke(IPC.GET_DIFF_STATS, taskId, scope),
   getFileStatuses: (taskId, scope) => ipcRenderer.invoke(IPC.GET_FILE_STATUSES, taskId, scope),
   getGitLog: (taskId) => ipcRenderer.invoke(IPC.GET_GIT_LOG, taskId),
+
+  // Walkthrough
+  getWalkthrough: (taskId) => ipcRenderer.invoke(IPC.WALKTHROUGH_GET, taskId),
+  generateWalkthrough: (taskId, focus) => ipcRenderer.invoke(IPC.WALKTHROUGH_GENERATE, taskId, focus),
+  getWalkthroughDiff: (taskId, onCurrentHead) => ipcRenderer.invoke(IPC.WALKTHROUGH_DIFF, taskId, onCurrentHead),
+  remapWalkthrough: (taskId) => ipcRenderer.invoke(IPC.WALKTHROUGH_REMAP, taskId),
+  onWalkthroughUpdated: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, taskId: string) => callback(taskId);
+    ipcRenderer.on(IPC_STREAM.WALKTHROUGH_UPDATED, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.WALKTHROUGH_UPDATED, handler);
+  },
   getPrUrl: (taskId) => ipcRenderer.invoke(IPC.GET_PR_URL, taskId),
 
   // Shell

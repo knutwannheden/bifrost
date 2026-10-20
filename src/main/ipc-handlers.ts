@@ -28,7 +28,7 @@ import { loadConfig, mergeRendererConfig, saveConfig } from './config';
 import { getConsoleSession, initConsole, resetConsole } from './console-service';
 import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
 import { getCuratorState, initCurator, runCuratorNow } from './curator-service';
-import { getDiff, getDiffStats, getFileStatuses, resolveBaseRef } from './diff-service';
+import { getDiff, getDiffStats, getFileStatuses, getRangeDiff, resolveBaseRef, resolveDiffBase } from './diff-service';
 import { applyReclaim, initDiskReclaim, scanReclaimable } from './disk-reclaim-service';
 import { getGitLog } from './git-log-service';
 import { scanRecentRepos } from './history-scanner';
@@ -53,6 +53,8 @@ import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
 import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store';
 import { generateTaskTitle } from './title-generator';
+import { assessStaleness, currentHead, remapAnchor } from './walkthrough-anchor';
+import { generateWalkthrough, loadCurrentWalkthrough, storeWalkthrough } from './walkthrough-service';
 import {
   cleanupMultiRepoContainer,
   createMultiRepoContainer,
@@ -904,6 +906,66 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.GET_GIT_LOG, async (_event, taskId: string) => {
     const task = getTask(taskId);
     return getGitLog(task.worktreePath, task.baseBranch || undefined);
+  });
+
+  // Walkthrough
+  ipcMain.handle(IPC.WALKTHROUGH_GET, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    const walkthrough = loadCurrentWalkthrough(taskId);
+    const staleness = walkthrough ? await assessStaleness(task.worktreePath, walkthrough) : null;
+    return { walkthrough, staleness };
+  });
+
+  const generatingWalkthroughs = new Set<string>();
+  ipcMain.handle(IPC.WALKTHROUGH_GENERATE, async (_event, taskId: string, focus: string | null) => {
+    if (generatingWalkthroughs.has(taskId)) return { ok: false, error: 'A walkthrough is already being generated' };
+    generatingWalkthroughs.add(taskId);
+    try {
+      const task = getTask(taskId);
+      const baseRef = await resolveBaseBranch(task);
+      if (!baseRef) return { ok: false, error: 'Could not resolve the base branch' };
+      const walkthrough = await generateWalkthrough({ worktreePath: task.worktreePath, baseRef, focus });
+      storeWalkthrough(taskId, walkthrough);
+      if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_STREAM.WALKTHROUGH_UPDATED, taskId);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    } finally {
+      generatingWalkthroughs.delete(taskId);
+    }
+  });
+
+  ipcMain.handle(IPC.WALKTHROUGH_DIFF, async (_event, taskId: string, onCurrentHead: boolean) => {
+    const task = getTask(taskId);
+    if (!onCurrentHead) {
+      const walkthrough = loadCurrentWalkthrough(taskId);
+      if (!walkthrough) return '';
+      return getRangeDiff(task.worktreePath, walkthrough.change.base, walkthrough.change.head);
+    }
+    const baseRef = await resolveBaseBranch(task);
+    const base = baseRef ? await resolveDiffBase(task.worktreePath, baseRef) : null;
+    if (!base) throw new Error('Could not resolve the base branch');
+    return getRangeDiff(task.worktreePath, base, await currentHead(task.worktreePath));
+  });
+
+  ipcMain.handle(IPC.WALKTHROUGH_REMAP, async (_event, taskId: string) => {
+    const task = getTask(taskId);
+    const walkthrough = loadCurrentWalkthrough(taskId);
+    if (!walkthrough) return {};
+    const head = await currentHead(task.worktreePath);
+    const baseRef = await resolveBaseBranch(task);
+    const base = (baseRef && (await resolveDiffBase(task.worktreePath, baseRef))) || walkthrough.change.base;
+    const result: Record<string, import('../shared/walkthrough').Remapped> = {};
+    for (const step of walkthrough.steps) {
+      const anchored = [
+        { id: step.id, anchor: step.anchor },
+        ...step.comments.map((c) => ({ id: c.id, anchor: c.anchor })),
+      ];
+      for (const { id, anchor } of anchored) {
+        if (anchor) result[id] = await remapAnchor(task.worktreePath, anchor, anchor.side === 'old' ? base : head);
+      }
+    }
+    return result;
   });
 
   // PR URL

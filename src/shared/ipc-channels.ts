@@ -26,6 +26,7 @@ import type {
   TaskPr,
   TokenUsageResult,
 } from './types.ts';
+import type { Remapped, Staleness, Walkthrough } from './walkthrough.ts';
 
 // Request-response channels (invoke/handle)
 export const IPC = {
@@ -70,6 +71,12 @@ export const IPC = {
   GET_FILE_STATUSES: 'diff:file-statuses',
   GET_GIT_LOG: 'git:log',
   GET_PR_URL: 'git:pr-url',
+
+  // Walkthrough
+  WALKTHROUGH_GET: 'walkthrough:get',
+  WALKTHROUGH_GENERATE: 'walkthrough:generate',
+  WALKTHROUGH_DIFF: 'walkthrough:diff',
+  WALKTHROUGH_REMAP: 'walkthrough:remap',
 
   // Shell
   OPEN_URL: 'shell:open-url',
@@ -160,6 +167,7 @@ export const IPC_STREAM = {
   SESSION_EXIT: 'session:exit',
   ACTIVITY_ENTRY: 'activity:entry',
   CHANGE_FEED_ITEMS: 'change-feed:items',
+  WALKTHROUGH_UPDATED: 'walkthrough:updated',
   TASK_SUMMARY: 'task:summary',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
@@ -231,6 +239,16 @@ export interface BifrostAPI {
   getFileStatuses(taskId: string, scope?: 'working' | 'all'): Promise<Record<string, string[]>>;
   getGitLog(taskId: string): Promise<GitLogEntry[]>;
   getPrUrl(taskId: string): Promise<string | null>;
+
+  // Walkthrough
+  getWalkthrough(taskId: string): Promise<{ walkthrough: Walkthrough | null; staleness: Staleness | null }>;
+  /** Resolves once the walkthrough is stored; `onWalkthroughUpdated` fires too. */
+  generateWalkthrough(taskId: string, focus: string | null): Promise<{ ok: true } | { ok: false; error: string }>;
+  /** The walkthrough's own base..head, or the branch as it stands now. */
+  getWalkthroughDiff(taskId: string, onCurrentHead: boolean): Promise<string>;
+  /** Every anchor followed onto the current head, keyed by step or comment id. */
+  remapWalkthrough(taskId: string): Promise<Record<string, Remapped>>;
+  onWalkthroughUpdated(callback: (taskId: string) => void): () => void;
 
   // Shell
   openUrl(url: string): Promise<void>;
