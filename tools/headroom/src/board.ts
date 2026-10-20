@@ -183,12 +183,34 @@ export class Board {
     });
   }
 
-  renew(id: number, ttlMs: number): Claim {
+  /** Extends the claim from now, and restates its reason when given one, which is how progress reaches waiters. */
+  renew(id: number, ttlMs: number, why?: string): Claim {
     return this.transaction(() => {
       const claim = this.row(id);
-      this.db.prepare('UPDATE claims SET ttl_ms = ?, expires_at = ? WHERE id = ?').run(ttlMs, this.now() + ttlMs, id);
+      this.db
+        .prepare('UPDATE claims SET ttl_ms = ?, expires_at = ?, why = ? WHERE id = ?')
+        .run(ttlMs, this.now() + ttlMs, why ?? claim.why, id);
       this.schedule(claim.resource);
       return this.row(id);
+    });
+  }
+
+  /** Releases the claim and files the same claim again at the back of the queue, for work that lets others in between rounds. */
+  requeue(id: number): { next: Claim[]; claim: Claim } {
+    return this.transaction(() => {
+      const old = this.row(id);
+      const next = this.release(id);
+      const claim = this.claim({
+        resource: old.resource,
+        mode: old.mode,
+        holder: old.holder,
+        sessionId: old.sessionId ?? undefined,
+        pid: old.pid ?? undefined,
+        why: old.why,
+        priority: old.priority,
+        ttlMs: old.ttlMs,
+      });
+      return { next, claim };
     });
   }
 

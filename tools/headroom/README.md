@@ -27,7 +27,9 @@ ln -s "$PWD/src/cli.ts" ~/.local/bin/headroom     # or anywhere on PATH
 ln -s "$PWD/skill" ~/.claude/skills/headroom
 ```
 
-`run` wraps a command: it waits for the claim, renews it while the command runs, releases on exit, and stops the command (exit 3) when the claim is asked to yield. Exit codes otherwise: 0 granted or done, 1 queued, refused or lapsed, 2 wait timed out, else the command's own.
+`run` wraps a command: it waits for the claim, renews it while the command runs, releases on exit, and acts on a yield request. `hold <id> -- <cmd>` is the middle part alone, for a claim held across several commands; `run` is `acquire --wait`, `hold` and `release`. On a yield, both write a marker file the command sees as `$HEADROOM_YIELD` and stop the command's process group when `--grace` runs out (`0` at once, `3m` after a loop has had time to finish its rep, `never` only warns). Exit codes: 0 granted or done, 1 queued, refused or lapsed, 2 wait timed out, 3 stopped for a yield, else the command's own; `acquire -q` prints only the id for `$(...)`.
+
+The hook shows a session the board at session start, whenever it changed since that session last saw it, and on every prompt while the session holds or waits — not on every prompt regardless. `status` adds a one-second busy sample and the heaviest processes under no claim, since a grant is advisory and the load average lags.
 
 Register the MCP server in `~/.claude.json` as a stdio server, or use the CLI alone — they are the same commands. Use absolute paths: Claude Code spawns the server with the launching app's PATH, which under an Electron app is not your shell's.
 

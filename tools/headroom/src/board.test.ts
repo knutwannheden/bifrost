@@ -108,6 +108,25 @@ describe('lifetime', () => {
     expect(board.get(crashed.id)?.releasedAt).not.toBeNull();
   });
 
+  test('renew can restate the reason, so progress reaches the waiters through the board', () => {
+    const { board } = fresh();
+    const bench = board.claim(cpu('exclusive', 'bench'));
+    expect(board.renew(bench.id, 5 * MIN, 'round 3 of 5, ~10 min left').why).toBe('round 3 of 5, ~10 min left');
+    expect(board.renew(bench.id, 5 * MIN).why).toBe('round 3 of 5, ~10 min left');
+  });
+
+  test('requeue releases the claim and files a fresh one at the back of the queue', () => {
+    const { board } = fresh();
+    const bench = board.claim(cpu('exclusive', 'bench'));
+    const other = board.claim(cpu('exclusive', 'other'));
+
+    const { next, claim } = board.requeue(bench.id);
+    expect(next.map((c) => c.id)).toEqual([other.id]);
+    expect(claim.holder).toBe('bench');
+    expect(claim.grantedAt).toBeNull();
+    expect(board.get(bench.id)?.releasedAt).not.toBeNull();
+  });
+
   test('renew extends a claim from now, not from its old expiry', () => {
     const { board, tick } = fresh();
     const bench = board.claim(cpu('exclusive', 'bench', { ttlMs: 5 * MIN }));

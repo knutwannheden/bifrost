@@ -2,7 +2,16 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import type { Board } from './board.ts';
-import { formatLeft, granted, holderName, nextUp, parseDuration, queued, sessionPid } from './common.ts';
+import {
+  formatLeft,
+  granted,
+  holderName,
+  type NameResolver,
+  nextUp,
+  parseDuration,
+  queued,
+  sessionPid,
+} from './common.ts';
 import { hookOutput } from './hook.ts';
 
 const WHY = 'What you are doing, and what breaks if someone proceeds anyway. Other sessions decide from this.';
@@ -14,7 +23,7 @@ function text(s: string) {
 }
 
 /** The CLI's commands as MCP tools, so a session can claim without a shell. */
-export function createServer(board: Board, name: typeof holderName = holderName): McpServer {
+export function createServer(board: Board, name: NameResolver = holderName): McpServer {
   const server = new McpServer(
     { name: 'headroom', version: '0.1.0' },
     {
@@ -63,7 +72,7 @@ export function createServer(board: Board, name: typeof holderName = holderName)
       const c = board.claim({
         resource,
         mode,
-        holder: name(as),
+        holder: await name(as),
         sessionId: process.env.CLAUDE_CODE_SESSION_ID,
         pid: sessionPid(),
         why,
@@ -91,10 +100,17 @@ export function createServer(board: Board, name: typeof holderName = holderName)
     {
       title: 'Renew a claim',
       description: 'Extend a claim from now. A claim nobody renews lapses at its ttl, whether held or waiting.',
-      inputSchema: { id: z.number().int(), ttl: z.string().optional().describe('e.g. 10m (default 10m)') },
+      inputSchema: {
+        id: z.number().int(),
+        ttl: z.string().optional().describe('e.g. 10m (default 10m)'),
+        why: z
+          .string()
+          .optional()
+          .describe('A restated reason, e.g. progress or a revised estimate, shown to waiters.'),
+      },
     },
-    async ({ id, ttl }) => {
-      const c = board.renew(id, parseDuration(ttl ?? '10m'));
+    async ({ id, ttl, why }) => {
+      const c = board.renew(id, parseDuration(ttl ?? '10m'), why);
       return text(c.grantedAt !== null ? granted(board, c) : queued(board, c));
     },
   );
@@ -117,7 +133,7 @@ export function createServer(board: Board, name: typeof holderName = holderName)
       const c = board.claim({
         resource,
         mode: 'notice',
-        holder: name(as, 'notice'),
+        holder: await name(as, 'notice'),
         why,
         ttlMs: parseDuration(ttl ?? '1h'),
       });
@@ -142,7 +158,7 @@ export function createServer(board: Board, name: typeof holderName = holderName)
     async ({ resource, why, ttl, as }) => {
       const { claim, yielding } = board.seize({
         resource,
-        holder: name(as),
+        holder: await name(as),
         sessionId: process.env.CLAUDE_CODE_SESSION_ID,
         pid: sessionPid(),
         why,

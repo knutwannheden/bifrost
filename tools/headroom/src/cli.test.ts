@@ -37,6 +37,113 @@ describe('cli', () => {
     expect(second.out).toMatch(/waiting #2/);
     expect(second.out).toContain('SendMessage');
     expect(second.out).toContain('"bench"');
+    expect(second.out).toMatch(/1st in line/);
+    expect(second.out).not.toMatch(/granted/);
+
+    const third = run(['acquire', 'cpu', '--shared', '--why', 'more tests', '--as', 'suite-2']);
+    expect(third.out).toMatch(/2nd in line/);
+  });
+
+  test('-q prints only the claim id, for shell composition', () => {
+    const r = run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench', '-q']);
+    expect(r.code).toBe(0);
+    expect(r.out.trim()).toBe('1');
+    const queued = run(['acquire', 'cpu', '--exclusive', '--why', 'profiling', '--as', 'prof', '-q']);
+    expect(queued.code).toBe(1);
+    expect(queued.out.trim()).toBe('2');
+  });
+
+  test('hold with a grace period lets the command see the yield request and finish on its own', async () => {
+    run(['acquire', 'cpu', '--shared', '--why', 'long tests', '--as', 'suite']);
+    const holding = spawn(
+      process.execPath,
+      [
+        CLI,
+        'hold',
+        '1',
+        '--grace',
+        'never',
+        '--',
+        'sh',
+        '-c',
+        'while [ ! -e "$HEADROOM_YIELD" ]; do sleep 0.05; done; echo saw-yield',
+      ],
+      { env },
+    );
+    let out = '';
+    holding.stdout.on('data', (d) => (out += d));
+    holding.stderr.on('data', (d) => (out += d));
+    await new Promise((r) => setTimeout(r, 300));
+    run(['seize', 'cpu', '--why', 'hotfix timing', '--as', 'boss']);
+    const code = await new Promise<number | null>((r) => holding.on('exit', r));
+
+    expect(out).toContain('saw-yield');
+    expect(code).toBe(0);
+  }, 10_000);
+
+  test('release --requeue reports the new claim and its place behind the others', () => {
+    run(['acquire', 'cpu', '--exclusive', '--why', 'round 1', '--as', 'bench']);
+    run(['acquire', 'cpu', '--exclusive', '--why', 'profiling', '--as', 'prof']);
+    const r = run(['release', '1', '--requeue']);
+    expect(r.out).toMatch(/granted next.*"prof"/);
+    expect(r.out).toMatch(/waiting #3.*1st in line/);
+  });
+
+  test('hook injects on change, at session start, and always for a session with a claim', () => {
+    const prompt = (session: string) =>
+      run(['hook'], JSON.stringify({ session_id: session, hook_event_name: 'UserPromptSubmit' }));
+    const start = (session: string) =>
+      run(['hook'], JSON.stringify({ session_id: session, hook_event_name: 'SessionStart' }));
+
+    run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);
+    expect(prompt('watcher').out).toContain('JMH run');
+    expect(prompt('watcher').out.trim()).toBe('');
+    expect(start('watcher').out).toContain('JMH run');
+
+    run(['acquire', 'cpu', '--shared', '--why', 'tests', '--as', 'suite']);
+    expect(prompt('watcher').out).toContain('tests');
+
+    expect(prompt('sess-cli').out).toContain('JMH run');
+    expect(prompt('sess-cli').out).toContain('JMH run');
+  });
+
+  test('status samples how busy the machine is, which the board alone cannot say', () => {
+    const r = run(['status']);
+    expect(r.out).toMatch(/\d+% busy/);
+  });
+
+  test('renew --why restates the reason on the board', () => {
+    run(['acquire', 'cpu', '--exclusive', '--why', 'round 1 of 5', '--as', 'bench']);
+    run(['renew', '1', '--why', 'round 3 of 5, ~10 min left']);
+    expect(run(['status']).out).toContain('round 3 of 5');
+  });
+
+  test('a Bifrost session without the name variable resolves its name from the local API', async () => {
+    const { createServer } = await import('node:http');
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (d) => (body += d));
+      req.on('end', () => {
+        const ok = req.url === '/find-task' && JSON.parse(body).query === 'sess-cli';
+        res.setHeader('content-type', 'application/json');
+        res.end(
+          JSON.stringify(ok ? { ok: true, task: { id: 't1' }, sessionName: 'My Bifrost task' } : { error: 'no' }),
+        );
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as { port: number }).port;
+    try {
+      // The server answers from this process, so the CLI must not be waited on synchronously.
+      const child = spawn(process.execPath, [CLI, 'acquire', 'cpu', '--shared', '--why', 'tests'], {
+        env: { ...env, BIFROST_API_PORT: String(port) },
+      });
+      const code = await new Promise<number | null>((r) => child.on('exit', r));
+      expect(code).toBe(0);
+      expect(run(['status']).out).toContain('held by My Bifrost task');
+    } finally {
+      server.close();
+    }
   });
 
   test('release names whoever is granted next, so the releaser can tell them', () => {
@@ -67,7 +174,7 @@ describe('cli', () => {
     const r = run(['acquire', 'cpu', '--shared', '--why', 'tests']);
     expect(r.code).toBe(1);
     expect(r.out).toContain('--as');
-    expect(run(['status']).out).toBe('nothing claimed\n');
+    expect(run(['status']).out).toMatch(/^nothing claimed/);
   });
 
   test('run holds the claim for the command and releases it on exit, passing the exit code through', () => {
@@ -86,7 +193,7 @@ describe('cli', () => {
     ]);
     expect(r.out).toContain('working');
     expect(r.code).toBe(7);
-    expect(run(['status']).out).toBe('nothing claimed\n');
+    expect(run(['status']).out).toMatch(/^nothing claimed/);
   });
 
   test('run that gives up waiting withdraws its claim, since the command never ran', () => {

@@ -1,5 +1,5 @@
 import type { Claim, Status } from './board.ts';
-import { formatLeft, load } from './common.ts';
+import { formatLeft } from './common.ts';
 
 export interface HookOutput {
   /** One line for the user's terminal. */
@@ -61,7 +61,7 @@ export function hookOutput(
     hookSpecificOutput: {
       hookEventName: event,
       additionalContext: [
-        `Shared resources on this machine (from \`headroom status\`, ${load()}):`,
+        'Shared resources on this machine (from `headroom status`):',
         ...detail,
         'Before CPU-heavy work (benchmarks, profiling, full builds, long suites), claim with `headroom acquire`.',
       ].join('\n'),
