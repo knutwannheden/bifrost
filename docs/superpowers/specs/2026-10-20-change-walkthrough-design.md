@@ -103,7 +103,7 @@ A walkthrough is a document about one `(base, head)` pair. Git reproduces that d
 
 | status | how it was found | drawn as |
 |---|---|---|
-| `exact` | target commit equals `anchor.commit` | no badge |
+| `exact` | target commit equals `anchor.commit`, or no hunk between them touches or precedes the anchored lines | no badge |
 | `shifted` | `git diff -U0 <anchor.commit> <target> -- path` has no hunk touching the anchored lines; the range moves by the net offset of hunks above it | small "moved" badge, lines highlighted as normal |
 | `fuzzy` | `anchor.commit` is gone from the object store, or git reports the file renamed; the `snippet` (`first` then `last`, exact, then whitespace-trimmed) matches exactly once in the target file | "re-anchored by text" badge in warning colour |
 | `lost` | a hunk in that diff overlaps the anchored lines, or the snippet matches zero or several places, or the file is gone | the step's card renders with its `snippet` as a static code block and the note "these lines changed after this walkthrough was written"; nothing in the live diff is highlighted |

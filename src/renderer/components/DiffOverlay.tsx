@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DiffFile, DiffFileStatus, DiffLine } from '../../shared/diff-parser';
+import { diffFileStats, extFromPath, parseDiff } from '../../shared/diff-parser';
 import type { CaptureContextParams, GitLogEntry } from '../../shared/types';
 import type { DiffMode } from '../context/AppContext';
 import { getActiveDiffState, useApp } from '../context/AppContext';
@@ -9,8 +11,6 @@ import { useSessionMetrics } from '../hooks/useSessionMetrics';
 import { type TabDef, useTabMnemonics } from '../hooks/useTabMnemonics';
 import { isDarkTheme } from '../hooks/useTheme';
 import { useTokenUsage } from '../hooks/useTokenUsage';
-import type { DiffFile, DiffFileStatus, DiffLine } from '../utils/diff-parser';
-import { diffFileStats, extFromPath, parseDiff } from '../utils/diff-parser';
 import { formatRelative } from '../utils/format-time';
 import { type WordRange, wordRanges } from '../utils/inline-diff';
 import { isModKey } from '../utils/platform';
