@@ -11,8 +11,14 @@ export interface HookOutput {
   };
 }
 
-function who(c: Claim): string {
+/** The holder as the reading session knows it: itself as "you", anyone else by name and session id. */
+function who(c: Claim, me: string | null): string {
+  if (me && c.sessionId === me) return 'you';
   return c.sessionId ? `${c.holder} [${c.sessionId}]` : c.holder;
+}
+
+function name(c: Claim, me: string | null): string {
+  return me && c.sessionId === me ? 'you' : c.holder;
 }
 
 /** What the board says to a session about to act, or null when it has nothing to say. */
@@ -35,23 +41,23 @@ export function hookOutput(
     const waiting = status.waiting.filter((c) => c.resource === r);
 
     const parts: string[] = [];
-    if (notices.length) parts.push(`notice from ${notices.map((c) => c.holder).join(', ')}`);
+    if (notices.length) parts.push(`notice from ${notices.map((c) => name(c, me)).join(', ')}`);
     if (holding.length)
-      parts.push(`held by ${holding.map((c) => `${c.holder} (${c.mode}, ${formatLeft(c, now)})`).join(', ')}`);
+      parts.push(`held by ${holding.map((c) => `${name(c, me)} (${c.mode}, ${formatLeft(c, now)})`).join(', ')}`);
     if (waiting.length) parts.push(`${waiting.length} waiting`);
     banner.push(`${r}: ${parts.join('; ')}`);
 
     detail.push(`## ${r}`);
-    for (const c of notices) detail.push(`- NOTICE from ${who(c)} (${formatLeft(c, now)} left): ${c.why}`);
-    for (const c of holding) detail.push(`- held by ${who(c)}, ${c.mode}, ${formatLeft(c, now)} left: ${c.why}`);
-    for (const c of waiting) detail.push(`- waiting: ${who(c)}, ${c.mode}, priority ${c.priority}: ${c.why}`);
+    for (const c of notices) detail.push(`- NOTICE from ${who(c, me)} (${formatLeft(c, now)} left): ${c.why}`);
+    for (const c of holding) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${formatLeft(c, now)} left: ${c.why}`);
+    for (const c of waiting) detail.push(`- waiting: ${who(c, me)}, ${c.mode}, priority ${c.priority}: ${c.why}`);
   }
 
   const yields = me ? status.holding.filter((c) => c.sessionId === me && c.yieldRequestedBy !== null) : [];
   for (const c of yields) {
     const seizer = status.waiting.find((w) => w.id === c.yieldRequestedBy);
     detail.unshift(
-      `YIELD REQUESTED on ${c.resource}: ${seizer ? who(seizer) : 'another session'} needs it now` +
+      `YIELD REQUESTED on ${c.resource}: ${seizer ? who(seizer, me) : 'another session'} needs it now` +
         `${seizer ? ` — ${seizer.why}` : ''}. Stop your work there and run \`headroom release ${c.id}\`.`,
     );
   }

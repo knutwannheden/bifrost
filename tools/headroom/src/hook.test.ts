@@ -24,6 +24,33 @@ describe('hookOutput', () => {
     expect(context).toMatch(/waiting.*suite/);
   });
 
+  test("a session's own claim reads as you, not as its name", () => {
+    const board = Board.inMemory({ now: () => T0 });
+    board.claim({
+      resource: 'cpu',
+      mode: 'shared',
+      holder: 'lock-regen',
+      sessionId: 'sess-1',
+      why: 'relocks',
+      ttlMs: 10 * MIN,
+    });
+    board.claim({
+      resource: 'cpu',
+      mode: 'exclusive',
+      holder: 'bench',
+      sessionId: 'sess-2',
+      why: 'JMH',
+      ttlMs: 10 * MIN,
+    });
+
+    const out = hookOutput(board.status(), 'sess-1', T0);
+    expect(out?.systemMessage).toMatch(/held by you \(shared/);
+    expect(out?.systemMessage).not.toContain('lock-regen');
+    const context = out?.hookSpecificOutput.additionalContext ?? '';
+    expect(context).toMatch(/held by you/);
+    expect(context).toMatch(/waiting: bench/);
+  });
+
   test('a yield request against my own claim is spelled out with the release command', () => {
     const board = Board.inMemory({ now: () => T0 });
     const mine = board.claim({

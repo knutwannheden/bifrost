@@ -169,6 +169,13 @@ export class Board {
     });
   }
 
+  /** Ties the claim's life to another process, for a wrapper holding it on the session's behalf. */
+  attach(id: number, pid: number | null): void {
+    this.transaction(() => {
+      this.db.prepare('UPDATE claims SET pid = ? WHERE id = ?').run(pid, id);
+    });
+  }
+
   /** Releases the claim and returns the claims granted because it went. */
   release(id: number): Claim[] {
     return this.transaction(() => {

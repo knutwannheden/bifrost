@@ -217,6 +217,19 @@ describe('cli', () => {
     expect(run(['status']).out).not.toMatch(/waiting/);
   });
 
+  test('a killed hold frees the claim on the next look, and a finished hold hands it back to the session', async () => {
+    run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);
+    const holding = spawn(process.execPath, [CLI, 'hold', '1', '--', 'sleep', '2'], { env });
+    await new Promise((r) => setTimeout(r, 400));
+    holding.kill('SIGKILL');
+    await new Promise<void>((r) => holding.on('exit', () => r()));
+    expect(run(['status']).out).toMatch(/^nothing claimed/);
+
+    run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);
+    expect(run(['hold', '2', '--', 'true']).code).toBe(0);
+    expect(run(['status']).out).toMatch(/held by bench/);
+  }, 10_000);
+
   test('run stops its command when the claim is asked to yield', async () => {
     const running = spawn(
       process.execPath,
@@ -251,7 +264,7 @@ describe('cli', () => {
     expect(empty.out.trim()).toBe('');
 
     run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);
-    const busy = run(['hook'], JSON.stringify({ session_id: 'sess-cli', hook_event_name: 'UserPromptSubmit' }));
+    const busy = run(['hook'], JSON.stringify({ session_id: 'onlooker', hook_event_name: 'UserPromptSubmit' }));
     const parsed = JSON.parse(busy.out);
     expect(parsed.systemMessage).toContain('bench');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('JMH run');

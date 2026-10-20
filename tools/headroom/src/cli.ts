@@ -94,6 +94,10 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
   const marker = join(dirname(dbFile()), `yield-${id}`);
   rmSync(marker, { force: true });
   console.error(`headroom: holding #${id} for: ${cmd.join(' ')}`);
+  // While held here, the claim lives and dies with this wrapper rather than
+  // the session, so a killed hold frees the resource on the next look.
+  const owner = board.get(id)?.pid ?? sessionPid();
+  board.attach(id, process.pid);
 
   const child = spawn(cmd[0]!, cmd.slice(1), {
     stdio: 'inherit',
@@ -144,6 +148,7 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
   clearInterval(tick);
   if (graceTimer) clearTimeout(graceTimer);
   rmSync(marker, { force: true });
+  if (board.get(id)?.releasedAt === null) board.attach(id, owner);
   return stoppedForYield ? 3 : code;
 }
 
