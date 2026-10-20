@@ -63,6 +63,8 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `prompt-sender.ts` | Programmatic prompt injection into running sessions |
 | `permission-manager.ts` | Approval flow for tool use in managed-permissions mode |
 | `session-metrics.ts` | Postmortem session analysis (token waste, backtracking) |
+| `walkthrough-service.ts` | Generates a guided walkthrough of a branch's committed change, and stores it per task |
+| `walkthrough-anchor.ts` | Checks a walkthrough's anchors against the commits, and follows them onto a later head |
 
 ### Key Renderer Modules
 
@@ -72,6 +74,7 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `hooks/useKeyboard.ts` | Global Cmd+key shortcuts, context capture flow |
 | `components/DiffOverlay.tsx` | Git diff + activity log viewer with syntax highlighting (Shiki) |
 | `components/TokenUsageChart.tsx` | Per-turn token usage bar/line chart with turn detail panel |
+| `components/WalkthroughContent.tsx` | Walkthrough tab of the diff overlay: steps in narrated order over the pinned diff |
 | `hooks/useTokenUsage.ts` | Fetches parsed token data from main process via IPC |
 | `components/TaskHistoryPanel.tsx` | Task management + external session resumption |
 | `components/TerminalPane.tsx` | Terminal container with split pane support |

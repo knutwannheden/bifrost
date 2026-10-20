@@ -28,7 +28,7 @@ export interface Comment {
   body: string;
   author: 'agent' | 'user';
   anchor: Anchor;
-  /** Phase 2: a comment drafted for a GitHub pending review. */
+  /** Set when the comment belongs to a GitHub pending review. */
   review: { state: 'draft' | 'submitted'; githubId?: number } | null;
 }
 

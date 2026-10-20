@@ -9,7 +9,7 @@ import type {
   TaskStatus,
 } from '../../shared/types';
 
-export type DiffMode = 'git' | 'activity' | 'log' | 'metrics';
+export type DiffMode = 'git' | 'activity' | 'log' | 'metrics' | 'walkthrough';
 export type PaneTarget = 'claude' | 'dev';
 
 export interface TaskPaneState {

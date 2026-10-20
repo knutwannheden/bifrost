@@ -22,12 +22,14 @@ import SearchIndicator from './SearchIndicator';
 import SessionMetricsPanel from './SessionMetricsPanel';
 import Spinner from './Spinner';
 import TokenUsageChart from './TokenUsageChart';
+import WalkthroughContent, { WALKTHROUGH_HINTS, type WalkthroughHandle } from './WalkthroughContent';
 
 const MODE_TABS: TabDef<DiffMode>[] = [
   { value: 'git', label: 'Git Diff' },
   { value: 'activity', label: 'Tokens' },
   { value: 'log', label: 'Git Log', hintIndex: 4 },
   { value: 'metrics', label: 'Metrics' },
+  { value: 'walkthrough', label: 'Walkthrough' },
 ];
 
 const statusConfig: Record<DiffFileStatus, { letter: string; color: string }> = {
@@ -612,6 +614,8 @@ export default function DiffOverlay() {
   const isActivity = diffMode === 'activity';
   const isLog = diffMode === 'log';
   const isMetrics = diffMode === 'metrics';
+  const isWalkthrough = diffMode === 'walkthrough';
+  const walkthroughRef = useRef<WalkthroughHandle>(null);
 
   // Fetch token usage data for the Tokens tab
   const tokenUsage = useTokenUsage(showDiff && isActivity && state.activeTaskId ? state.activeTaskId : null);
@@ -692,6 +696,8 @@ export default function DiffOverlay() {
       return;
     }
 
+    if (isWalkthrough && walkthroughRef.current?.handleKeyDown(e)) return;
+
     // Mod+O: open the focused entry's file in the IDE
     if (isModKey(e) && !e.shiftKey && e.key.toLowerCase() === 'o') {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
@@ -735,7 +741,7 @@ export default function DiffOverlay() {
       }
     }
 
-    if (handleSearchKey(e)) return;
+    if (!isWalkthrough && handleSearchKey(e)) return;
     if (handleModeKey(e)) return;
 
     switch (e.key) {
@@ -797,7 +803,9 @@ export default function DiffOverlay() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-faint">&uarr;&darr; navigate &middot; type to search &middot; Esc close</span>
+          <span className="text-xs text-faint">
+            {isWalkthrough ? WALKTHROUGH_HINTS : '↑↓ navigate · type to search · Esc close'}
+          </span>
           <CloseButton onClick={() => dispatch({ type: 'TOGGLE_DIFF' })} />
         </div>
       </div>
@@ -880,6 +888,15 @@ export default function DiffOverlay() {
             error={sessionMetrics.error}
           />
         </div>
+      )}
+
+      {state.activeTaskId && isWalkthrough && (
+        <WalkthroughContent
+          key={state.activeTaskId}
+          ref={walkthroughRef}
+          taskId={state.activeTaskId}
+          worktreePath={state.tasks.find((t) => t.id === state.activeTaskId)?.worktreePath ?? ''}
+        />
       )}
 
       {!state.activeTaskId && <div className="flex-1 text-sm text-muted text-center py-4">No active task</div>}

@@ -2,13 +2,16 @@
  * A walkthrough's anchors must point at the lines its author meant, and keep
  * pointing at them as the branch moves. Run with `npm run check:walkthrough-schema`.
  */
+import { layOut } from '../src/renderer/utils/walkthrough-layout.ts';
 import { parseDiff } from '../src/shared/diff-parser.ts';
 import {
+  type Anchor,
   extractSnippet,
   locateQuote,
   matchSnippet,
   numberDiff,
   parseZeroContextHunks,
+  type Step,
   shiftRange,
 } from '../src/shared/walkthrough.ts';
 
@@ -65,6 +68,60 @@ const grown = [...long.slice(0, 5), 'added a', 'added b', ...long.slice(5)];
 check(
   'a long anchor that grew in the middle runs to its last lines',
   eq(matchSnippet(grown, extractSnippet(long, [1, 8]), 8), [1, 10]),
+);
+
+const placed = parseDiff(
+  [
+    'diff --git a/p.ts b/p.ts',
+    '--- a/p.ts',
+    '+++ b/p.ts',
+    '@@ -5,3 +5,3 @@',
+    ' keep',
+    '-was',
+    '+now',
+    ' tail',
+    '',
+  ].join('\n'),
+);
+const at = (side: 'old' | 'new', lines: [number, number]): Anchor => ({
+  path: 'p.ts',
+  side,
+  commit: 'c',
+  lines,
+  snippet: { before: [], first: [], last: [], after: [] },
+});
+const stepAt = (id: string, anchor: Anchor, comments: Step['comments'] = []): Step => ({
+  id,
+  kind: 'narration',
+  chapter: null,
+  title: id,
+  body: '',
+  anchor,
+  comments,
+});
+const comment = {
+  id: 'c1',
+  kind: 'bug' as const,
+  body: '',
+  author: 'agent' as const,
+  anchor: at('new', [5, 7]),
+  review: null,
+};
+const layout = layOut(
+  placed,
+  [stepAt('old', at('old', [6, 6])), stepAt('far', at('new', [40, 41])), stepAt('new', at('new', [6, 6]), [comment])],
+  (_id, anchor) => ({ anchor, status: 'exact' }),
+  0,
+);
+const [keep, was, now, tailLine] = placed[0].hunks[0].lines;
+check(
+  'a step lands on the line of its own side, not the other side’s line of the same number',
+  eq(layout.before.get(was), [0]) && eq(layout.before.get(now), [2]),
+);
+check('a step whose lines are outside every hunk is not placed in the diff', layout.unplaced.has(1));
+check(
+  'a comment sits after the last of its lines',
+  layout.after.get(tailLine)?.[0] === comment && !layout.after.has(keep),
 );
 
 if (failed) {
