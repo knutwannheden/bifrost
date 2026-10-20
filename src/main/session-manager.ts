@@ -429,6 +429,7 @@ export function createSession(
     e.CLAUDE_CODE_RESUME_TOKEN_THRESHOLD = String(NEVER_LARGE_TOKENS);
     e.BIFROST_CONTEXT = options?.context ?? 'code';
     if (options?.taskId) e.BIFROST_TASK_ID = options.taskId;
+    if (options?.name) e.BIFROST_SESSION_NAME = options.name;
     if (options?.apiPort) e.BIFROST_API_PORT = String(options.apiPort);
     if (options?.agentTeams) e.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
     return e;
