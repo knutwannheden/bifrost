@@ -241,8 +241,14 @@ export interface BifrostAPI {
   getPrUrl(taskId: string): Promise<string | null>;
 
   // Walkthrough
-  getWalkthrough(taskId: string): Promise<{ walkthrough: Walkthrough | null; staleness: Staleness | null }>;
-  /** Resolves once the walkthrough is stored; `onWalkthroughUpdated` fires too. */
+  /** `generating` and `error` describe the task's latest run, whichever tab started it. */
+  getWalkthrough(taskId: string): Promise<{
+    walkthrough: Walkthrough | null;
+    staleness: Staleness | null;
+    generating: boolean;
+    error: string | null;
+  }>;
+  /** Resolves once the run ends; `onWalkthroughUpdated` fires as it starts and as it ends. */
   generateWalkthrough(taskId: string, focus: string | null): Promise<{ ok: true } | { ok: false; error: string }>;
   /** The walkthrough's own base..head, or the branch as it stands now. */
   getWalkthroughDiff(taskId: string, onCurrentHead: boolean): Promise<string>;

@@ -909,29 +909,44 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   // Walkthrough
+  // A run outlives the tab that started it, so its state is held here for whichever tab loads next.
+  const generatingWalkthroughs = new Set<string>();
+  const walkthroughErrors = new Map<string, string>();
+  const walkthroughChanged = (taskId: string) => {
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_STREAM.WALKTHROUGH_UPDATED, taskId);
+  };
+
   ipcMain.handle(IPC.WALKTHROUGH_GET, async (_event, taskId: string) => {
     const task = getTask(taskId);
     const walkthrough = loadCurrentWalkthrough(taskId);
     const staleness = walkthrough ? await assessStaleness(task.worktreePath, walkthrough) : null;
-    return { walkthrough, staleness };
+    return {
+      walkthrough,
+      staleness,
+      generating: generatingWalkthroughs.has(taskId),
+      error: walkthroughErrors.get(taskId) ?? null,
+    };
   });
 
-  const generatingWalkthroughs = new Set<string>();
   ipcMain.handle(IPC.WALKTHROUGH_GENERATE, async (_event, taskId: string, focus: string | null) => {
     if (generatingWalkthroughs.has(taskId)) return { ok: false, error: 'A walkthrough is already being generated' };
     generatingWalkthroughs.add(taskId);
+    walkthroughErrors.delete(taskId);
+    walkthroughChanged(taskId);
     try {
       const task = getTask(taskId);
       const baseRef = await resolveBaseBranch(task);
-      if (!baseRef) return { ok: false, error: 'Could not resolve the base branch' };
+      if (!baseRef) throw new Error('Could not resolve the base branch');
       const walkthrough = await generateWalkthrough({ worktreePath: task.worktreePath, baseRef, focus });
       storeWalkthrough(taskId, walkthrough);
-      if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_STREAM.WALKTHROUGH_UPDATED, taskId);
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      const error = err instanceof Error ? err.message : String(err);
+      walkthroughErrors.set(taskId, error);
+      return { ok: false, error };
     } finally {
       generatingWalkthroughs.delete(taskId);
+      walkthroughChanged(taskId);
     }
   });
 

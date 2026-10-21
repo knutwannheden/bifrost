@@ -33,6 +33,8 @@ export function useWalkthrough(taskId: string): UseWalkthroughResult {
       const result = await window.bifrost.getWalkthrough(taskId);
       setWalkthrough(result.walkthrough);
       setStaleness(result.staleness);
+      setGenerating(result.generating);
+      setGenerateError(result.error);
     } finally {
       setLoading(false);
     }
@@ -99,13 +101,9 @@ export function useWalkthrough(taskId: string): UseWalkthroughResult {
     (focus: string | null) => {
       setGenerating(true);
       setGenerateError(null);
-      window.bifrost
-        .generateWalkthrough(taskId, focus)
-        .then((r) => {
-          if (r.ok) setOnCurrentHead(false);
-          else setGenerateError(r.error);
-        })
-        .finally(() => setGenerating(false));
+      window.bifrost.generateWalkthrough(taskId, focus).then((r) => {
+        if (r.ok) setOnCurrentHead(false);
+      });
     },
     [taskId],
   );
