@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import type { Board } from './board.ts';
 import {
+  busyRefusal,
   formatLeft,
   granted,
   holderName,
@@ -66,9 +67,13 @@ export function createServer(board: Board, name: NameResolver = holderName): Mcp
           .describe('How long you expect to hold it, e.g. 10m, 1h (default 10m). Renew to extend.'),
         priority: z.number().int().optional().describe('Higher goes ahead in the queue (default 0).'),
         as: z.string().optional().describe(AS),
+        force: z
+          .boolean()
+          .optional()
+          .describe('Take an exclusive claim even while something outside any claim pins the CPU.'),
       },
     },
-    async ({ resource, mode, why, ttl, priority, as }) => {
+    async ({ resource, mode, why, ttl, priority, as, force }) => {
       const c = board.claim({
         resource,
         mode,
@@ -79,6 +84,11 @@ export function createServer(board: Board, name: NameResolver = holderName): Mcp
         priority,
         ttlMs: parseDuration(ttl ?? '10m'),
       });
+      const refusal = c.grantedAt !== null && mode === 'exclusive' && !force ? await busyRefusal(board, c) : null;
+      if (refusal) {
+        board.release(c.id);
+        return { ...text(refusal), isError: true };
+      }
       return text(c.grantedAt !== null ? granted(board, c) : queued(board, c));
     },
   );

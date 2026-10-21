@@ -29,7 +29,9 @@ ln -s "$PWD/skill" ~/.claude/skills/headroom
 
 `run` wraps a command: it waits for the claim, renews it while the command runs, releases on exit, and acts on a yield request. `hold <id> -- <cmd>` is the middle part alone, for a claim held across several commands; `run` is `acquire --wait`, `hold` and `release`. On a yield, both write a marker file the command sees as `$HEADROOM_YIELD` and stop the command's process group when `--grace` runs out (`0` at once, `3m` after a loop has had time to finish its rep, `never` only warns). Exit codes: 0 granted or done, 1 queued, refused or lapsed, 2 wait timed out, 3 stopped for a yield, else the command's own; `acquire -q` prints only the id for `$(...)`.
 
-The hook shows a session the board at session start, whenever it changed since that session last saw it, and on every prompt while the session holds or waits — not on every prompt regardless. `status` adds a one-second busy sample and the heaviest processes under no claim, since a grant is advisory and the load average lags.
+The hook shows a session the board at session start, whenever it changed since that session last saw it, and on every prompt while the session holds or waits — not on every prompt regardless.
+
+An exclusive claim is granted only onto a quiet machine. At the moment of grant, headroom samples CPU time per process over a second (two `ps` snapshots, so no lagging average) and refuses with exit 4 and the pids when processes outside every claim — and outside the asker's own session — burn more than `HEADROOM_QUIET_CPU` percent of a core (default 150). `--force` takes the claim anyway; shared claims are never refused for load. `status` prints the same sample. Where `ps` cannot run, the grant goes through with a note saying it was unchecked.
 
 Register the MCP server in `~/.claude.json` as a stdio server, or use the CLI alone — they are the same commands. Use absolute paths: Claude Code spawns the server with the launching app's PATH, which under an Electron app is not your shell's.
 
@@ -72,3 +74,6 @@ stop and release. The `headroom` skill has the details.
 | `CLAUDE_CODE_SESSION_ID` | Recorded on each claim; set by Claude Code |
 | `CLAUDE_PID` | The session process a claim is tied to; set by Claude Code for Bash, the MCP server uses its parent |
 | `HEADROOM_POLL_MS` | `wait` poll interval (default 2000) |
+| `HEADROOM_QUIET_CPU` | Foreign CPU, in percent of one core, above which an exclusive grant is refused (default 150) |
+| `HEADROOM_SAMPLE_MS` | Length of the CPU sample (default 1000) |
+| `HEADROOM_PS` | A command printing `ps -Ao pid,ppid,time,comm`'s table, for another platform or a test |

@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
@@ -10,9 +10,16 @@ let env: NodeJS.ProcessEnv;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'headroom-cli-'));
+  // A stand-in for ps on which nothing ever burns CPU, so the real machine's load cannot fail a test.
+  const quietPs = join(dir, 'ps-quiet.sh');
+  writeFileSync(quietPs, '#!/bin/sh\nprintf "  PID  PPID      TIME COMMAND\\n4243 1 0:00.00 idle\\n"\n', {
+    mode: 0o755,
+  });
   env = {
     ...process.env,
     HEADROOM_DB: join(dir, 'board.db'),
+    HEADROOM_PS: quietPs,
+    HEADROOM_SAMPLE_MS: '20',
     HEADROOM_POLL_MS: '50',
     CLAUDE_CODE_SESSION_ID: 'sess-cli',
     BIFROST_SESSION_NAME: undefined,
@@ -248,6 +255,27 @@ describe('cli', () => {
     expect(out).toContain('boss');
     expect(run(['status']).out).toMatch(/held by boss/);
   }, 10_000);
+
+  test('an exclusive acquire is refused with the pids while something outside any claim pins the CPU', () => {
+    // A stand-in for ps whose one hog burns three CPU-seconds between any two calls.
+    const ps = join(dir, 'ps.sh');
+    writeFileSync(
+      ps,
+      '#!/bin/sh\nn=$(cat "$0.n" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$0.n"\n' +
+        'printf "  PID  PPID      TIME COMMAND\\n4242 1 0:%02d.00 hog\\n4243 1 0:00.00 idle\\n" $((n*3))\n',
+      { mode: 0o755 },
+    );
+    const busyEnv = { ...env, HEADROOM_PS: ps, HEADROOM_SAMPLE_MS: '20' };
+    const busy = (args: string[]) => spawnSync(process.execPath, [CLI, ...args], { env: busyEnv, encoding: 'utf8' });
+
+    const refused = busy(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);
+    expect(refused.status).toBe(4);
+    expect(refused.stdout + refused.stderr).toMatch(/hog.*4242|4242.*hog/);
+    expect(run(['status']).out).toMatch(/^nothing claimed/);
+
+    expect(busy(['acquire', 'cpu', '--shared', '--why', 'tests', '--as', 'suite']).status).toBe(0);
+    expect(busy(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench', '--force']).status).toBe(1);
+  });
 
   test('renew tells a holder that someone has asked it to yield', () => {
     run(['acquire', 'cpu', '--shared', '--why', 'tests', '--as', 'suite']);

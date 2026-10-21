@@ -39,7 +39,17 @@ Anything under about 30 seconds of CPU — a quick grep, a single test class —
 
 The MCP tools `headroom_acquire`, `headroom_release`, `headroom_renew`, `headroom_status`, `headroom_notice`, `headroom_seize` are the same commands; `run` and `hold` are CLI only.
 
-Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request · otherwise the command's own. A script keys on the exit code, never on the text, which is written for people. `acquire -q` prints only the claim id, for `$(...)`.
+Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request · 4 refused because the machine is busy outside any claim · otherwise the command's own. A script keys on the exit code, never on the text, which is written for people. `acquire -q` prints only the claim id, for `$(...)`.
+
+## When the machine is busy outside the board
+
+An exclusive claim is granted only onto a quiet machine. Before handing it over, headroom samples the CPU for a second; if processes under no claim — and not your own — are burning more than about 1.5 cores, the claim is refused (exit 4) and the output names them with their pids:
+
+```
+refused #7 — cpu is 480% busy outside any claim: java 410% (pid 4123), node 70% (pid 4190).
+```
+
+That is work nobody claimed, so the board cannot tell you whose it is. Find out before deciding: `ps -p 4123 -o pid,ppid,command` says what it is, and `ListAgents` plus a `SendMessage` finds the session running it. Then acquire again once it is done, or `--force` if you have decided it does not matter to your measurement. `run` and `wait` apply the same check at the moment of grant. Shared claims are never refused for load; they tolerate it by definition.
 
 ## Queue order
 

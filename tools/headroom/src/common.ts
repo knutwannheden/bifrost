@@ -1,7 +1,5 @@
-import { spawnSync } from 'node:child_process';
-import os from 'node:os';
-import { basename } from 'node:path';
 import type { Board, Claim } from './board.ts';
+import { describeLoad, sampleForeignLoad } from './machine.ts';
 
 export function formatLeft(claim: Claim, now: number): string {
   const ms = claim.expiresAt - now;
@@ -56,42 +54,27 @@ export async function holderName(as: string | undefined, kind: 'claim' | 'notice
 export type NameResolver = (as: string | undefined, kind?: 'claim' | 'notice') => string | Promise<string>;
 
 /**
- * How busy the machine is over one second, and the heaviest processes that
- * belong to no claim. A grant is advisory, so this is what says whether it
- * bought quiet.
+ * The refusal for an exclusive claim granted onto a machine that something
+ * outside the board is already pinning, or null when it is quiet enough. A
+ * machine that cannot be sampled is reported, not refused.
  */
-export async function quiet(holderPids: number[]): Promise<string> {
-  const before = os.cpus().map((c) => c.times);
-  await new Promise((r) => setTimeout(r, 1000));
-  const after = os.cpus().map((c) => c.times);
-  let idle = 0;
-  let total = 0;
-  after.forEach((t, i) => {
-    const b = before[i]!;
-    idle += t.idle - b.idle;
-    total += t.user - b.user + (t.nice - b.nice) + (t.sys - b.sys) + (t.idle - b.idle) + (t.irq - b.irq);
-  });
-  const busy = total > 0 ? Math.round(100 * (1 - idle / total)) : 0;
-
-  const ps = spawnSync('ps', ['-Ao', 'pid,ppid,pcpu,comm'], { encoding: 'utf8' }).stdout ?? '';
-  const rows = ps
-    .split('\n')
-    .slice(1)
-    .map((l) => l.trim().split(/\s+/))
-    .filter((f) => f.length >= 4)
-    .map((f) => ({ pid: Number(f[0]), ppid: Number(f[1]), cpu: Number(f[2]), comm: basename(f.slice(3).join(' ')) }));
-  const parent = new Map(rows.map((r) => [r.pid, r.ppid]));
-  const holders = new Set(holderPids);
-  const underClaim = (pid: number): boolean => {
-    for (let p: number | undefined = pid; p && p > 1; p = parent.get(p)) if (holders.has(p)) return true;
-    return false;
-  };
-  const top = rows
-    .filter((r) => r.cpu >= 5 && !underClaim(r.pid))
-    .sort((a, b) => b.cpu - a.cpu)
-    .slice(0, 3)
-    .map((r) => `${r.comm} ${Math.round(r.cpu)}%`);
-  return `${busy}% busy${top.length ? `; outside any claim: ${top.join(', ')}` : ''}`;
+export async function busyRefusal(board: Board, claim: Claim): Promise<string | null> {
+  const threshold = Number(process.env.HEADROOM_QUIET_CPU ?? 150);
+  const holders = board
+    .status(claim.resource)
+    .holding.map((c) => c.pid)
+    .filter((p): p is number => p !== null);
+  const load = await sampleForeignLoad([...holders, sessionPid()]);
+  if ('error' in load) {
+    console.error(`headroom: could not sample the machine (${load.error}); granting unchecked`);
+    return null;
+  }
+  if (load.percent < threshold) return null;
+  return [
+    `refused #${claim.id} — ${claim.resource} is ${describeLoad(load)}.`,
+    'That is not on the board, so find out what it is and who runs it (ps -p <pid> -o pid,ppid,command; ListAgents),',
+    'then acquire again, or pass --force to take the claim anyway.',
+  ].join('\n');
 }
 
 /** Who to tell after a release, since a waiter that is not polling learns of its grant only at its next prompt. */

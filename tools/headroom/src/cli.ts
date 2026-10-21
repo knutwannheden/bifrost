@@ -6,23 +6,24 @@ import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { Board, type ClaimInput, type Mode } from './board.ts';
 import {
+  busyRefusal,
   formatLeft,
   granted,
   holderName,
   nextUp,
   parseDuration,
   queued,
-  quiet,
   sessionPid,
   signature,
 } from './common.ts';
 import { hookOutput } from './hook.ts';
+import { describeLoad, sampleForeignLoad } from './machine.ts';
 
 const USAGE = `headroom — advisory claims on shared resources, for agent sessions on one machine
 
   headroom run <resource> --shared|--exclusive --why "..." [--ttl 10m] [--grace 0] [--as name] -- <command...>
       acquire, wait your turn, hold while the command runs, release on exit
-  headroom acquire <resource> --shared|--exclusive --why "..." [--ttl 10m] [--priority N] [--wait] [--as name] [-q]
+  headroom acquire <resource> --shared|--exclusive --why "..." [--ttl 10m] [--priority N] [--wait] [--as name] [-q] [--force]
   headroom hold <id> [--grace 0|3m|never] -- <command...>
       keep the claim alive while the command runs, and act on a yield request
   headroom wait <id> [--timeout 40m]
@@ -43,8 +44,13 @@ On a yield request, hold and run write a marker file whose path the command has 
 stop the command's process group when --grace runs out: 0 stops at once, 3m lets a loop finish its rep,
 never only warns. A loop checks the marker between reps: [ -e "$HEADROOM_YIELD" ] && break
 
+An exclusive claim is granted only onto a quiet machine: if processes outside every claim are burning more than
+HEADROOM_QUIET_CPU percent of a core (default 150) over a one-second sample, the claim is refused with their pids,
+so you can find out what they are. --force takes the claim anyway.
+
 Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request
-            · otherwise the command's own. Scripts key on the exit code; the text is for people.
+            · 4 refused because the machine is busy outside any claim · otherwise the command's own.
+Scripts key on the exit code; the text is for people.
 A waiting claim lapses unless renewed; wait, hold and run renew it while they poll. wait has no cutoff
 unless --timeout is given. Environment: HEADROOM_DB (default ~/.headroom/board.db), HEADROOM_AS,
 BIFROST_SESSION_NAME.`;
@@ -62,7 +68,7 @@ function pollMs(): number {
   return Number(process.env.HEADROOM_POLL_MS ?? 2000);
 }
 
-async function waitFor(board: Board, id: number, timeoutMs: number): Promise<number> {
+async function waitFor(board: Board, id: number, timeoutMs: number, force = false): Promise<number> {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     const c = board.get(id);
@@ -71,6 +77,12 @@ async function waitFor(board: Board, id: number, timeoutMs: number): Promise<num
       return 1;
     }
     if (c.grantedAt !== null) {
+      const refusal = c.mode === 'exclusive' && !force ? await busyRefusal(board, c) : null;
+      if (refusal) {
+        board.release(id);
+        console.log(refusal);
+        return 4;
+      }
       console.log(granted(board, c));
       return 0;
     }
@@ -158,11 +170,19 @@ async function runUnderClaim(
   cmd: string[],
   graceMs: number | null,
   timeoutMs: number,
+  force: boolean,
 ): Promise<number> {
   const claim = board.claim(input);
+  const refusal =
+    claim.grantedAt !== null && claim.mode === 'exclusive' && !force ? await busyRefusal(board, claim) : null;
+  if (refusal) {
+    board.release(claim.id);
+    console.error(refusal);
+    return 4;
+  }
   if (claim.grantedAt === null) {
     console.error(queued(board, claim));
-    const code = await waitFor(board, claim.id, timeoutMs);
+    const code = await waitFor(board, claim.id, timeoutMs, force);
     if (code !== 0) {
       // Nothing ran, so there is no place in the queue worth keeping.
       board.release(claim.id);
@@ -216,6 +236,7 @@ async function main(argv: string[]): Promise<number> {
       timeout: { type: 'string' },
       grace: { type: 'string', default: '0' },
       requeue: { type: 'boolean' },
+      force: { type: 'boolean' },
       as: { type: 'string' },
       quiet: { type: 'boolean', short: 'q' },
       json: { type: 'boolean' },
@@ -258,7 +279,14 @@ async function main(argv: string[]): Promise<number> {
     switch (command) {
       case 'run': {
         if (cmd.length === 0) throw new Error('run needs a command after --');
-        return await runUnderClaim(board, await claimInput(), cmd, parseGrace(values.grace), timeoutMs);
+        return await runUnderClaim(
+          board,
+          await claimInput(),
+          cmd,
+          parseGrace(values.grace),
+          timeoutMs,
+          values.force ?? false,
+        );
       }
       case 'hold': {
         if (cmd.length === 0) throw new Error('hold needs a command after --');
@@ -267,15 +295,21 @@ async function main(argv: string[]): Promise<number> {
       case 'acquire': {
         const claim = board.claim(await claimInput());
         if (claim.grantedAt !== null) {
+          const refusal = claim.mode === 'exclusive' && !values.force ? await busyRefusal(board, claim) : null;
+          if (refusal) {
+            board.release(claim.id);
+            console.log(refusal);
+            return 4;
+          }
           console.log(values.quiet ? claim.id : granted(board, claim));
           return 0;
         }
-        if (values.wait) return await waitFor(board, claim.id, timeoutMs);
+        if (values.wait) return await waitFor(board, claim.id, timeoutMs, values.force ?? false);
         console.log(values.quiet ? claim.id : queued(board, claim));
         return 1;
       }
       case 'wait':
-        return await waitFor(board, Number(arg), timeoutMs);
+        return await waitFor(board, Number(arg), timeoutMs, values.force ?? false);
       case 'renew': {
         const c = board.renew(Number(arg), parseDuration(values.ttl ?? '10m'), values.why);
         console.log(c.grantedAt !== null ? granted(board, c) : queued(board, c));
@@ -332,7 +366,8 @@ async function main(argv: string[]): Promise<number> {
           return 0;
         }
         const out = hookOutput(status, null, Date.now());
-        const machine = await quiet(status.holding.map((c) => c.pid).filter((p): p is number => p !== null));
+        const load = await sampleForeignLoad(status.holding.map((c) => c.pid).filter((p): p is number => p !== null));
+        const machine = 'error' in load ? `could not sample (${load.error})` : describeLoad(load);
         console.log(`${out ? out.hookSpecificOutput.additionalContext : 'nothing claimed'}\nMachine: ${machine}`);
         return 0;
       }

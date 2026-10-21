@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { expect, test } from 'vitest';
@@ -5,6 +8,14 @@ import { Board } from './board.ts';
 import { createServer } from './mcp.ts';
 
 test('acquire over MCP is granted, and a second exclusive claim is told who holds it', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'headroom-mcp-'));
+  process.env.HEADROOM_PS = join(dir, 'ps-quiet.sh');
+  writeFileSync(
+    process.env.HEADROOM_PS,
+    '#!/bin/sh\nprintf "  PID  PPID      TIME COMMAND\\n4243 1 0:00.00 idle\\n"\n',
+    { mode: 0o755 },
+  );
+  process.env.HEADROOM_SAMPLE_MS = '20';
   const board = Board.inMemory();
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   await createServer(board, (as) => as ?? 'anon').connect(serverSide);
