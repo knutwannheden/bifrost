@@ -14,7 +14,7 @@ export function parseDuration(text: string): number {
   return Number(m[1]) * { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000, '': 60_000 }[m[2]]!;
 }
 
-/** The Claude Code session this process serves, which every Bash call is told and an MCP server is a child of. */
+/** The Claude Code session this process serves, which every Bash call is told. */
 export function sessionPid(): number {
   return Number(process.env.CLAUDE_PID) || process.ppid;
 }
@@ -50,8 +50,6 @@ export async function holderName(as: string | undefined, kind: 'claim' | 'notice
     'Pass --as <name>: the name other sessions message you by, which ListAgents shows as "This session is ...".',
   );
 }
-
-export type NameResolver = (as: string | undefined, kind?: 'claim' | 'notice') => string | Promise<string>;
 
 /**
  * The refusal for an exclusive claim granted onto a machine that something

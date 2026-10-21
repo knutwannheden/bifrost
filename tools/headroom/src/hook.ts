@@ -41,15 +41,31 @@ export function hookOutput(
     const waiting = status.waiting.filter((c) => c.resource === r);
 
     const parts: string[] = [];
-    if (notices.length) parts.push(`notice from ${notices.map((c) => name(c, me)).join(', ')}`);
-    if (holding.length)
-      parts.push(`held by ${holding.map((c) => `${name(c, me)} (${c.mode}, ${formatLeft(c, now)})`).join(', ')}`);
+    if (notices.length)
+      parts.push(
+        `notice from ${notices.map((c) => `${name(c, me)}${c.holderLimit === 1 ? ' (one at a time)' : ''}`).join(', ')}`,
+      );
+    const started = holding.filter((c) => c.acceptedAt !== null);
+    const offered = holding.filter((c) => c.acceptedAt === null);
+    if (started.length)
+      parts.push(`held by ${started.map((c) => `${name(c, me)} (${c.mode}, ${formatLeft(c, now)})`).join(', ')}`);
+    if (offered.length) parts.push(`offered to ${offered.map((c) => name(c, me)).join(', ')}`);
     if (waiting.length) parts.push(`${waiting.length} waiting`);
     banner.push(`${r}: ${parts.join('; ')}`);
 
     detail.push(`## ${r}`);
-    for (const c of notices) detail.push(`- NOTICE from ${who(c, me)} (${formatLeft(c, now)} left): ${c.why}`);
-    for (const c of holding) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${formatLeft(c, now)} left: ${c.why}`);
+    for (const c of notices)
+      detail.push(
+        `- NOTICE #${c.id} from ${who(c, me)} (${formatLeft(c, now)} left), ` +
+          `${c.holderLimit === 1 ? 'one claim at a time so claim and wait your turn' : 'nothing new is granted'}` +
+          `: ${c.why}`,
+      );
+    for (const c of started) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${formatLeft(c, now)} left: ${c.why}`);
+    for (const c of offered)
+      detail.push(
+        `- offered to ${who(c, me)}, ${c.mode}, not started yet — take it with \`headroom hold ${c.id}\` ` +
+          `or lose it to whoever is ready: ${c.why}`,
+      );
     for (const c of waiting) detail.push(`- waiting: ${who(c, me)}, ${c.mode}, priority ${c.priority}: ${c.why}`);
   }
 

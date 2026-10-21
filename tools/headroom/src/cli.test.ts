@@ -147,7 +147,7 @@ describe('cli', () => {
       });
       const code = await new Promise<number | null>((r) => child.on('exit', r));
       expect(code).toBe(0);
-      expect(run(['status']).out).toContain('held by My Bifrost task');
+      expect(run(['status']).out).toContain('My Bifrost task');
     } finally {
       server.close();
     }
@@ -253,7 +253,7 @@ describe('cli', () => {
     expect(code).toBe(3);
     expect(out).toMatch(/yield/i);
     expect(out).toContain('boss');
-    expect(run(['status']).out).toMatch(/held by boss/);
+    expect(run(['status']).out).toMatch(/offered to boss/);
   }, 10_000);
 
   test('an exclusive acquire is refused with the pids while something outside any claim pins the CPU', () => {

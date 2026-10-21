@@ -13,8 +13,15 @@ describe('hookOutput', () => {
 
   test('holders and waiters reach the user as a banner and the model with the reasons', () => {
     const board = Board.inMemory({ now: () => T0 });
-    board.claim({ resource: 'cpu', mode: 'exclusive', holder: 'bench', why: 'JMH on the parser', ttlMs: 7 * MIN });
+    const bench = board.claim({
+      resource: 'cpu',
+      mode: 'exclusive',
+      holder: 'bench',
+      why: 'JMH on the parser',
+      ttlMs: 7 * MIN,
+    });
     board.claim({ resource: 'cpu', mode: 'shared', holder: 'suite', why: 'full test run', ttlMs: 10 * MIN });
+    board.attach(bench.id, process.pid);
 
     const out = hookOutput(board.status(), null, T0);
     expect(out?.systemMessage).toMatch(/cpu.*bench.*exclusive.*7m/);
@@ -26,7 +33,7 @@ describe('hookOutput', () => {
 
   test("a session's own claim reads as you, not as its name", () => {
     const board = Board.inMemory({ now: () => T0 });
-    board.claim({
+    const mine = board.claim({
       resource: 'cpu',
       mode: 'shared',
       holder: 'lock-regen',
@@ -34,6 +41,7 @@ describe('hookOutput', () => {
       why: 'relocks',
       ttlMs: 10 * MIN,
     });
+    board.attach(mine.id, process.pid);
     board.claim({
       resource: 'cpu',
       mode: 'exclusive',
@@ -49,6 +57,38 @@ describe('hookOutput', () => {
     const context = out?.hookSpecificOutput.additionalContext ?? '';
     expect(context).toMatch(/held by you/);
     expect(context).toMatch(/waiting: bench/);
+  });
+
+  test('a notice that only serializes work does not read as one that stops it', () => {
+    const board = Board.inMemory({ now: () => T0 });
+    board.claim({
+      resource: 'cpu',
+      mode: 'notice',
+      holder: 'knut',
+      why: 'on battery',
+      ttlMs: 60 * MIN,
+      holderLimit: 1,
+    });
+
+    const context = hookOutput(board.status(), null, T0)?.hookSpecificOutput.additionalContext ?? '';
+    expect(context).toMatch(/one claim at a time/);
+    expect(context).not.toMatch(/nothing new is granted/);
+  });
+
+  test('an offer nobody has started reads as offered rather than held, and says how to take it', () => {
+    const board = Board.inMemory({ now: () => T0 });
+    board.claim({
+      resource: 'cpu',
+      mode: 'exclusive',
+      holder: 'asleep',
+      sessionId: 'sess-1',
+      why: 'JMH on the parser',
+      ttlMs: 10 * MIN,
+    });
+
+    const out = hookOutput(board.status(), 'sess-1', T0);
+    expect(out?.systemMessage).toMatch(/offered to you/);
+    expect(out?.hookSpecificOutput.additionalContext).toMatch(/not started yet.*headroom hold/);
   });
 
   test('a yield request against my own claim is spelled out with the release command', () => {

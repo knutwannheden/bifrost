@@ -1,6 +1,6 @@
 # headroom
 
-Advisory claims on shared resources, so parallel agent sessions on one machine do not run a benchmark on top of a test suite. One SQLite file, a CLI, an MCP server over the same commands, and a hook that puts the board in front of every session.
+Advisory claims on shared resources, so parallel agent sessions on one machine do not run a benchmark on top of a test suite. One SQLite file, a CLI, and a hook that puts the board in front of every session.
 
 ```
 headroom run cpu --exclusive --why "JMH on the parser; another heavy process invalidates the run" -- ./gradlew jmh
@@ -32,12 +32,6 @@ ln -s "$PWD/skill" ~/.claude/skills/headroom
 The hook shows a session the board at session start, whenever it changed since that session last saw it, and on every prompt while the session holds or waits — not on every prompt regardless.
 
 An exclusive claim is granted only onto a quiet machine. At the moment of grant, headroom samples CPU time per process over a second (two `ps` snapshots, so no lagging average) and refuses with exit 4 and the pids when processes outside every claim — and outside the asker's own session — burn more than `HEADROOM_QUIET_CPU` percent of a core (default 150). `--force` takes the claim anyway; shared claims are never refused for load. `status` prints the same sample. Where `ps` cannot run, the grant goes through with a note saying it was unchecked.
-
-Register the MCP server in `~/.claude.json` as a stdio server, or use the CLI alone — they are the same commands. Use absolute paths: Claude Code spawns the server with the launching app's PATH, which under an Electron app is not your shell's.
-
-```json
-"headroom": { "type": "stdio", "command": "/abs/path/to/node", "args": ["/abs/path/to/tools/headroom/src/cli.ts", "mcp", "serve"] }
-```
 
 ## Hook
 
@@ -72,7 +66,7 @@ stop and release. The `headroom` skill has the details.
 | `HEADROOM_DB` | Board file (default `~/.headroom/board.db`) |
 | `HEADROOM_AS`, `BIFROST_SESSION_NAME` | Default holder name — the name other sessions message you by |
 | `CLAUDE_CODE_SESSION_ID` | Recorded on each claim; set by Claude Code |
-| `CLAUDE_PID` | The session process a claim is tied to; set by Claude Code for Bash, the MCP server uses its parent |
+| `CLAUDE_PID` | The session process a claim is tied to; set by Claude Code for Bash |
 | `HEADROOM_POLL_MS` | `wait` poll interval (default 2000) |
 | `HEADROOM_QUIET_CPU` | Foreign CPU, in percent of one core, above which an exclusive grant is refused (default 150) |
 | `HEADROOM_SAMPLE_MS` | Length of the CPU sample (default 1000) |

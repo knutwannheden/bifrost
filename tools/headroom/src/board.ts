@@ -18,11 +18,19 @@ export interface Claim {
   /** When the claim lapses unless renewed, counted from the grant once there is one. */
   expiresAt: number;
   grantedAt: number | null;
+  /** When the holder started on the resource, as against when it was offered one. */
+  acceptedAt: number | null;
   releasedAt: number | null;
   /** The seizing claim that asked this holder to stop, if any. */
   yieldRequestedBy: number | null;
   /** The holder's session process, whose death releases the claim. */
   pid: number | null;
+  /**
+   * On a notice, how many claims may hold the resource while it stands. Zero
+   * keeps the machine quiet and one makes work take turns. Null on every other
+   * kind of claim, which constrains nobody but itself.
+   */
+  holderLimit: number | null;
 }
 
 export interface ClaimInput {
@@ -34,13 +42,19 @@ export interface ClaimInput {
   why: string;
   priority?: number;
   ttlMs: number;
+  holderLimit?: number;
 }
 
 export interface BoardOptions {
   now?: () => number;
   /** Whether a process still exists, so a crashed holder's claim is dropped the next time the board is read. */
   alive?: (pid: number) => boolean;
+  /** How long an offer is held open for the session at the front of the queue. */
+  offerGraceMs?: number;
 }
+
+/** Long enough for a session polling in `wait` to pick its turn up, short enough that an idle one does not strand the resource. */
+const OFFER_GRACE_MS = 60_000;
 
 function processExists(pid: number): boolean {
   try {
@@ -49,6 +63,11 @@ function processExists(pid: number): boolean {
   } catch (e) {
     return (e as NodeJS.ErrnoException).code === 'EPERM';
   }
+}
+
+function fits(claim: Claim, holders: Claim[], limit = Number.POSITIVE_INFINITY): boolean {
+  if (holders.length >= limit) return false;
+  return claim.mode === 'shared' ? holders.every((h) => h.mode === 'shared') : holders.length === 0;
 }
 
 export interface Status {
@@ -70,9 +89,11 @@ const SCHEMA = `
     created_at INTEGER NOT NULL,
     expires_at INTEGER NOT NULL,
     granted_at INTEGER,
+    accepted_at INTEGER,
     released_at INTEGER,
     yield_requested_by INTEGER,
-    pid INTEGER
+    pid INTEGER,
+    holder_limit INTEGER
   );
   CREATE INDEX IF NOT EXISTS claims_live ON claims(resource) WHERE released_at IS NULL;
 `;
@@ -89,9 +110,11 @@ interface Row {
   created_at: number;
   expires_at: number;
   granted_at: number | null;
+  accepted_at: number | null;
   released_at: number | null;
   yield_requested_by: number | null;
   pid: number | null;
+  holder_limit: number | null;
 }
 
 function toClaim(r: Row): Claim {
@@ -107,9 +130,11 @@ function toClaim(r: Row): Claim {
     createdAt: r.created_at,
     expiresAt: r.expires_at,
     grantedAt: r.granted_at,
+    acceptedAt: r.accepted_at,
     releasedAt: r.released_at,
     yieldRequestedBy: r.yield_requested_by,
     pid: r.pid,
+    holderLimit: r.holder_limit,
   };
 }
 
@@ -118,15 +143,26 @@ export class Board {
   private readonly db: DatabaseSync;
   private readonly now: () => number;
   private readonly alive: (pid: number) => boolean;
+  private readonly offerGraceMs: number;
   private depth = 0;
 
   private constructor(db: DatabaseSync, options: BoardOptions) {
     this.db = db;
     this.now = options.now ?? Date.now;
     this.alive = options.alive ?? processExists;
+    this.offerGraceMs = options.offerGraceMs ?? OFFER_GRACE_MS;
     db.exec(SCHEMA);
     const columns = db.prepare('PRAGMA table_info(claims)').all() as { name: string }[];
     if (!columns.some((c) => c.name === 'pid')) db.exec('ALTER TABLE claims ADD COLUMN pid INTEGER');
+    // A claim granted before the board tracked starts is treated as started, so
+    // an upgrade does not take the resource off work already running.
+    if (!columns.some((c) => c.name === 'holder_limit')) {
+      db.exec('ALTER TABLE claims ADD COLUMN holder_limit INTEGER');
+    }
+    if (!columns.some((c) => c.name === 'accepted_at')) {
+      db.exec('ALTER TABLE claims ADD COLUMN accepted_at INTEGER');
+      db.exec('UPDATE claims SET accepted_at = granted_at WHERE granted_at IS NOT NULL');
+    }
   }
 
   static open(file: string, options: BoardOptions = {}): Board {
@@ -149,8 +185,8 @@ export class Board {
       const now = this.now();
       const { lastInsertRowid } = this.db
         .prepare(
-          `INSERT INTO claims (resource, mode, holder, session_id, pid, why, priority, ttl_ms, created_at, expires_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO claims (resource, mode, holder, session_id, pid, why, priority, ttl_ms, created_at, expires_at, holder_limit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.resource,
@@ -163,17 +199,34 @@ export class Board {
           input.ttlMs,
           now,
           now + input.ttlMs,
+          input.holderLimit ?? null,
         );
       this.schedule(input.resource);
       return this.row(Number(lastInsertRowid));
     });
   }
 
-  /** Ties the claim's life to another process, for a wrapper holding it on the session's behalf. */
+  /**
+   * Ties the claim's life to another process, for a wrapper holding it on the
+   * session's behalf. A wrapper runs only on a resource its claim has, so this
+   * is also how the claim starts on it.
+   */
   attach(id: number, pid: number | null): void {
     this.transaction(() => {
+      const { resource } = this.row(id);
       this.db.prepare('UPDATE claims SET pid = ? WHERE id = ?').run(pid, id);
+      // An offer has to be on the table before it can be taken, and taking it
+      // is what sends the offer it beat back to the queue.
+      this.schedule(resource);
+      if (pid !== null && this.start(id)) this.schedule(resource);
     });
+  }
+
+  /** Records that a granted claim has started on the resource, or false when it has nothing to start on. */
+  private start(id: number): boolean {
+    if (this.row(id).grantedAt === null) return false;
+    this.db.prepare('UPDATE claims SET accepted_at = ? WHERE id = ? AND accepted_at IS NULL').run(this.now(), id);
+    return true;
   }
 
   /** Releases the claim and returns the claims granted because it went. */
@@ -197,6 +250,9 @@ export class Board {
       this.db
         .prepare('UPDATE claims SET ttl_ms = ?, expires_at = ?, why = ? WHERE id = ?')
         .run(ttlMs, this.now() + ttlMs, why ?? claim.why, id);
+      // Renewing is a session saying it is still on this, which is all that
+      // taking an offer takes when no wrapper is holding the claim.
+      this.start(id);
       this.schedule(claim.resource);
       return this.row(id);
     });
@@ -216,6 +272,7 @@ export class Board {
         why: old.why,
         priority: old.priority,
         ttlMs: old.ttlMs,
+        holderLimit: old.holderLimit ?? undefined,
       });
       return { next, claim };
     });
@@ -269,11 +326,17 @@ export class Board {
 
   /**
    * Settles who holds the resource and returns its live claims in queue order.
-   * Lapsed claims and claims of dead sessions are released first. A notice
-   * stops every grant. Otherwise the
+   * Lapsed claims and claims of dead sessions are released first. Then the
    * queue is walked by priority, then age, and each claim that fits beside the
    * current holders is granted until one does not fit, so a waiting exclusive
-   * claim also holds back the shared claims behind it.
+   * claim also holds back the shared claims behind it. A standing notice caps
+   * how many may hold the resource at once, which is how the user makes the
+   * machine quiet or makes work take turns.
+   *
+   * A grant is an offer until its holder starts on it. It is the front of the
+   * queue's alone for the grace, and after that the next claim is offered the
+   * resource too, so whichever session is ready to work gets it rather than
+   * the one that happens to be asleep.
    */
   private schedule(resource: string): Claim[] {
     const now = this.now();
@@ -293,14 +356,28 @@ export class Board {
         .all(resource) as unknown as Row[]
     ).map(toClaim);
 
-    const holding = live.filter((c) => c.mode !== 'notice' && c.grantedAt !== null);
-    const blocked = live.some((c) => c.mode === 'notice');
+    const started = live.filter((c) => c.mode !== 'notice' && c.grantedAt !== null && c.acceptedAt !== null);
+    const withdraw = this.db.prepare('UPDATE claims SET granted_at = NULL WHERE id = ?');
+    for (const c of live) {
+      if (c.mode === 'notice' || c.grantedAt === null || c.acceptedAt !== null) continue;
+      if (fits(c, started)) continue;
+      withdraw.run(c.id);
+      c.grantedAt = null;
+    }
+
+    const holding = live.filter(
+      (c) =>
+        c.mode !== 'notice' &&
+        c.grantedAt !== null &&
+        (c.acceptedAt !== null || now - c.grantedAt <= this.offerGraceMs),
+    );
+    // The tightest standing notice decides how much may run, and with none the
+    // resource is only bound by the modes the claims asked for.
+    const limit = Math.min(...live.filter((c) => c.mode === 'notice').map((c) => c.holderLimit ?? 0));
     const grant = this.db.prepare('UPDATE claims SET granted_at = ?, expires_at = ? WHERE id = ?');
     for (const c of live) {
       if (c.mode === 'notice' || c.grantedAt !== null) continue;
-      if (blocked) break;
-      const fits = c.mode === 'shared' ? holding.every((h) => h.mode === 'shared') : holding.length === 0;
-      if (!fits) break;
+      if (!fits(c, holding, limit)) break;
       grant.run(now, now + c.ttlMs, c.id);
       c.grantedAt = now;
       c.expiresAt = now + c.ttlMs;

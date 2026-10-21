@@ -1,6 +1,6 @@
 ---
 name: headroom
-description: Use before running anything that pins the CPU for minutes — benchmarks, profiling, full builds, long test suites — and whenever the board (a `headroom` banner, a yield request, a waiting claim) shows up in your context. Claims shared resources on this machine so parallel agent sessions do not corrupt each other's measurements or crawl together.
+description: Use before running anything that pins the CPU for minutes — benchmarks, profiling, full builds, long test suites — and whenever the board (a `headroom` banner, a yield request, a waiting claim) shows up in your context. Also when the user asks to restrict what runs on this machine, such as one thing at a time on battery, or to lift such a restriction. Claims shared resources on this machine so parallel agent sessions do not corrupt each other's measurements or crawl together.
 ---
 
 # Headroom
@@ -31,13 +31,11 @@ headroom release $id
 Anything under about 30 seconds of CPU — a quick grep, a single test class — runs unclaimed. Builds, suites, benchmarks and profiles are claimed, however short they look.
 
 - `--exclusive` when another heavy process would **corrupt your result**: benchmarks, profiling, timing measurements.
-- `--shared` when it would **only slow you down**: test suites, full builds, large recipe runs. Shared claims hold together.
+- `--shared` when it would **only slow you down**: test suites, full builds, large recipe runs. Shared claims hold together, unless a notice is making work take turns.
 - `--why` is read by other sessions deciding whether to wait, negotiate or override you. Say what you are doing *and what breaks if they proceed anyway*. "Running tests" tells them nothing; "full suite, ~6 min, just slower if you join" tells them everything.
 - `--ttl` is your estimate. Running over? `headroom renew <id> --ttl 5m`. A claim nobody renews lapses at its ttl, **held or waiting** — a queued claim you walk away from disappears too, and an exclusive claim that lapses mid-benchmark lets the next session in while your numbers are still being taken. `run` and `hold` renew for you; a bare claim is yours to renew.
 - `renew --why "round 3 of 5, ~10 min left"` restates your reason on the board. That is how progress and revised estimates reach the sessions waiting on you, instead of them asking.
 - `--as` is the name other sessions message you by: what `ListAgents` shows as "This session is …". Sessions started by Bifrost have it set already; if you are refused for lack of a name, pass it.
-
-The MCP tools `headroom_acquire`, `headroom_release`, `headroom_renew`, `headroom_status`, `headroom_notice`, `headroom_seize` are the same commands; `run` and `hold` are CLI only.
 
 Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request · 4 refused because the machine is busy outside any claim · otherwise the command's own. A script keys on the exit code, never on the text, which is written for people. `acquire -q` prints only the claim id, for `$(...)`.
 
@@ -55,13 +53,15 @@ That is work nobody claimed, so the board cannot tell you whose it is. Find out 
 
 Higher `--priority` goes first, then older claims first. A shared claim joins shared holders at once; an exclusive claim waits for the resource to empty, and while it waits no later shared claim slips past it. So the way to reserve a turn is to claim it: the queue is the reservation.
 
+A grant is an offer until you start on it, and it is yours alone for about a minute. Start inside that and the resource is held for you until you release it. Leave it and the next claim is offered the resource as well, so whichever session is ready to work takes it and the other goes back to the queue with its place intact. `run` and `hold` start the claim by running something under it, and `renew` starts a bare one, which is all a session has to do to say it is still on this. So nothing is taken off you for being slow — only for not being there.
+
 ## Claim early
 
 Claim as soon as you know you will need the resource, not when you reach that step. A queued claim holds your place, and an order agreed over messages ("Python perf first, then me, then the Spaces task") exists only in those messages until each party has a claim on the board. Hold the place with `headroom wait` or `headroom run`; a claim nobody renews lapses.
 
 ## When you release
 
-`release` names whoever was granted next. A session sitting in `headroom wait` or `headroom run` picks the grant up within seconds; one that is idle sees it only at its next prompt, so tell it with `SendMessage` when it matters.
+`release` names whoever was granted next. A session sitting in `headroom wait` or `headroom run` picks the grant up within seconds. An idle one sees it only at its next prompt, which is usually longer than the offer stands, so tell it with `SendMessage` when the order matters to you.
 
 ## When you are not granted
 
@@ -83,7 +83,19 @@ Under `run` or `hold` this is handled for you, and `--grace` decides how: `0` (t
 
 ## Notices
 
-A notice is a condition, not a claim: `headroom notice cpu --why "on generator power until ~15:00, prefer targeted tests"`. Nobody holds it, but no new claim is granted while it stands. Usually posted by the user. If you see one, do what it says.
+A notice is a condition, not a claim. Nobody holds it, and it says how much may run while it stands. Usually posted by the user, and the board shows it with its id so it can be lifted.
+
+```
+headroom notice cpu --why "on generator power until ~15:00, prefer targeted tests"
+headroom notice cpu --serial --ttl 3h --why "on battery — one claim at a time"
+headroom clear <id>
+```
+
+Plain, nothing new is granted at all. With `--serial`, work still runs but only one claim at a time, so `--shared` stops meaning "beside the others" and a suite waits its turn instead of draining the battery alongside two more. Ask for what you are actually doing either way: the notice does the restricting, not your flags.
+
+Either kind leaves the claims already running alone and takes effect as they finish. To quiet the machine now, that is `seize`. To lift a notice, `headroom clear <id>` with the id from the board, or let its `--ttl` run out.
+
+**The user asks for this in their own words** — "we're on battery", "stop everything for a bit", "make the agents take turns". That is a notice, and lifting it is the same conversation in reverse ("I'm plugged in again").
 
 ## Reading the board
 

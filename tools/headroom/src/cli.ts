@@ -28,12 +28,12 @@ const USAGE = `headroom — advisory claims on shared resources, for agent sessi
       keep the claim alive while the command runs, and act on a yield request
   headroom wait <id> [--timeout 40m]
   headroom renew <id> [--ttl 10m] [--why "..."]
-  headroom release <id> [--requeue]
-  headroom notice <resource> --why "..." [--ttl 1h] [--as name]
+  headroom release <id> [--requeue]        (clear <id> is the same thing, for lifting a notice)
+  headroom notice <resource> --why "..." [--serial] [--ttl 1h] [--as name]
+      --serial lets work through one claim at a time instead of stopping it; without it nothing new runs
   headroom seize <resource> --why "..." [--ttl 10m] [--as name]
   headroom status [resource] [--json]
   headroom hook                      reads a Claude Code hook event on stdin
-  headroom mcp serve
 
 shared: any number hold together (test suites, builds). exclusive: holds alone (benchmarks, profiling).
 --why says what you are doing and what breaks if someone proceeds anyway; renew --why restates it.
@@ -52,8 +52,9 @@ Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out
             · 4 refused because the machine is busy outside any claim · otherwise the command's own.
 Scripts key on the exit code; the text is for people.
 A waiting claim lapses unless renewed; wait, hold and run renew it while they poll. wait has no cutoff
-unless --timeout is given. Environment: HEADROOM_DB (default ~/.headroom/board.db), HEADROOM_AS,
-BIFROST_SESSION_NAME.`;
+unless --timeout is given. A grant is an offer for about a minute: run and hold start on it, renew starts
+a bare claim, and an offer nobody starts is made to the next in line too, whoever is ready first taking it.
+Environment: HEADROOM_DB (default ~/.headroom/board.db), HEADROOM_AS, BIFROST_SESSION_NAME.`;
 
 function dbFile(): string {
   return process.env.HEADROOM_DB ?? join(homedir(), '.headroom', 'board.db');
@@ -110,6 +111,11 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
   // the session, so a killed hold frees the resource on the next look.
   const owner = board.get(id)?.pid ?? sessionPid();
   board.attach(id, process.pid);
+  // Another session can start on the resource in the moment between the grant
+  // and this hold, which leaves the claim queued while the command runs anyway.
+  if (board.get(id)?.grantedAt === null) {
+    console.error(`headroom: #${id} was taken by another session first — running unclaimed, so expect company`);
+  }
 
   const child = spawn(cmd[0]!, cmd.slice(1), {
     stdio: 'inherit',
@@ -236,6 +242,7 @@ async function main(argv: string[]): Promise<number> {
       timeout: { type: 'string' },
       grace: { type: 'string', default: '0' },
       requeue: { type: 'boolean' },
+      serial: { type: 'boolean' },
       force: { type: 'boolean' },
       as: { type: 'string' },
       quiet: { type: 'boolean', short: 'q' },
@@ -249,12 +256,6 @@ async function main(argv: string[]): Promise<number> {
     return command ? 0 : 1;
   }
   const timeoutMs = values.timeout ? parseDuration(values.timeout) : Number.POSITIVE_INFINITY;
-
-  if (command === 'mcp') {
-    const { serve } = await import('./mcp.ts');
-    await serve(openBoard());
-    return 0;
-  }
 
   /** The claim acquire and run both make from the flags. */
   const claimInput = async (): Promise<ClaimInput> => {
@@ -334,9 +335,11 @@ async function main(argv: string[]): Promise<number> {
           holder: await holderName(values.as, 'notice'),
           why: values.why,
           ttlMs: parseDuration(values.ttl ?? '1h'),
+          holderLimit: values.serial ? 1 : 0,
         });
         console.log(
-          `notice #${c.id} on ${c.resource} for ${formatLeft(c, Date.now())}. Lift it with: headroom clear ${c.id}`,
+          `notice #${c.id} on ${c.resource} for ${formatLeft(c, Date.now())} — ` +
+            `${values.serial ? 'one claim at a time' : 'nothing new runs'}. Lift it with: headroom clear ${c.id}`,
         );
         return 0;
       }

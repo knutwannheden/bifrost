@@ -5,12 +5,13 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { Board } from './board.ts';
 
 const MIN = 60_000;
+const GRACE = MIN;
 
 /** A board on a fake clock and a fake process table, so expiry and crashes are values to set. */
 function fresh() {
   let now = 1_000_000;
   const dead = new Set<number>();
-  const board = Board.inMemory({ now: () => now, alive: (pid) => !dead.has(pid) });
+  const board = Board.inMemory({ now: () => now, alive: (pid) => !dead.has(pid), offerGraceMs: GRACE });
   return { board, tick: (ms: number) => (now += ms), kill: (pid: number) => dead.add(pid) };
 }
 
@@ -90,8 +91,11 @@ describe('notices', () => {
 describe('lifetime', () => {
   test('an expired holder drops out and the next in line is granted', () => {
     const { board, tick } = fresh();
-    board.claim(cpu('exclusive', 'bench', { ttlMs: 5 * MIN }));
+    const bench = board.claim(cpu('exclusive', 'bench', { ttlMs: 5 * MIN }));
     const next = board.claim(cpu('exclusive', 'next'));
+    // Started, so it is the ttl running out that frees the resource here and
+    // not the offer grace.
+    board.attach(bench.id, 4242);
 
     tick(5 * MIN + 1);
     expect(board.get(next.id)?.grantedAt).not.toBeNull();
@@ -133,6 +137,60 @@ describe('lifetime', () => {
     tick(4 * MIN);
     const renewed = board.renew(bench.id, 10 * MIN);
     expect(renewed.expiresAt).toBe(1_000_000 + 4 * MIN + 10 * MIN);
+  });
+});
+
+describe('a notice that makes work take turns', () => {
+  const serial = { resource: 'cpu', mode: 'notice', holder: 'knut', why: 'on battery', ttlMs: 60 * MIN } as const;
+
+  test('shared claims stop holding together and run one at a time', () => {
+    const { board } = fresh();
+    board.claim({ ...serial, holderLimit: 1 });
+    const first = board.claim(cpu('shared', 'suite-1'));
+    const second = board.claim(cpu('shared', 'suite-2'));
+
+    expect(first.grantedAt).not.toBeNull();
+    expect(board.get(second.id)?.grantedAt).toBeNull();
+
+    board.release(first.id);
+    expect(board.get(second.id)?.grantedAt).not.toBeNull();
+  });
+});
+
+describe('offers', () => {
+  test('an offer nobody starts stops holding the queue back once the grace passes', () => {
+    const { board, tick } = fresh();
+    const asleep = board.claim(cpu('exclusive', 'asleep'));
+    const awake = board.claim(cpu('exclusive', 'awake'));
+    expect(asleep.grantedAt).not.toBeNull();
+    expect(board.get(awake.id)?.grantedAt).toBeNull();
+
+    tick(GRACE + 1);
+    expect(board.get(awake.id)?.grantedAt).not.toBeNull();
+  });
+
+  test('whoever starts first keeps the resource, and the other offer goes back to the queue in place', () => {
+    const { board, tick } = fresh();
+    const asleep = board.claim(cpu('exclusive', 'asleep'));
+    const awake = board.claim(cpu('exclusive', 'awake'));
+
+    tick(GRACE + 1);
+    board.attach(awake.id, 4242);
+
+    expect(board.get(awake.id)?.grantedAt).not.toBeNull();
+    expect(board.get(asleep.id)?.grantedAt).toBeNull();
+    expect(board.get(asleep.id)?.releasedAt).toBeNull();
+    expect(board.status('cpu').waiting.map((c) => c.holder)).toEqual(['asleep']);
+  });
+
+  test('renewing starts a claim nothing wraps, so the grace stops running against it', () => {
+    const { board, tick } = fresh();
+    const bare = board.claim(cpu('exclusive', 'bare'));
+    const next = board.claim(cpu('exclusive', 'next'));
+    board.renew(bare.id, 10 * MIN);
+
+    tick(GRACE + 1);
+    expect(board.get(next.id)?.grantedAt).toBeNull();
   });
 });
 
