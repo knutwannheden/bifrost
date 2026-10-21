@@ -60,11 +60,11 @@ import {
   createMultiRepoContainer,
   createWorktree,
   createWorktreeFromPr,
+  headBranch,
   inspectWorktree,
   removeWorktree,
   restoreWorktree,
   slugify,
-  worktreeBranch,
 } from './worktree-manager';
 
 // In-memory task list, synced to disk
@@ -151,6 +151,24 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
 }
 
 /**
+ * Point each open task at the branch its worktree has checked out. A session
+ * that moves to a second branch opens its next PR there, and both the task's
+ * PR and its curated outcome are found by branch.
+ */
+export function refreshTaskBranches(): void {
+  let moved = false;
+  for (const [i, task] of tasks.entries()) {
+    if (task.archivedAt) continue;
+    const branch = headBranch(task.worktreePath);
+    if (branch && branch !== task.branch) {
+      tasks[i] = { ...task, branch };
+      moved = true;
+    }
+  }
+  if (moved) saveTasks(tasks);
+}
+
+/**
  * Rename the worktree's branch, returning the new name or null when left alone.
  * HEAD is the source of truth for which branch that is, since it's observed
  * rather than stored. In-place tasks sit on the repo's own checked-out branch,
@@ -208,7 +226,7 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
       // The branch holds the commits, so reopening builds the worktree back from
       // it — which is why uncommitted work is worth a confirmation and commits
       // are not. A detached HEAD has no branch to build from, so it stays.
-      const branch = await worktreeBranch(task.worktreePath);
+      const branch = headBranch(task.worktreePath);
       if (branch) {
         updates.branch = branch;
         removal = () => removeWorktree(repo.path, task.worktreePath);
@@ -836,7 +854,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     saveTasks(tasks);
   });
 
-  ipcMain.handle(IPC.GET_TASK_PRS, () => getTaskPrs(tasks, loadConfig().repos));
+  ipcMain.handle(IPC.GET_TASK_PRS, () => {
+    refreshTaskBranches();
+    return getTaskPrs(tasks, loadConfig().repos);
+  });
 
   ipcMain.handle(IPC.CREATE_DEV_TERMINAL, (_event, taskId: string) => {
     const task = getTask(taskId);

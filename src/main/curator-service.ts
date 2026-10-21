@@ -6,7 +6,7 @@ import type { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { CuratorRunResult, CuratorState, Repo, Task, TaskCuration, TaskOutcome } from '../shared/types';
 import { loadConfig } from './config';
-import { archiveTaskCore, getTasks, updateTask } from './ipc-handlers';
+import { archiveTaskCore, getTasks, refreshTaskBranches, updateTask } from './ipc-handlers';
 import { isWorktreeDisposable } from './worktree-manager';
 
 const execFile = promisify(execFileCb);
@@ -52,6 +52,7 @@ export async function runCuratorNow(): Promise<void> {
   const config = loadConfig();
   if (!config.experimentalFeatures) return;
 
+  refreshTaskBranches();
   const tasks = getTasks();
   const hasStoppedClean = tasks.some((t) => t.status === 'stopped' && !t.isExternal && !t.inPlace);
   const hasUnclassified = tasks.some(

@@ -221,14 +221,22 @@ export async function restoreWorktree(repoPath: string, taskName: string, branch
   return worktreePath;
 }
 
-/** The branch a worktree's HEAD is on, or null when it is detached. */
-export async function worktreeBranch(worktreePath: string): Promise<string | null> {
+/**
+ * The branch a worktree's HEAD is on, or null when it is detached or the
+ * directory is not a worktree. Reads the files directly, which is what makes
+ * it cheap enough to ask for every task on a poll.
+ */
+export function headBranch(worktreePath: string): string | null {
+  const SYMREF = 'ref: refs/heads/';
   try {
-    const { stdout } = await execFile('git', ['--no-optional-locks', 'symbolic-ref', '--quiet', '--short', 'HEAD'], {
-      cwd: worktreePath,
-      timeout: 5000,
-    });
-    return stdout.trim() || null;
+    const dotGit = path.join(worktreePath, '.git');
+    // A linked worktree's .git is a file naming the real gitdir, which is where
+    // its HEAD lives. The primary checkout's is the gitdir itself.
+    const gitDir = fs.statSync(dotGit).isDirectory()
+      ? dotGit
+      : path.resolve(worktreePath, fs.readFileSync(dotGit, 'utf8').replace('gitdir:', '').trim());
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8').trim();
+    return head.startsWith(SYMREF) ? head.slice(SYMREF.length) || null : null;
   } catch {
     return null;
   }
@@ -265,7 +273,7 @@ export async function inspectWorktree(
   return {
     repoPath: first ? first.slice('worktree '.length) : worktreePath,
     worktreePath,
-    branch: await worktreeBranch(worktreePath),
+    branch: headBranch(worktreePath),
   };
 }
 
