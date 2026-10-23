@@ -21,6 +21,21 @@ function name(c: Claim, me: string | null): string {
   return me && c.sessionId === me ? 'you' : c.holder;
 }
 
+/**
+ * The claims of each holder, in the order the holders first appear. A session
+ * running two commands at once holds a claim for each.
+ */
+function byHolder(claims: Claim[], me: string | null): [string, Claim[]][] {
+  const groups = new Map<string, Claim[]>();
+  for (const c of claims) {
+    const key = name(c, me);
+    const group = groups.get(key);
+    if (group) group.push(c);
+    else groups.set(key, [c]);
+  }
+  return [...groups];
+}
+
 /** What the board says to a session about to act, or null when it has nothing to say. */
 export function hookOutput(
   status: Status,
@@ -48,8 +63,22 @@ export function hookOutput(
     const started = holding.filter((c) => c.acceptedAt !== null);
     const offered = holding.filter((c) => c.acceptedAt === null);
     if (started.length)
-      parts.push(`held by ${started.map((c) => `${name(c, me)} (${c.mode}, ${formatLeft(c, now)})`).join(', ')}`);
-    if (offered.length) parts.push(`offered to ${offered.map((c) => name(c, me)).join(', ')}`);
+      parts.push(
+        `held by ${byHolder(started, me)
+          .map(([n, cs]) => {
+            // The last of them to expire is when the holder could be done
+            // with the resource.
+            const until = cs.reduce((a, b) => (a.expiresAt >= b.expiresAt ? a : b));
+            return `${n} (${cs[0].mode}${cs.length > 1 ? ` ×${cs.length}` : ''}, ${formatLeft(until, now)})`;
+          })
+          .join(', ')}`,
+      );
+    if (offered.length)
+      parts.push(
+        `offered to ${byHolder(offered, me)
+          .map(([n, cs]) => `${n}${cs.length > 1 ? ` ×${cs.length}` : ''}`)
+          .join(', ')}`,
+      );
     if (waiting.length) parts.push(`${waiting.length} waiting`);
     banner.push(`${r}: ${parts.join('; ')}`);
 

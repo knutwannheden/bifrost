@@ -59,6 +59,30 @@ describe('hookOutput', () => {
     expect(context).toMatch(/waiting: bench/);
   });
 
+  test('a session running two commands at once is named once with a count, not twice', () => {
+    const board = Board.inMemory({ now: () => T0 });
+    for (const [why, ttl] of [
+      ['corpus replay', 10 * MIN],
+      ['group-upgrade replay', 30 * MIN],
+    ] as const) {
+      const c = board.claim({
+        resource: 'cpu',
+        mode: 'shared',
+        holder: 'resolver',
+        sessionId: 'sess-1',
+        why,
+        ttlMs: ttl,
+      });
+      board.attach(c.id, process.pid);
+    }
+
+    const out = hookOutput(board.status(), 'sess-1', T0);
+    expect(out?.systemMessage).toContain('held by you (shared ×2, 30m)');
+    const context = out?.hookSpecificOutput.additionalContext ?? '';
+    expect(context).toContain('corpus replay');
+    expect(context).toContain('group-upgrade replay');
+  });
+
   test('a notice that only serializes work does not read as one that stops it', () => {
     const board = Board.inMemory({ now: () => T0 });
     board.claim({
