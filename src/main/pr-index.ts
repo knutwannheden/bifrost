@@ -1,7 +1,7 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { Repo, Task, TaskPr } from '../shared/types';
-import { type GhPrFacts, verdictsFor } from './pr-verdicts';
+import { type GhPrFacts, verdictsFor } from './pr-verdicts.ts';
 
 const execFile = promisify(execFileCb);
 
@@ -30,7 +30,8 @@ async function isGhAvailable(): Promise<boolean> {
   try {
     await execFile('gh', ['--version'], { timeout: 5000 });
     ghAvailable = true;
-  } catch {
+  } catch (err) {
+    console.warn('[pr-index] gh --version failed:', (err as Error).message);
     ghAvailable = false;
   }
   ghCheckedAt = Date.now();
@@ -66,6 +67,7 @@ interface GhOpenPr {
  * cost a subprocess and a round trip per task.
  */
 async function refresh(repo: Repo): Promise<RepoIndex> {
+  const previous = indexes.get(repo.id);
   const byBranch = new Map<string, TaskPr>();
   try {
     const { stdout } = await execFile(
@@ -90,8 +92,13 @@ async function refresh(repo: Repo): Promise<RepoIndex> {
         });
       }
     }
-  } catch {
-    /* not a GitHub repo, unauthenticated, or offline — the repo simply has no PRs to show */
+  } catch (err) {
+    // A failed listing says nothing about which PRs the repo has, so the last
+    // answer stands until the next refresh. A repo that never answered has none.
+    console.warn(`[pr-index] listing PRs for ${repo.name} failed:`, (err as Error).message);
+    const index = { byBranch: previous?.byBranch ?? byBranch, fetchedAt: Date.now(), stale: previous?.stale ?? false };
+    indexes.set(repo.id, index);
+    return index;
   }
   // Asked for separately: mergeStateStatus and the check rollup triple the time
   // of the listing above, and only an open PR has anything left to wait on.
@@ -137,21 +144,22 @@ export function markPrIndexStale(repoId: string): void {
 
 /** The PR each task's branch has, for every task whose branch has one. */
 export async function getTaskPrs(tasks: Task[], repos: Repo[]): Promise<Record<string, TaskPr>> {
-  if (!(await isGhAvailable())) return {};
-
-  const wanted = new Set(tasks.filter((t) => t.branch).map((t) => t.repoId));
-  const now = Date.now();
-  await Promise.all(
-    repos
-      .filter((r) => wanted.has(r.id))
-      .filter((r) => {
-        const index = indexes.get(r.id);
-        if (!index) return true;
-        const age = now - index.fetchedAt;
-        return index.stale ? age > MIN_REFRESH_MS : age > REFRESH_MS;
-      })
-      .map((r) => refresh(r)),
-  );
+  // Without gh nothing is refreshed, and the indexes answer as they last stood.
+  if (await isGhAvailable()) {
+    const wanted = new Set(tasks.filter((t) => t.branch).map((t) => t.repoId));
+    const now = Date.now();
+    await Promise.all(
+      repos
+        .filter((r) => wanted.has(r.id))
+        .filter((r) => {
+          const index = indexes.get(r.id);
+          if (!index) return true;
+          const age = now - index.fetchedAt;
+          return index.stale ? age > MIN_REFRESH_MS : age > REFRESH_MS;
+        })
+        .map((r) => refresh(r)),
+    );
+  }
 
   const result: Record<string, TaskPr> = {};
   for (const task of tasks) {
