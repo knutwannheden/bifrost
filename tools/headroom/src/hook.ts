@@ -6,7 +6,7 @@ export interface HookOutput {
   systemMessage: string;
   hookSpecificOutput: {
     hookEventName: 'UserPromptSubmit' | 'SessionStart';
-    /** The full picture for the model, which the banner only summarises. */
+    /** What the model needs from the board, with the reasons the banner leaves out. */
     additionalContext: string;
   };
 }
@@ -21,19 +21,39 @@ function name(c: Claim, me: string | null): string {
   return me && c.sessionId === me ? 'you' : c.holder;
 }
 
+/** The session a claim belongs to. Sessions can share a holder name, so the name alone cannot tell them apart. */
+function sessionOf(c: Claim): string {
+  return c.sessionId ?? c.holder;
+}
+
 /**
- * The claims of each holder, in the order the holders first appear. A session
- * running two commands at once holds a claim for each.
+ * The claims of each session, in the order the sessions first appear. A
+ * session running two commands at once holds a claim for each.
  */
-function byHolder(claims: Claim[], me: string | null): [string, Claim[]][] {
+function bySession(claims: Claim[]): Claim[][] {
   const groups = new Map<string, Claim[]>();
   for (const c of claims) {
-    const key = name(c, me);
-    const group = groups.get(key);
+    const group = groups.get(sessionOf(c));
     if (group) group.push(c);
-    else groups.set(key, [c]);
+    else groups.set(sessionOf(c), [c]);
   }
-  return [...groups];
+  return [...groups.values()];
+}
+
+/** Each session once, with a count when it holds more than one claim. */
+function named(claims: Claim[], me: string | null, withMode: boolean): string {
+  return bySession(claims)
+    .map((cs) => {
+      const times = cs.length > 1 ? ` ×${cs.length}` : '';
+      return withMode ? `${name(cs[0], me)} (${cs[0].mode}${times})` : `${name(cs[0], me)}${times}`;
+    })
+    .join(', ');
+}
+
+function sharedCount(claims: Claim[], sessions: string): string {
+  const n = claims.length;
+  const s = new Set(claims.map(sessionOf)).size;
+  return `${n} shared claim${n === 1 ? '' : 's'} from ${s} ${sessions}${s === 1 ? '' : 's'}`;
 }
 
 /** What the board says to a session about to act, or null when it has nothing to say. */
@@ -62,23 +82,12 @@ export function hookOutput(
       );
     const started = holding.filter((c) => c.acceptedAt !== null);
     const offered = holding.filter((c) => c.acceptedAt === null);
-    if (started.length)
-      parts.push(
-        `held by ${byHolder(started, me)
-          .map(([n, cs]) => {
-            // The last of them to expire is when the holder could be done
-            // with the resource.
-            const until = cs.reduce((a, b) => (a.expiresAt >= b.expiresAt ? a : b));
-            return `${n} (${cs[0].mode}${cs.length > 1 ? ` ×${cs.length}` : ''}, ${formatLeft(until, now)})`;
-          })
-          .join(', ')}`,
-      );
-    if (offered.length)
-      parts.push(
-        `offered to ${byHolder(offered, me)
-          .map(([n, cs]) => `${n}${cs.length > 1 ? ` ×${cs.length}` : ''}`)
-          .join(', ')}`,
-      );
+    // Another session's shared claim blocks no one, so it is only counted. A claim that can block is named.
+    const counted = started.filter((c) => c.mode === 'shared' && !(me && c.sessionId === me));
+    const shown = started.filter((c) => !counted.includes(c));
+    if (shown.length) parts.push(`held by ${named(shown, me, true)}`);
+    if (counted.length) parts.push(sharedCount(counted, 'session'));
+    if (offered.length) parts.push(`offered to ${named(offered, me, false)}`);
     if (waiting.length) parts.push(`${waiting.length} waiting`);
     banner.push(`${r}: ${parts.join('; ')}`);
 
@@ -89,7 +98,8 @@ export function hookOutput(
           `${c.holderLimit === 1 ? 'one claim at a time so claim and wait your turn' : 'nothing new is granted'}` +
           `: ${c.why}`,
       );
-    for (const c of started) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${formatLeft(c, now)} left: ${c.why}`);
+    for (const c of shown) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${formatLeft(c, now)} left: ${c.why}`);
+    if (counted.length) detail.push(`- ${sharedCount(counted, 'other session')}; \`headroom status\` lists them`);
     for (const c of offered)
       detail.push(
         `- offered to ${who(c, me)}, ${c.mode}, not started yet — take it with \`headroom hold ${c.id}\` ` +

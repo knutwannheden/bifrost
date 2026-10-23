@@ -24,8 +24,8 @@ describe('hookOutput', () => {
     board.attach(bench.id, process.pid);
 
     const out = hookOutput(board.status(), null, T0);
-    expect(out?.systemMessage).toMatch(/cpu.*bench.*exclusive.*7m/);
-    expect(out?.systemMessage).not.toContain('JMH');
+    expect(out?.systemMessage).toContain('cpu: held by bench (exclusive)');
+    expect(out?.systemMessage).not.toMatch(/JMH|7m/);
     const context = out?.hookSpecificOutput.additionalContext ?? '';
     expect(context).toContain('JMH on the parser');
     expect(context).toMatch(/waiting.*suite/);
@@ -77,10 +77,30 @@ describe('hookOutput', () => {
     }
 
     const out = hookOutput(board.status(), 'sess-1', T0);
-    expect(out?.systemMessage).toContain('held by you (shared ×2, 30m)');
+    expect(out?.systemMessage).toContain('held by you (shared ×2)');
     const context = out?.hookSpecificOutput.additionalContext ?? '';
     expect(context).toContain('corpus replay');
     expect(context).toContain('group-upgrade replay');
+  });
+
+  test("other sessions' shared claims are counted by session, while my own stay named", () => {
+    const board = Board.inMemory({ now: () => T0 });
+    for (const [holder, sessionId, why] of [
+      ['lock-regen', 'sess-1', 'relocks'],
+      ['runner', 'sess-2', 'unit tests'],
+      ['runner', 'sess-2', 'integration tests'],
+      ['runner', 'sess-3', 'lint'],
+    ] as const) {
+      const c = board.claim({ resource: 'cpu', mode: 'shared', holder, sessionId, why, ttlMs: 10 * MIN });
+      board.attach(c.id, process.pid);
+    }
+
+    const out = hookOutput(board.status(), 'sess-1', T0);
+    expect(out?.systemMessage).toBe('headroom — cpu: held by you (shared); 3 shared claims from 2 sessions');
+    const context = out?.hookSpecificOutput.additionalContext ?? '';
+    expect(context).toContain('relocks');
+    expect(context).not.toMatch(/runner|unit tests/);
+    expect(context).toContain('3 shared claims from 2 other sessions; `headroom status` lists them');
   });
 
   test('a notice that only serializes work does not read as one that stops it', () => {
