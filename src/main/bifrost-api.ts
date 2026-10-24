@@ -50,7 +50,14 @@ import {
 } from './prompt-sender';
 import { addRepo } from './repo-manager';
 import { normalizeRepoPath } from './repo-path';
-import { getSessionName, hasSession, killSession, sessionOutputAt, waitForSessionReady } from './session-manager';
+import {
+  getSessionName,
+  hasSession,
+  killSession,
+  sessionAwaitsTrust,
+  sessionOutputAt,
+  waitForSessionReady,
+} from './session-manager';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -154,6 +161,12 @@ function jsonResponse(res: http.ServerResponse, data: unknown, status = 200): vo
 
 function errorResponse(res: http.ServerResponse, message: string, status = 400): void {
   jsonResponse(res, { error: message }, status);
+}
+
+function notStartedReason(taskId: string): string {
+  return sessionAwaitsTrust(taskId)
+    ? "Session is stopped on Claude Code's workspace trust prompt. Answer it in the task's tab."
+    : 'Session did not finish starting up';
 }
 
 function resolveTaskId(body: Record<string, unknown>): string | undefined {
@@ -801,7 +814,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // Waited for on both paths: a session spawned moments ago exists before
       // its TUI reads anything, and a name handed back then is not yet usable.
       if (!(await waitForSessionReady(wakeId))) {
-        jsonResponse(res, { ok: false, error: 'Session did not finish starting up' });
+        jsonResponse(res, { ok: false, error: notStartedReason(wakeId) });
         return;
       }
       // The name the session actually carries, which is the task's name from
@@ -848,7 +861,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         }
       }
       if (!(await waitForSessionReady(openId))) {
-        jsonResponse(res, { ok: false, error: 'Session did not finish starting up' });
+        jsonResponse(res, { ok: false, error: notStartedReason(openId) });
         return;
       }
       jsonResponse(res, {

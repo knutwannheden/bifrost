@@ -70,5 +70,29 @@ write({ projects: { [repo]: { hasTrustDialogAccepted: true } } });
 
 check('no config at all is nothing to do', trustDirectory(repo, path.join(root, 'absent.json')) === false);
 
+write({ projects: { [root]: { hasTrustDialogAccepted: true } } });
+{
+  const before = fs.readFileSync(configPath, 'utf-8');
+  const wrote = trustDirectory(repo, configPath);
+  check(
+    'a directory inside a trusted one is left alone',
+    wrote === false && fs.readFileSync(configPath, 'utf-8') === before,
+  );
+}
+
+{
+  const configDir = path.join(root, 'config-dir');
+  fs.mkdirSync(configDir);
+  const inDir = path.join(configDir, '.claude.json');
+  fs.writeFileSync(inDir, JSON.stringify({ projects: {} }));
+  process.env.CLAUDE_CONFIG_DIR = configDir;
+  trustDirectory(repo);
+  delete process.env.CLAUDE_CONFIG_DIR;
+  check(
+    'with CLAUDE_CONFIG_DIR set, trust goes to the config Claude reads there',
+    JSON.parse(fs.readFileSync(inDir, 'utf-8')).projects[repo]?.hasTrustDialogAccepted === true,
+  );
+}
+
 fs.rmSync(root, { recursive: true, force: true });
 process.exit(failed === 0 ? 0 : 1);

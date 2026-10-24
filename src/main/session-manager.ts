@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { trustDirectory } from './claude-trust.ts';
 import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror';
 
 // Use require for node-pty because it's externalized from Vite bundling
@@ -95,6 +96,8 @@ interface ReadyGate {
   resolve: () => void;
   ready: boolean;
   timer: ReturnType<typeof setTimeout> | null;
+  /** Stopped on the workspace trust prompt, which is quiet without being ready for a prompt. */
+  awaitingTrust: boolean;
 }
 // A freshly spawned PTY accepts writes seconds before Claude's TUI reads them,
 // so callers that inject input need a readiness signal rather than liveness.
@@ -109,7 +112,7 @@ function createReadyGate(sessionId: string): void {
   const promise = new Promise<void>((r) => {
     resolve = r;
   });
-  sessionReady.set(sessionId, { promise, resolve, ready: false, timer: null });
+  sessionReady.set(sessionId, { promise, resolve, ready: false, timer: null, awaitingTrust: false });
 }
 
 /** Restart the quiet-period countdown; the last output before silence wins. */
@@ -123,7 +126,7 @@ export function sessionOutputAt(sessionId: string): number | undefined {
 function noteSessionOutput(sessionId: string): void {
   lastOutputAt.set(sessionId, Date.now());
   const gate = sessionReady.get(sessionId);
-  if (!gate || gate.ready) return;
+  if (!gate || gate.ready || gate.awaitingTrust) return;
   if (gate.timer) clearTimeout(gate.timer);
   gate.timer = setTimeout(() => {
     gate.ready = true;
@@ -314,6 +317,8 @@ export function spawnSession(
     spawnArgs = args;
   }
 
+  if (options?.autoTrust) trustDirectory(cwd);
+
   let shell: IPty;
   try {
     shell = pty.spawn(spawnCommand, spawnArgs, {
@@ -341,10 +346,7 @@ export function spawnSession(
   createMirror(sessionId, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
   createReadyGate(sessionId);
 
-  // Auto-accept workspace trust prompt for Bifrost-managed Claude sessions.
-  // Worktree directories are subdirectories of repos the user already added,
-  // but Claude Code treats each unique CWD as a separate project needing trust.
-  let trustHandled = !options?.autoTrust;
+  let trustScanned = !options?.autoTrust;
 
   shell.onData((data: string) => {
     const forward = mirrorOutput(sessionId, data);
@@ -356,12 +358,20 @@ export function spawnSession(
 
     // The trust prompt only appears during startup, which bounds this scan to
     // a small buffer — normalizing every chunk of a long session would not.
-    if (!trustHandled) {
+    // It is left for a person, since Enter on it picks "No, exit".
+    if (!trustScanned) {
       if (buf.length > TRUST_SCAN_LIMIT) {
-        trustHandled = true;
+        trustScanned = true;
       } else if (normalizeOutput(buf).includes('yesitrustthisfolder')) {
-        trustHandled = true;
-        shell.write('\r');
+        trustScanned = true;
+        const gate = sessionReady.get(sessionId);
+        if (gate && !gate.ready) {
+          if (gate.timer) clearTimeout(gate.timer);
+          gate.timer = null;
+          gate.awaitingTrust = true;
+          gate.resolve();
+        }
+        console.warn(`[session] ${sessionId} is stopped on the workspace trust prompt for ${cwd}`);
       }
     }
 
@@ -490,12 +500,18 @@ export function createShellSession(
 export function writeToSession(sessionId: string, data: string): boolean {
   const session = sessions.get(sessionId);
   if (!session) return false;
+  // Someone is answering the trust prompt, after which the session settles like any other.
+  if (sessionReady.get(sessionId)?.awaitingTrust) createReadyGate(sessionId);
   session.write(data);
   return true;
 }
 
 export function hasSession(sessionId: string): boolean {
   return sessions.has(sessionId);
+}
+
+export function sessionAwaitsTrust(sessionId: string): boolean {
+  return sessionReady.get(sessionId)?.awaitingTrust === true;
 }
 
 /** Resolves true once the session's TUI accepts input, false on timeout or exit. */

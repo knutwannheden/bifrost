@@ -2,7 +2,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CLAUDE_CONFIG = path.join(os.homedir(), '.claude.json');
+/** The config Claude Code reads, which CLAUDE_CONFIG_DIR moves out of the home directory. */
+function claudeConfigPath(): string {
+  return path.join(process.env.CLAUDE_CONFIG_DIR ?? os.homedir(), '.claude.json');
+}
 
 /** What Claude Code writes for a project it has not met, with trust granted. */
 const TRUSTED_ENTRY = {
@@ -22,7 +25,7 @@ const TRUSTED_ENTRY = {
  * it wrote, which is once per directory: a session that never sees the prompt
  * is one an agent can drive unattended.
  */
-export function trustDirectory(dir: string, configPath = CLAUDE_CONFIG): boolean {
+export function trustDirectory(dir: string, configPath = claudeConfigPath()): boolean {
   // Claude looks a project up under the path it resolved, so a directory
   // reached through a symlink is not the key it will read.
   let key: string;
@@ -41,7 +44,11 @@ export function trustDirectory(dir: string, configPath = CLAUDE_CONFIG): boolean
   }
 
   const projects = config.projects ?? {};
-  if (projects[key]?.hasTrustDialogAccepted === true) return false;
+  // Claude honours trust granted to any ancestor, which is how a worktree inside its repo is trusted.
+  for (let d = key; ; d = path.dirname(d)) {
+    if (projects[d]?.hasTrustDialogAccepted === true) return false;
+    if (d === path.dirname(d)) break;
+  }
   config.projects = { ...projects, [key]: { ...TRUSTED_ENTRY, ...projects[key], hasTrustDialogAccepted: true } };
 
   // Claude Code rewrites this file whole and often. Renaming into place keeps a
