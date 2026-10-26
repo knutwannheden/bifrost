@@ -28,8 +28,8 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-function run(args: string[], input?: string) {
-  const r = spawnSync(process.execPath, [CLI, ...args], { env, input, encoding: 'utf8' });
+function run(args: string[], input?: string, extraEnv: NodeJS.ProcessEnv = {}) {
+  const r = spawnSync(process.execPath, [CLI, ...args], { env: { ...env, ...extraEnv }, input, encoding: 'utf8' });
   return { code: r.status, out: r.stdout + r.stderr };
 }
 
@@ -94,6 +94,28 @@ describe('cli', () => {
     const r = run(['release', '1', '--requeue']);
     expect(r.out).toMatch(/granted next.*"prof"/);
     expect(r.out).toMatch(/waiting #3.*1st in line/);
+  });
+
+  test('after a tool call, a holder hears once of each session that starts waiting behind it', () => {
+    const afterTool = (session: string) =>
+      run(['hook'], JSON.stringify({ session_id: session, hook_event_name: 'PostToolUse' }));
+    const acquireAs = (holder: string, session: string) =>
+      run(['acquire', 'cpu', '--exclusive', '--why', `${holder} work`, '--as', holder], undefined, {
+        CLAUDE_CODE_SESSION_ID: session,
+      });
+
+    run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);
+    expect(afterTool('sess-cli').out.trim()).toBe('');
+
+    acquireAs('prof', 'sess-prof');
+    const told = afterTool('sess-cli').out;
+    expect(told).toContain('prof work');
+    expect(told).toContain('headroom release 1 --requeue');
+    expect(afterTool('sess-cli').out.trim()).toBe('');
+    expect(afterTool('sess-prof').out.trim()).toBe('');
+
+    acquireAs('lint', 'sess-lint');
+    expect(afterTool('sess-cli').out).toContain('lint work');
   });
 
   test('hook injects on change, at session start, and always for a session with a claim', () => {

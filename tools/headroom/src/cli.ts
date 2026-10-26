@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
-import { Board, type ClaimInput, type Mode } from './board.ts';
+import { Board, type Claim, type ClaimInput, type Mode } from './board.ts';
 import {
   busyRefusal,
   formatLeft,
@@ -16,7 +16,7 @@ import {
   sessionPid,
   signature,
 } from './common.ts';
-import { hookOutput } from './hook.ts';
+import { hookOutput, waitingBehind } from './hook.ts';
 import { describeLoad, sampleForeignLoad } from './machine.ts';
 
 const USAGE = `headroom — advisory claims on shared resources, for agent sessions on one machine
@@ -28,7 +28,8 @@ const USAGE = `headroom — advisory claims on shared resources, for agent sessi
       keep the claim alive while the command runs, and act on a yield request
   headroom wait <id> [--timeout 40m]
   headroom renew <id> [--ttl 10m] [--why "..."]
-  headroom release <id> [--requeue]        (clear <id> is the same thing, for lifting a notice)
+  headroom release <id> [--requeue]        --requeue lets the next in line run and files the claim right behind it
+      (clear <id> is the same thing, for lifting a notice)
   headroom notice <resource> --why "..." [--serial] [--ttl 1h] [--as name]
       --serial lets work through one claim at a time instead of stopping it; without it nothing new runs
   headroom seize <resource> --why "..." [--ttl 10m] [--as name]
@@ -226,6 +227,26 @@ function shouldInject(session: string | null, event: string | undefined, board: 
   return now !== last;
 }
 
+/**
+ * The sessions waiting behind a claim this session holds that it has not been
+ * told of yet, so a holder hears of each waiter once however many tools it runs.
+ */
+function newlyWaitingBehind(session: string, board: Board): { held: Claim; waiters: Claim[] } | null {
+  const status = board.status();
+  const held = status.holding.find((c) => c.sessionId === session);
+  if (!held) return null;
+  const waiters = status.waiting.filter((c) => c.resource === held.resource && c.sessionId !== session);
+  const toldFile = join(dirname(dbFile()), 'seen', `${session.replace(/[^\w-]/g, '_')}.behind`);
+  let told: number[] = [];
+  try {
+    told = JSON.parse(readFileSync(toldFile, 'utf8'));
+  } catch {}
+  mkdirSync(dirname(toldFile), { recursive: true });
+  writeFileSync(toldFile, JSON.stringify(waiters.map((c) => c.id)));
+  const fresh = waiters.filter((c) => !told.includes(c.id));
+  return fresh.length ? { held, waiters: fresh } : null;
+}
+
 async function main(argv: string[]): Promise<number> {
   const dashes = argv.indexOf('--');
   const cmd = dashes >= 0 ? argv.slice(dashes + 1) : [];
@@ -382,6 +403,11 @@ async function main(argv: string[]): Promise<number> {
         });
         const event = input.trim() ? JSON.parse(input) : {};
         const session = event.session_id ?? null;
+        if (event.hook_event_name === 'PostToolUse') {
+          const behind = session ? newlyWaitingBehind(session, board) : null;
+          if (behind) console.log(JSON.stringify(waitingBehind(behind.held, behind.waiters)));
+          return 0;
+        }
         if (!shouldInject(session, event.hook_event_name, board)) return 0;
         const out = hookOutput(board.status(), session, Date.now(), event.hook_event_name);
         if (out) console.log(JSON.stringify(out));

@@ -5,7 +5,7 @@ export interface HookOutput {
   /** One line for the user's terminal. */
   systemMessage: string;
   hookSpecificOutput: {
-    hookEventName: 'UserPromptSubmit' | 'SessionStart';
+    hookEventName: 'UserPromptSubmit' | 'SessionStart' | 'PostToolUse';
     /** What the model needs from the board, with the reasons the banner leaves out. */
     additionalContext: string;
   };
@@ -125,6 +125,26 @@ export function hookOutput(
         'Shared resources on this machine (from `headroom status`):',
         ...detail,
         'Before CPU-heavy work (benchmarks, profiling, full builds, long suites), claim with `headroom acquire`.',
+      ].join('\n'),
+    },
+  };
+}
+
+/** What a holder is told after a tool call about sessions that started waiting behind its claim. */
+export function waitingBehind(held: Claim, waiters: Claim[]): HookOutput {
+  const names = waiters.map((w) => w.holder).join(', ');
+  return {
+    systemMessage: `headroom — ${names} waiting on ${held.resource} behind your claim #${held.id}`,
+    hookSpecificOutput: {
+      hookEventName: 'PostToolUse',
+      additionalContext: [
+        ...waiters.map(
+          (w) =>
+            `${w.holder} [${w.sessionId ?? '-'}] is waiting on ${held.resource} behind your claim #${held.id}: ${w.why}`,
+        ),
+        `If nothing runs under #${held.id} now, step aside with \`headroom release ${held.id} --requeue\`.`,
+        'The next in line runs while you prepare your next step, and your claim comes back right behind it.',
+        `If you are finished with ${held.resource}, \`headroom release ${held.id}\` instead.`,
       ].join('\n'),
     },
   };

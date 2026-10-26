@@ -258,10 +258,15 @@ export class Board {
     });
   }
 
-  /** Releases the claim and files the same claim again at the back of the queue, for work that lets others in between rounds. */
+  /**
+   * Releases the claim and files the same claim again right behind the claim
+   * at the front of the queue, so a holder lets the next one run and takes its
+   * turn straight after.
+   */
   requeue(id: number): { next: Claim[]; claim: Claim } {
     return this.transaction(() => {
       const old = this.row(id);
+      const front = this.status(old.resource).waiting[0];
       const next = this.release(id);
       const claim = this.claim({
         resource: old.resource,
@@ -270,11 +275,16 @@ export class Board {
         sessionId: old.sessionId ?? undefined,
         pid: old.pid ?? undefined,
         why: old.why,
-        priority: old.priority,
+        priority: front?.priority ?? old.priority,
         ttlMs: old.ttlMs,
         holderLimit: old.holderLimit ?? undefined,
       });
-      return { next, claim };
+      if (!front) return { next, claim };
+      // The queue sorts by priority, then age, then id, so sharing the front's
+      // age and coming later by id puts this claim right behind it.
+      this.db.prepare('UPDATE claims SET created_at = ? WHERE id = ?').run(front.createdAt, claim.id);
+      this.schedule(old.resource);
+      return { next, claim: this.row(claim.id) };
     });
   }
 

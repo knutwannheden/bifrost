@@ -26,7 +26,7 @@ headroom hold $id -- ./gradlew jmh -Pround=2
 headroom release $id
 ```
 
-**Claim the heavy work, not the time around it.** A claim held across idle gaps — a three-hour shared claim for work that runs in bursts, an exclusive claim kept while you read results — holds everyone else out of a CPU nobody is using. Claim per burst: `run` around each command does this by itself, and for a bare claim, release when the burst ends and claim again for the next. The one exception is a measurement whose rounds must not be split by other load — an interleaved A/B — which is held as one claim for exactly its rounds; if it is long, `headroom release <id> --requeue` between rounds lets a waiter in and puts you back in line. A short claim that is renewed when needed beats a long one that is guessed.
+**Claim the heavy work, not the time around it.** A claim held across idle gaps — a three-hour shared claim for work that runs in bursts, an exclusive claim kept while you read results — holds everyone else out of a CPU nobody is using. Claim per burst: `run` around each command does this by itself, and for a bare claim, release when the burst ends and claim again for the next. The one exception is a measurement whose rounds must not be split by other load — an interleaved A/B — which is held as one claim for exactly its rounds; if it is long, `headroom release <id> --requeue` between rounds lets the next in line run and brings you back right behind it. A short claim that is renewed when needed beats a long one that is guessed.
 
 Anything under about 30 seconds of CPU — a quick grep, a single test class — runs unclaimed. Builds, suites, benchmarks and profiles are claimed, however short they look.
 
@@ -62,6 +62,10 @@ Claim as soon as you know you will need the resource, not when you reach that st
 ## When you release
 
 `release` names whoever was granted next. A session sitting in `headroom wait` or `headroom run` picks the grant up within seconds. An idle one sees it only at its next prompt, which is usually longer than the offer stands, so tell it with `SendMessage` when the order matters to you.
+
+## When someone is waiting behind you
+
+After a tool call you may be told that a session is waiting behind your claim. If nothing runs under the claim right now, step aside with `headroom release <id> --requeue`. The next in line runs while you read results and prepare your next step, and your claim comes back right behind it, ahead of everyone else waiting. When you are ready, `headroom wait <new id>` takes your turn, or `headroom hold <new id> -- <command>` once it is granted. If you are finished with the resource, plain `release` instead.
 
 ## When you are not granted
 
