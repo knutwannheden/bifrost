@@ -19,7 +19,7 @@ import type {
   Repo,
   Task,
 } from '../shared/types';
-import { getFileDiffOnDemand, getLastChangedFile, startWatching, stopWatching } from './activity-watcher';
+import { getFileDiffOnDemand, startWatching, stopWatching } from './activity-watcher';
 import { getApiPort, isSessionStale } from './bifrost-api';
 import { forgetChangeFeed, initChangeFeed, loadChangeFeed, setActiveFeedTask } from './change-feed-service';
 import { scanClaudeSessions } from './claude-session-scanner';
@@ -34,6 +34,7 @@ import { getGitLog } from './git-log-service';
 import { scanRecentRepos } from './history-scanner';
 import { openFileInIde, openInIde } from './ide-launcher';
 import { checkIntegration, installIntegration } from './integration-installer';
+import { lastChangedFile } from './last-changed-file.ts';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
 import { getTaskPrs } from './pr-index';
@@ -1082,7 +1083,7 @@ end tell`;
   });
 
   ipcMain.handle(IPC.GET_LAST_CHANGED_FILE, (_event, taskId: string) => {
-    return getLastChangedFile(taskId);
+    return lastChangedFile(getTask(taskId).worktreePath);
   });
 
   // Activity Log

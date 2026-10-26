@@ -215,8 +215,7 @@ export interface ActivityEntry {
   id: string;
   taskId: string;
   timestamp: number;
-  type: 'file_change' | 'commit' | 'claude_event';
-  filePath?: string;
+  type: 'commit' | 'claude_event';
   commitSha?: string;
   commitMessage?: string;
   // Claude event fields

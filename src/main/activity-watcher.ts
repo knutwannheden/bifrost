@@ -21,22 +21,6 @@ const execFile = promisify(execFileCb);
 const SAFETY_POLL_INTERVAL_MS = 15000;
 const GIT_TIMEOUT_MS = 10000;
 
-// Heavy/uninteresting subtrees we never need change signals from. `.git` is
-// excluded here and watched separately via the resolved gitdir (below), because
-// a commit on a worktree touches the gitdir's `logs/HEAD`, not the worktree.
-const WORKTREE_IGNORE = [
-  '**/node_modules/**',
-  '**/.git/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/out/**',
-  '**/target/**',
-  '**/.next/**',
-  '**/.turbo/**',
-  '**/.cache/**',
-  '**/coverage/**',
-];
-
 // The gitdir's `objects/` sees heavy pack churn that tells us nothing the
 // `logs/HEAD`/refs/index changes don't; ignore it to avoid needless re-polls.
 const GITDIR_IGNORE = ['**/objects/**'];
@@ -66,13 +50,11 @@ function resolveGitDir(worktreePath: string): string | null {
 type UnusedRow = Record<string, any>;
 
 interface TaskWatcher {
-  /** Safety-net poll; the filesystem watches below drive the hot path. */
+  /** Safety-net poll. The gitdir watch drives the hot path. */
   safetyTimer: ReturnType<typeof setInterval>;
-  worktreeWatch: FsWatchHandle | null;
   gitdirWatch: FsWatchHandle | null;
   entries: ActivityEntry[];
   headSha: string | null;
-  knownFiles: Set<string>;
   polling: boolean;
   /** A change fired while a poll was in flight — re-run once it finishes. */
   pollPending: boolean;
@@ -104,23 +86,6 @@ async function getCommitMessage(worktreePath: string, sha: string): Promise<stri
   }
 }
 
-async function getChangedFiles(worktreePath: string): Promise<string[]> {
-  try {
-    const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
-      cwd: worktreePath,
-      timeout: GIT_TIMEOUT_MS,
-    });
-    if (!stdout.trim()) return [];
-    return stdout
-      .trim()
-      .split('\n')
-      .map((line) => line.substring(3).trim())
-      .filter((f) => f.length > 0);
-  } catch {
-    return [];
-  }
-}
-
 export function startWatching(
   taskId: string,
   worktreePath: string,
@@ -136,21 +101,15 @@ export function startWatching(
 
   const tw: TaskWatcher = {
     safetyTimer: null as unknown as ReturnType<typeof setInterval>,
-    worktreeWatch: null,
     gitdirWatch: null,
     entries,
     headSha: null,
-    knownFiles: new Set<string>(),
     polling: false,
     pollPending: false,
   };
 
-  // Get initial HEAD SHA and file state before starting the poll loop
-  Promise.all([getHeadSha(worktreePath), getChangedFiles(worktreePath)]).then(([sha, files]) => {
+  getHeadSha(worktreePath).then((sha) => {
     tw.headSha = sha;
-    for (const f of files) {
-      tw.knownFiles.add(f);
-    }
   });
 
   const poll = async () => {
@@ -164,7 +123,6 @@ export function startWatching(
     tw.polling = true;
     tw.pollPending = false;
     try {
-      // 1. Check for new commit
       const currentSha = await getHeadSha(worktreePath);
       if (currentSha && tw.headSha && currentSha !== tw.headSha) {
         const commitMsg = await getCommitMessage(worktreePath, currentSha);
@@ -177,50 +135,16 @@ export function startWatching(
           commitMessage: commitMsg,
         };
         tw.entries = [commitEntry];
-        tw.headSha = currentSha;
-        tw.knownFiles.clear();
         mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
-        return;
       }
-      if (currentSha) {
-        tw.headSha = currentSha;
-      }
-
-      // 2. Check for file changes via git status
-      const changedFiles = await getChangedFiles(worktreePath);
-      const currentSet = new Set(changedFiles);
-
-      // Remove files no longer in git status
-      for (const f of tw.knownFiles) {
-        if (!currentSet.has(f)) {
-          tw.knownFiles.delete(f);
-        }
-      }
-
-      // Emit entries for new files
-      for (const file of changedFiles) {
-        if (!tw.knownFiles.has(file)) {
-          tw.knownFiles.add(file);
-
-          const entry: ActivityEntry = {
-            id: randomUUID(),
-            taskId,
-            timestamp: Date.now(),
-            type: 'file_change',
-            filePath: file,
-          };
-          tw.entries.push(entry);
-          mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
-        }
-      }
+      if (currentSha) tw.headSha = currentSha;
     } catch (err) {
       // Worktree may have been deleted or git state is broken — skip this cycle
       console.error(`[activity-watcher] poll error for task ${taskId}:`, err);
     } finally {
       tw.polling = false;
-      // A change fired during the poll above (including via the commit branch's
-      // early return) — run one more pass to pick it up. In `finally` so it
-      // covers every exit path.
+      // A change fired during the poll above — run one more pass to pick it up.
+      // In `finally` so it covers every exit path.
       if (tw.pollPending) {
         tw.pollPending = false;
         void poll();
@@ -228,25 +152,16 @@ export function startWatching(
     }
   };
 
-  // Slow safety net — the filesystem watches below handle the low-latency path.
+  // Slow safety net — the gitdir watch below handles the low-latency path.
   tw.safetyTimer = setInterval(poll, SAFETY_POLL_INTERVAL_MS);
   watchers.set(taskId, tw);
 
-  // Event-driven: re-poll when worktree files change (file edits) or the gitdir
-  // changes (commits). `subscribe` is async; if this task's watcher is replaced
+  // Commits are seen through the gitdir, whose `logs/HEAD` a commit on the
+  // worktree touches. `subscribe` is async; if this task's watcher is replaced
   // or stopped before it resolves, close the orphaned handle immediately.
   const trigger = (): void => {
     void poll();
   };
-  watchDir(worktreePath, trigger, { ignore: WORKTREE_IGNORE })
-    .then((handle) => {
-      if (watchers.get(taskId) === tw) tw.worktreeWatch = handle;
-      else void handle.close();
-    })
-    .catch((err) => {
-      console.error(`[activity-watcher] failed to watch worktree for task ${taskId}:`, err);
-    });
-
   const gitdir = resolveGitDir(worktreePath);
   if (gitdir) {
     watchDir(gitdir, trigger, { ignore: GITDIR_IGNORE })
@@ -267,7 +182,6 @@ export function stopWatching(taskId: string): void {
   const tw = watchers.get(taskId);
   if (tw) {
     clearInterval(tw.safetyTimer);
-    void tw.worktreeWatch?.close();
     void tw.gitdirWatch?.close();
     watchers.delete(taskId);
   }
@@ -282,27 +196,15 @@ export function stopAllWatching(): void {
 
 export function getActivityLog(taskId: string, worktreePath: string): ActivityEntry[] {
   const tw = watchers.get(taskId);
-  const fileEntries = tw ? tw.entries : [];
+  const commitEntries = tw ? tw.entries : [];
 
   // Also include recent Claude JSONL entries (read directly from source)
   const claudeEntries = getRecentClaudeEntries(taskId, worktreePath);
 
-  if (claudeEntries.length === 0) return fileEntries;
+  if (claudeEntries.length === 0) return commitEntries;
 
   // Merge and sort by timestamp
-  return [...fileEntries, ...claudeEntries].sort((a, b) => a.timestamp - b.timestamp);
-}
-
-export function getLastChangedFile(taskId: string): string | null {
-  const tw = watchers.get(taskId);
-  const entries = tw ? tw.entries : [];
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const filePath = entries[i].filePath;
-    if (entries[i].type === 'file_change' && filePath) {
-      return filePath;
-    }
-  }
-  return null;
+  return [...commitEntries, ...claudeEntries].sort((a, b) => a.timestamp - b.timestamp);
 }
 
 export async function getFileDiffOnDemand(worktreePath: string, filePath: string): Promise<string> {

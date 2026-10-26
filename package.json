@@ -28,6 +28,7 @@
     "check:repo-match": "node scripts/check-repo-match.mts",
     "check:branch-drift": "node scripts/check-branch-drift.mts",
     "check:pr-index": "node scripts/check-pr-index.mts",
+    "check:last-changed-file": "node scripts/check-last-changed-file.mts",
     "check:worktree-scan": "node scripts/check-worktree-scan.mts",
     "check:worktree-adopt": "node scripts/check-worktree-adopt.mts",
     "check:walkthrough-schema": "node scripts/check-walkthrough-schema.mts",

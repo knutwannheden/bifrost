@@ -51,7 +51,7 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `session-manager.ts` | Spawns/kills PTY sessions via node-pty |
 | `session-mirror.ts` | Headless xterm per session; shapes the replay for the terminal that attaches |
 | `ipc-handlers.ts` | Registers all IPC handlers, manages in-memory task list |
-| `activity-watcher.ts` | Watches worktrees for file changes, commits, Claude JSONL events |
+| `activity-watcher.ts` | Watches worktrees for commits and Claude JSONL events |
 | `claude-watcher.ts` | Parses Claude JSONL session files for token usage, turn boundaries, and tool attribution |
 | `context-store.ts` | Structured context capture with JSONL persistence |
 | `worktree-manager.ts` | Creates/removes git worktrees for tasks |
