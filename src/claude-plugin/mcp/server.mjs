@@ -374,7 +374,7 @@ server.registerTool(
         .boolean()
         .optional()
         .describe(
-          'If true, archive the task: close + mark archived + delete worktree. Defaults to false (close only).',
+          "If true, archive the task: close + mark archived + delete worktree. Defaults to false (close only). Archiving deletes only the task's own worktree. It cannot know what the task created anywhere else, so before archiving the task you run in, remove that yourself: worktrees you added to other repos, clones and scratch directories, processes still running, headroom claims still held. Remove only what this task created, since other sessions share the machine.",
         ),
       force: z
         .boolean()

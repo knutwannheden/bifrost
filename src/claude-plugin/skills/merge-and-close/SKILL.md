@@ -103,15 +103,27 @@ Use `--squash` by default. If merge fails:
 | Branch protection | Report the specific protection rule blocking merge and **stop**. |
 | Other error | Report the error message verbatim and **stop**. |
 
-### 6. Archive the Bifrost task
+### 6. Clean up what the task made outside its worktree
 
-After successful merge, call the `close_or_archive_task` MCP tool with `archive: true` and no `taskId` — it defaults to the task you are running in. Pass a `taskId` only when the user named a different task.
+Archiving deletes the task's worktree and everything in it: submodules, build output, untracked files. It cannot see what the task created anywhere else, so remove that yourself first:
 
-### 7. Report
+- Worktrees you added to other repos, such as a reference checkout's `.worktrees/<name>`. Remove each with `git -C <repo> worktree remove <path>`.
+- Clones and scratch directories you made under `$TMPDIR`, `/tmp` or elsewhere.
+- Processes you started that still run: dev servers, watchers, containers.
+- Headroom claims you still hold: `headroom release <id>`.
+
+Remove only what you know this task created. Other sessions share this machine, so a worktree or directory you did not make may be in use. Leave it and name it in the report.
+
+### 7. Archive the Bifrost task
+
+After the cleanup, call the `close_or_archive_task` MCP tool with `archive: true` and no `taskId` — it defaults to the task you are running in. Pass a `taskId` only when the user named a different task.
+
+### 8. Report
 
 Confirm to the user:
 - PR was merged (include PR URL)
 - Branch was deleted
+- What you cleaned up outside the worktree, and anything you left because you did not create it
 - Bifrost task was archived
 
 ## Common Rationalizations - STOP
@@ -127,5 +139,6 @@ Confirm to the user:
 | "The thread is outdated, the code moved on" | Outdated means the line shifted, not that the point was answered. |
 | "I'll address the comments in a follow-up" | Say that to the user before merging, not instead of telling them. |
 | "I can resolve the thread myself, it's handled" | Resolving is posting to GitHub. Not yours to do. |
+| "Archiving cleans everything up" | Only the task's own worktree. What you made elsewhere outlives the task. |
 
 **All of these mean: Follow the process. No shortcuts.**
