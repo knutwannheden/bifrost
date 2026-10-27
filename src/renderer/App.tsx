@@ -60,13 +60,9 @@ export default function App() {
   const activeTaskIdRef = useRef(state.activeTaskId);
   activeTaskIdRef.current = state.activeTaskId;
 
-  // Mark active task as read when switching to it, and sync to main process
   useEffect(() => {
     window.bifrost.setActiveTaskId(state.activeTaskId);
-    if (state.activeTaskId) {
-      dispatch({ type: 'SET_TASK_UNREAD', taskId: state.activeTaskId, hasUnread: false });
-    }
-  }, [state.activeTaskId, dispatch]);
+  }, [state.activeTaskId]);
 
   // Listen for session exit to update task status
   useEffect(() => {
@@ -447,13 +443,14 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [state.toast, state.toastDuration, dispatch]);
 
-  // Track tab recency — only mark as active after a 200ms dwell
-  // so rapid Cmd+Shift+[/] cycling doesn't mark every tab
+  // A tab counts as visited, and read, after a 200ms dwell, so tabs that
+  // Cmd+Shift+[/] cycles past keep their place in history and their unread strip.
   useEffect(() => {
     if (!state.activeTaskId) return;
     const taskId = state.activeTaskId;
     const timer = setTimeout(() => {
       dispatch({ type: 'MARK_TAB_ACTIVE', taskId });
+      dispatch({ type: 'SET_TASK_UNREAD', taskId, hasUnread: false });
     }, 200);
     return () => clearTimeout(timer);
   }, [state.activeTaskId, dispatch]);
