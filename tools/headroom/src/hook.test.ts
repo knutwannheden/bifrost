@@ -31,6 +31,16 @@ describe('hookOutput', () => {
     expect(context).toMatch(/waiting.*suite/);
   });
 
+  test('a claim held around a command shows no countdown, since the command renews it', () => {
+    const board = Board.inMemory({ now: () => T0 });
+    const bench = board.claim({ resource: 'cpu', mode: 'exclusive', holder: 'bench', why: 'JMH', ttlMs: 10 * MIN });
+    board.attach(bench.id, process.pid, true);
+
+    const context = hookOutput(board.status(), null, T0)?.hookSpecificOutput.additionalContext ?? '';
+    expect(context).toContain('held by bench, exclusive, renewed while its command runs: JMH');
+    expect(context).not.toMatch(/\dm left/);
+  });
+
   test("a session's own claim reads as you, not as its name", () => {
     const board = Board.inMemory({ now: () => T0 });
     const mine = board.claim({

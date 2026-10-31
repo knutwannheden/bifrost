@@ -111,7 +111,7 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
   // While held here, the claim lives and dies with this wrapper rather than
   // the session, so a killed hold frees the resource on the next look.
   const owner = board.get(id)?.pid ?? sessionPid();
-  board.attach(id, process.pid);
+  board.attach(id, process.pid, true);
   // Another session can start on the resource in the moment between the grant
   // and this hold, which leaves the claim queued while the command runs anyway.
   if (board.get(id)?.grantedAt === null) {

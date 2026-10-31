@@ -1,5 +1,5 @@
 import type { Claim, Status } from './board.ts';
-import { formatLeft } from './common.ts';
+import { formatLeft, lifetime } from './common.ts';
 
 export interface HookOutput {
   /** One line for the user's terminal. */
@@ -98,7 +98,7 @@ export function hookOutput(
           `${c.holderLimit === 1 ? 'one claim at a time so claim and wait your turn' : 'nothing new is granted'}` +
           `: ${c.why}`,
       );
-    for (const c of shown) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${formatLeft(c, now)} left: ${c.why}`);
+    for (const c of shown) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${lifetime(c, now)}: ${c.why}`);
     if (counted.length) detail.push(`- ${sharedCount(counted, 'other session')}; \`headroom status\` lists them`);
     for (const c of offered)
       detail.push(

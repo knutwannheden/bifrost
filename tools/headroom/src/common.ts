@@ -8,6 +8,11 @@ export function formatLeft(claim: Claim, now: number): string {
   return min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? `${min % 60}m` : ''}` : `${min}m`;
 }
 
+/** How long a claim stands: a countdown for a bare claim, and no deadline at all for one a command renews. */
+export function lifetime(claim: Claim, now: number): string {
+  return claim.renewing ? 'renewed while its command runs' : `${formatLeft(claim, now)} left`;
+}
+
 export function parseDuration(text: string): number {
   const m = /^(\d+)\s*([smhd]?)$/.exec(text.trim());
   if (!m) throw new Error(`Bad duration "${text}" — use 90s, 10m, 1h`);
@@ -103,7 +108,7 @@ export function queued(board: Board, claim: Claim): string {
   );
   const lines = [`waiting #${claim.id} — ${claim.resource} is not free; you are ${ordinal(ahead.length + 1)} in line.`];
   for (const n of notices) lines.push(`  notice from ${n.holder}: ${n.why}`);
-  for (const h of holding) lines.push(`  held by ${h.holder} (${h.mode}, ${formatLeft(h, now)} left): ${h.why}`);
+  for (const h of holding) lines.push(`  held by ${h.holder} (${h.mode}, ${lifetime(h, now)}): ${h.why}`);
   for (const w of ahead) lines.push(`  ahead of you: ${w.holder} (${w.mode}): ${w.why}`);
   const names = [...holding, ...ahead].map((c) => `"${c.holder}"`).join(', ');
   if (names) lines.push(`To negotiate, use SendMessage with to: ${names}.`);

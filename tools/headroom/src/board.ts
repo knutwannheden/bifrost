@@ -25,6 +25,8 @@ export interface Claim {
   yieldRequestedBy: number | null;
   /** The holder's session process, whose death releases the claim. */
   pid: number | null;
+  /** Whether that process renews the claim for as long as its command runs, so the ttl is a lease and not a deadline. */
+  renewing: boolean;
   /**
    * On a notice, how many claims may hold the resource while it stands. Zero
    * keeps the machine quiet and one makes work take turns. Null on every other
@@ -93,7 +95,8 @@ const SCHEMA = `
     released_at INTEGER,
     yield_requested_by INTEGER,
     pid INTEGER,
-    holder_limit INTEGER
+    holder_limit INTEGER,
+    renewing INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS claims_live ON claims(resource) WHERE released_at IS NULL;
 `;
@@ -115,6 +118,7 @@ interface Row {
   yield_requested_by: number | null;
   pid: number | null;
   holder_limit: number | null;
+  renewing: number;
 }
 
 function toClaim(r: Row): Claim {
@@ -135,6 +139,7 @@ function toClaim(r: Row): Claim {
     yieldRequestedBy: r.yield_requested_by,
     pid: r.pid,
     holderLimit: r.holder_limit,
+    renewing: r.renewing === 1,
   };
 }
 
@@ -162,6 +167,9 @@ export class Board {
     if (!columns.some((c) => c.name === 'accepted_at')) {
       db.exec('ALTER TABLE claims ADD COLUMN accepted_at INTEGER');
       db.exec('UPDATE claims SET accepted_at = granted_at WHERE granted_at IS NOT NULL');
+    }
+    if (!columns.some((c) => c.name === 'renewing')) {
+      db.exec('ALTER TABLE claims ADD COLUMN renewing INTEGER NOT NULL DEFAULT 0');
     }
   }
 
@@ -211,10 +219,10 @@ export class Board {
    * session's behalf. A wrapper runs only on a resource its claim has, so this
    * is also how the claim starts on it.
    */
-  attach(id: number, pid: number | null): void {
+  attach(id: number, pid: number | null, renewing = false): void {
     this.transaction(() => {
       const { resource } = this.row(id);
-      this.db.prepare('UPDATE claims SET pid = ? WHERE id = ?').run(pid, id);
+      this.db.prepare('UPDATE claims SET pid = ?, renewing = ? WHERE id = ?').run(pid, renewing ? 1 : 0, id);
       // An offer has to be on the table before it can be taken, and taking it
       // is what sends the offer it beat back to the queue.
       this.schedule(resource);
