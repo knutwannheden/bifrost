@@ -111,7 +111,13 @@ export function queued(board: Board, claim: Claim): string {
   return lines.join('\n');
 }
 
-/** What the board looks like apart from the clock, so a session is shown it again only when something happened. */
+/**
+ * What the board looks like apart from the clock and the running shared claims,
+ * which block nobody, so a session is shown it again only when something it could act on happened.
+ */
 export function signature(claims: Claim[]): string {
-  return claims.map((c) => `${c.id}:${c.grantedAt !== null}:${c.why}:${c.yieldRequestedBy ?? ''}`).join('|');
+  return claims
+    .filter((c) => !(c.mode === 'shared' && c.grantedAt !== null && c.acceptedAt !== null))
+    .map((c) => `${c.id}:${c.grantedAt !== null}:${c.why}:${c.yieldRequestedBy ?? ''}`)
+    .join('|');
 }

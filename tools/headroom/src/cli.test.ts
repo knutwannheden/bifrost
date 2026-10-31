@@ -136,6 +136,22 @@ describe('cli', () => {
     expect(prompt('sess-cli').out).toContain('JMH run');
   });
 
+  test("other sessions' shared claims coming and going are not a change to a session without a claim", () => {
+    const prompt = () =>
+      run(['hook'], JSON.stringify({ session_id: 'watcher', hook_event_name: 'UserPromptSubmit' })).out.trim();
+
+    run(['acquire', 'cpu', '--shared', '--why', 'tests', '--as', 'suite']);
+    run(['renew', '1']);
+    expect(prompt()).toBe('');
+    run(['acquire', 'cpu', '--shared', '--why', 'lint', '--as', 'lint']);
+    run(['renew', '2']);
+    run(['release', '1']);
+    expect(prompt()).toBe('');
+
+    run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);
+    expect(prompt()).toContain('JMH run');
+  });
+
   test('status samples how busy the machine is, which the board alone cannot say', () => {
     const r = run(['status']);
     expect(r.out).toMatch(/\d+% busy/);
