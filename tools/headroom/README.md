@@ -31,7 +31,7 @@ ln -s "$PWD/skill" ~/.claude/skills/headroom
 
 The hook shows a session the board at session start, whenever it changed since that session last saw it, and on every prompt while the session holds or waits — not on every prompt regardless.
 
-An exclusive claim is granted only onto a quiet machine. At the moment of grant, headroom samples CPU time per process over a second (two `ps` snapshots, so no lagging average) and refuses with exit 4 and the pids when processes outside every claim — and outside the asker's own session — burn more than `HEADROOM_QUIET_CPU` percent of a core (default 150). `--force` takes the claim anyway; shared claims are never refused for load. `status` prints the same sample. Where `ps` cannot run, the grant goes through with a note saying it was unchecked.
+An exclusive claim is granted only onto a quiet machine. At the moment of grant, headroom samples CPU time per process over three seconds (two `ps` snapshots, so no lagging average) and refuses with exit 4 and the pids when processes outside every claim — and outside the asker's own session — each busy at least half a core, together burn more than `HEADROOM_QUIET_CPU` percent of a core (default 150). Processes under that floor are the desktop's idle hum, not contention, however many there are. `--force` takes the claim anyway; shared claims are never refused for load. `status` prints the same sample. Where `ps` cannot run, the grant goes through with a note saying it was unchecked.
 
 ## Hook
 

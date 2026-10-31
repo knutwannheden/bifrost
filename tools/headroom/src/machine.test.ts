@@ -4,23 +4,25 @@ import { foreignLoad, parsePs, sampleForeignLoad } from './machine.ts';
 const table = (rows: string[]) => parsePs(['  PID  PPID      TIME COMMAND', ...rows].join('\n'));
 
 describe('foreignLoad', () => {
-  test('counts CPU burned outside every claim and the asker, and names the processes', () => {
+  test('counts and names the processes outside every claim that burn at least half a core each', () => {
     const before = table([
       '100 1 0:10.00 gradle',
       '200 100 0:00.00 java',
       '300 1 0:05.00 python',
       '400 1 1:00.00 WindowServer',
+      '500 1 0:00.00 claude',
     ]);
     const after = table([
       '100 1 0:11.50 gradle',
       '200 100 0:00.00 java',
-      '300 1 0:06.00 python',
-      '400 1 1:00.20 WindowServer',
+      '300 1 0:05.50 python',
+      '400 1 1:00.40 WindowServer',
+      '500 1 0:00.45 claude',
     ]);
 
     const load = foreignLoad(before, after, 1000, []);
-    expect(load.percent).toBe(270);
-    expect(load.top.map((p) => p.pid)).toEqual([100, 300, 400]);
+    expect(load.percent).toBe(200);
+    expect(load.top.map((p) => p.pid)).toEqual([100, 300]);
     expect(load.top[0]).toMatchObject({ pid: 100, comm: 'gradle', percent: 150 });
   });
 

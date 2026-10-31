@@ -45,9 +45,9 @@ On a yield request, hold and run write a marker file whose path the command has 
 stop the command's process group when --grace runs out: 0 stops at once, 3m lets a loop finish its rep,
 never only warns. A loop checks the marker between reps: [ -e "$HEADROOM_YIELD" ] && break
 
-An exclusive claim is granted only onto a quiet machine: if processes outside every claim are burning more than
-HEADROOM_QUIET_CPU percent of a core (default 150) over a one-second sample, the claim is refused with their pids,
-so you can find out what they are. --force takes the claim anyway.
+An exclusive claim is granted only onto a quiet machine: if processes outside every claim, each busy at least half
+a core, together burn more than HEADROOM_QUIET_CPU percent of a core (default 150) over a three-second sample, the
+claim is refused with their pids, so you can find out what they are. --force takes the claim anyway.
 
 Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request
             · 4 refused because the machine is busy outside any claim · otherwise the command's own.

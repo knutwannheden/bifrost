@@ -41,7 +41,7 @@ Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out
 
 ## When the machine is busy outside the board
 
-An exclusive claim is granted only onto a quiet machine. Before handing it over, headroom samples the CPU for a second; if processes under no claim — and not your own — are burning more than about 1.5 cores, the claim is refused (exit 4) and the output names them with their pids:
+An exclusive claim is granted only onto a quiet machine. Before handing it over, headroom samples the CPU for three seconds; if processes under no claim — and not your own — each busy at least half a core, together burn more than about 1.5 cores, the claim is refused (exit 4) and the output names them with their pids. The window server, idle sessions and system daemons sit under that floor, so an idle desktop measures as quiet:
 
 ```
 refused #7 — cpu is 480% busy outside any claim: java 410% (pid 4123), node 70% (pid 4190).
@@ -103,4 +103,4 @@ Either kind leaves the claims already running alone and takes effect as they fin
 
 ## Reading the board
 
-`headroom status` shows every resource with holders, waiters, reasons and time left, then a one-second sample of how busy the machine is and the heaviest processes that belong to no claim — the check for whether a grant actually bought quiet. A hook injects the board into your context at session start, whenever it changed since you last saw it, and on every prompt while you hold or wait on a claim; a prompt with no board attached means nothing changed.
+`headroom status` shows every resource with holders, waiters, reasons and time left, then a three-second sample of how busy the machine is and the processes that belong to no claim and are busy at least half a core — the check for whether a grant actually bought quiet. A hook injects the board into your context at session start, whenever it changed since you last saw it, and on every prompt while you hold or wait on a claim; a prompt with no board attached means nothing changed.
