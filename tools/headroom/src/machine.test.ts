@@ -26,6 +26,15 @@ describe('foreignLoad', () => {
     expect(load.top[0]).toMatchObject({ pid: 100, comm: 'gradle', percent: 150 });
   });
 
+  test("a session's own claude process is not load, while the build it spawned is", () => {
+    const before = table(['700 1 0:10.00 claude', '701 700 0:00.00 java']);
+    const after = table(['700 1 0:11.00 claude', '701 700 0:02.00 java']);
+
+    const load = foreignLoad(before, after, 1000, []);
+    expect(load.percent).toBe(200);
+    expect(load.top.map((p) => p.comm)).toEqual(['java']);
+  });
+
   test('a process under a holder or under the asker is not foreign', () => {
     const before = table([
       '100 1 0:10.00 gradle',

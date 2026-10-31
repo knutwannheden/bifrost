@@ -21,6 +21,13 @@ export interface ForeignLoad {
  */
 const COMPETING_PERCENT = 50;
 
+/**
+ * The agent sessions are the board's participants. One burns a core for seconds
+ * while it renders a reply, which is not work on the machine, so only what a
+ * session spawns counts.
+ */
+const AGENT_COMM = 'claude';
+
 /** Long enough that a one-second burst of one process does not tip the sample. */
 const DEFAULT_SAMPLE_MS = 3000;
 
@@ -64,7 +71,7 @@ export function foreignLoad(
   };
   const top: ForeignLoad['top'] = [];
   for (const proc of after.values()) {
-    if (excluded(proc.pid)) continue;
+    if (excluded(proc.pid) || proc.comm === AGENT_COMM) continue;
     const burned = proc.cpuMs - (before.get(proc.pid)?.cpuMs ?? 0);
     const percent = Math.round((100 * burned) / windowMs);
     if (percent < COMPETING_PERCENT) continue;
