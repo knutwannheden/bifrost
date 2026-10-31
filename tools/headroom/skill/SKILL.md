@@ -35,7 +35,7 @@ Anything under about 30 seconds of CPU — a quick grep, a single test class —
 - `--why` is read by other sessions deciding whether to wait, negotiate or override you. Say what you are doing *and what breaks if they proceed anyway*. "Running tests" tells them nothing; "full suite, ~6 min, just slower if you join" tells them everything.
 - `--ttl` is your estimate. Running over? `headroom renew <id> --ttl 5m`. A claim nobody renews lapses at its ttl, **held or waiting** — a queued claim you walk away from disappears too, and an exclusive claim that lapses mid-benchmark lets the next session in while your numbers are still being taken. `run` and `hold` renew for you; a bare claim is yours to renew.
 - `renew --why "round 3 of 5, ~10 min left"` restates your reason on the board. That is how progress and revised estimates reach the sessions waiting on you, instead of them asking.
-- `--as` is the name other sessions message you by: what `ListAgents` shows as "This session is …". Sessions started by Bifrost have it set already; if you are refused for lack of a name, pass it.
+- `--as` is the name other sessions message you by: what `ListAgents` shows as "This session is …". Sessions started by Bifrost have it set already. Any other session is listed under its working directory and session id unless it passes `--as`, and a claim listed that way cannot be messaged, so pass a name when you expect to be negotiated with.
 
 Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request · 4 refused because the machine is busy outside any claim · otherwise the command's own. A script keys on the exit code, never on the text, which is written for people. `acquire -q` prints only the claim id, for `$(...)`.
 

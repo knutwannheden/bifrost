@@ -163,6 +163,12 @@ describe('cli', () => {
     expect(run(['status']).out).toContain('round 3 of 5');
   });
 
+  test('a session with no name at all is named by its directory and session id', () => {
+    const r = run(['acquire', 'cpu', '--shared', '--why', 'tests']);
+    expect(r.code).toBe(0);
+    expect(run(['status']).out).toContain('offered to headroom/sess-cli');
+  });
+
   test('a Bifrost session without the name variable resolves its name from the local API', async () => {
     const { createServer } = await import('node:http');
     const server = createServer((req, res) => {
@@ -214,13 +220,6 @@ describe('cli', () => {
     expect(code).toBe(0);
     expect(out).toMatch(/granted #2/);
   }, 10_000);
-
-  test('a claim with no messageable name is refused rather than filed under the user', () => {
-    const r = run(['acquire', 'cpu', '--shared', '--why', 'tests']);
-    expect(r.code).toBe(1);
-    expect(r.out).toContain('--as');
-    expect(run(['status']).out).toMatch(/^nothing claimed/);
-  });
 
   test('run holds the claim for the command and releases it on exit, passing the exit code through', () => {
     const r = run([

@@ -1,3 +1,4 @@
+import { basename } from 'node:path';
 import type { Board, Claim } from './board.ts';
 import { describeLoad, sampleForeignLoad } from './machine.ts';
 
@@ -46,14 +47,15 @@ async function bifrostSessionName(): Promise<string | undefined> {
 /**
  * The name other sessions message this one by, which Bifrost exports for its
  * sessions. A notice needs no address, so it may fall back to the user's name.
+ * A session with no name is listed by its directory and session id, which
+ * says whose claim it is even though SendMessage cannot deliver to it.
  */
 export async function holderName(as: string | undefined, kind: 'claim' | 'notice' = 'claim'): Promise<string> {
   const name = as ?? process.env.HEADROOM_AS ?? process.env.BIFROST_SESSION_NAME ?? (await bifrostSessionName());
   if (name) return name;
   if (kind === 'notice' && process.env.USER) return process.env.USER;
-  throw new Error(
-    'Pass --as <name>: the name other sessions message you by, which ListAgents shows as "This session is ...".',
-  );
+  const session = process.env.CLAUDE_CODE_SESSION_ID ?? String(sessionPid());
+  return `${basename(process.cwd())}/${session.slice(0, 8)}`;
 }
 
 /**

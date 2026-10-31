@@ -38,7 +38,8 @@ const USAGE = `headroom — advisory claims on shared resources, for agent sessi
 
 shared: any number hold together (test suites, builds). exclusive: holds alone (benchmarks, profiling).
 --why says what you are doing and what breaks if someone proceeds anyway; renew --why restates it.
---as is the name other sessions message you by; Bifrost sessions have it in BIFROST_SESSION_NAME.
+--as is the name other sessions message you by; Bifrost sessions have it in BIFROST_SESSION_NAME. Without
+either, a claim is listed under the working directory and session id, which nobody can message.
 -q prints only the claim id, for $(...) and && chains.
 
 On a yield request, hold and run write a marker file whose path the command has in $HEADROOM_YIELD, then
