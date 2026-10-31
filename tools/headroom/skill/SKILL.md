@@ -26,7 +26,7 @@ headroom hold $id -- ./gradlew jmh -Pround=2
 headroom release $id
 ```
 
-**Claim the heavy work, not the time around it.** A claim held across idle gaps — a three-hour shared claim for work that runs in bursts, an exclusive claim kept while you read results — holds everyone else out of a CPU nobody is using. Claim per burst: `run` around each command does this by itself, and for a bare claim, release when the burst ends and claim again for the next. The one exception is a measurement whose rounds must not be split by other load — an interleaved A/B — which is held as one claim for exactly its rounds; if it is long, `headroom release <id> --requeue` between rounds lets the next in line run and brings you back right behind it. A short claim that is renewed when needed beats a long one that is guessed.
+**A claim with nothing running under it steps aside.** `run` claims for exactly its command. A bare claim lets the next in line run while no `hold` is running under it — while you read results or edit between rounds — and your next `hold` waits for its turn, which comes right after. So a long bare claim costs nobody anything, and the board shows it as idle. The one exception is a measurement whose rounds must not be split by other load — an interleaved A/B — which you acquire with `--keep`, so the resource stays yours through the gaps; release it the moment the rounds are done, or `headroom release <id> --requeue` between rounds if it is long. A short claim that is renewed when needed beats a long one that is guessed.
 
 Anything under about 30 seconds of CPU — a quick grep, a single test class — runs unclaimed. Builds, suites, benchmarks and profiles are claimed, however short they look.
 

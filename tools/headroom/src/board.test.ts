@@ -134,6 +134,29 @@ describe('lifetime', () => {
     expect(board.status('cpu').waiting.map((c) => c.holder)).toEqual(['bench', 'third']);
   });
 
+  test('a started claim with no command holding it lets the next claim run, and waits its turn when it holds again', () => {
+    const { board } = fresh();
+    const bench = board.claim(cpu('exclusive', 'bench'));
+    board.attach(bench.id, 100);
+    const other = board.claim(cpu('exclusive', 'other'));
+    expect(other.grantedAt).not.toBeNull();
+    board.attach(other.id, 200, true);
+
+    board.attach(bench.id, 101, true);
+    expect(board.get(bench.id)?.grantedAt).toBeNull();
+    expect(board.status('cpu').waiting.map((c) => c.holder)).toEqual(['bench']);
+
+    board.release(other.id);
+    expect(board.get(bench.id)?.grantedAt).not.toBeNull();
+  });
+
+  test('a claim made with keep holds the resource while idle', () => {
+    const { board } = fresh();
+    const bench = board.claim({ ...cpu('exclusive', 'bench'), keep: true });
+    board.attach(bench.id, 100);
+    expect(board.claim(cpu('exclusive', 'other')).grantedAt).toBeNull();
+  });
+
   test('renew extends a claim from now, not from its old expiry', () => {
     const { board, tick } = fresh();
     const bench = board.claim(cpu('exclusive', 'bench', { ttlMs: 5 * MIN }));
@@ -178,7 +201,7 @@ describe('offers', () => {
     const awake = board.claim(cpu('exclusive', 'awake'));
 
     tick(GRACE + 1);
-    board.attach(awake.id, 4242);
+    board.attach(awake.id, 4242, true);
 
     expect(board.get(awake.id)?.grantedAt).not.toBeNull();
     expect(board.get(asleep.id)?.grantedAt).toBeNull();
@@ -188,7 +211,7 @@ describe('offers', () => {
 
   test('renewing starts a claim nothing wraps, so the grace stops running against it', () => {
     const { board, tick } = fresh();
-    const bare = board.claim(cpu('exclusive', 'bare'));
+    const bare = board.claim({ ...cpu('exclusive', 'bare'), keep: true });
     const next = board.claim(cpu('exclusive', 'next'));
     board.renew(bare.id, 10 * MIN);
 

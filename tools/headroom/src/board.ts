@@ -27,6 +27,8 @@ export interface Claim {
   pid: number | null;
   /** Whether that process renews the claim for as long as its command runs, so the ttl is a lease and not a deadline. */
   renewing: boolean;
+  /** Whether the claim holds the resource while nothing runs under it. Without it an idle claim lets the next in line run. */
+  keep: boolean;
   /**
    * On a notice, how many claims may hold the resource while it stands. Zero
    * keeps the machine quiet and one makes work take turns. Null on every other
@@ -45,6 +47,7 @@ export interface ClaimInput {
   priority?: number;
   ttlMs: number;
   holderLimit?: number;
+  keep?: boolean;
 }
 
 export interface BoardOptions {
@@ -96,7 +99,8 @@ const SCHEMA = `
     yield_requested_by INTEGER,
     pid INTEGER,
     holder_limit INTEGER,
-    renewing INTEGER NOT NULL DEFAULT 0
+    renewing INTEGER NOT NULL DEFAULT 0,
+    keep INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS claims_live ON claims(resource) WHERE released_at IS NULL;
 `;
@@ -119,6 +123,7 @@ interface Row {
   pid: number | null;
   holder_limit: number | null;
   renewing: number;
+  keep: number;
 }
 
 function toClaim(r: Row): Claim {
@@ -140,7 +145,13 @@ function toClaim(r: Row): Claim {
     pid: r.pid,
     holderLimit: r.holder_limit,
     renewing: r.renewing === 1,
+    keep: r.keep === 1,
   };
+}
+
+/** A started claim with no command running under it, which lets the next claim in line run. */
+export function idle(c: Claim): boolean {
+  return c.acceptedAt !== null && !c.renewing && !c.keep;
 }
 
 /** The claims store that decides which claims hold a resource now. */
@@ -171,6 +182,9 @@ export class Board {
     if (!columns.some((c) => c.name === 'renewing')) {
       db.exec('ALTER TABLE claims ADD COLUMN renewing INTEGER NOT NULL DEFAULT 0');
     }
+    if (!columns.some((c) => c.name === 'keep')) {
+      db.exec('ALTER TABLE claims ADD COLUMN keep INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   static open(file: string, options: BoardOptions = {}): Board {
@@ -193,8 +207,8 @@ export class Board {
       const now = this.now();
       const { lastInsertRowid } = this.db
         .prepare(
-          `INSERT INTO claims (resource, mode, holder, session_id, pid, why, priority, ttl_ms, created_at, expires_at, holder_limit)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO claims (resource, mode, holder, session_id, pid, why, priority, ttl_ms, created_at, expires_at, holder_limit, keep)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.resource,
@@ -208,6 +222,7 @@ export class Board {
           now,
           now + input.ttlMs,
           input.holderLimit ?? null,
+          input.keep ? 1 : 0,
         );
       this.schedule(input.resource);
       return this.row(Number(lastInsertRowid));
@@ -223,11 +238,26 @@ export class Board {
     this.transaction(() => {
       const { resource } = this.row(id);
       this.db.prepare('UPDATE claims SET pid = ?, renewing = ? WHERE id = ?').run(pid, renewing ? 1 : 0, id);
+      if (renewing) this.withdrawIfOvertaken(id);
       // An offer has to be on the table before it can be taken, and taking it
       // is what sends the offer it beat back to the queue.
       this.schedule(resource);
       if (pid !== null && this.start(id)) this.schedule(resource);
     });
+  }
+
+  /**
+   * A claim that stepped aside while idle can find the resource taken when its
+   * next command starts. It then goes back to waiting, first in line by age.
+   */
+  private withdrawIfOvertaken(id: number): void {
+    const claim = this.row(id);
+    if (claim.grantedAt === null) return;
+    const others = this.schedule(claim.resource).filter(
+      (c) => c.id !== id && c.mode !== 'notice' && c.grantedAt !== null && !idle(c),
+    );
+    if (fits(claim, others)) return;
+    this.db.prepare('UPDATE claims SET granted_at = NULL, accepted_at = NULL WHERE id = ?').run(id);
   }
 
   /** Records that a granted claim has started on the resource, or false when it has nothing to start on. */
@@ -286,6 +316,7 @@ export class Board {
         priority: front?.priority ?? old.priority,
         ttlMs: old.ttlMs,
         holderLimit: old.holderLimit ?? undefined,
+        keep: old.keep,
       });
       if (!front) return { next, claim };
       // The queue sorts by priority, then age, then id, so sharing the front's
@@ -374,7 +405,9 @@ export class Board {
         .all(resource) as unknown as Row[]
     ).map(toClaim);
 
-    const started = live.filter((c) => c.mode !== 'notice' && c.grantedAt !== null && c.acceptedAt !== null);
+    const started = live.filter(
+      (c) => c.mode !== 'notice' && c.grantedAt !== null && c.acceptedAt !== null && !idle(c),
+    );
     const withdraw = this.db.prepare('UPDATE claims SET granted_at = NULL WHERE id = ?');
     for (const c of live) {
       if (c.mode === 'notice' || c.grantedAt === null || c.acceptedAt !== null) continue;
@@ -387,6 +420,7 @@ export class Board {
       (c) =>
         c.mode !== 'notice' &&
         c.grantedAt !== null &&
+        !idle(c) &&
         (c.acceptedAt !== null || now - c.grantedAt <= this.offerGraceMs),
     );
     // The tightest standing notice decides how much may run, and with none the

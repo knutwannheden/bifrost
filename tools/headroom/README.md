@@ -13,7 +13,7 @@ headroom seize cpu --why "release timing, cannot wait"
 headroom status
 ```
 
-`shared` claims hold together, `exclusive` holds alone, a `notice` stops new grants without holding anything. The queue is walked by priority then age, and a waiting exclusive claim holds back the shared claims behind it. Nothing is enforced: a session that was told can still proceed, and is expected to say so.
+`shared` claims hold together, `exclusive` holds alone, a `notice` stops new grants without holding anything. The queue is walked by priority then age, and a waiting exclusive claim holds back the shared claims behind it. A started claim with no command running under it steps aside: the next in line is granted, and the idle claim waits its turn when it next holds, unless it was made with `--keep`. Nothing is enforced: a session that was told can still proceed, and is expected to say so.
 
 There is no server. Each command opens the SQLite file, settles the queue under a write lock, and exits. Cleanup needs no sweeper either: a claim records its session's process id and is dropped the next time anyone looks after that process is gone; while `run` or `hold` holds it, it is tied to that wrapper instead, so killing the wrapper frees the resource at once; and a claim nobody renews lapses at its ttl whether held or waiting.
 

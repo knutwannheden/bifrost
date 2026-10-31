@@ -163,6 +163,21 @@ describe('cli', () => {
     expect(run(['status']).out).toContain('round 3 of 5');
   });
 
+  test('a hold on a claim that stepped aside waits for the resource to come back', async () => {
+    run(['acquire', 'cpu', '--exclusive', '--why', 'A/B', '--as', 'bench']);
+    run(['renew', '1']);
+    expect(run(['acquire', 'cpu', '--exclusive', '--why', 'profile', '--as', 'prof']).out).toMatch(/granted #2/);
+
+    const holding = spawn(process.execPath, [CLI, 'hold', '2', '--', 'sleep', '1'], { env });
+    await new Promise((r) => setTimeout(r, 600));
+    const started = Date.now();
+    const r = run(['hold', '1', '--', 'echo', 'ran']);
+    expect(r.out).toContain('waiting for its turn');
+    expect(r.out).toContain('ran');
+    expect(Date.now() - started).toBeGreaterThan(300);
+    await new Promise((r) => holding.on('exit', r));
+  });
+
   test('a session with no name at all is named by its directory and session id', () => {
     const r = run(['acquire', 'cpu', '--shared', '--why', 'tests']);
     expect(r.code).toBe(0);

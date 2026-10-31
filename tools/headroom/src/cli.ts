@@ -23,7 +23,9 @@ const USAGE = `headroom — advisory claims on shared resources, for agent sessi
 
   headroom run <resource> --shared|--exclusive --why "..." [--ttl 10m] [--grace 0] [--as name] -- <command...>
       acquire, wait your turn, hold while the command runs, release on exit
-  headroom acquire <resource> --shared|--exclusive --why "..." [--ttl 10m] [--priority N] [--wait] [--as name] [-q] [--force]
+  headroom acquire <resource> --shared|--exclusive --why "..." [--ttl 10m] [--priority N] [--wait] [--as name] [-q] [--force] [--keep]
+      a claim with nothing running under it lets the next in line run and waits its turn when it holds again;
+      --keep holds the resource through the gaps, for rounds that must not be split by other load
   headroom hold <id> [--grace 0|3m|never] -- <command...>
       keep the claim alive while the command runs, and act on a yield request
   headroom wait <id> [--timeout 40m]
@@ -113,10 +115,19 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
   // the session, so a killed hold frees the resource on the next look.
   const owner = board.get(id)?.pid ?? sessionPid();
   board.attach(id, process.pid, true);
-  // Another session can start on the resource in the moment between the grant
-  // and this hold, which leaves the claim queued while the command runs anyway.
-  if (board.get(id)?.grantedAt === null) {
-    console.error(`headroom: #${id} was taken by another session first — running unclaimed, so expect company`);
+  // The claim steps aside while idle, so another session may be on the resource
+  // by now. The command then waits for the claim's turn.
+  for (let told = false; ; await new Promise((r) => setTimeout(r, pollMs()))) {
+    const c = board.get(id);
+    if (!c || c.releasedAt !== null) {
+      console.error(`headroom: #${id} is gone — acquire again`);
+      return 1;
+    }
+    if (c.grantedAt !== null) break;
+    if (!told)
+      console.error(`headroom: #${id} stepped aside while idle and ${c.resource} is taken — waiting for its turn`);
+    told = true;
+    board.renew(id, c.ttlMs);
   }
 
   const child = spawn(cmd[0]!, cmd.slice(1), {
@@ -266,6 +277,7 @@ async function main(argv: string[]): Promise<number> {
       requeue: { type: 'boolean' },
       serial: { type: 'boolean' },
       force: { type: 'boolean' },
+      keep: { type: 'boolean' },
       as: { type: 'string' },
       quiet: { type: 'boolean', short: 'q' },
       json: { type: 'boolean' },
@@ -294,6 +306,7 @@ async function main(argv: string[]): Promise<number> {
       why: values.why,
       priority: values.priority ? Number(values.priority) : 0,
       ttlMs: parseDuration(values.ttl ?? '10m'),
+      keep: !!values.keep,
     };
   };
 

@@ -21,7 +21,7 @@ describe('hookOutput', () => {
       ttlMs: 7 * MIN,
     });
     board.claim({ resource: 'cpu', mode: 'shared', holder: 'suite', why: 'full test run', ttlMs: 10 * MIN });
-    board.attach(bench.id, process.pid);
+    board.attach(bench.id, process.pid, true);
 
     const out = hookOutput(board.status(), null, T0);
     expect(out?.systemMessage).toContain('cpu: held by bench (exclusive)');
@@ -51,7 +51,7 @@ describe('hookOutput', () => {
       why: 'relocks',
       ttlMs: 10 * MIN,
     });
-    board.attach(mine.id, process.pid);
+    board.attach(mine.id, process.pid, true);
     board.claim({
       resource: 'cpu',
       mode: 'exclusive',

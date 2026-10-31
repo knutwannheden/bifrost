@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import type { Board, Claim } from './board.ts';
+import { type Board, type Claim, idle } from './board.ts';
 import { describeLoad, sampleForeignLoad } from './machine.ts';
 
 export function formatLeft(claim: Claim, now: number): string {
@@ -11,7 +11,9 @@ export function formatLeft(claim: Claim, now: number): string {
 
 /** How long a claim stands: a countdown for a bare claim, and no deadline at all for one a command renews. */
 export function lifetime(claim: Claim, now: number): string {
-  return claim.renewing ? 'renewed while its command runs' : `${formatLeft(claim, now)} left`;
+  if (claim.renewing) return 'renewed while its command runs';
+  const left = `${formatLeft(claim, now)} left`;
+  return idle(claim) ? `${left}, idle so the next in line may run` : left;
 }
 
 export function parseDuration(text: string): number {
