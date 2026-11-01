@@ -44,10 +44,12 @@ import {
   archiveScript,
   diffScript,
   getRemoteHost,
+  localClaudeValue,
   parseScriptOutput,
   type RemoteHost,
   type RemoteInfo,
   remoteClonePath,
+  remoteSessionSettings,
   restoreWorktreeScript,
   sessionSetupScript,
   statusScript,
@@ -713,7 +715,13 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
       taskId: task.id,
       worktreePath: task.worktreePath,
       sessionId: task.sessionId ?? randomUUID(),
-      claudeArgs: [...claudeArgs(launch), ...(info.pluginDir ? ['--plugin-dir', info.pluginDir] : [])],
+      claudeArgs: [
+        ...claudeArgs(
+          launch,
+          remoteSessionSettings(config.permissionMode, localClaudeValue('remoteControlAtStartup') === true),
+        ),
+        ...(info.pluginDir ? ['--plugin-dir', info.pluginDir] : []),
+      ],
       // The port is left to the file each connection rewrites, which follows Bifrost to a new port while tmux lives on.
       env: { ...claudeEnv(launch), BIFROST_MACHINE: task.machine ?? '' },
       prompt,

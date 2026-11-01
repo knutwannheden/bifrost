@@ -15,6 +15,7 @@ import {
   diffScript,
   parseScriptOutput,
   prepareScript,
+  remoteClonePath,
   sessionSetupScript,
   worktreeScript,
 } from '../src/main/remote-host.ts';
@@ -76,6 +77,7 @@ const home = path.join(root, 'home');
 const worktree = path.join(root, "work tree's");
 fs.mkdirSync(home);
 fs.mkdirSync(worktree);
+fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ projects: {} }));
 
 const taskId = '6f9c1a52-0000-4000-8000-000000000001';
 const sessionId = '0b8e2f34-0000-4000-8000-000000000002';
@@ -120,6 +122,11 @@ attach();
       fs.readFileSync(path.join(record, 'pwd'), 'utf-8').trim() === worktree &&
       env === `${taskId}\n${awkwardName}\n`,
     show({ args, stdin, env }),
+  );
+  check(
+    'setting a session up trusts its worktree, so Claude starts without asking',
+    JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf-8')).projects[worktree]?.hasTrustDialogAccepted ===
+      true,
   );
   check(
     'the attach asks tmux for the task-named session, creating it only when missing',
@@ -188,12 +195,21 @@ fs.writeFileSync(path.join(home2, clone, '.git', 'marker'), '');
 const second = parseScriptOutput(
   runRemote(
     home2,
-    worktreeScript({ clonePath: clone, url: origin, baseBranch: 'main', branchName: 'fix-it', slug: 'other' }),
+    worktreeScript({
+      clonePath: clone,
+      url: origin,
+      baseBranch: 'main',
+      branchName: 'fix-it',
+      slug: 'other',
+      gitName: 'Someone Else',
+    }),
   ),
 );
 check(
-  'a later task reuses the clone and picks a branch name nobody holds',
-  second.BRANCH === 'fix-it-2' && fs.existsSync(path.join(home2, clone, '.git', 'marker')),
+  'a later task reuses the clone, keeps the identity it has, and picks a branch name nobody holds',
+  second.BRANCH === 'fix-it-2' &&
+    fs.existsSync(path.join(home2, clone, '.git', 'marker')) &&
+    git(path.join(home2, clone), 'config', 'user.name') === "Ann O'Neil",
   show(second),
 );
 
@@ -242,20 +258,31 @@ const files = (raw: string) => Object.fromEntries(parseDiff(raw).map((f) => [f.n
 const home3 = path.join(root, 'home3');
 fs.mkdirSync(home3);
 const claudeJson = path.join(home3, '.claude.json');
-fs.writeFileSync(claudeJson, JSON.stringify({ numStartups: 3, projects: { '/elsewhere': { lastCost: 1 } } }));
-const prepared = parseScriptOutput(runRemote(home3, prepareScript({ apiPort: 43669 })));
+fs.writeFileSync(
+  claudeJson,
+  JSON.stringify({ numStartups: 3, theme: 'light', projects: { '/elsewhere': { lastCost: 1 } } }),
+);
+const prepared = parseScriptOutput(runRemote(home3, prepareScript({ apiPort: 43669, theme: 'dark-daltonized' })));
 {
   const config = JSON.parse(fs.readFileSync(claudeJson, 'utf-8'));
   check(
-    'preparing a machine points its hooks at the forwarded port and trusts the clone root, touching nothing else',
+    'preparing a machine points its hooks at the forwarded port and completes onboarding, keeping what is set',
     fs.readFileSync(path.join(home3, '.bifrost', 'api-port'), 'utf-8').trim() === '43669' &&
-      config.projects[path.join(home3, '.bifrost', 'repos')]?.hasTrustDialogAccepted === true &&
+      config.hasCompletedOnboarding === true &&
+      typeof config.lastOnboardingVersion === 'string' &&
+      config.theme === 'light' &&
       config.numStartups === 3 &&
       config.projects['/elsewhere'].lastCost === 1 &&
       prepared.HOME === home3,
     show({ prepared, config }),
   );
 }
+
+check(
+  'a clone sits at the path its repo has here, relative to home, and under ~/git for a repo outside it',
+  remoteClonePath({ path: path.join(os.homedir(), 'git', 'acme', 'widget'), name: 'widget' }) === 'git/acme/widget' &&
+    remoteClonePath({ path: '/opt/src/widget', githubPath: 'acme/widget', name: 'widget' }) === 'git/acme/widget',
+);
 
 fs.rmSync(root, { recursive: true, force: true });
 if (failed) {

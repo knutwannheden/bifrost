@@ -73,7 +73,9 @@ A task with `machine` set runs on a host from `BifrostConfig.machines`, reached 
 
 Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there.
 
-On the machine, each repo is cloned once under `~/.bifrost/repos/`, and a task's worktree sits in the clone's `.worktrees/`. Claude runs in a tmux session named after the task, on a tmux server of Bifrost's own. The tab is `ssh -tt` into that session, so Claude outlives the connection and Bifrost. When tmux is gone too, attaching resumes the transcript.
+On the machine, a repo is cloned once, at the path it has here relative to home, so `~/git/org/repo` there too. A task's worktree sits in the clone's `.worktrees/`. Claude runs in a tmux session named after the task, on a tmux server of Bifrost's own. The tab is `ssh -tt` into that session, so Claude outlives the connection and Bifrost. When tmux is gone too, attaching resumes the transcript.
+
+Nobody may be there to answer Claude's first-run screens, so Bifrost answers them up front. Connecting marks onboarding done, setting up a session trusts its worktree, and the session's `--settings` settle the renderer and the warning about skipped permissions.
 
 Every remote step is a shell script built in `remote-host.ts`. `npm run check:remote-scripts` runs them against a local home directory.
 

@@ -403,14 +403,16 @@ export interface ClaudeLaunchOptions {
 }
 
 /** Claude's arguments for a task session, short of which session to resume. */
-export function claudeArgs(options?: ClaudeLaunchOptions): string[] {
+export function claudeArgs(options?: ClaudeLaunchOptions, settings: Record<string, unknown> = {}): string[] {
   // Its consent prompt blocks startup until answered, which strands sessions
   // that are driven by an agent rather than watched in a tab.
   const a: string[] = ['--no-chrome'];
   if (options?.name) a.push('--name', options.name);
+  const merged = { ...settings };
   if (options?.permissionMode === 'auto-mode') a.push('--enable-auto-mode');
-  else if (options?.permissionMode === 'sandbox') a.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
+  else if (options?.permissionMode === 'sandbox') merged.sandbox = { enabled: true };
   else if (options?.permissionMode === 'skip-permissions') a.push('--dangerously-skip-permissions');
+  if (Object.keys(merged).length > 0) a.push('--settings', JSON.stringify(merged));
   return a;
 }
 

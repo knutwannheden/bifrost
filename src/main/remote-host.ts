@@ -47,9 +47,14 @@ function sessionDir(taskId: string): string {
   return `${REMOTE_DIR}/sessions/${taskId}`;
 }
 
-/** Where a machine keeps a repo's clone, relative to its home directory. */
-export function remoteClonePath(repo: { githubPath?: string; name: string }): string {
-  return `${REMOTE_DIR}/repos/${repo.githubPath ?? repo.name}`;
+/**
+ * Where a machine keeps a repo's clone, relative to its home directory. It is
+ * the path the repo has here, so a path a prompt names holds there as well.
+ */
+export function remoteClonePath(repo: { path: string; githubPath?: string; name: string }): string {
+  const relative = path.relative(os.homedir(), repo.path);
+  if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) return relative.split(path.sep).join('/');
+  return `git/${repo.githubPath ?? repo.name}`;
 }
 
 /** A remote worktree sits in its clone's .worktrees directory, as a local one does. */
@@ -124,6 +129,7 @@ export function sessionSetupScript(spec: RemoteSessionSpec): string {
     `-c ${shQuote(spec.worktreePath)} sh ${shQuote(`${dir}/run.sh`)}`;
   return [
     'set -e',
+    `python3 -c ${shQuote(TRUST_PY)} ${shQuote(spec.worktreePath)} ${shQuote(JSON.stringify(TRUSTED_ENTRY))} || true`,
     `d=${shQuote(dir)}`,
     'mkdir -p "$d"',
     `printf '%s\\n' ${shQuote(spec.sessionId)} > "$d/session-id"`,
@@ -208,8 +214,13 @@ export function worktreeScript(spec: WorktreeSpec): string {
     '  mv "$tmp" "$clone"',
     'fi',
     `git -C "$clone" fetch --quiet origin ${shQuote(spec.baseBranch)} </dev/null`,
-    ...(spec.gitName ? [`git -C "$clone" config user.name ${shQuote(spec.gitName)}`] : []),
-    ...(spec.gitEmail ? [`git -C "$clone" config user.email ${shQuote(spec.gitEmail)}`] : []),
+    // A clone the user made there may carry an identity of its own, which stays.
+    ...(spec.gitName
+      ? [`git -C "$clone" config user.name >/dev/null || git -C "$clone" config user.name ${shQuote(spec.gitName)}`]
+      : []),
+    ...(spec.gitEmail
+      ? [`git -C "$clone" config user.email >/dev/null || git -C "$clone" config user.email ${shQuote(spec.gitEmail)}`]
+      : []),
     'exclude="$clone/.git/info/exclude"',
     'mkdir -p "$(dirname "$exclude")"',
     'grep -qxF \'/.worktrees/\' "$exclude" 2>/dev/null || printf \'/.worktrees/\\n\' >> "$exclude"',
@@ -250,50 +261,66 @@ export function diffScript(worktreePath: string, baseRef?: string): string {
   ].join('\n');
 }
 
-const TRUST_PY = `import json, os, sys
-root = os.path.realpath(sys.argv[1])
-path = os.path.join(os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~'), '.claude.json')
-try:
-    with open(path) as f:
-        config = json.load(f)
-except Exception:
-    sys.exit(0)
-projects = config.get('projects') or {}
-d = root
-while True:
-    if (projects.get(d) or {}).get('hasTrustDialogAccepted') is True:
-        sys.exit(0)
-    if os.path.dirname(d) == d:
-        break
-    d = os.path.dirname(d)
-entry = json.loads(sys.argv[2])
-entry.update(projects.get(root) or {})
-entry['hasTrustDialogAccepted'] = True
-projects[root] = entry
-config['projects'] = projects
-tmp = '%s.bifrost-%d' % (path, os.getpid())
-with open(tmp, 'w') as f:
-    json.dump(config, f, indent=2)
-os.replace(tmp, path)`;
+/** A python3 program that edits Claude Code's config, leaving one it cannot read alone. */
+function editClaudeJson(body: string[]): string {
+  return [
+    'import json, os, sys',
+    "path = os.path.join(os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~'), '.claude.json')",
+    'try:',
+    '    with open(path) as f:',
+    '        config = json.load(f)',
+    'except Exception:',
+    '    sys.exit(0)',
+    ...body,
+    "tmp = '%s.bifrost-%d' % (path, os.getpid())",
+    "with open(tmp, 'w') as f:",
+    '    json.dump(config, f, indent=2)',
+    'os.replace(tmp, path)',
+  ].join('\n');
+}
+
+// Claude rewrites its config often, so each edit writes only when something is missing.
+const TRUST_PY = editClaudeJson([
+  'root = os.path.realpath(sys.argv[1])',
+  "projects = config.setdefault('projects', {})",
+  "if (projects.get(root) or {}).get('hasTrustDialogAccepted') is True:",
+  '    sys.exit(0)',
+  'entry = json.loads(sys.argv[2])',
+  'entry.update(projects.get(root) or {})',
+  "entry['hasTrustDialogAccepted'] = True",
+  'projects[root] = entry',
+]);
+
+const ONBOARDING_PY = editClaudeJson([
+  'seed = json.loads(sys.argv[1])',
+  'if sys.argv[2]:',
+  "    seed['lastOnboardingVersion'] = sys.argv[2]",
+  'if all(key in config for key in seed):',
+  '    sys.exit(0)',
+  'for key, value in seed.items():',
+  '    config.setdefault(key, value)',
+]);
 
 const PLUGIN_VERSION_PY = `import json; print(json.load(open('${REMOTE_PLUGIN_DIR}/.claude-plugin/plugin.json'))['version'])`;
 
 /**
  * Readies a machine for task sessions and reports what it lacks. The hooks and
  * MCP server read the API port from .bifrost/api-port, so writing the forwarded
- * port there connects them to this Bifrost. Trust is granted to the directory
- * holding every clone, which Claude extends to each worktree inside it.
+ * port there connects them to this Bifrost. Onboarding is marked done, with this
+ * machine's theme, since its first screen would hold a session's prompt back.
  * Prints HOME, MISSING, LOGGED_IN and PLUGIN_VERSION.
  */
-export function prepareScript(opts: { apiPort: number }): string {
+export function prepareScript(opts: { apiPort: number; theme?: string }): string {
+  const onboarding = { hasCompletedOnboarding: true, ...(opts.theme ? { theme: opts.theme } : {}) };
   return [
     'set -e',
     'cd "$HOME"',
-    `mkdir -p ${REMOTE_DIR}/sessions ${REMOTE_DIR}/repos`,
+    `mkdir -p ${REMOTE_DIR}/sessions`,
     `printf '%s\\n' ${opts.apiPort} > ${REMOTE_DIR}/api-port`,
     'if infocmp tmux-256color >/dev/null 2>&1; then term=tmux-256color; else term=screen-256color; fi',
     `printf '%s\\n' ${TMUX_CONF.map(shQuote).join(' ')} "set -g default-terminal $term" > ${REMOTE_DIR}/tmux.conf`,
-    `python3 -c ${shQuote(TRUST_PY)} "$HOME/${REMOTE_DIR}/repos" ${shQuote(JSON.stringify(TRUSTED_ENTRY))} || true`,
+    `version=$(claude --version 2>/dev/null | cut -d' ' -f1)`,
+    `python3 -c ${shQuote(ONBOARDING_PY)} ${shQuote(JSON.stringify(onboarding))} "$version" || true`,
     `printf 'HOME=%s\\n' "$HOME"`,
     'missing=',
     'for c in claude git tmux python3 curl; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done',
@@ -301,6 +328,37 @@ export function prepareScript(opts: { apiPort: number }): string {
     `if claude auth status </dev/null 2>/dev/null | grep -q '"loggedIn": *true'; then echo LOGGED_IN=yes; else echo LOGGED_IN=no; fi`,
     `printf 'PLUGIN_VERSION=%s\\n' "$(python3 -c ${shQuote(PLUGIN_VERSION_PY)} 2>/dev/null || true)"`,
   ].join('\n');
+}
+
+/**
+ * Settings a remote session starts with. On a machine where nobody ran Claude by
+ * hand, its offer of the fullscreen renderer and its warning about skipped
+ * permissions would each hold the prompt back. Remote Control follows this machine.
+ */
+export function remoteSessionSettings(permissionMode: string | undefined, remoteControl: boolean) {
+  return {
+    tui: 'default',
+    ...(permissionMode === 'skip-permissions' ? { skipDangerousModePermissionPrompt: true } : {}),
+    ...(remoteControl ? { remoteControlAtStartup: true } : {}),
+  };
+}
+
+/** A value from Claude Code's settings on this machine, or else from its global config. */
+export function localClaudeValue(key: string): unknown {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  const files = [
+    path.join(configDir ?? path.join(os.homedir(), '.claude'), 'settings.json'),
+    path.join(configDir ?? os.homedir(), '.claude.json'),
+  ];
+  for (const file of files) {
+    try {
+      const value = JSON.parse(fs.readFileSync(file, 'utf-8'))[key];
+      if (value !== undefined) return value;
+    } catch {
+      /* absent or unreadable */
+    }
+  }
+  return undefined;
 }
 
 export interface RemoteInfo {
@@ -429,7 +487,9 @@ export class RemoteHost {
     const forwarded = Number(stdout.trim());
     if (!forwarded) throw new Error(`${this.machine.name} did not forward the Bifrost API`);
 
-    const out = parseScriptOutput(await this.run(prepareScript({ apiPort: forwarded }), EXEC_TIMEOUT_MS));
+    const theme = localClaudeValue('theme');
+    const prepare = prepareScript({ apiPort: forwarded, theme: typeof theme === 'string' ? theme : undefined });
+    const out = parseScriptOutput(await this.run(prepare, EXEC_TIMEOUT_MS));
     if (!out.HOME) throw new Error(`${this.machine.name} could not be prepared`);
     const pluginDir = await this.syncPlugin(out.PLUGIN_VERSION, out.HOME);
     this.info = {
