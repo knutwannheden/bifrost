@@ -1,7 +1,7 @@
 #!/bin/bash
 # Restarts the Bifrost that runs in development mode, from a task inside it.
 #
-#   scripts/restart-bifrost.sh [--revert FROM..TO] [--nudge] [--prompt TEXT]
+#   scripts/restart-bifrost.sh [--revert FROM..TO] [--nudge] [--prompt TEXT] [--while-stopped COMMAND]
 #
 # It detaches and returns at once, printing its log. Once no claimed cpu work is
 # running, it restarts Bifrost from the same checkout, wakes the sessions that
@@ -21,12 +21,13 @@ esac
 
 if [ "$MODE" = launch ]; then
   export RESTART_TS=$(date +%Y%m%d-%H%M%S)
-  export RESTART_CALLER=${BIFROST_TASK_ID:-} RESTART_REVERT= RESTART_NUDGE=0 RESTART_PROMPT=
+  export RESTART_CALLER=${BIFROST_TASK_ID:-} RESTART_REVERT= RESTART_NUDGE=0 RESTART_PROMPT= RESTART_WHILE_STOPPED=
   while [ $# -gt 0 ]; do
     case "$1" in
       --revert) RESTART_REVERT=$2; shift 2 ;;
       --nudge) RESTART_NUDGE=1; shift ;;
       --prompt) RESTART_PROMPT=$2; shift 2 ;;
+      --while-stopped) RESTART_WHILE_STOPPED=$2; shift 2 ;;
       *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
   done
@@ -39,7 +40,7 @@ if [ "$MODE" = launch ]; then
   exit 0
 fi
 
-RESTART_CALLER=${RESTART_CALLER:-} RESTART_REVERT=${RESTART_REVERT:-} RESTART_NUDGE=${RESTART_NUDGE:-0} RESTART_PROMPT=${RESTART_PROMPT:-}
+RESTART_CALLER=${RESTART_CALLER:-} RESTART_REVERT=${RESTART_REVERT:-} RESTART_NUDGE=${RESTART_NUDGE:-0} RESTART_PROMPT=${RESTART_PROMPT:-} RESTART_WHILE_STOPPED=${RESTART_WHILE_STOPPED:-}
 LOG=$DIR/$RESTART_TS.log NPM_LOG=$DIR/$RESTART_TS-npm.log CLAUDE_LOG=$DIR/$RESTART_TS-claude.log
 LIVE=$DIR/$RESTART_TS-live.txt WORKING=$DIR/$RESTART_TS-working.txt REPORT=$DIR/$RESTART_TS-report.md
 exec >> "$LOG" 2>&1 < /dev/null
@@ -89,7 +90,7 @@ stop_bifrost() {
 
 start_bifrost() {
   # Bifrost hands its environment to every session, so the restart's own variables stay behind.
-  (cd "$REPO" && env -u RESTART_TS -u RESTART_CALLER -u RESTART_REVERT -u RESTART_NUDGE -u RESTART_PROMPT \
+  (cd "$REPO" && env -u RESTART_TS -u RESTART_CALLER -u RESTART_REVERT -u RESTART_NUDGE -u RESTART_PROMPT -u RESTART_WHILE_STOPPED \
     nohup npm start >> "$NPM_LOG" 2>&1 < /dev/null &)
   log "npm start launched, output in $NPM_LOG"
 }
@@ -107,6 +108,10 @@ restart() {
     '.tasks[] | select(.sessionName != null and .idle == false and .id != $me) | .id' > "$WORKING"
   log "sessions in use: $(wc -l < "$LIVE" | tr -d ' '), mid-turn: $(wc -l < "$WORKING" | tr -d ' ')"
   stop_bifrost
+  if [ -n "$RESTART_WHILE_STOPPED" ]; then
+    log "while stopped: $RESTART_WHILE_STOPPED"
+    sh -c "$RESTART_WHILE_STOPPED" && log "while stopped: done" || log "while stopped: exited $?"
+  fi
   start_bifrost
   if wait_healthy; then
     log "new build is up"

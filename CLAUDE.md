@@ -101,6 +101,7 @@ It waits for an exclusive headroom claim on the cpu, so no claimed run is cut of
 - When no build comes up, a headless `claude -p` gets the logs and the job of bringing Bifrost back.
 - `--nudge` also prompts the sessions the restart cut off mid-turn.
 - `--prompt TEXT` adds to the prompt the calling task gets.
+- `--while-stopped COMMAND` runs between the quit and the start, when nothing holds Bifrost's database, such as for a repair to it.
 
 ### Key Renderer Modules
 
