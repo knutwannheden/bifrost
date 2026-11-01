@@ -43,6 +43,7 @@ write(`${headroom}/node_modules/dep/index.js`, 'not for the machine\n');
 
 const cache = `${here}/.claude/plugins/cache`;
 write(`${cache}/hub/tool/1.0.0/.claude-plugin/plugin.json`, '{"name":"tool"}');
+write(`${cache}/hub/tool/1.0.0/.in_use/4242`, '');
 write(`${cache}/local/lab/0.1.0/.claude-plugin/plugin.json`, '{"name":"lab"}');
 write(`${here}/.bifrost/marketplace/bifrost/.claude-plugin/plugin.json`, '{"name":"bifrost"}');
 write(`${here}/.claude/plugins/marketplaces/hub/.claude-plugin/marketplace.json`, '{"name":"hub"}');
@@ -129,6 +130,7 @@ const first = await syncMachine(machine, options(['~/.local/bin/gw']));
       !('bifrost@bifrost' in installed.plugins) &&
       !('bifrost' in known) &&
       fs.existsSync(`${there}/.claude/plugins/cache/hub/tool/1.0.0/.claude-plugin/plugin.json`) &&
+      !fs.existsSync(`${there}/.claude/plugins/cache/hub/tool/1.0.0/.in_use`) &&
       read(`${there}/.claude/plugins/marketplaces/hub/plugins/tool/README.md`) === 'tool\n',
     show({ first, settings, installed, known }),
   );
@@ -153,9 +155,10 @@ check(
 );
 
 write(`${here}/.claude/CLAUDE.md`, 'global rules, revised\n');
+write(`${cache}/hub/tool/1.0.0/.in_use/5151`, '');
 const second = await syncMachine(machine, options([]));
 check(
-  'a second sync sends only what changed here, and removes what it synced before that is gone',
+  'a second sync sends only what changed here, not the marks of plugins in use here, and removes what it synced before that is gone',
   show(second.sent) === show(['.bifrost/claude/CLAUDE.md']) &&
     show(second.removed) === show(['.local/bin/gw']) &&
     read(`${there}/.bifrost/claude/CLAUDE.md`) === 'global rules, revised\n' &&

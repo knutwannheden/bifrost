@@ -39,6 +39,8 @@ const RULES_IMPORT = `@~/${RULES}`;
 /** Remote sessions load Bifrost's plugin with --plugin-dir, and a second copy would clash with it. */
 const OWN_PLUGIN = 'bifrost@bifrost';
 const OWN_MARKETPLACE = 'bifrost';
+/** Claude's marks for the processes using a plugin here, which mean nothing on the machine. */
+const LOCAL_ONLY = new Set(['.in_use']);
 /** A unit is replaced whole, so none may contain these. */
 const PROTECTED = ['.claude/.credentials.json', '.claude/projects', '.claude.json', '.ssh', '.bifrost', '.config/gh'];
 
@@ -172,8 +174,9 @@ function walk(
     onFile(real, relative, stat.mode);
   } else if (stat.isDirectory() && !above.has(real)) {
     const inside = new Set(above).add(real);
-    for (const name of fs.readdirSync(real).sort())
-      walk(path.join(abs, name), relative ? `${relative}/${name}` : name, onFile, inside);
+    for (const name of fs.readdirSync(real).sort()) {
+      if (!LOCAL_ONLY.has(name)) walk(path.join(abs, name), relative ? `${relative}/${name}` : name, onFile, inside);
+    }
   }
 }
 
