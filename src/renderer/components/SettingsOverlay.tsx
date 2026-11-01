@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { PROMPT_DEFS } from '../../shared/default-prompts';
-import type { BifrostConfig, Macro } from '../../shared/types';
+import type { BifrostConfig, Machine, Macro } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
@@ -25,7 +25,10 @@ interface SettingDef {
   render: (config: BifrostConfig, update: (updates: Partial<BifrostConfig>) => void) => React.ReactNode;
 }
 
-const CATEGORIES = ['Appearance', 'Agent', 'General', 'Macros', 'Slack'] as const;
+const CATEGORIES = ['Appearance', 'Agent', 'General', 'Machines', 'Macros', 'Slack'] as const;
+
+/** Categories drawn by an editor of their own rather than from buildSettings. */
+const EDITOR_CATEGORIES: readonly string[] = ['Machines', 'Macros'];
 
 function buildSettings(): SettingDef[] {
   return [
@@ -640,6 +643,126 @@ function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
   );
 }
 
+function MachineEditor({
+  config,
+  updateConfig,
+}: {
+  config: BifrostConfig;
+  updateConfig: (updates: Partial<BifrostConfig>) => void;
+}) {
+  const machines = config.machines ?? [];
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editHost, setEditHost] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const startEdit = (idx: number) => {
+    setEditIdx(idx);
+    setEditName(machines[idx].name);
+    setEditHost(machines[idx].host);
+    setError(null);
+  };
+
+  const startAdd = () => {
+    setEditIdx(machines.length);
+    setEditName('');
+    setEditHost('');
+    setError(null);
+  };
+
+  const save = () => {
+    const name = editName.trim();
+    const host = editHost.trim();
+    // The name becomes a file name and is what a prompt says, so it stays a plain word.
+    if (!/^[a-z0-9][a-z0-9-]*$/i.test(name)) return setError('Name: letters, digits and hyphens');
+    if (!host || /\s/.test(host)) return setError('SSH host: one host name, as ssh takes it');
+    if (machines.some((m, i) => i !== editIdx && m.name === name)) return setError(`"${name}" is taken`);
+    const updated = [...machines];
+    updated[editIdx!] = { name, host } satisfies Machine;
+    updateConfig({ machines: updated });
+    setEditIdx(null);
+  };
+
+  const remove = (idx: number) => {
+    const updated = machines.filter((_, i) => i !== idx);
+    updateConfig({ machines: updated.length > 0 ? updated : undefined });
+    if (editIdx === idx) setEditIdx(null);
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="border border-border-input rounded-sm overflow-hidden">
+        {machines.length === 0 && editIdx === null && (
+          <div className="text-sm text-muted text-center py-4">No machines configured</div>
+        )}
+        {machines.map((m, idx) => (
+          <div
+            key={m.name}
+            onClick={() => startEdit(idx)}
+            className={`flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
+              editIdx === idx ? 'bg-surface-alt' : 'hover:bg-surface-hover'
+            }`}
+          >
+            <span className="text-sm text-primary flex-1">{m.name}</span>
+            <span className="text-xs text-muted font-mono truncate max-w-[240px]">{m.host}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                remove(idx);
+              }}
+              className="text-xs text-danger hover:brightness-125 transition-colors"
+            >
+              &times;
+            </button>
+          </div>
+        ))}
+      </div>
+      {editIdx !== null ? (
+        <div className="mt-3 space-y-2">
+          <div className="flex gap-2">
+            <FormInput
+              autoFocus
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Name (e.g. gpu-box)"
+              className="w-40 px-2 py-1"
+            />
+            <FormInput
+              value={editHost}
+              onChange={(e) => setEditHost(e.target.value)}
+              placeholder="SSH host (e.g. gpu-box.example.com)"
+              className="flex-1 px-2 py-1 font-mono"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') save();
+              }}
+            />
+          </div>
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <div className="flex gap-2">
+            <PrimaryButton size="sm" onClick={save}>
+              Save
+            </PrimaryButton>
+            <button
+              onClick={() => setEditIdx(null)}
+              className="text-xs text-secondary hover:text-primary transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={startAdd} className="mt-2 text-xs text-accent-hover hover:brightness-125 transition-colors">
+          + Add machine
+        </button>
+      )}
+      <p className="mt-2 text-xs text-muted">
+        A task runs on one of these when its prompt names it. Any host ssh reaches without a password works, with Claude
+        logged in there and git, tmux, python3 and curl installed.
+      </p>
+    </div>
+  );
+}
+
 export default function SettingsOverlay() {
   const { state, dispatch } = useApp();
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -757,7 +880,7 @@ export default function SettingsOverlay() {
           <div className="flex-1 overflow-y-auto p-4 space-y-6">
             {visibleCategories.map((cat) => {
               const catSettings = filteredSettings.filter((s) => s.category === cat);
-              if (catSettings.length === 0 && cat !== 'Macros') return null;
+              if (catSettings.length === 0 && !EDITOR_CATEGORIES.includes(cat)) return null;
               return (
                 <div
                   key={cat}
@@ -795,6 +918,9 @@ export default function SettingsOverlay() {
                   </div>
                   {cat === 'Macros' && (!search.trim() || matchesAllTerms('Macros', search)) && (
                     <MacroEditor config={config} updateConfig={updateConfig} />
+                  )}
+                  {cat === 'Machines' && (!search.trim() || matchesAllTerms('Machines ssh remote', search)) && (
+                    <MachineEditor config={config} updateConfig={updateConfig} />
                   )}
                   {cat === 'Agent' &&
                     (!search.trim() ||

@@ -26,13 +26,16 @@ import {
   archiveTaskCore,
   broadcastRepos,
   createTaskCore,
+  getRemoteDiff,
   getTask,
   getTasks,
   isPendingRestore,
+  isRemoteWorktreeDirty,
   markTurnBoundary,
   reopenTaskCore,
   resolveTaskTarget,
   restoreTaskSession,
+  stopTaskSession,
   type TaskTarget,
   updateTask,
 } from './ipc-handlers';
@@ -48,6 +51,7 @@ import {
   sendPrompt as sendPromptToTask,
   workingTaskIds,
 } from './prompt-sender';
+import { getRemoteHost, sessionIdScript } from './remote-host';
 import { addRepo } from './repo-manager';
 import { normalizeRepoPath } from './repo-path';
 import {
@@ -248,9 +252,9 @@ function finishTurn(task: Task): void {
   }
 }
 
-function killTaskSessions(taskId: string): void {
-  killSession(taskId);
-  killSession(`${taskId}-dev`);
+function killTaskSessions(task: Task): void {
+  stopTaskSession(task);
+  killSession(`${task.id}-dev`);
 }
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
@@ -338,6 +342,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         repoId: t.repoId,
         status: t.status,
         idle: t.status === 'running' ? isIdle(t.id) : undefined,
+        machine: t.machine,
         branch: t.branch,
         baseBranch: t.baseBranch,
         worktreePath: t.worktreePath,
@@ -349,7 +354,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/create-task': {
-      const { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId } = body as {
+      const { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId, machine } = body as {
         repoId?: string;
         repoPath?: string;
         worktreePath?: string;
@@ -358,6 +363,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         branchName?: string;
         prompt?: string;
         createdByTaskId?: string;
+        machine?: string;
       };
       if (!repoId && !repoPath && !worktreePath) {
         errorResponse(res, 'either repoId, repoPath or worktreePath is required');
@@ -367,7 +373,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       console.log(
         `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? `${prompt.length} chars` : 'none'}`,
       );
-      const params = { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId };
+      const params = { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId, machine };
       // An async caller is answered before the work runs, so the arguments are
       // settled first and a bad one comes back as a failed request.
       let target: TaskTarget;
@@ -414,14 +420,22 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       try {
         const task = getTask(taskId);
         cancelTaskRequests(taskId);
-        killTaskSessions(taskId);
+        killTaskSessions(task);
 
         if (archive) {
           // Archive: stop + mark archived + remove worktree
           stopWatching(taskId);
 
+          if (!force && task.machine && (await isRemoteWorktreeDirty(task))) {
+            errorResponse(
+              res,
+              'Worktree has uncommitted changes, and archiving deletes them. Close it instead (archive=false) to keep the worktree, or ask the user before passing force=true.',
+              409,
+            );
+            return;
+          }
           // Check if worktree is dirty (unless forced or external/in-place)
-          if (!force && !task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
+          if (!force && !task.machine && !task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
             try {
               const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
                 cwd: task.worktreePath,
@@ -470,7 +484,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       try {
         const task = getTask(targetId);
-        const diff = await getDiff(task.worktreePath);
+        const diff = task.machine ? await getRemoteDiff(task) : await getDiff(task.worktreePath);
         jsonResponse(res, diff);
       } catch (e) {
         errorResponse(res, (e as Error).message, 404);
@@ -761,6 +775,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           repoId: found.repoId,
           status: found.status,
           idle: found.status === 'running' ? isIdle(found.id) : undefined,
+          machine: found.machine,
           branch: found.branch,
           baseBranch: found.baseBranch,
           worktreePath: found.worktreePath,
@@ -991,6 +1006,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         // Preserve the old session ID in history (e.g. after /clear)
         const sessionHistory = task.sessionId ? [...(task.sessionHistory ?? []), task.sessionId] : task.sessionHistory;
         updateTask(task.id, { sessionId, sessionHistory });
+        if (task.machine) {
+          getRemoteHost(task.machine)
+            .exec(sessionIdScript(task.id, sessionId))
+            .catch((err) => console.warn(`[api] session-start: ${(err as Error).message}`));
+        }
       }
       jsonResponse(res, { ok: true });
       return;

@@ -15,6 +15,7 @@ import type {
   BifrostConfig,
   CaptureContextParams,
   CreateTaskParams,
+  DiffResult,
   PermissionDecision,
   Repo,
   Task,
@@ -39,9 +40,26 @@ import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
 import { getTaskPrs } from './pr-index';
 import { handleScrapeResponse, sendPrompt, workingTaskIds } from './prompt-sender';
+import {
+  archiveScript,
+  diffScript,
+  getRemoteHost,
+  parseScriptOutput,
+  type RemoteHost,
+  type RemoteInfo,
+  remoteClonePath,
+  restoreWorktreeScript,
+  sessionSetupScript,
+  statusScript,
+  stopSessionScript,
+  worktreeScript,
+} from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, matchRepo, removeRepo } from './repo-manager';
 import {
   attachSession,
+  claudeArgs,
+  claudeEnv,
+  createRemoteSession,
   createSession,
   createShellSession,
   getSessionName,
@@ -113,11 +131,12 @@ export function clearInterrupted(taskId: string): void {
 /**
  * Quitting kills every session, and a turn in flight dies with its Bash child —
  * which is the "Exit code 137" the task reads back on reopening. Recorded here
- * so the task can be offered the chance to pick it up.
+ * so the task can be offered the chance to pick it up. A session on another
+ * machine runs on through the quit.
  */
 export function markSessionsInterrupted(): void {
   const at = Date.now();
-  const working = workingTaskIds().filter((id) => tasks.some((t) => t.id === id));
+  const working = workingTaskIds().filter((id) => tasks.some((t) => t.id === id && !t.machine));
   for (const id of working) {
     const task = tasks.find((t) => t.id === id);
     if (task) task.interruptedAt = at;
@@ -159,7 +178,7 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
 export function refreshTaskBranches(): void {
   let moved = false;
   for (const [i, task] of tasks.entries()) {
-    if (task.archivedAt) continue;
+    if (task.archivedAt || task.machine) continue;
     const branch = headBranch(task.worktreePath);
     if (branch && branch !== task.branch) {
       tasks[i] = { ...task, branch };
@@ -215,7 +234,15 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
   const updates: Partial<Task> = { status: 'archived', archivedAt: Date.now() };
   let removal: (() => Promise<void>) | null = null;
 
-  if (!task.isExternal && fs.existsSync(task.worktreePath)) {
+  const host = remoteHostFor(task);
+  if (host) {
+    // The branch is read there as the worktree goes, so it is recorded once removal reports it.
+    removal = () =>
+      host.exec(archiveScript(task.id, task.worktreePath)).then((out) => {
+        const branch = parseScriptOutput(out).BRANCH;
+        if (branch && branch !== task.branch) updateTask(taskId, { branch });
+      });
+  } else if (!task.isExternal && !task.machine && fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
     if (repo?.multiTaskId === task.id) {
@@ -313,7 +340,17 @@ async function destroyTask(taskId: string): Promise<void> {
   if (task.status === 'running') {
     killSession(taskId);
   }
-  if (fs.existsSync(task.worktreePath)) {
+  const host = remoteHostFor(task);
+  if (host) {
+    cleanups.set(
+      taskId,
+      host
+        .exec(archiveScript(task.id, task.worktreePath))
+        .then(() => undefined)
+        .catch((err) => console.warn(`[delete] ${task.machine}: ${(err as Error).message}`))
+        .finally(() => cleanups.delete(taskId)),
+    );
+  } else if (!task.machine && fs.existsSync(task.worktreePath)) {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
     if (repo?.multiTaskId === task.id) {
@@ -404,8 +441,10 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
  * confused. Composed here so it reaches the session's first prompt
  * without landing in the task's summary, which is shown and searched.
  */
-function creatorCoordinates(createdByTaskId: string | undefined, taskId: string): string {
+function creatorCoordinates(createdByTaskId: string | undefined, taskId: string, machine?: string): string {
   if (!createdByTaskId) return '';
+  // SendMessage reaches only sessions on the machine it is sent from.
+  if (tasks.find((t) => t.id === createdByTaskId)?.machine !== machine) return '';
   const sessionName = getSessionName(createdByTaskId);
   if (!sessionName) return '';
   return (
@@ -454,6 +493,13 @@ export async function resolveTaskTarget(params: CreateTaskParams): Promise<TaskT
   }
   if (!repo) throw new Error(`Repo not found: ${params.repoId ?? input}`);
 
+  if (params.machine) {
+    getRemoteHost(params.machine);
+    if (adopted || params.inPlace || params.prInfo) {
+      throw new Error('A task on another machine starts from a fresh worktree there');
+    }
+  }
+
   if (adopted) {
     const conflict = activeTaskAt(adopted.worktreePath);
     if (conflict) {
@@ -475,6 +521,7 @@ export async function createTaskCore(
 
   const config = loadConfig();
   const { repo, adopted } = target ?? (await resolveTaskTarget(params));
+  if (params.machine) return createRemoteTask(params, mainWindow, repo, params.machine);
 
   // An adopted worktree's branch says what the work is.
   const name = params.branchName || params.name || adopted?.branch || generateTaskName();
@@ -558,6 +605,157 @@ export async function createTaskCore(
   return task;
 }
 
+/** A first clone of a large repo runs to minutes. */
+const CLONE_TIMEOUT_MS = 30 * 60_000;
+
+/** The machine a task runs on, or null for this one and for a machine since removed from the settings. */
+function remoteHostFor(task: Task): RemoteHost | null {
+  if (!task.machine) return null;
+  try {
+    return getRemoteHost(task.machine);
+  } catch (err) {
+    console.warn(`[remote] task ${task.id}: ${(err as Error).message}`);
+    return null;
+  }
+}
+
+/** Ends a task's session. On another machine that ends its tmux session, which killing the tab's ssh leaves running. */
+export function stopTaskSession(task: Task): void {
+  killSession(task.id);
+  remoteHostFor(task)
+    ?.exec(stopSessionScript(task.id))
+    .catch((err) => console.warn(`[remote] could not stop ${task.id}: ${(err as Error).message}`));
+}
+
+async function localGitConfig(repoPath: string, key: string): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFile('git', ['config', key], { cwd: repoPath, timeout: 5000 });
+    return stdout.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Creates a task on another machine, in a worktree of a clone made there from
+ * the repo's origin. Commits there carry the identity this repo commits with here.
+ */
+async function createRemoteTask(
+  params: CreateTaskParams,
+  mainWindow: BrowserWindow,
+  repo: Repo,
+  machine: string,
+): Promise<Task> {
+  const host = getRemoteHost(machine);
+  const info = await host.connectReady();
+  let url: string;
+  try {
+    ({ stdout: url } = await execFile('git', ['remote', 'get-url', 'origin'], { cwd: repo.path, timeout: 5000 }));
+  } catch {
+    throw new Error(`${repo.name} has no origin remote for ${machine} to clone from`);
+  }
+  const name = params.branchName || params.name || generateTaskName();
+  const created = parseScriptOutput(
+    await host.exec(
+      worktreeScript({
+        clonePath: remoteClonePath(repo),
+        url: url.trim(),
+        baseBranch: params.branch ?? repo.defaultBranch,
+        branchName: params.branchName ?? slugify(name),
+        slug: slugify(name),
+        gitName: await localGitConfig(repo.path, 'user.name'),
+        gitEmail: await localGitConfig(repo.path, 'user.email'),
+      }),
+      CLONE_TIMEOUT_MS,
+    ),
+  );
+  if (!created.WORKTREE) throw new Error(`Could not create a worktree on ${machine}`);
+
+  const taskId = randomUUID();
+  const task: Task = {
+    id: taskId,
+    name,
+    repoId: repo.id,
+    machine,
+    baseBranch: created.BASE,
+    branch: created.BRANCH,
+    worktreePath: created.WORKTREE,
+    sessionId: randomUUID(),
+    status: 'running',
+    hasUnread: false,
+    createdAt: Date.now(),
+    ...(params.prompt ? { summary: params.prompt } : {}),
+    ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
+  };
+  const prompt = params.prompt
+    ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId, machine)
+    : undefined;
+  await writeRemoteSession(task, host, info, prompt);
+
+  tasks.push(task);
+  saveTasks(tasks);
+  startRemoteSession(task, mainWindow);
+  return task;
+}
+
+/** Writes the scripts the task's session starts from, with the settings as they are now. */
+async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo, prompt?: string): Promise<void> {
+  const config = loadConfig();
+  const launch = {
+    taskId: task.id,
+    name: task.name,
+    permissionMode: config.permissionMode,
+    agentTeams: config.agentTeams,
+  };
+  await host.exec(
+    sessionSetupScript({
+      home: info.home,
+      taskId: task.id,
+      worktreePath: task.worktreePath,
+      sessionId: task.sessionId ?? randomUUID(),
+      claudeArgs: [...claudeArgs(launch), ...(info.pluginDir ? ['--plugin-dir', info.pluginDir] : [])],
+      // The port is left to the file each connection rewrites, which follows Bifrost to a new port while tmux lives on.
+      env: { ...claudeEnv(launch), BIFROST_MACHINE: task.machine ?? '' },
+      prompt,
+    }),
+  );
+}
+
+function startRemoteSession(task: Task, mainWindow: BrowserWindow): void {
+  if (!task.machine) throw new Error(`Task ${task.id} runs on this machine`);
+  createRemoteSession(task.id, getRemoteHost(task.machine), mainWindow, {
+    name: task.name,
+    // Given up on, the session waits for its tab to be opened again, as after a restart.
+    onGiveUp: () => pendingRestore.add(task.id),
+  });
+}
+
+async function reopenRemoteTask(task: Task, mainWindow: BrowserWindow): Promise<Task> {
+  const host = getRemoteHost(task.machine ?? '');
+  const info = await host.connectReady();
+  if (task.branch) await host.exec(restoreWorktreeScript(task.worktreePath, task.branch));
+  await writeRemoteSession(task, host, info);
+  startRemoteSession(task, mainWindow);
+  return updateTask(task.id, { status: 'running', hasUnread: false, archivedAt: undefined });
+}
+
+/** The working diff of a task on another machine, or against its base for scope 'all'. */
+export async function getRemoteDiff(task: Task, scope: 'working' | 'all' = 'working'): Promise<DiffResult> {
+  const host = remoteHostFor(task);
+  if (!host) return { worktreePath: task.worktreePath, diff: '' };
+  const diff = await host.exec(diffScript(task.worktreePath, scope === 'all' ? task.baseBranch : undefined));
+  return { worktreePath: task.worktreePath, diff };
+}
+
+/** Unreadable counts as clean, matching the local check, so a failed answer never blocks an archive. */
+export async function isRemoteWorktreeDirty(task: Task): Promise<boolean> {
+  try {
+    return ((await remoteHostFor(task)?.exec(statusScript(task.worktreePath))) ?? '').trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 /** Check if a task needs session restoration (deferred on startup). */
 export function isPendingRestore(taskId: string): boolean {
   return pendingRestore.has(taskId);
@@ -566,6 +764,10 @@ export function isPendingRestore(taskId: string): boolean {
 export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): void {
   pendingRestore.delete(taskId);
   const task = getTask(taskId);
+  if (task.machine) {
+    startRemoteSession(task, mainWindow);
+    return;
+  }
   const config = loadConfig();
 
   createSession(taskId, task.worktreePath, mainWindow, {
@@ -593,6 +795,7 @@ export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow):
   if (multiRepoGuardRepo?.multiTaskId) {
     throw new Error('Multi-repo tasks cannot be reopened after archiving');
   }
+  if (task.machine) return reopenRemoteTask(task, mainWindow);
 
   let worktreePath = task.worktreePath;
   let branch = task.branch;
@@ -680,9 +883,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Mark previously-running tasks as running and defer session creation until tab activation
   for (const task of tasksToRestore) {
-    if (fs.existsSync(task.worktreePath)) {
+    // A remote worktree is not on this disk, so whether it still exists is for the attach to find out.
+    if (task.machine || fs.existsSync(task.worktreePath)) {
       // Check if stored sessionId is stale; if so, clear it so user can select a session
-      if (task.sessionId && isSessionStale(task.worktreePath, task.sessionId)) {
+      if (!task.machine && task.sessionId && isSessionStale(task.worktreePath, task.sessionId)) {
         const idx = tasks.findIndex((t) => t.id === task.id);
         if (idx !== -1) {
           tasks[idx] = { ...tasks[idx], sessionId: undefined };
@@ -777,7 +981,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     if (task.status === 'running') {
       cancelTaskRequests(taskId);
-      killSession(taskId);
+      stopTaskSession(task);
     }
     // Kill the dev terminal too
     const devSessionId = devSessions.get(taskId);
@@ -796,6 +1000,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     const task = getTask(taskId);
     // We don't own external or in-place worktrees — skip check
     if (task.isExternal || task.inPlace) return false;
+    if (task.machine) return isRemoteWorktreeDirty(task);
     if (!fs.existsSync(task.worktreePath)) return false;
     try {
       const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
@@ -862,6 +1067,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   ipcMain.handle(IPC.CREATE_DEV_TERMINAL, (_event, taskId: string) => {
     const task = getTask(taskId);
+    if (task.machine) throw new Error(`A task on ${task.machine} has no dev terminal`);
     // Kill existing dev session if any
     const existing = devSessions.get(taskId);
     if (existing) killSession(existing);
@@ -906,6 +1112,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Diff
   ipcMain.handle(IPC.GET_DIFF, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
+    if (task.machine) return getRemoteDiff(task, scope);
     const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
     return getDiff(task.worktreePath, baseBranch, scope);
   });
@@ -913,6 +1120,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // File statuses (staged/unstaged/committed/untracked)
   ipcMain.handle(IPC.GET_FILE_STATUSES, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
+    if (task.machine) return {};
     const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
     return getFileStatuses(task.worktreePath, baseBranch);
   });
@@ -920,6 +1128,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Diff stats
   ipcMain.handle(IPC.GET_DIFF_STATS, async (_event, taskId: string, scope?: 'working' | 'all') => {
     const task = getTask(taskId);
+    if (task.machine) return null;
     const baseBranch = scope === 'all' ? await resolveBaseBranch(task) : undefined;
     return getDiffStats(task.worktreePath, baseBranch, scope);
   });

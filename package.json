@@ -33,6 +33,7 @@
     "check:worktree-adopt": "node scripts/check-worktree-adopt.mts",
     "check:walkthrough-schema": "node scripts/check-walkthrough-schema.mts",
     "check:walkthrough-anchor": "node scripts/check-walkthrough-anchor.mts",
+    "check:remote-scripts": "node scripts/check-remote-scripts.mts",
     "test": "npm --prefix tools/postmortem test && npm --prefix tools/headroom test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

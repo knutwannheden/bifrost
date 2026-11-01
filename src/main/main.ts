@@ -11,6 +11,7 @@ import { closeDatabase, openDatabase } from './db';
 import { ensureHooks } from './integration-installer';
 import { markSessionsInterrupted, registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
+import { closeRemoteHosts } from './remote-host';
 import { killAllSessions } from './session-manager';
 import { startPolling } from './slack-service';
 
@@ -312,6 +313,7 @@ app.on('before-quit', async () => {
   stopAllWatching();
   markSessionsInterrupted();
   killAllSessions();
+  closeRemoteHosts();
   await stopApi();
   closeDatabase();
 });

@@ -8,7 +8,7 @@ function claudeConfigPath(): string {
 }
 
 /** What Claude Code writes for a project it has not met, with trust granted. */
-const TRUSTED_ENTRY = {
+export const TRUSTED_ENTRY = {
   allowedTools: [],
   mcpContextUris: [],
   mcpServers: {},

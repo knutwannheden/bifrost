@@ -65,6 +65,17 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `session-metrics.ts` | Postmortem session analysis (token waste, backtracking) |
 | `walkthrough-service.ts` | Generates a guided walkthrough of a branch's committed change, and stores it per task |
 | `walkthrough-anchor.ts` | Checks a walkthrough's anchors against the commits, and follows them onto a later head |
+| `remote-host.ts` | Runs task sessions and commands on a configured machine over a shared SSH connection |
+
+### Tasks on other machines
+
+A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. SendMessage does not cross machines.
+
+Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there.
+
+On the machine, each repo is cloned once under `~/.bifrost/repos/`, and a task's worktree sits in the clone's `.worktrees/`. Claude runs in a tmux session named after the task, on a tmux server of Bifrost's own. The tab is `ssh -tt` into that session, so Claude outlives the connection and Bifrost. When tmux is gone too, attaching resumes the transcript.
+
+Every remote step is a shell script built in `remote-host.ts`. `npm run check:remote-scripts` runs them against a local home directory.
 
 ### Key Renderer Modules
 

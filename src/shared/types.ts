@@ -54,10 +54,20 @@ export interface Repo {
   multiTaskId?: string;
 }
 
+/** A machine tasks can run on besides this one, reached over SSH. */
+export interface Machine {
+  /** What a prompt calls it, e.g. "gpu-box". */
+  name: string;
+  /** The host `ssh` connects to, configured as ~/.ssh/config says. */
+  host: string;
+}
+
 export interface Task {
   id: string;
   name: string;
   repoId: string;
+  /** The machine the task runs on, by name, absent for this one. Its worktreePath is a path on that machine. */
+  machine?: string;
   /** The ref this worktree was created from. */
   baseBranch: string;
   /** The worktree's own branch; undefined when it could not be recovered. */
@@ -163,6 +173,7 @@ export interface BifrostConfig {
     console?: string;
   };
   macros?: Macro[];
+  machines?: Machine[];
 }
 
 export interface CreateTaskParams {
@@ -187,6 +198,8 @@ export interface CreateTaskParams {
   createdByTaskId?: string;
   /** Repo IDs for multi-repo task — when set, repoId/branch/inPlace/prInfo are ignored */
   multiRepoIds?: string[];
+  /** The configured machine to run the task on instead of this one */
+  machine?: string;
 }
 
 export interface PrInfo {

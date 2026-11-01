@@ -7,6 +7,7 @@ import type { BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { trustDirectory } from './claude-trust.ts';
+import type { RemoteHost } from './remote-host.ts';
 import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror';
 
 // Use require for node-pty because it's externalized from Vite bundling
@@ -392,58 +393,69 @@ export function spawnSession(
   });
 }
 
+export interface ClaudeLaunchOptions {
+  taskId?: string;
+  name?: string;
+  apiPort?: number;
+  permissionMode?: string;
+  agentTeams?: boolean;
+  context?: string;
+}
+
+/** Claude's arguments for a task session, short of which session to resume. */
+export function claudeArgs(options?: ClaudeLaunchOptions): string[] {
+  // Its consent prompt blocks startup until answered, which strands sessions
+  // that are driven by an agent rather than watched in a tab.
+  const a: string[] = ['--no-chrome'];
+  if (options?.name) a.push('--name', options.name);
+  if (options?.permissionMode === 'auto-mode') a.push('--enable-auto-mode');
+  else if (options?.permissionMode === 'sandbox') a.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
+  else if (options?.permissionMode === 'skip-permissions') a.push('--dangerously-skip-permissions');
+  return a;
+}
+
+/** What a task session's environment adds to the one it inherits. */
+export function claudeEnv(options?: ClaudeLaunchOptions): Record<string, string> {
+  const e: Record<string, string> = {};
+  // Resuming a stale, large session otherwise offers to summarize it first.
+  // Claude only compacts when that offer is accepted, so putting the offer
+  // out of reach is how a task resumes as-is. Both thresholds have to be
+  // passed for it to appear. Both are raised in case that becomes either.
+  e.CLAUDE_CODE_RESUME_THRESHOLD_MINUTES = String(NEVER_STALE_MINUTES);
+  e.CLAUDE_CODE_RESUME_TOKEN_THRESHOLD = String(NEVER_LARGE_TOKENS);
+  e.BIFROST_CONTEXT = options?.context ?? 'code';
+  if (options?.taskId) e.BIFROST_TASK_ID = options.taskId;
+  if (options?.name) e.BIFROST_SESSION_NAME = options.name;
+  if (options?.apiPort) e.BIFROST_API_PORT = String(options.apiPort);
+  if (options?.agentTeams) e.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
+  return e;
+}
+
+/** A session comes up with nothing in flight, whatever Bifrost last heard about the one before it. */
+function announceIdle(sessionId: string, mainWindow: BrowserWindow, taskId?: string): void {
+  lastOutputAt.set(sessionId, Date.now());
+  if (taskId && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, taskId, false);
+  }
+}
+
 export function createSession(
   sessionId: string,
   cwd: string,
   mainWindow: BrowserWindow,
-  options?: {
+  options?: ClaudeLaunchOptions & {
     resumeSessionId?: string;
-    taskId?: string;
-    name?: string;
-    apiPort?: number;
-    permissionMode?: string;
-    agentTeams?: boolean;
-    context?: string;
     prompt?: string;
     onResumeFailed?: () => void;
   },
 ): void {
-  // A session comes up with nothing in flight, whatever the last thing Bifrost
-  // heard about the old one was — a restored task that reads as working has
-  // only inherited that from before the restart.
-  lastOutputAt.set(sessionId, Date.now());
-  if (options?.taskId && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, options.taskId, false);
-  }
+  announceIdle(sessionId, mainWindow, options?.taskId);
 
-  const buildArgs = (resume: boolean): string[] => {
-    // Its consent prompt blocks startup until answered, which strands sessions
-    // that are driven by an agent rather than watched in a tab.
-    const a: string[] = ['--no-chrome'];
-    if (resume && options?.resumeSessionId) a.push('--resume', options.resumeSessionId);
-    if (options?.name) a.push('--name', options.name);
-    if (options?.permissionMode === 'auto-mode') a.push('--enable-auto-mode');
-    else if (options?.permissionMode === 'sandbox')
-      a.push('--settings', JSON.stringify({ sandbox: { enabled: true } }));
-    else if (options?.permissionMode === 'skip-permissions') a.push('--dangerously-skip-permissions');
-    return a;
-  };
-
-  const buildEnv = (): Record<string, string> => {
-    const e: Record<string, string> = {};
-    // Resuming a stale, large session otherwise offers to summarize it first.
-    // Claude only compacts when that offer is accepted, so putting the offer
-    // out of reach is how a task resumes as-is. Both thresholds have to be
-    // passed for it to appear; both are raised in case that becomes either.
-    e.CLAUDE_CODE_RESUME_THRESHOLD_MINUTES = String(NEVER_STALE_MINUTES);
-    e.CLAUDE_CODE_RESUME_TOKEN_THRESHOLD = String(NEVER_LARGE_TOKENS);
-    e.BIFROST_CONTEXT = options?.context ?? 'code';
-    if (options?.taskId) e.BIFROST_TASK_ID = options.taskId;
-    if (options?.name) e.BIFROST_SESSION_NAME = options.name;
-    if (options?.apiPort) e.BIFROST_API_PORT = String(options.apiPort);
-    if (options?.agentTeams) e.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = '1';
-    return e;
-  };
+  const buildArgs = (resume: boolean): string[] =>
+    resume && options?.resumeSessionId
+      ? ['--resume', options.resumeSessionId, ...claudeArgs(options)]
+      : claudeArgs(options);
+  const buildEnv = (): Record<string, string> => claudeEnv(options);
 
   // When resuming, detect "No conversation found" and automatically retry without --resume
   const onBeforeExit = options?.resumeSessionId
@@ -472,6 +484,75 @@ export function createSession(
   // that was never born. This is where --name is decided, and a session keeps
   // the name its task had then, which is how it stays addressable.
   if (options?.name) sessionNames.set(sessionId, options.name);
+}
+
+/** Delays between attempts to reattach a remote session whose connection dropped, about a minute in all. */
+const RECONNECT_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
+/** A connection that held this long counts as recovered, and the next drop gets every attempt again. */
+const RECONNECT_RESET_MS = 60_000;
+/** Remote sessions between a dropped connection and the next attempt, with how to give the attempt up. */
+const pendingReconnects = new Map<string, { timer: ReturnType<typeof setTimeout>; abandon: () => void }>();
+
+/**
+ * A task session on another machine. The PTY runs `ssh` into the task's tmux
+ * session there, so Claude keeps working when the connection or Bifrost goes
+ * away. ssh exits 255 when the connection fails, and only that is retried. The
+ * remote side ending the session exits with anything else.
+ */
+export function createRemoteSession(
+  sessionId: string,
+  host: RemoteHost,
+  mainWindow: BrowserWindow,
+  options: { name?: string; onGiveUp?: () => void },
+): void {
+  announceIdle(sessionId, mainWindow, sessionId);
+  host.hold(sessionId);
+  // Brings up the link that carries the API to the machine.
+  host.connect().catch((err) => console.warn(`[session] ${host.machine.name}: ${(err as Error).message}`));
+
+  let attempt = 0;
+  let startedAt = 0;
+  let pty: IPty | undefined;
+
+  const onBeforeExit = (_buffer: string, exitCode: number): boolean => {
+    // killSession has already let go of a PTY it ended.
+    if (sessions.get(sessionId) !== pty || exitCode !== 255) {
+      host.release(sessionId);
+      return false;
+    }
+    if (Date.now() - startedAt > RECONNECT_RESET_MS) attempt = 0;
+    const delay = RECONNECT_DELAYS_MS[attempt++];
+    if (delay === undefined) {
+      host.release(sessionId);
+      options.onGiveUp?.();
+      return false;
+    }
+    sessions.delete(sessionId);
+    disposeMirror(sessionId);
+    send(mainWindow, sessionId, `\r\n[Connection to ${host.machine.name} lost, reconnecting…]\r\n`, false);
+    const timer = setTimeout(() => {
+      pendingReconnects.delete(sessionId);
+      try {
+        spawn();
+      } catch (err) {
+        console.error(`[session] could not reconnect ${sessionId}:`, err);
+        host.release(sessionId);
+        forgetSession(sessionId);
+        options.onGiveUp?.();
+        if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, 255);
+      }
+    }, delay);
+    pendingReconnects.set(sessionId, { timer, abandon: () => host.release(sessionId) });
+    return true;
+  };
+
+  const spawn = () => {
+    startedAt = Date.now();
+    spawnSession(sessionId, 'ssh', host.ptyArgs(sessionId), os.homedir(), mainWindow, { onBeforeExit });
+    pty = sessions.get(sessionId);
+  };
+  spawn();
+  if (options.name) sessionNames.set(sessionId, options.name);
 }
 
 function findShell(): string {
@@ -564,7 +645,17 @@ export async function attachSession(
   return true;
 }
 
+function abandonReconnect(sessionId: string): void {
+  const pending = pendingReconnects.get(sessionId);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingReconnects.delete(sessionId);
+  pending.abandon();
+  forgetSession(sessionId);
+}
+
 export function killSession(sessionId: string): void {
+  abandonReconnect(sessionId);
   const session = sessions.get(sessionId);
   if (session) {
     session.kill('SIGTERM');
@@ -576,6 +667,7 @@ export function killSession(sessionId: string): void {
 }
 
 export function killAllSessions(): void {
+  for (const id of [...pendingReconnects.keys()]) abandonReconnect(id);
   for (const [id, session] of sessions) {
     session.kill('SIGTERM');
     sessions.delete(id);

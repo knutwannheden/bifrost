@@ -71,6 +71,17 @@ function apiCall(endpoint, body, { timeout = 60000 } = {}) {
 // MCP Server
 // ---------------------------------------------------------------------------
 
+/** The machine this session runs on, by its name in Bifrost's settings. Empty on the machine Bifrost runs on. */
+const MACHINE = process.env.BIFROST_MACHINE || '';
+
+/** What to show in place of a task's session name, or null when that name is how to reach it. */
+function addressOf(t, unreachedHint) {
+  if ((t.machine || '') !== MACHINE) {
+    return `on ${t.machine || "Bifrost's own machine"}, out of SendMessage's reach from here`;
+  }
+  return t.sessionName ? null : unreachedHint;
+}
+
 const server = new McpServer(
   {
     name: 'bifrost',
@@ -93,6 +104,10 @@ const server = new McpServer(
       'A session is named after its task as of when the session started, so a task',
       'renamed since then is addressed by its former name. list_tasks, find_task and',
       'wake_task all report the name a task is actually reachable by.',
+      '',
+      'SendMessage reaches only tasks on the machine you run on, which is',
+      MACHINE ? `"${MACHINE}", not the one Bifrost runs on.` : 'the one Bifrost runs on.',
+      'list_tasks and find_task name the machine of a task that runs elsewhere.',
     ].join('\n'),
   },
 );
@@ -128,7 +143,7 @@ server.registerTool(
             .map((t) => {
               const display = t.idle === false ? 'working' : t.idle === true ? 'idle' : t.status;
               const reach = t.status === 'running' ? 'wake_task to reach it' : 'open_task to reopen it';
-              const address = t.sessionName ? `send to: "${t.sessionName}"` : `no session — ${reach}`;
+              const address = addressOf(t, `no session — ${reach}`) ?? `send to: "${t.sessionName}"`;
               return `- ${t.name} [${display}] (branch: ${t.branch}, id: ${t.id}, ${address})`;
             })
             .join('\n')
@@ -287,7 +302,13 @@ server.registerTool(
         .string()
         .optional()
         .describe(
-          "Path to a git worktree that already exists (e.g. '~/git/org/repo/.worktrees/feature'), for the task to run in instead of a fresh one. The task starts on the branch that worktree has checked out, with its uncommitted changes in place, so use this to hand over work already set up there. The repo is read from the worktree, which makes 'repo' unnecessary and overrides it. Archiving the task removes the worktree, leaving its branch, except where the path is the repo's primary checkout.",
+          "Path to a git worktree that already exists on the machine Bifrost runs on (e.g. '~/git/org/repo/.worktrees/feature'), for the task to run in instead of a fresh one. The task starts on the branch that worktree has checked out, with its uncommitted changes in place, so use this to hand over work already set up there. The repo is read from the worktree, which makes 'repo' unnecessary and overrides it. Archiving the task removes the worktree, leaving its branch, except where the path is the repo's primary checkout.",
+        ),
+      machine: z
+        .string()
+        .optional()
+        .describe(
+          "The machine to run the task on, by its name in Bifrost's settings (e.g. 'gpu-box'), when the user names one. Omitted, the task runs on the machine Bifrost runs on. A name Bifrost does not know is refused with the names it does. The repo is cloned there and the task starts from a fresh worktree, so this cannot be combined with 'worktree'. SendMessage does not cross machines, so a task elsewhere is not told how to reach its creator.",
         ),
       prompt: z
         .string()
@@ -296,7 +317,7 @@ server.registerTool(
         ),
     },
   },
-  async ({ name, repo, worktree, prompt }) => {
+  async ({ name, repo, worktree, machine, prompt }) => {
     let repoId;
     let repoPath;
 
@@ -340,6 +361,7 @@ server.registerTool(
       worktreePath: worktree,
       name,
       prompt,
+      machine,
       createdByTaskId: TASK_ID || undefined,
       async: true,
     });
@@ -349,7 +371,7 @@ server.registerTool(
         {
           type: 'text',
           text: result.pending
-            ? `Task "${taskName}" is being created and will appear in a new Bifrost tab shortly.`
+            ? `Task "${taskName}" is being created${machine ? ` on ${machine}` : ''} and will appear in a new Bifrost tab shortly.`
             : `Task "${result.name}" created (id: ${result.id}, branch: ${result.branch}). It's running in a new tab.`,
         },
       ],
@@ -478,12 +500,11 @@ server.registerTool(
       `${t.name} (id: ${t.id})`,
       `status: ${t.status}${t.idle === undefined ? '' : t.idle ? ', idle' : ', working'}`,
       `branch: ${t.branch ?? t.baseBranch}`,
-      `worktree: ${t.worktreePath}`,
-      t.sessionName
-        ? `send to: "${t.sessionName}" with SendMessage${
-            t.sessionName === t.name ? '' : ' (its session name; the task has been renamed since)'
-          }`
-        : 'no session running — wake_task starts one and reports how to address it',
+      `worktree: ${t.worktreePath}${t.machine ? ` on ${t.machine}` : ''}`,
+      addressOf(t, 'no session running — wake_task starts one and reports how to address it') ??
+        `send to: "${t.sessionName}" with SendMessage${
+          t.sessionName === t.name ? '' : ' (its session name; the task has been renamed since)'
+        }`,
     ];
     if (t.createdByTaskId) lines.push(`created by task: ${t.createdByTaskId}`);
     return { content: [{ type: 'text', text: lines.join('\n') }] };

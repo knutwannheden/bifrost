@@ -181,7 +181,9 @@ export default function TaskTab({
       ? `Branch: ${task.branch}`
       : `Branch: ${task.branch} · Base: ${task.baseBranch}`;
 
-  const tooltipLines = [task.name, task.summary, branchLine].filter(Boolean) as string[];
+  const tooltipLines = [task.name, task.summary, branchLine, task.machine && `Runs on ${task.machine}`].filter(
+    Boolean,
+  ) as string[];
 
   // Activity indicator: green pulse while Claude works, then a solid bar for a
   // turn that ended — blue where it finished, red where it failed or was cut off.
@@ -227,6 +229,9 @@ export default function TaskTab({
             <span className="truncate">
               <Highlight text={repoName} search={search} />
             </span>
+            {task.machine ? (
+              <span className="shrink-0 rounded-sm bg-surface-alt px-1 text-secondary">{task.machine}</span>
+            ) : null}
             {pr ? <PrPill pr={pr} onOpen={(url) => window.bifrost.openUrl(url)} /> : null}
           </span>
         </span>

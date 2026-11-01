@@ -29,7 +29,7 @@ const MARKETPLACE_NAME = 'bifrost';
 const PLUGIN_NAME = 'bifrost';
 const PLUGIN_ID = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 const MARKETPLACE_DIR = path.join(os.homedir(), '.bifrost', 'marketplace');
-const PLUGIN_DEPLOY_DIR = path.join(MARKETPLACE_DIR, PLUGIN_NAME);
+export const PLUGIN_DEPLOY_DIR = path.join(MARKETPLACE_DIR, PLUGIN_NAME);
 const PLUGINS_FILE = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
 const KNOWN_MARKETPLACES_FILE = path.join(os.homedir(), '.claude', 'plugins', 'known_marketplaces.json');
 const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
@@ -45,7 +45,7 @@ function atomicWriteFileSync(filePath: string, data: string): void {
   fs.renameSync(tmp, filePath);
 }
 
-function readPluginVersion(pluginDir: string): string | null {
+export function readPluginVersion(pluginDir: string): string | null {
   try {
     const manifest = path.join(pluginDir, '.claude-plugin', 'plugin.json');
     const data = JSON.parse(fs.readFileSync(manifest, 'utf-8'));
