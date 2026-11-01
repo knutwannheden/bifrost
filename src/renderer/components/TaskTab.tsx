@@ -329,6 +329,23 @@ export default function TaskTab({
                 dispatch({ type: 'SHOW_TOAST', message: `${reference} copied` });
               }}
             />
+            {!task.machine &&
+              !task.inPlace &&
+              !task.isExternal &&
+              (state.config?.machines ?? []).map((machine) => (
+                <MenuItem
+                  key={machine.name}
+                  label={`Move to ${machine.name}`}
+                  onClick={() => {
+                    setMenuPos(null);
+                    dispatch({ type: 'SHOW_TOAST', message: `Moving "${task.name}" to ${machine.name}…` });
+                    window.bifrost
+                      .transferTask(task.id, machine.name)
+                      .then(() => dispatch({ type: 'SHOW_TOAST', message: `"${task.name}" runs on ${machine.name}` }))
+                      .catch((err: Error) => dispatch({ type: 'SHOW_TOAST', message: `Move failed: ${err.message}` }));
+                  }}
+                />
+              ))}
             <div className="my-1 border-t border-border-default" />
             <MenuItem
               label="Close"

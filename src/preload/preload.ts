@@ -22,6 +22,7 @@ const api: BifrostAPI = {
   archiveTask: (taskId) => ipcRenderer.invoke(IPC.ARCHIVE_TASK, taskId),
   isWorktreeDirty: (taskId) => ipcRenderer.invoke(IPC.IS_WORKTREE_DIRTY, taskId),
   reopenTask: (taskId) => ipcRenderer.invoke(IPC.REOPEN_TASK, taskId),
+  transferTask: (taskId, machine) => ipcRenderer.invoke(IPC.TRANSFER_TASK, taskId, machine),
   clearInterrupted: (taskId) => ipcRenderer.invoke(IPC.CLEAR_INTERRUPTED, taskId),
   renameTask: (taskId, name) => ipcRenderer.invoke(IPC.RENAME_TASK, taskId, name),
   regenerateTaskTitle: (taskId) => ipcRenderer.invoke(IPC.REGENERATE_TASK_TITLE, taskId),
@@ -140,6 +141,11 @@ const api: BifrostAPI = {
     const handler = (_event: Electron.IpcRendererEvent, task: import('../shared/types').Task) => callback(task);
     ipcRenderer.on(IPC_STREAM.TASK_CREATED, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.TASK_CREATED, handler);
+  },
+  onTaskUpdated: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, task: import('../shared/types').Task) => callback(task);
+    ipcRenderer.on(IPC_STREAM.TASK_UPDATED, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.TASK_UPDATED, handler);
   },
   onTaskClosed: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, taskId: string, archived: boolean) =>

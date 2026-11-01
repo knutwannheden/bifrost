@@ -50,6 +50,7 @@ export const IPC = {
   ARCHIVE_TASK: 'task:archive',
   IS_WORKTREE_DIRTY: 'task:is-worktree-dirty',
   REOPEN_TASK: 'task:reopen',
+  TRANSFER_TASK: 'task:transfer',
   CLEAR_INTERRUPTED: 'task:clear-interrupted',
   RENAME_TASK: 'task:rename',
   REGENERATE_TASK_TITLE: 'task:regenerate-title',
@@ -175,6 +176,7 @@ export const IPC_STREAM = {
   PERMISSION_PROMPT: 'permission:prompt',
   STATS_UPDATE: 'stats:update',
   TASK_CREATED: 'task:created',
+  TASK_UPDATED: 'task:updated',
   TASK_CLOSED: 'task:closed',
   SLACK_REACTION: 'slack:reaction',
   CLAUDE_ACTIVE: 'claude:active',
@@ -209,6 +211,8 @@ export interface BifrostAPI {
   archiveTask(taskId: string): Promise<Task>;
   isWorktreeDirty(taskId: string): Promise<boolean>;
   reopenTask(taskId: string): Promise<Task>;
+  /** Moves a task from this machine to the configured machine with that name. */
+  transferTask(taskId: string, machine: string): Promise<Task>;
   clearInterrupted(taskId: string): Promise<void>;
   renameTask(taskId: string, name: string): Promise<Task>;
   /**
@@ -310,6 +314,8 @@ export interface BifrostAPI {
   // Task events
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
   onTaskCreated(callback: (task: Task) => void): () => void;
+  /** A task changed in the main process by other means than this window, such as moving to another machine. */
+  onTaskUpdated(callback: (task: Task) => void): () => void;
   onTaskClosed(callback: (taskId: string, archived: boolean) => void): () => void;
 
   // Notifications

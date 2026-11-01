@@ -1,6 +1,7 @@
 import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
@@ -65,6 +66,7 @@ import {
   createSession,
   createShellSession,
   getSessionName,
+  hasSession,
   killSession,
   resizeSession,
   writeToSession,
@@ -73,6 +75,7 @@ import { getSessionMetricsData } from './session-metrics';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getStats } from './stats-service';
 import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store';
+import { claudeProjectDir, packTask, unpackScript } from './task-transfer';
 import { generateTaskTitle } from './title-generator';
 import { assessStaleness, currentHead, remapAnchor } from './walkthrough-anchor';
 import { generateWalkthrough, loadCurrentWalkthrough, storeWalkthrough } from './walkthrough-service';
@@ -747,6 +750,124 @@ async function reopenRemoteTask(task: Task, mainWindow: BrowserWindow): Promise<
   return updateTask(task.id, { status: 'running', hasUnread: false, archivedAt: undefined });
 }
 
+/**
+ * Moves a task from this machine to another, with its branch, its staged and
+ * unstaged changes, and its conversation. The local worktree goes once the task
+ * runs there, keeping its branch as archiving does, unless it holds untracked
+ * files, which do not travel.
+ */
+export async function transferTaskCore(taskId: string, machine: string, mainWindow: BrowserWindow): Promise<Task> {
+  const task = getTask(taskId);
+  if (task.machine) throw new Error(`"${task.name}" already runs on ${task.machine}`);
+  if (task.isExternal || task.inPlace) throw new Error('Only a task in a worktree of its own can be moved');
+  const repo = loadConfig().repos.find((r: Repo) => r.id === task.repoId);
+  if (!repo || repo.multiTaskId) throw new Error('Only a task in a single repo can be moved');
+  const branch = headBranch(task.worktreePath);
+  if (!branch) throw new Error('A detached HEAD has no branch to move');
+  const baseRef = await resolveBaseRef(task.worktreePath, task.baseBranch);
+  if (!baseRef) throw new Error(`Cannot find ${task.baseBranch} to move the branch against`);
+  let url: string;
+  try {
+    ({ stdout: url } = await execFile('git', ['remote', 'get-url', 'origin'], { cwd: repo.path, timeout: 5000 }));
+  } catch {
+    throw new Error(`${repo.name} has no origin remote for ${machine} to clone from`);
+  }
+  const host = getRemoteHost(machine);
+  const info = await host.connectReady();
+
+  const slug = path.basename(task.worktreePath);
+  const clonePath = remoteClonePath(repo);
+  const remoteWorktree = `${info.home}/${clonePath}/.worktrees/${slug}`;
+  const projects = path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude'), 'projects');
+  const transcript = task.sessionId
+    ? path.join(projects, claudeProjectDir(task.worktreePath), `${task.sessionId}.jsonl`)
+    : null;
+  const dropDir = `.bifrost/transfer/${task.id}`;
+
+  // The conversation is copied whole, so the session stops first and nothing writes to it meanwhile.
+  const wasRunning = hasSession(taskId);
+  cancelTaskRequests(taskId);
+  stopWatching(taskId);
+  killSession(taskId);
+  const pack = fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-transfer-'));
+  let moved: Task;
+  try {
+    packTask(
+      {
+        worktreePath: task.worktreePath,
+        baseRef,
+        transcript: transcript && fs.existsSync(transcript) ? transcript : null,
+        rewrites: [
+          [task.worktreePath, remoteWorktree],
+          [os.homedir(), info.home],
+        ],
+      },
+      pack,
+    );
+    await host.upload(pack, dropDir);
+    const out = parseScriptOutput(
+      await host.exec(
+        unpackScript({
+          clonePath,
+          url: url.trim(),
+          baseBranch: baseRef.slice(baseRef.indexOf('/') + 1),
+          branchName: branch,
+          slug,
+          gitName: await localGitConfig(repo.path, 'user.name'),
+          gitEmail: await localGitConfig(repo.path, 'user.email'),
+          dropDir,
+          sessionId: task.sessionId ?? '',
+        }),
+        CLONE_TIMEOUT_MS,
+      ),
+    );
+    if (!out.WORKTREE) throw new Error(`${machine} did not report the moved worktree`);
+    moved = {
+      ...task,
+      machine,
+      worktreePath: out.WORKTREE,
+      branch: out.BRANCH,
+      baseBranch: out.BASE,
+      status: 'running',
+    };
+    await writeRemoteSession(moved, host, info);
+  } catch (err) {
+    // Nothing here has changed yet, so the task carries on where it was.
+    if (wasRunning) restoreTaskSession(taskId, mainWindow);
+    throw err;
+  } finally {
+    fs.rmSync(pack, { recursive: true, force: true });
+  }
+
+  const updated = updateTask(taskId, {
+    machine,
+    worktreePath: moved.worktreePath,
+    branch: moved.branch,
+    baseBranch: moved.baseBranch,
+    status: 'running',
+  });
+  startRemoteSession(updated, mainWindow);
+  if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_STREAM.TASK_UPDATED, updated);
+
+  const { stdout: untracked } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], {
+    cwd: task.worktreePath,
+    timeout: 10000,
+  });
+  if (untracked.trim()) {
+    const files = untracked.trim().split('\n');
+    mainWindow.webContents.send(
+      IPC_STREAM.TOAST,
+      `Kept ${task.worktreePath} here: ${files.length} untracked file${files.length === 1 ? '' : 's'} did not move`,
+      8000,
+    );
+  } else {
+    removeWorktree(repo.path, task.worktreePath).catch((err) =>
+      console.error(`[transfer] could not remove ${task.worktreePath}:`, err),
+    );
+  }
+  return updated;
+}
+
 /** The working diff of a task on another machine, or against its base for scope 'all'. */
 export async function getRemoteDiff(task: Task, scope: 'working' | 'all' = 'working'): Promise<DiffResult> {
   const host = remoteHostFor(task);
@@ -1022,6 +1143,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.REOPEN_TASK, (_event, taskId: string) => reopenTaskCore(taskId, mainWindow));
+
+  ipcMain.handle(IPC.TRANSFER_TASK, (_event, taskId: string, machine: string) =>
+    transferTaskCore(taskId, machine, mainWindow),
+  );
 
   ipcMain.handle(IPC.CLEAR_INTERRUPTED, (_event, taskId: string) => {
     clearInterrupted(taskId);

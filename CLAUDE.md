@@ -77,7 +77,9 @@ On the machine, a repo is cloned once, at the path it has here relative to home,
 
 Nobody may be there to answer Claude's first-run screens, so Bifrost answers them up front. Connecting marks onboarding done, setting up a session trusts its worktree, and the session's `--settings` settle the renderer and the warning about skipped permissions.
 
-Every remote step is a shell script built in `remote-host.ts`. `npm run check:remote-scripts` runs them against a local home directory.
+A task here moves to another machine with "Move to" in its context menu (`task-transfer.ts`). Its commits beyond its base travel as a git bundle, and its staged and unstaged changes as patches. Its transcript travels with the worktree and home paths rewritten, and is filed under the directory Claude names after the new path, so the session resumes there under the same id. Untracked files stay behind. The local worktree is removed unless it holds some.
+
+Every remote step is a shell script built in `remote-host.ts` or `task-transfer.ts`. `npm run check:remote-scripts` and `npm run check:task-transfer` run them against a local home directory.
 
 ### Restarting Bifrost from a task
 

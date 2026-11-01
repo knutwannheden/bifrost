@@ -38,6 +38,7 @@ import {
   restoreTaskSession,
   stopTaskSession,
   type TaskTarget,
+  transferTaskCore,
   updateTask,
 } from './ipc-handlers';
 import { deleteNote, listNotes } from './note-store';
@@ -866,6 +867,21 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // The name the session actually carries, which is the task's name from
       // when it started rather than its name now.
       jsonResponse(res, { ok: true, name: getSessionName(wakeId) ?? wakeTask.name, alreadyAwake });
+      return;
+    }
+
+    case '/transfer-task': {
+      const transferId = resolveTaskId(body);
+      const machine = body.machine as string | undefined;
+      if (!transferId || !machine || !mainWindow) {
+        errorResponse(res, 'taskId and machine are required');
+        return;
+      }
+      try {
+        jsonResponse(res, await transferTaskCore(transferId, machine, mainWindow));
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 400);
+      }
       return;
     }
 

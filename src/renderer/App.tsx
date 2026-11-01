@@ -132,6 +132,11 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
+  useEffect(() => {
+    const unsub = window.bifrost.onTaskUpdated((task) => dispatch({ type: 'UPDATE_TASK', task }));
+    return unsub;
+  }, [dispatch]);
+
   // Listen for toast messages from main process
   useEffect(() => {
     const unsub = window.bifrost.onToast((message, duration) => {

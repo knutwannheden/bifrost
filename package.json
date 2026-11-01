@@ -35,6 +35,7 @@
     "check:walkthrough-anchor": "node scripts/check-walkthrough-anchor.mts",
     "check:remote-scripts": "node scripts/check-remote-scripts.mts",
     "check:diff-paths": "node scripts/check-diff-paths.mts",
+    "check:task-transfer": "node scripts/check-task-transfer.mts",
     "test": "npm --prefix tools/postmortem test && npm --prefix tools/headroom test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

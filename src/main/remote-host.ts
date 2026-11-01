@@ -196,11 +196,10 @@ export interface WorktreeSpec {
 }
 
 /**
- * Clones the repo on first use and forks a new branch's worktree from the
- * freshly fetched base branch. Prints BRANCH, WORKTREE and BASE.
+ * Clones the repo on first use and fetches its base branch. Leaves clone, branch
+ * and wt set to a branch name nobody holds and the worktree path for it.
  */
-export function worktreeScript(spec: WorktreeSpec): string {
-  const base = shQuote(`origin/${spec.baseBranch}`);
+export function cloneLines(spec: WorktreeSpec): string[] {
   return [
     'set -e',
     'cd "$HOME"',
@@ -232,6 +231,14 @@ export function worktreeScript(spec: WorktreeSpec): string {
     '  n=$((n + 1))',
     'done',
     `wt="$HOME/$clone/.worktrees/"${shQuote(spec.slug)}`,
+  ];
+}
+
+/** Forks a new branch's worktree from the freshly fetched base branch. Prints BRANCH, WORKTREE and BASE. */
+export function worktreeScript(spec: WorktreeSpec): string {
+  const base = shQuote(`origin/${spec.baseBranch}`);
+  return [
+    ...cloneLines(spec),
     `git -C "$clone" worktree add --quiet -b "$branch" "$wt" ${base}`,
     `git -C "$wt" branch --quiet --set-upstream-to ${base} "$branch" || true`,
     `printf 'BRANCH=%s\\nWORKTREE=%s\\nBASE=%s\\n' "$branch" "$wt" ${base}`,
@@ -373,6 +380,7 @@ const CONTROL_DIR = path.join(os.homedir(), '.bifrost', 'ssh');
 /** Connecting may first start a stopped machine, which takes minutes. */
 const CONNECT_TIMEOUT_MS = 5 * 60_000;
 const EXEC_TIMEOUT_MS = 2 * 60_000;
+const UPLOAD_TIMEOUT_MS = 15 * 60_000;
 const RELINK_DELAY_MS = 10_000;
 const IDLE_CLOSE_MS = 60_000;
 const KEEPALIVE = ['-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4'];
@@ -599,19 +607,34 @@ export class RemoteHost {
     const version = readPluginVersion(PLUGIN_DEPLOY_DIR);
     if (!version) return null;
     if (version !== remoteVersion) {
-      const tar = spawn('tar', ['--no-xattrs', '-C', PLUGIN_DEPLOY_DIR, '-czf', '-', '.'], {
-        env: { ...process.env, COPYFILE_DISABLE: '1' },
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
       const dest = REMOTE_PLUGIN_DIR;
-      await this.run(
-        '',
-        EXEC_TIMEOUT_MS,
+      await this.sendTar(
+        PLUGIN_DEPLOY_DIR,
         `rm -rf ${dest}.new && mkdir -p ${dest}.new && tar -xzf - -C ${dest}.new && rm -rf ${dest} && mv ${dest}.new ${dest}`,
-        tar.stdout,
+        EXEC_TIMEOUT_MS,
       );
     }
     return `${home}/${REMOTE_PLUGIN_DIR}`;
+  }
+
+  /** Copies a local directory's contents into a fresh directory on the machine, relative to its home directory. */
+  async upload(localDir: string, remoteDir: string, timeoutMs = UPLOAD_TIMEOUT_MS): Promise<void> {
+    // The remote login shell parses the command, so the path stays to characters it reads literally.
+    if (!/^[A-Za-z0-9._/-]+$/.test(remoteDir)) throw new Error(`Unsafe remote directory: ${remoteDir}`);
+    await this.connect();
+    await this.sendTar(
+      localDir,
+      `rm -rf ${remoteDir} && mkdir -p ${remoteDir} && tar -xzf - -C ${remoteDir}`,
+      timeoutMs,
+    );
+  }
+
+  private sendTar(localDir: string, remoteCommand: string, timeoutMs: number): Promise<string> {
+    const tar = spawn('tar', ['--no-xattrs', '-C', localDir, '-czf', '-', '.'], {
+      env: { ...process.env, COPYFILE_DISABLE: '1' },
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return this.run('', timeoutMs, remoteCommand, tar.stdout);
   }
 }
 
