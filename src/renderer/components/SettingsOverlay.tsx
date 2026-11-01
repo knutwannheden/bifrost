@@ -705,6 +705,16 @@ function MachineEditor({
           >
             <span className="text-sm text-primary flex-1">{m.name}</span>
             <span className="text-xs text-muted font-mono truncate max-w-[240px]">{m.host}</span>
+            {/* The switch sits in the row, whose own click starts an edit. */}
+            <span className="flex items-center gap-1.5 text-xs text-secondary" onClick={(e) => e.stopPropagation()}>
+              Sync setup
+              <ToggleSwitch
+                checked={m.sync === true}
+                onChange={(on) =>
+                  updateConfig({ machines: machines.map((x, i) => (i === idx ? { ...x, sync: on } : x)) })
+                }
+              />
+            </span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -755,6 +765,22 @@ function MachineEditor({
           + Add machine
         </button>
       )}
+      <div className="mt-3">
+        <span className="text-xs text-secondary">Also synced to machines with Sync setup on, one path per line</span>
+        <FormTextarea
+          defaultValue={(config.syncPaths ?? []).join('\n')}
+          onBlur={(e) => {
+            const paths = e.target.value
+              .split('\n')
+              .map((line) => line.trim())
+              .filter(Boolean);
+            updateConfig({ syncPaths: paths.length > 0 ? paths : undefined });
+          }}
+          placeholder="~/.local/bin/gw"
+          rows={3}
+          className="mt-1 w-full px-2 py-1 font-mono"
+        />
+      </div>
       <p className="mt-2 text-xs text-muted">
         A task runs on one of these when its prompt names it. Any host ssh reaches without a password works, with Claude
         logged in there and git, tmux, python3 and curl installed.

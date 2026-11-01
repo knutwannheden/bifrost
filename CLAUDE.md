@@ -79,7 +79,17 @@ Nobody may be there to answer Claude's first-run screens, so Bifrost answers the
 
 A task here moves to another machine with "Move to" in its context menu (`task-transfer.ts`). Its commits beyond its base travel as a git bundle, and its staged and unstaged changes as patches. Its transcript travels with the worktree and home paths rewritten, and is filed under the directory Claude names after the new path, so the session resumes there under the same id. Untracked files stay behind. The local worktree is removed unless it holds some.
 
-Every remote step is a shell script built in `remote-host.ts` or `task-transfer.ts`. `npm run check:remote-scripts` and `npm run check:task-transfer` run them against a local home directory.
+A machine with "Sync setup" on gets this machine's Claude setup on every connect (`remote-sync.ts`). Each part travels to the same path relative to home, is replaced whole, and travels only when its hash changed:
+
+- Skills, agents, commands and the status line script under `~/.claude`.
+- The `CLAUDE.md` files in the directories above the configured repos.
+- `settings.json`, with home paths rewritten.
+- The enabled plugins and their marketplaces. A directory marketplace sends only its manifest and the enabled plugins.
+- Bifrost's `tools/headroom`, linked into `~/.local/bin`, and the extra paths from the settings.
+
+`~/.claude/CLAUDE.md` is the exception. The machine's own may be written by something else, such as a provisioning script that rewrites a block of it on every start, so the rules go to `~/.bifrost/claude/CLAUDE.md` and the machine's file only gains a line importing them. Bifrost's own plugin stays out, since remote sessions load it with `--plugin-dir`.
+
+Every remote step is a shell script built in `remote-host.ts`, `task-transfer.ts` or `remote-sync.ts`. The checks `check:remote-scripts`, `check:task-transfer` and `check:remote-sync` run them against a local home directory.
 
 ### Restarting Bifrost from a task
 

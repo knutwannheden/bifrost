@@ -60,6 +60,8 @@ export interface Machine {
   name: string;
   /** The host `ssh` connects to, configured as ~/.ssh/config says. */
   host: string;
+  /** Whether connecting brings the machine's Claude setup in line with this one's. */
+  sync?: boolean;
 }
 
 export interface Task {
@@ -174,6 +176,8 @@ export interface BifrostConfig {
   };
   macros?: Macro[];
   machines?: Machine[];
+  /** Files and directories synced to machines besides Claude's setup, relative to home or with ~/. */
+  syncPaths?: string[];
 }
 
 export interface CreateTaskParams {

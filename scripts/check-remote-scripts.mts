@@ -68,7 +68,7 @@ fs.writeFileSync(
 printf '%s\\0' "$@" > '${record}/args'
 cat > '${record}/stdin'
 pwd > '${record}/pwd'
-printf '%s\\n' "$BIFROST_TASK_ID" "$BIFROST_SESSION_NAME" > '${record}/env'
+printf '%s\\n' "$BIFROST_TASK_ID" "$BIFROST_SESSION_NAME" "$PATH" > '${record}/env'
 `,
   { mode: 0o755 },
 );
@@ -120,7 +120,7 @@ attach();
       !args.includes('--resume') &&
       stdin === `${awkwardPrompt}\n` &&
       fs.readFileSync(path.join(record, 'pwd'), 'utf-8').trim() === worktree &&
-      env === `${taskId}\n${awkwardName}\n`,
+      env.startsWith(`${taskId}\n${awkwardName}\n${home}/.local/bin:`),
     show({ args, stdin, env }),
   );
   check(

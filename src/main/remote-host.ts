@@ -7,6 +7,7 @@ import type { Machine } from '../shared/types.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
+import { syncMachine } from './remote-sync.ts';
 
 const execFile = promisify(execFileCb);
 
@@ -109,6 +110,8 @@ export function sessionSetupScript(spec: RemoteSessionSpec): string {
   const run = [
     ...exports,
     `d=${shQuote(dir)}`,
+    // Tools such as headroom sit in ~/.local/bin, which only a login shell puts on PATH.
+    'export PATH="$HOME/.local/bin:$PATH"',
     `cd ${shQuote(spec.worktreePath)} || exit 1`,
     'sid=$(cat "$d/session-id")',
     `set -- ${spec.claudeArgs.map(shQuote).join(' ')}`,
@@ -385,6 +388,14 @@ const RELINK_DELAY_MS = 10_000;
 const IDLE_CLOSE_MS = 60_000;
 const KEEPALIVE = ['-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4'];
 
+/** A directory under Bifrost's own tools/, which exists when Bifrost runs from its checkout. */
+function bifrostTool(name: string): string | undefined {
+  // The main process is bundled into .vite/build, two levels below the checkout.
+  if (typeof __dirname !== 'string') return undefined;
+  const dir = path.resolve(__dirname, '..', '..', 'tools', name);
+  return fs.existsSync(dir) ? dir : undefined;
+}
+
 function localApiPort(): number | null {
   try {
     return Number(fs.readFileSync(path.join(os.homedir(), '.bifrost', 'api-port'), 'utf-8').trim()) || null;
@@ -500,6 +511,12 @@ export class RemoteHost {
     const out = parseScriptOutput(await this.run(prepare, EXEC_TIMEOUT_MS));
     if (!out.HOME) throw new Error(`${this.machine.name} could not be prepared`);
     const pluginDir = await this.syncPlugin(out.PLUGIN_VERSION, out.HOME);
+    if (this.machine.sync) {
+      // A sync that fails is logged, and the connection goes on without it.
+      await this.syncSetup(out.HOME).catch((err) =>
+        console.warn(`[sync] ${this.machine.name}: ${(err as Error).message}`),
+      );
+    }
     this.info = {
       home: out.HOME,
       missing: out.MISSING ? out.MISSING.split(' ') : [],
@@ -618,15 +635,40 @@ export class RemoteHost {
   }
 
   /** Copies a local directory's contents into a fresh directory on the machine, relative to its home directory. */
-  async upload(localDir: string, remoteDir: string, timeoutMs = UPLOAD_TIMEOUT_MS): Promise<void> {
+  async upload(localDir: string, remoteDir: string): Promise<void> {
+    await this.connect();
+    await this.uploadOverLink(localDir, remoteDir);
+  }
+
+  /** upload, for a link that is open or being opened, which connect would wait on. */
+  private async uploadOverLink(localDir: string, remoteDir: string): Promise<void> {
     // The remote login shell parses the command, so the path stays to characters it reads literally.
     if (!/^[A-Za-z0-9._/-]+$/.test(remoteDir)) throw new Error(`Unsafe remote directory: ${remoteDir}`);
-    await this.connect();
-    await this.sendTar(
-      localDir,
-      `rm -rf ${remoteDir} && mkdir -p ${remoteDir} && tar -xzf - -C ${remoteDir}`,
-      timeoutMs,
+    const command = `rm -rf ${remoteDir} && mkdir -p ${remoteDir} && tar -xzf - -C ${remoteDir}`;
+    await this.sendTar(localDir, command, UPLOAD_TIMEOUT_MS);
+  }
+
+  /** Brings the machine's Claude setup in line with this one's, over the link being opened. */
+  private async syncSetup(home: string): Promise<void> {
+    const config = loadConfig();
+    const { sent, removed } = await syncMachine(
+      {
+        upload: (localDir, remoteDir) => this.uploadOverLink(localDir, remoteDir),
+        exec: (script) => this.run(script, UPLOAD_TIMEOUT_MS),
+      },
+      {
+        localHome: os.homedir(),
+        remoteHome: home,
+        repoPaths: config.repos.filter((r) => !r.multiTaskId).map((r) => r.path),
+        syncPaths: config.syncPaths ?? [],
+        headroomDir: bifrostTool('headroom'),
+      },
     );
+    if (sent.length + removed.length > 0) {
+      console.log(
+        `[sync] ${this.machine.name}: sent ${sent.join(', ') || 'nothing'}; removed ${removed.join(', ') || 'nothing'}`,
+      );
+    }
   }
 
   private sendTar(localDir: string, remoteCommand: string, timeoutMs: number): Promise<string> {
