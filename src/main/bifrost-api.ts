@@ -19,8 +19,9 @@ import {
   turnEnded,
 } from './activity-state';
 import { getActivityLog, stopWatching } from './activity-watcher';
+import { relayMessage } from './claude-oneshot';
 import { loadConfig, saveConfig } from './config';
-import { CONSOLE_SESSION_ID } from './console-service';
+import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
 import {
   archiveTaskCore,
@@ -252,6 +253,33 @@ function finishTurn(task: Task): void {
   }
 }
 
+/**
+ * Tells the session that asked for a task why it was not created, since it was
+ * answered before the work ran. A caller SendMessage cannot reach, on another
+ * machine or outside Bifrost, has the toast alone.
+ */
+function reportCreateFailure(
+  params: { name?: string; machine?: string; createdByTaskId?: string },
+  fromConsole: boolean,
+  repoName: string,
+  reason: string,
+): void {
+  let to: string | undefined;
+  if (params.createdByTaskId) {
+    const creator = getTasks().find((t) => t.id === params.createdByTaskId);
+    to = creator && !creator.machine ? getSessionName(creator.id) : undefined;
+  } else if (fromConsole && hasSession(CONSOLE_SESSION_ID)) {
+    to = CONSOLE_NAME;
+  }
+  if (!to) return;
+  const what = params.name ? `Task "${params.name}"` : 'The task you asked for';
+  const where = params.machine ? ` on ${params.machine}` : '';
+  relayMessage(
+    to,
+    `${what} in ${repoName} was not created${where}: ${reason}\n\nBifrost sent this and cannot read a reply.`,
+  ).catch((err) => console.warn('[api] could not report the failed task:', err));
+}
+
 function killTaskSessions(task: Task): void {
   stopTaskSession(task);
   killSession(`${task.id}-dev`);
@@ -395,6 +423,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
             const msg = (e as Error).message;
             console.error('[api] async create-task failed:', msg);
             mainWindow!.webContents.send(IPC_STREAM.TOAST, `Task creation failed: ${msg}`, 5000);
+            reportCreateFailure(params, body.callerContext === 'console', target.repo.name, msg);
           });
       } else {
         try {

@@ -10,7 +10,7 @@ const CONSOLE_DIR = path.join(os.homedir(), '.bifrost', 'console');
 
 /** Stable across restarts: the renderer attaches to it, the phone addresses it. */
 export const CONSOLE_SESSION_ID = 'console';
-const CONSOLE_NAME = 'bifrost';
+export const CONSOLE_NAME = 'bifrost';
 
 /** A crashing console must not respawn in a tight loop. */
 const RESPAWN_DELAY_MS = 5_000;

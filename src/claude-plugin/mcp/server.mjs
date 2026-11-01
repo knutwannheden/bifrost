@@ -363,6 +363,7 @@ server.registerTool(
       prompt,
       machine,
       createdByTaskId: TASK_ID || undefined,
+      callerContext: process.env.BIFROST_CONTEXT,
       async: true,
     });
     const taskName = name || 'new task';
@@ -371,7 +372,11 @@ server.registerTool(
         {
           type: 'text',
           text: result.pending
-            ? `Task "${taskName}" is being created${machine ? ` on ${machine}` : ''} and will appear in a new Bifrost tab shortly.`
+            ? `Task "${taskName}" is being created${machine ? ` on ${machine}` : ''} and will appear in a new Bifrost tab shortly.${
+                (TASK_ID && !MACHINE) || process.env.BIFROST_CONTEXT === 'console'
+                  ? ' If it cannot be created, a message from Bifrost will say why.'
+                  : ''
+              }`
             : `Task "${result.name}" created (id: ${result.id}, branch: ${result.branch}). It's running in a new tab.`,
         },
       ],
