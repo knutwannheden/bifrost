@@ -12,7 +12,14 @@ DIR=$HOME/.bifrost/restart
 # A session counts as in use when its turn state changed this recently, or a turn is under way.
 ACTIVE_WITHIN_MIN=60
 
-if [ -z "${RESTART_TS:-}" ]; then
+# The mode comes from an argument only. RESTART_* travel in the environment, and any left over must not decide it.
+MODE=launch
+case "${1:-}" in
+  --run) MODE=run ;;
+  --restart) MODE=restart ;;
+esac
+
+if [ "$MODE" = launch ]; then
   export RESTART_TS=$(date +%Y%m%d-%H%M%S)
   export RESTART_CALLER=${BIFROST_TASK_ID:-} RESTART_REVERT= RESTART_NUDGE=0 RESTART_PROMPT=
   while [ $# -gt 0 ]; do
@@ -26,12 +33,13 @@ if [ -z "${RESTART_TS:-}" ]; then
   mkdir -p "$DIR"
   # A copy runs, so the restart outlives a checkout that changes or goes away meanwhile.
   cp "$0" "$DIR/$RESTART_TS.sh"
-  python3 -c 'import os, sys; os.setsid(); os.execvp("bash", ["bash", sys.argv[1]])' "$DIR/$RESTART_TS.sh" \
+  python3 -c 'import os, sys; os.setsid(); os.execvp("bash", ["bash", sys.argv[1], "--run"])' "$DIR/$RESTART_TS.sh" \
     < /dev/null > /dev/null 2>&1 &
   echo "restarting Bifrost in the background; log: $DIR/$RESTART_TS.log"
   exit 0
 fi
 
+RESTART_CALLER=${RESTART_CALLER:-} RESTART_REVERT=${RESTART_REVERT:-} RESTART_NUDGE=${RESTART_NUDGE:-0} RESTART_PROMPT=${RESTART_PROMPT:-}
 LOG=$DIR/$RESTART_TS.log NPM_LOG=$DIR/$RESTART_TS-npm.log CLAUDE_LOG=$DIR/$RESTART_TS-claude.log
 LIVE=$DIR/$RESTART_TS-live.txt WORKING=$DIR/$RESTART_TS-working.txt REPORT=$DIR/$RESTART_TS-report.md
 exec >> "$LOG" 2>&1 < /dev/null
@@ -80,7 +88,9 @@ stop_bifrost() {
 }
 
 start_bifrost() {
-  (cd "$REPO" && nohup npm start >> "$NPM_LOG" 2>&1 < /dev/null &)
+  # Bifrost hands its environment to every session, so the restart's own variables stay behind.
+  (cd "$REPO" && env -u RESTART_TS -u RESTART_CALLER -u RESTART_REVERT -u RESTART_NUDGE -u RESTART_PROMPT \
+    nohup npm start >> "$NPM_LOG" 2>&1 < /dev/null &)
   log "npm start launched, output in $NPM_LOG"
 }
 
@@ -147,22 +157,22 @@ EOF
   log "claude -p exited $?"
 }
 
-case "${1:-}" in
-  --restart) restart; exit $? ;;
-esac
+if [ "$MODE" = restart ]; then
+  restart
+  exit $?
+fi
 
 if command -v headroom >/dev/null; then
   log "waiting for an exclusive cpu claim, so no claimed run is cut off"
-  tries=0
-  until headroom run cpu --exclusive --as bifrost-restart \
-    --why "restarting Bifrost: every session restarts, so no claimed run may be in flight" -- bash "$0" --restart; do
-    log "headroom run exited $?"
-    # Once the restart step has run, its outcome stands. Running it again would cut the sessions off twice.
-    grep -q 'reverting\|new build is up\|new build not up' "$LOG" && break
-    tries=$((tries + 1))
-    [ "$tries" -ge 120 ] && { log "no claim after $tries tries; Bifrost was left as it was"; exit 1; }
-    sleep 60
-  done
+  # --force skips only the check for load nobody claimed, which a restart cannot cut off.
+  if id=$(headroom acquire cpu --exclusive --force --wait -q --as bifrost-restart \
+    --why "restarting Bifrost: every session restarts, so no claimed run may be in flight"); then
+    headroom hold "$id" --grace never -- bash "$0" --restart
+    headroom release "$id" > /dev/null
+  else
+    log "no cpu claim; Bifrost was left as it was"
+    exit 1
+  fi
 else
   restart
 fi
