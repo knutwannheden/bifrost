@@ -1,0 +1,184 @@
+#!/bin/bash
+# Restarts the Bifrost that runs in development mode, from a task inside it.
+#
+#   scripts/restart-bifrost.sh [--revert FROM..TO] [--nudge] [--prompt TEXT]
+#
+# It detaches and returns at once, printing its log. Once no claimed cpu work is
+# running, it restarts Bifrost from the same checkout, wakes the sessions that
+# were live, and prompts the calling task with how it went.
+set -u
+
+DIR=$HOME/.bifrost/restart
+
+if [ -z "${RESTART_TS:-}" ]; then
+  export RESTART_TS=$(date +%Y%m%d-%H%M%S)
+  export RESTART_CALLER=${BIFROST_TASK_ID:-} RESTART_REVERT= RESTART_NUDGE=0 RESTART_PROMPT=
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --revert) RESTART_REVERT=$2; shift 2 ;;
+      --nudge) RESTART_NUDGE=1; shift ;;
+      --prompt) RESTART_PROMPT=$2; shift 2 ;;
+      *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+  done
+  mkdir -p "$DIR"
+  # A copy runs, so the restart outlives a checkout that changes or goes away meanwhile.
+  cp "$0" "$DIR/$RESTART_TS.sh"
+  python3 -c 'import os, sys; os.setsid(); os.execvp("bash", ["bash", sys.argv[1]])' "$DIR/$RESTART_TS.sh" \
+    < /dev/null > /dev/null 2>&1 &
+  echo "restarting Bifrost in the background; log: $DIR/$RESTART_TS.log"
+  exit 0
+fi
+
+LOG=$DIR/$RESTART_TS.log NPM_LOG=$DIR/$RESTART_TS-npm.log CLAUDE_LOG=$DIR/$RESTART_TS-claude.log
+LIVE=$DIR/$RESTART_TS-live.txt WORKING=$DIR/$RESTART_TS-working.txt REPORT=$DIR/$RESTART_TS-report.md
+exec >> "$LOG" 2>&1 < /dev/null
+log() { echo "$(date +%T) $*"; }
+
+# A Claude session's markers in the environment would make every session started from here its child.
+unset CLAUDECODE CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_CODE_BRIDGE_SESSION_ID \
+  CLAUDE_CODE_MESSAGING_SOCKET CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXECPATH \
+  CLAUDE_CODE_TMPDIR CLAUDE_TMPDIR BIFROST_TASK_ID BIFROST_SESSION_NAME BIFROST_API_PORT BIFROST_CONTEXT
+
+# pgrep -f cannot read other processes' arguments on macOS, so ps is matched instead.
+processes() { ps -axo pid=,command= | sed 's/^ *//'; }
+electron_pid() { processes | awk -v repo="$REPO" '$2 == repo "/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" && $3 == "." && NF == 3 { print $1 }' | head -1; }
+forge_pid() { processes | awk -v start="$REPO/node_modules/@electron-forge/cli/dist/electron-forge-start.js" '$3 == start { print $1 }' | head -1; }
+
+# The running Bifrost says which checkout to start again, and which node to start it with.
+REPO=$(processes | awk '$2 ~ /\/node_modules\/electron\/dist\/Electron\.app\/Contents\/MacOS\/Electron$/ && $3 == "." && NF == 3 { sub(/\/node_modules\/.*/, "", $2); print $2 }' | head -1)
+if [ -z "$REPO" ] || ! grep -q '"name": "bifrost"' "$REPO/package.json" 2>/dev/null; then
+  log "no Bifrost running in development mode; nothing restarted"
+  exit 1
+fi
+NODE_BIN=$(processes | awk -v start="$REPO/node_modules/@electron-forge/cli/dist/electron-forge-start.js" '$3 == start { print $2 }' | head -1)
+[ -n "$NODE_BIN" ] && export PATH=$(dirname "$NODE_BIN"):$PATH
+log "Bifrost runs from $REPO"
+
+api() {
+  local port
+  port=$(cat "$HOME/.bifrost/api-port" 2>/dev/null) || return 1
+  curl -s --max-time 30 -X POST -H 'Content-Type: application/json' -d "$2" "http://127.0.0.1:$port$1"
+}
+healthy() { api /list-tasks '{"status":"running","limit":1}' | grep -q '"tasks"'; }
+wait_healthy() { for _ in $(seq 1 60); do sleep 3; healthy && return 0; done; return 1; }
+
+stop_bifrost() {
+  local pid forge
+  pid=$(electron_pid) forge=$(forge_pid)
+  [ -z "$pid" ] && { log "no Electron running"; return 0; }
+  # SIGTERM lets Electron quit on its own terms, and SIGKILL follows only when it does not.
+  log "SIGTERM Electron $pid (forge ${forge:-none})"
+  kill -TERM "$pid"
+  for _ in $(seq 1 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
+  kill -0 "$pid" 2>/dev/null && { log "Electron still up after 30s, SIGKILL"; kill -KILL "$pid"; }
+  for _ in $(seq 1 15); do { [ -z "$forge" ] || ! kill -0 "$forge" 2>/dev/null; } && break; sleep 1; done
+  [ -n "$forge" ] && kill -0 "$forge" 2>/dev/null && { log "forge still up, SIGTERM"; kill -TERM "$forge"; sleep 3; }
+  return 0
+}
+
+start_bifrost() {
+  (cd "$REPO" && nohup npm start >> "$NPM_LOG" 2>&1 < /dev/null &)
+  log "npm start launched, output in $NPM_LOG"
+}
+
+restart() {
+  # Only sessions live now come back, as opening their tabs would bring them.
+  local tasks
+  tasks=$(api /list-tasks '{"status":"running","limit":500}')
+  echo "$tasks" | jq -r '.tasks[] | select(.sessionName != null) | .id' > "$LIVE"
+  echo "$tasks" | jq -r --arg me "$RESTART_CALLER" \
+    '.tasks[] | select(.sessionName != null and .idle == false and .id != $me) | .id' > "$WORKING"
+  log "live sessions: $(wc -l < "$LIVE" | tr -d ' '), mid-turn: $(wc -l < "$WORKING" | tr -d ' ')"
+  stop_bifrost
+  start_bifrost
+  if wait_healthy; then
+    log "new build is up"
+    return 0
+  fi
+  if [ -z "$RESTART_REVERT" ]; then
+    log "new build not up after 3 minutes"
+    return 1
+  fi
+  # Takes out only the named commits, so uncommitted work in the checkout stays.
+  log "new build not up after 3 minutes, reverting $RESTART_REVERT in the working tree"
+  stop_bifrost
+  if git -C "$REPO" diff "$RESTART_REVERT" | git -C "$REPO" apply -R; then
+    log "reverted; to re-apply: git diff $RESTART_REVERT | git apply"
+  else
+    log "revert did not apply"
+  fi
+  start_bifrost
+  wait_healthy && log "previous build is up" || log "previous build did not come up either"
+  return 1
+}
+
+failsafe() {
+  log "Bifrost is not answering; handing over to claude -p, transcript in $CLAUDE_LOG"
+  local brief
+  brief=$(cat <<EOF
+Bifrost is an Electron app that the user runs in development mode with \`npm start\` from $REPO. A scripted restart has left it not answering, and the user may be away and depend on it. Get it running and healthy again.
+
+What happened is in the restart log $LOG, and the app's own output is in $NPM_LOG.${RESTART_REVERT:+ The restart was to load commits $RESTART_REVERT. If the log says it reverted them, they are already out of the working tree.}
+
+Healthy means ~/.bifrost/api-port names a port where this prints JSON with a "tasks" key:
+  curl -s -X POST -H 'Content-Type: application/json' -d '{"status":"running","limit":1}' http://127.0.0.1:\$(cat ~/.bifrost/api-port)/list-tasks
+
+Only one Bifrost may run. Before starting one, check ps for $REPO/node_modules/electron and for electron-forge. Start it detached, so it outlives you, and give it a minute to answer:
+  cd $REPO && nohup npm start >> $NPM_LOG 2>&1 < /dev/null &
+
+The checkout may hold the user's uncommitted work, which has to survive. Never run git reset, checkout, restore, stash, clean, commit or push.${RESTART_REVERT:+ Do not edit tracked files, except to take $RESTART_REVERT out with \`git -C $REPO diff $RESTART_REVERT | git -C $REPO apply -R\` when the log does not already say that was done.} Installing or rebuilding dependencies is fine.
+
+Finish by writing what you found and what you did to $REPORT, whether or not Bifrost is up.
+EOF
+)
+  # macOS has no timeout(1) of its own, and without it the turn cap is the only limit.
+  if command -v timeout >/dev/null; then
+    timeout 1800 claude -p --max-turns 80 --dangerously-skip-permissions "$brief" >> "$CLAUDE_LOG" 2>&1 < /dev/null
+  else
+    claude -p --max-turns 80 --dangerously-skip-permissions "$brief" >> "$CLAUDE_LOG" 2>&1 < /dev/null
+  fi
+  log "claude -p exited $?"
+}
+
+case "${1:-}" in
+  --restart) restart; exit $? ;;
+esac
+
+if command -v headroom >/dev/null; then
+  log "waiting for an exclusive cpu claim, so no claimed run is cut off"
+  tries=0
+  until headroom run cpu --exclusive --as bifrost-restart \
+    --why "restarting Bifrost: every session restarts, so no claimed run may be in flight" -- bash "$0" --restart; do
+    log "headroom run exited $?"
+    # Once the restart step has run, its outcome stands. Running it again would cut the sessions off twice.
+    grep -q 'reverting\|new build is up\|new build not up' "$LOG" && break
+    tries=$((tries + 1))
+    [ "$tries" -ge 120 ] && { log "no claim after $tries tries; Bifrost was left as it was"; exit 1; }
+    sleep 60
+  done
+else
+  restart
+fi
+
+healthy || failsafe
+healthy || { log "Bifrost is still down"; exit 1; }
+
+while read -r id; do
+  log "wake $id: $(api /wake-task "{\"taskId\":\"$id\"}" | head -c 200)"
+done < "$LIVE"
+if [ "$RESTART_NUDGE" = 1 ]; then
+  nudge="Bifrost restarted and cut your turn off. Carry on where you left off."
+  while read -r id; do
+    log "nudge $id: $(api /send-prompt "$(jq -n --arg t "$nudge" --arg id "$id" '{taskId: $id, text: $t, mode: "queue"}')" | head -c 200)"
+  done < "$WORKING"
+fi
+
+if [ -n "$RESTART_CALLER" ]; then
+  if grep -q 'new build is up' "$LOG"; then build="the new build"; else build="the previous build, since the new one did not start"; fi
+  prompt="Bifrost restarted on $build (log: $LOG)."
+  [ -f "$REPORT" ] && prompt="$prompt A headless Claude brought it back up, and its report is $REPORT."
+  [ -n "$RESTART_PROMPT" ] && prompt="$prompt $RESTART_PROMPT"
+  log "prompt to $RESTART_CALLER: $(api /send-prompt "$(jq -n --arg t "$prompt" --arg id "$RESTART_CALLER" '{taskId: $id, text: $t, mode: "queue"}')" | head -c 200)"
+fi
+log "done"

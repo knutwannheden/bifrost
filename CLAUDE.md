@@ -16,7 +16,7 @@ Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Cod
 - `npm run make` — build distributable installers
 
 `tools/postmortem` has a vitest suite (`npm test`). The Electron app itself has no test framework;
-`scripts/` holds standalone checks for invariants worth pinning.
+`scripts/` holds standalone checks for invariants worth pinning, and `restart-bifrost.sh`.
 
 ## Architecture
 
@@ -78,6 +78,17 @@ On the machine, a repo is cloned once, at the path it has here relative to home,
 Nobody may be there to answer Claude's first-run screens, so Bifrost answers them up front. Connecting marks onboarding done, setting up a session trusts its worktree, and the session's `--settings` settle the renderer and the warning about skipped permissions.
 
 Every remote step is a shell script built in `remote-host.ts`. `npm run check:remote-scripts` runs them against a local home directory.
+
+### Restarting Bifrost from a task
+
+Bifrost runs in development mode from a checkout, and a change to the main process takes effect only after a restart. A restart ends every session, the one asking for it included. `scripts/restart-bifrost.sh` does it from inside a task. It detaches and returns at once, and its log goes to `~/.bifrost/restart/`.
+
+It waits for an exclusive headroom claim on the cpu, so no claimed run is cut off. It asks Bifrost to quit with SIGTERM, kills it only when it does not, and starts `npm start` again from the same checkout, detached from any terminal. Once Bifrost answers, it wakes the sessions that were live and prompts the task that ran it to carry on.
+
+- `--revert FROM..TO` names the commits just merged. A build that does not come up is reverted in the working tree, and the previous one started.
+- When no build comes up, a headless `claude -p` gets the logs and the job of bringing Bifrost back.
+- `--nudge` also prompts the sessions the restart cut off mid-turn.
+- `--prompt TEXT` adds to the prompt the calling task gets.
 
 ### Key Renderer Modules
 
