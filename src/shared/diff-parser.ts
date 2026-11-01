@@ -22,6 +22,59 @@ export interface DiffLine {
   newLineNo: number | null;
 }
 
+const C_ESCAPES: Record<string, number> = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 };
+
+/** The C string git quotes a path as, opening at `start`. Its octal escapes are the bytes of UTF-8. */
+function readQuoted(s: string, start: number): { value: string; end: number } {
+  const bytes: number[] = [];
+  const encoder = new TextEncoder();
+  let i = start + 1;
+  while (i < s.length && s[i] !== '"') {
+    if (s[i] === '\\' && /[0-7]/.test(s[i + 1] ?? '')) {
+      bytes.push(parseInt(s.slice(i + 1, i + 4), 8));
+      i += 4;
+    } else if (s[i] === '\\') {
+      bytes.push(C_ESCAPES[s[i + 1]] ?? s.charCodeAt(i + 1));
+      i += 2;
+    } else {
+      const char = String.fromCodePoint(s.codePointAt(i) ?? 0);
+      bytes.push(...encoder.encode(char));
+      i += char.length;
+    }
+  }
+  return { value: new TextDecoder().decode(new Uint8Array(bytes)), end: i + 1 };
+}
+
+function withoutPrefix(name: string, prefix: 'a/' | 'b/'): string {
+  return name.startsWith(prefix) ? name.slice(prefix.length) : name;
+}
+
+/**
+ * A path from a `---` or `+++` line, or null for /dev/null. git quotes a name
+ * with unusual bytes, and ends an unquoted name holding a space with a TAB.
+ */
+function markerPath(raw: string, prefix: 'a/' | 'b/'): string | null {
+  const name = raw.startsWith('"') ? readQuoted(raw, 0).value : raw.replace(/\t$/, '');
+  return name === '/dev/null' ? null : withoutPrefix(name, prefix);
+}
+
+/** The two paths of a `diff --git` line, either of which git may have quoted. */
+function gitHeaderPaths(line: string): [string, string] {
+  const rest = line.slice('diff --git '.length);
+  if (rest.startsWith('"')) {
+    const a = readQuoted(rest, 0);
+    const b = rest.slice(a.end + 1);
+    return [withoutPrefix(a.value, 'a/'), withoutPrefix(b.startsWith('"') ? readQuoted(b, 0).value : b, 'b/')];
+  }
+  // An unquoted name holds no quote, so ` "` can only open a quoted second path.
+  const quotedB = rest.endsWith('"') ? rest.lastIndexOf(' "') : -1;
+  if (quotedB > 0) {
+    return [withoutPrefix(rest.slice(0, quotedB), 'a/'), withoutPrefix(readQuoted(rest, quotedB + 1).value, 'b/')];
+  }
+  const match = rest.match(/^a\/(.+) b\/(.+)$/);
+  return [match?.[1] ?? '', match?.[2] ?? ''];
+}
+
 export function parseDiff(raw: string): DiffFile[] {
   const files: DiffFile[] = [];
   const lines = raw.split('\n');
@@ -34,10 +87,10 @@ export function parseDiff(raw: string): DiffFile[] {
       continue;
     }
 
-    const match = lines[i].match(/^diff --git a\/(.+) b\/(.+)$/);
+    const [oldPath, newPath] = gitHeaderPaths(lines[i]);
     const file: DiffFile = {
-      oldPath: match?.[1] ?? '',
-      newPath: match?.[2] ?? '',
+      oldPath,
+      newPath,
       status: 'modified',
       binary: false,
       hunks: [],
@@ -57,10 +110,10 @@ export function parseDiff(raw: string): DiffFile[] {
       } else if (lines[i] === 'GIT binary patch') {
         file.binary = true;
       }
-      if (lines[i].startsWith('--- a/')) {
-        file.oldPath = lines[i].slice(6);
-      } else if (lines[i].startsWith('+++ b/')) {
-        file.newPath = lines[i].slice(6);
+      if (lines[i].startsWith('--- ')) {
+        file.oldPath = markerPath(lines[i].slice(4), 'a/') ?? file.oldPath;
+      } else if (lines[i].startsWith('+++ ')) {
+        file.newPath = markerPath(lines[i].slice(4), 'b/') ?? file.newPath;
       }
       i++;
     }
