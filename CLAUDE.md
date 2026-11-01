@@ -83,7 +83,7 @@ Every remote step is a shell script built in `remote-host.ts`. `npm run check:re
 
 Bifrost runs in development mode from a checkout, and a change to the main process takes effect only after a restart. A restart ends every session, the one asking for it included. `scripts/restart-bifrost.sh` does it from inside a task. It detaches and returns at once, and its log goes to `~/.bifrost/restart/`.
 
-It waits for an exclusive headroom claim on the cpu, so no claimed run is cut off. It asks Bifrost to quit with SIGTERM, kills it only when it does not, and starts `npm start` again from the same checkout, detached from any terminal. Once Bifrost answers, it wakes the sessions that were live and prompts the task that ran it to carry on.
+It waits for an exclusive headroom claim on the cpu, so no claimed run is cut off. It asks Bifrost to quit with SIGTERM, kills it only when it does not, and starts `npm start` again from the same checkout, detached from any terminal. Once Bifrost answers, it wakes the sessions in use, and prompts the task that ran it to carry on. A session counts as in use when it was mid-turn or changed turn state in the last hour. The others wait for their tabs to be opened, as after any restart.
 
 - `--revert FROM..TO` names the commits just merged. A build that does not come up is reverted in the working tree, and the previous one started.
 - When no build comes up, a headless `claude -p` gets the logs and the job of bringing Bifrost back.

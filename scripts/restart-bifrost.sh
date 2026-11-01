@@ -5,10 +5,12 @@
 #
 # It detaches and returns at once, printing its log. Once no claimed cpu work is
 # running, it restarts Bifrost from the same checkout, wakes the sessions that
-# were live, and prompts the calling task with how it went.
+# were in use, and prompts the calling task with how it went.
 set -u
 
 DIR=$HOME/.bifrost/restart
+# A session counts as in use when its turn state changed this recently, or a turn is under way.
+ACTIVE_WITHIN_MIN=60
 
 if [ -z "${RESTART_TS:-}" ]; then
   export RESTART_TS=$(date +%Y%m%d-%H%M%S)
@@ -83,13 +85,17 @@ start_bifrost() {
 }
 
 restart() {
-  # Only sessions live now come back, as opening their tabs would bring them.
-  local tasks
+  # The rest stay deferred until their tabs are opened, as after any restart.
+  local tasks since
   tasks=$(api /list-tasks '{"status":"running","limit":500}')
-  echo "$tasks" | jq -r '.tasks[] | select(.sessionName != null) | .id' > "$LIVE"
+  since=$(( ($(date +%s) - ACTIVE_WITHIN_MIN * 60) * 1000 ))
+  echo "$tasks" | jq -r --arg me "$RESTART_CALLER" --argjson since "$since" '
+    .tasks[] | select(.sessionName != null)
+    | select(.id == $me or .idle == false or (.lastActiveAt // 0) >= $since)
+    | .id' > "$LIVE"
   echo "$tasks" | jq -r --arg me "$RESTART_CALLER" \
     '.tasks[] | select(.sessionName != null and .idle == false and .id != $me) | .id' > "$WORKING"
-  log "live sessions: $(wc -l < "$LIVE" | tr -d ' '), mid-turn: $(wc -l < "$WORKING" | tr -d ' ')"
+  log "sessions in use: $(wc -l < "$LIVE" | tr -d ' '), mid-turn: $(wc -l < "$WORKING" | tr -d ' ')"
   stop_bifrost
   start_bifrost
   if wait_healthy; then
