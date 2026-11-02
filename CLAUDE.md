@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Bifrost
 
-Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Code agent sessions. Each task gets its own git worktree and PTY terminal running Claude Code, with live streaming via xterm.js.
+Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Code agent sessions. Each task gets its own git worktree and a Claude Code session in tmux, streamed live to xterm.js.
 
 ## Commands
 
@@ -48,7 +48,9 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 
 | Module | Purpose |
 |--------|---------|
-| `session-manager.ts` | Spawns/kills PTY sessions via node-pty |
+| `session-manager.ts` | Keeps one stream per session: a tmux control client for Claude, node-pty for a dev shell |
+| `tmux-control.ts` | A tmux control-mode client for one session: the pane's own bytes out, keys in, and a replay on joining |
+| `tmux-session.ts` | The files and tmux command line a session runs from, the same on every machine |
 | `session-mirror.ts` | Headless xterm per session; shapes the replay for the terminal that attaches |
 | `ipc-handlers.ts` | Registers all IPC handlers, manages in-memory task list |
 | `activity-watcher.ts` | Watches worktrees for commits and Claude JSONL events |
@@ -67,13 +69,19 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `walkthrough-anchor.ts` | Checks a walkthrough's anchors against the commits, and follows them onto a later head |
 | `remote-host.ts` | Runs task sessions and commands on a configured machine over a shared SSH connection |
 
+### Sessions in tmux
+
+Every Claude session, the console included, runs in a tmux session named after it on Bifrost's own tmux server (`tmux -L bifrost`). It starts from `~/.bifrost/sessions/<id>/run.sh`, which resumes the transcript under the task's session id when there is one. Bifrost reads each session as a tmux control-mode client, so a tab gets the program's own bytes, links and colours included.
+
+Quitting Bifrost only detaches, so its sessions run on, and opening a tab or waking a task joins them again. A client that joins replays the pane's scrollback, its screen and the terminal modes tmux reports. Dev terminals are plain PTYs and end with Bifrost.
+
 ### Tasks on other machines
 
 A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. SendMessage does not cross machines.
 
 Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there.
 
-On the machine, a repo is cloned once, at the path it has here relative to home, so `~/git/org/repo` there too. A task's worktree sits in the clone's `.worktrees/`. Claude runs in a tmux session named after the task, on a tmux server of Bifrost's own. The tab is `ssh -tt` into that session, so Claude outlives the connection and Bifrost. When tmux is gone too, attaching resumes the transcript.
+On the machine, a repo is cloned once, at the path it has here relative to home, so `~/git/org/repo` there too. A task's worktree sits in the clone's `.worktrees/`. Claude runs in tmux there as it does here, and the tab's control client reaches it over `ssh`, so Claude outlives the connection and Bifrost. A connection that drops is retried, and the tab is redrawn from the new client's replay.
 
 Nobody may be there to answer Claude's first-run screens, so Bifrost answers them up front. Connecting marks onboarding done, setting up a session trusts its worktree, and the session's `--settings` settle the renderer and the warning about skipped permissions.
 
@@ -93,13 +101,12 @@ Every remote step is a shell script built in `remote-host.ts`, `task-transfer.ts
 
 ### Restarting Bifrost from a task
 
-Bifrost runs in development mode from a checkout, and a change to the main process takes effect only after a restart. A restart ends every session, the one asking for it included. `scripts/restart-bifrost.sh` does it from inside a task. It detaches and returns at once, and its log goes to `~/.bifrost/restart/`.
+Bifrost runs in development mode from a checkout, and a change to the main process takes effect only after a restart. A restart leaves the sessions in tmux running, the one asking for it included, and ends dev terminals. `scripts/restart-bifrost.sh` does it from inside a task. It detaches and returns at once, and its log goes to `~/.bifrost/restart/`.
 
-It waits for an exclusive headroom claim on the cpu, so no claimed run is cut off. It asks Bifrost to quit with SIGTERM, kills it only when it does not, and starts `npm start` again from the same checkout, detached from any terminal. Once Bifrost answers, it wakes the sessions in use, and prompts the task that ran it to carry on. A session counts as in use when it was mid-turn or changed turn state in the last hour. The others wait for their tabs to be opened, as after any restart.
+It waits for an exclusive headroom claim on the cpu, so no claimed run is cut off. It asks Bifrost to quit with SIGTERM, kills it only when it does not, and starts `npm start` again from the same checkout, detached from any terminal. Once Bifrost answers, it joins the sessions in use again, and prompts the task that ran it to carry on. A session counts as in use when it was mid-turn or changed turn state in the last hour. The others wait for their tabs to be opened, as after any restart.
 
 - `--revert FROM..TO` names the commits just merged. A build that does not come up is reverted in the working tree, and the previous one started.
 - When no build comes up, a headless `claude -p` gets the logs and the job of bringing Bifrost back.
-- `--nudge` also prompts the sessions the restart cut off mid-turn.
 - `--prompt TEXT` adds to the prompt the calling task gets.
 - `--while-stopped COMMAND` runs between the quit and the start, when nothing holds Bifrost's database, such as for a repair to it.
 
