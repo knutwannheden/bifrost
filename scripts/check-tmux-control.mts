@@ -182,6 +182,19 @@ try {
       show({ survived, alive: alive('lifetime'), exits: second.exits() }),
     );
   }
+
+  {
+    const missing = TmuxControl.start(path.join(root, 'no-such-tmux'), [], { cols: 80, rows: 10 }, env);
+    const exited = await new Promise<boolean>((resolve) => {
+      missing.onExit(() => resolve(true));
+      setTimeout(() => resolve(false), 2000);
+    });
+    const rejected = await missing.screen.then(
+      () => false,
+      () => true,
+    );
+    check('a client that cannot start reports its exit', exited && rejected, show({ exited, rejected }));
+  }
 } finally {
   try {
     tmux('kill-server');

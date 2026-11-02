@@ -64,12 +64,16 @@ export class TmuxControl {
     });
     // An unawaited replay is no error of its own, since the exit is reported.
     this.screen.catch(() => {});
-    child.on('exit', (code) => {
+    const ended = (code: number | null) => {
+      if (this.exited) return;
       this.exited = true;
       rejectScreen(new Error(`tmux exited with ${code} before its screen was read`));
       for (const p of this.pending.splice(0)) p.done(['tmux exited'], true);
       for (const listener of this.exitListeners) listener(code);
-    });
+    };
+    child.on('exit', ended);
+    // A command that cannot be spawned reports an error and no exit.
+    child.on('error', () => ended(null));
   }
 
   /** Spawns `command args`, which attach a tmux client in control mode, sized cols by rows. */
