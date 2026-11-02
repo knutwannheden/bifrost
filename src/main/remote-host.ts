@@ -40,7 +40,8 @@ const TMUX_CONF = [
   'set -g window-size latest',
   // Keeps tmux off the alternate screen, which has no scrollback.
   "set -ga terminal-overrides ',*:smcup@:rmcup@'",
-  "set -as terminal-features ',*:RGB'",
+  // The tab's xterm.js shows 24-bit colour and OSC 8 links, which tmux passes on only when told.
+  "set -as terminal-features ',*:RGB:hyperlinks'",
 ];
 
 function sessionDir(taskId: string): string {
@@ -109,6 +110,10 @@ export function sessionSetupScript(spec: RemoteSessionSpec): string {
   });
   const run = [
     ...exports,
+    // Claude shows links in a terminal it recognises and takes its colour depth from COLORTERM.
+    // Inside tmux it sees neither, so the pane claims a terminal Claude knows.
+    // FORCE_HYPERLINK would also reach the tools Claude runs, and it overrides their check for a terminal.
+    'export TERM_PROGRAM=ghostty COLORTERM=truecolor',
     `d=${shQuote(dir)}`,
     // Tools such as headroom sit in ~/.local/bin, which only a login shell puts on PATH.
     'export PATH="$HOME/.local/bin:$PATH"',

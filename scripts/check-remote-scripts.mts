@@ -44,7 +44,8 @@ const stubs = path.join(root, 'stubs');
 const record = path.join(root, 'record');
 fs.mkdirSync(stubs);
 fs.mkdirSync(record);
-// tmux runs the session's command in the -c directory, which is all the attach needs from it.
+// tmux runs the session's command in the -c directory, as TERM_PROGRAM=tmux with no COLORTERM.
+// That is all the attach needs from it.
 fs.writeFileSync(
   path.join(stubs, 'tmux'),
   `#!/bin/sh
@@ -58,6 +59,8 @@ while [ $# -gt 0 ]; do
     *) break ;;
   esac
 done
+export TERM_PROGRAM=tmux TERM_PROGRAM_VERSION=3.4
+unset COLORTERM
 cd "$dir" && exec "$@"
 `,
   { mode: 0o755 },
@@ -69,6 +72,7 @@ printf '%s\\0' "$@" > '${record}/args'
 cat > '${record}/stdin'
 pwd > '${record}/pwd'
 printf '%s\\n' "$BIFROST_TASK_ID" "$BIFROST_SESSION_NAME" "$PATH" > '${record}/env'
+printf '%s\\n' "$TERM_PROGRAM" "$COLORTERM" > '${record}/term'
 `,
   { mode: 0o755 },
 );
@@ -127,6 +131,11 @@ attach();
     'setting a session up trusts its worktree, so Claude starts without asking',
     JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf-8')).projects[worktree]?.hasTrustDialogAccepted ===
       true,
+  );
+  check(
+    'Claude in the tmux pane is told its terminal shows links and 24-bit colour',
+    fs.readFileSync(path.join(record, 'term'), 'utf-8') === 'ghostty\ntruecolor\n',
+    show(fs.readFileSync(path.join(record, 'term'), 'utf-8')),
   );
   check(
     'the attach asks tmux for the task-named session, creating it only when missing',
@@ -275,6 +284,34 @@ const prepared = parseScriptOutput(runRemote(home3, prepareScript({ apiPort: 436
       config.projects['/elsewhere'].lastCost === 1 &&
       prepared.HOME === home3,
     show({ prepared, config }),
+  );
+}
+
+let hasTmux = true;
+try {
+  execFileSync('tmux', ['-V'], { stdio: 'ignore' });
+} catch {
+  hasTmux = false;
+  console.log('skip — no tmux here to load the prepared configuration into');
+}
+if (hasTmux) {
+  const socket = path.join(root, 'tmux.sock');
+  const conf = path.join(home3, '.bifrost', 'tmux.conf');
+  const load = ['-S', socket, '-f', conf, 'start-server', ';', 'show-options', '-s', 'terminal-features'];
+  const listed = execFileSync('tmux', load).toString();
+  try {
+    execFileSync('tmux', ['-S', socket, 'kill-server'], { stdio: 'ignore' });
+  } catch {
+    /* a server with no sessions has already exited */
+  }
+  const forAnyTerminal = listed
+    .split('\n')
+    .filter((line) => line.includes(' *:'))
+    .flatMap((line) => line.split(' *:')[1].split(':'));
+  check(
+    'tmux is told the tab behind it shows links and 24-bit colour',
+    forAnyTerminal.includes('hyperlinks') && forAnyTerminal.includes('RGB'),
+    show(listed),
   );
 }
 
