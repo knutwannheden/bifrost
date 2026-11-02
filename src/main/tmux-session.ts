@@ -10,22 +10,13 @@ export function shQuote(value: string): string {
 /** A tmux server of Bifrost's own, so its settings and sessions stay apart from the user's. */
 export const TMUX_SOCKET = 'bifrost';
 
-/** Prefix keys and the status line would sit between the tab and Claude. */
+/**
+ * The settings Bifrost's tmux server starts with. Its clients attach in
+ * control mode, so tmux draws nothing for them.
+ */
 const TMUX_CONF = [
-  'set -g prefix None',
-  'set -g prefix2 None',
-  'set -g status off',
-  'set -g mouse off',
   'set -g history-limit 50000',
-  'set -s escape-time 0',
-  'set -g focus-events on',
-  'set -g set-titles on',
-  "set -g set-titles-string '#T'",
   'set -g window-size latest',
-  // Keeps tmux off the alternate screen, which has no scrollback.
-  "set -ga terminal-overrides ',*:smcup@:rmcup@'",
-  // The tab's xterm.js shows 24-bit colour and OSC 8 links, which tmux passes on only when told.
-  "set -as terminal-features ',*:RGB:hyperlinks'",
   // The tab reads the pane's bytes directly, so programs there write for xterm.js.
   'set -g default-terminal xterm-256color',
 ];

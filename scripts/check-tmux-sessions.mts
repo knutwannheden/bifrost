@@ -10,15 +10,17 @@ import os from 'node:os';
 import path from 'node:path';
 import headless from '@xterm/headless';
 import type { BrowserWindow } from 'electron';
+import type { RemoteHost } from '../src/main/remote-host.ts';
 import {
   attachLocalSession,
   attachSession,
+  createRemoteSession,
   detachAllSessions,
   getSessionName,
   killSession,
   writeToSession,
 } from '../src/main/session-manager.ts';
-import { writeLocalSession } from '../src/main/tmux-session.ts';
+import { controlArgs, writeLocalSession } from '../src/main/tmux-session.ts';
 import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 
 const { Terminal } = headless;
@@ -203,6 +205,37 @@ try {
     await sleep(300);
     const echoes = dataOf('twice').join('').split('echo:x').length - 1;
     check('attaching a session twice leaves one stream', echoes === 1, show(echoes));
+  }
+
+  {
+    setUp('remote');
+    // A host whose client is this machine's tmux. Its end is reported as 255, as ssh reports a dropped link.
+    const host = {
+      machine: { name: 'fake', host: 'fake' },
+      hold() {},
+      release() {},
+      connect: async () => ({}),
+      controlCommand: (taskId: string, cols: number, rows: number) => ({
+        command: 'sh',
+        args: ['-c', 'tmux "$@"; exit 255', 'sh', ...controlArgs(path.join(home, '.bifrost'), taskId, cols, rows)],
+      }),
+    } as unknown as RemoteHost;
+    createRemoteSession('remote', host, win, { name: 'remote' });
+    await attachSession('remote', win, 80, 10);
+    await sleep(300);
+    const from = events.length;
+    execFileSync('tmux', ['-S', socket, 'detach-client', '-s', 'remote']);
+    const redrawn = await until(
+      () =>
+        events
+          .slice(from)
+          .some(
+            (e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === 'remote' && (e.data as string).startsWith('\x1bc'),
+          ),
+      8000,
+    );
+    check('a dropped connection reconnects and redraws the tab', redrawn && alive('remote'), show(alive('remote')));
+    killSession('remote');
   }
 } finally {
   detachAllSessions();

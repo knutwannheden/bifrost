@@ -632,7 +632,7 @@ function startLocalSession(task: Task, mainWindow: BrowserWindow, prompt?: strin
   attachLocalSession(task.id, mainWindow, { name: task.name, taskId: task.id });
 }
 
-/** Ends a task's session. On another machine that ends its tmux session, which killing the tab's ssh leaves running. */
+/** Ends a task's session. On another machine the script also ends a tmux session no stream reads. */
 export function stopTaskSession(task: Task): void {
   killSession(task.id);
   remoteHostFor(task)

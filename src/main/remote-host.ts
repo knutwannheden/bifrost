@@ -8,7 +8,15 @@ import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
 import { syncMachine } from './remote-sync.ts';
-import { type SessionSpec, sessionDir, sessionFiles, shQuote, TMUX_SOCKET, tmuxConf } from './tmux-session.ts';
+import {
+  controlArgs,
+  type SessionSpec,
+  sessionDir,
+  sessionFiles,
+  shQuote,
+  TMUX_SOCKET,
+  tmuxConf,
+} from './tmux-session.ts';
 
 export { shQuote };
 
@@ -49,32 +57,15 @@ export function parseScriptOutput(output: string): Record<string, string> {
   return values;
 }
 
-/**
- * The command a tab's `ssh` runs. The remote login shell parses it, so it holds
- * nothing that needs quoting, and the rest lives in the session's scripts.
- */
-export function attachCommand(taskId: string): string {
-  return `sh ${sessionDir(taskId)}/attach.sh`;
-}
-
-/**
- * Writes the scripts a task's session runs from. attach.sh joins the task's tmux
- * session or starts it, so a dropped connection, a Bifrost restart and a reboot
- * of the machine all come back through it.
- */
+/** Writes the files a task's session runs from, and trusts its worktree. */
 export function sessionSetupScript(spec: SessionSpec): string {
   const dir = `${spec.home}/${sessionDir(spec.taskId)}`;
-  const conf = shQuote(`${spec.home}/${REMOTE_DIR}/tmux.conf`);
-  const attach =
-    `exec tmux -u -L ${TMUX_SOCKET} -f ${conf} new-session -A -s ${shQuote(spec.taskId)} ` +
-    `-c ${shQuote(spec.worktreePath)} sh ${shQuote(`${dir}/run.sh`)}`;
-  const files = { ...sessionFiles(spec), 'attach.sh': attach };
   return [
     'set -e',
     `python3 -c ${shQuote(TRUST_PY)} ${shQuote(spec.worktreePath)} ${shQuote(JSON.stringify(TRUSTED_ENTRY))} || true`,
     `d=${shQuote(dir)}`,
     'mkdir -p "$d"',
-    ...Object.entries(files).map(([name, content]) => `printf '%s\\n' ${shQuote(content)} > "$d/${name}"`),
+    ...Object.entries(sessionFiles(spec)).map(([name, content]) => `printf '%s\\n' ${shQuote(content)} > "$d/${name}"`),
   ].join('\n');
 }
 
@@ -364,9 +355,14 @@ export class RemoteHost {
     return ['-S', this.controlPath, '-o', 'ControlMaster=no', ...KEEPALIVE];
   }
 
-  /** The `ssh` arguments for a tab attached to the task's session. */
-  ptyArgs(taskId: string): string[] {
-    return [...this.sshOptions(), '-tt', this.machine.host, attachCommand(taskId)];
+  /**
+   * The command that attaches a tmux control client to the task's session on
+   * the machine, starting it when it is missing. The login shell there reads
+   * the remote command, whose every word is safe for it unquoted.
+   */
+  controlCommand(taskId: string, cols: number, rows: number): { command: string; args: string[] } {
+    const remote = ['tmux', ...controlArgs(REMOTE_DIR, taskId, cols, rows)].join(' ');
+    return { command: 'ssh', args: [...this.sshOptions(), '-T', '-o', 'BatchMode=yes', this.machine.host, remote] };
   }
 
   /** The machine, connected and prepared. */

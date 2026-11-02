@@ -447,6 +447,12 @@ function attachTmux(
   mainWindow: BrowserWindow,
   start: (size: { cols: number; rows: number }) => TmuxControl,
   end: (control: TmuxControl) => void,
+  options: {
+    /** The window still shows the session from before, so the replay replaces it. */
+    redraw?: boolean;
+    /** Answers whether an exit is a lost connection it has taken over. */
+    lost?: (code: number | null) => boolean;
+  } = {},
 ): void {
   const size = desiredGeometry.get(sessionId) ?? lastKnownGeometry;
   const control = start(size);
@@ -463,7 +469,7 @@ function attachTmux(
     sessionId,
     control.screen.then(
       (replay) => {
-        if (current()) output(replay, false);
+        if (current()) output(options.redraw ? `\x1bc${replay}` : replay, options.redraw === true);
       },
       () => {},
     ),
@@ -472,7 +478,7 @@ function attachTmux(
     if (current()) output(data, true);
   });
   control.onExit((code) => {
-    if (current()) ended(sessionId, mainWindow, code === 0 ? 0 : (code ?? 1));
+    if (current() && !options.lost?.(code)) ended(sessionId, mainWindow, code === 0 ? 0 : (code ?? 1));
   });
 }
 
@@ -565,10 +571,10 @@ const RECONNECT_RESET_MS = 60_000;
 const pendingReconnects = new Map<string, { timer: ReturnType<typeof setTimeout>; abandon: () => void }>();
 
 /**
- * A task session on another machine. The PTY runs `ssh` into the task's tmux
- * session there, so Claude keeps working when the connection or Bifrost goes
- * away. ssh exits 255 when the connection fails, and only that is retried. The
- * remote side ending the session exits with anything else.
+ * A task session on another machine, read through a tmux control client over
+ * ssh, so Claude keeps working when the connection or Bifrost goes away. ssh
+ * exits 255 when the connection fails, and only that is retried. The remote
+ * side ending the session exits with anything else.
  */
 export function createRemoteSession(
   sessionId: string,
@@ -583,11 +589,9 @@ export function createRemoteSession(
 
   let attempt = 0;
   let startedAt = 0;
-  let pty: SessionStream | undefined;
 
-  const onBeforeExit = (_buffer: string, exitCode: number): boolean => {
-    // killSession has already let go of a PTY it ended.
-    if (sessions.get(sessionId) !== pty || exitCode !== 255) {
+  const lost = (code: number | null): boolean => {
+    if (code !== 255) {
       host.release(sessionId);
       return false;
     }
@@ -603,26 +607,29 @@ export function createRemoteSession(
     send(mainWindow, sessionId, `\r\n[Connection to ${host.machine.name} lost, reconnecting…]\r\n`, false);
     const timer = setTimeout(() => {
       pendingReconnects.delete(sessionId);
-      try {
-        spawn();
-      } catch (err) {
-        console.error(`[session] could not reconnect ${sessionId}:`, err);
-        host.release(sessionId);
-        forgetSession(sessionId);
-        options.onGiveUp?.();
-        if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, 255);
-      }
+      connect(true);
     }, delay);
     pendingReconnects.set(sessionId, { timer, abandon: () => host.release(sessionId) });
     return true;
   };
 
-  const spawn = () => {
+  const connect = (redraw: boolean) => {
     startedAt = Date.now();
-    spawnSession(sessionId, 'ssh', host.ptyArgs(sessionId), os.homedir(), mainWindow, { onBeforeExit });
-    pty = sessions.get(sessionId);
+    attachTmux(
+      sessionId,
+      mainWindow,
+      ({ cols, rows }) => {
+        const { command, args } = host.controlCommand(sessionId, cols, rows);
+        return TmuxControl.start(command, args, { cols, rows });
+      },
+      (control) => {
+        host.release(sessionId);
+        control.kill();
+      },
+      { redraw, lost },
+    );
   };
-  spawn();
+  connect(false);
   if (options.name) sessionNames.set(sessionId, options.name);
 }
 

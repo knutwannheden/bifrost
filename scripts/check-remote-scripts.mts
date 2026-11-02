@@ -14,11 +14,11 @@ import {
   diffScript,
   parseScriptOutput,
   prepareScript,
+  RemoteHost,
   remoteClonePath,
   sessionSetupScript,
   worktreeScript,
 } from '../src/main/remote-host.ts';
-import { controlArgs } from '../src/main/tmux-session.ts';
 import { parseDiff } from '../src/shared/diff-parser.ts';
 
 let failed = 0;
@@ -107,15 +107,12 @@ const attach = (configDir?: string) => {
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, PATH: `${stubs}:${process.env.PATH}` };
   if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
   else delete env.CLAUDE_CONFIG_DIR;
-  return execFileSync(
-    process.env.SHELL ?? '/bin/sh',
-    ['-c', ['tmux', ...controlArgs('.bifrost', taskId, 80, 24)].join(' ')],
-    {
-      cwd: home,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
+  const { args } = new RemoteHost({ name: 'machine', host: 'machine' }).controlCommand(taskId, 80, 24);
+  return execFileSync(process.env.SHELL ?? '/bin/sh', ['-c', args[args.length - 1]], {
+    cwd: home,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 };
 const argsOf = (file: string) => fs.readFileSync(path.join(record, file), 'utf-8').split('\0').slice(0, -1);
 
@@ -324,23 +321,13 @@ try {
 if (hasTmux) {
   const socket = path.join(root, 'tmux.sock');
   const conf = path.join(home3, '.bifrost', 'tmux.conf');
-  const load = ['-S', socket, '-f', conf, 'start-server', ';', 'show-options', '-s', 'terminal-features'];
-  load.push(';', 'show-options', '-g', 'default-terminal');
+  const load = ['-S', socket, '-f', conf, 'start-server', ';', 'show-options', '-g', 'default-terminal'];
   const listed = execFileSync('tmux', load).toString();
   try {
     execFileSync('tmux', ['-S', socket, 'kill-server'], { stdio: 'ignore' });
   } catch {
     /* a server with no sessions has already exited */
   }
-  const forAnyTerminal = listed
-    .split('\n')
-    .filter((line) => line.includes(' *:'))
-    .flatMap((line) => line.split(' *:')[1].split(':'));
-  check(
-    'tmux is told the tab behind it shows links and 24-bit colour',
-    forAnyTerminal.includes('hyperlinks') && forAnyTerminal.includes('RGB'),
-    show(listed),
-  );
   check(
     'a pane tells its programs they write to an xterm',
     /^default-terminal "?xterm-256color"?$/m.test(listed),
