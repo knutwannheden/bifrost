@@ -34,6 +34,7 @@
     "check:walkthrough-schema": "node scripts/check-walkthrough-schema.mts",
     "check:walkthrough-anchor": "node scripts/check-walkthrough-anchor.mts",
     "check:remote-scripts": "node scripts/check-remote-scripts.mts",
+    "check:tmux-control": "node scripts/check-tmux-control.mts",
     "check:diff-paths": "node scripts/check-diff-paths.mts",
     "check:task-transfer": "node scripts/check-task-transfer.mts",
     "check:remote-sync": "node scripts/check-remote-sync.mts",
