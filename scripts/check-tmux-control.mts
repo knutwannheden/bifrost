@@ -166,6 +166,25 @@ try {
   }
 
   {
+    const program = `printf '\\033[?2004h\\033[?1h'; sleep 5`;
+    const first = attach('modes', program);
+    await first.control.screen;
+    await sleep(300);
+    first.control.detach();
+    await first.exited;
+    const second = attach('modes', program);
+    const term = await render([await second.control.screen]);
+    const { bracketedPasteMode, applicationCursorKeysMode } = term.modes;
+    check(
+      'a joining client restores the modes the program set',
+      bracketedPasteMode && applicationCursorKeysMode,
+      show(term.modes),
+    );
+    second.control.kill();
+    await second.exited;
+  }
+
+  {
     const first = attach('lifetime', 'sleep 5');
     await first.control.screen;
     first.control.detach();

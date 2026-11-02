@@ -4,6 +4,20 @@ import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 const REPLAY_LINES = 1000;
 /** send-keys -H takes one argument per byte, so a long paste goes over several commands. */
 const KEYS_PER_COMMAND = 256;
+/**
+ * Modes a program sets once, at its start, which a capture of the screen does
+ * not show. Each is the tmux format that reports it and the sequence that sets it.
+ */
+const MODES: Array<[string, string]> = [
+  ['bracket_paste_flag', '\x1b[?2004h'],
+  ['keypad_cursor_flag', '\x1b[?1h'],
+  ['keypad_flag', '\x1b='],
+  ['mouse_standard_flag', '\x1b[?1000h'],
+  ['mouse_button_flag', '\x1b[?1002h'],
+  ['mouse_all_flag', '\x1b[?1003h'],
+  ['mouse_sgr_flag', '\x1b[?1006h'],
+];
+const MODE_FORMAT = MODES.map(([format]) => `#{${format}}`).join(' ');
 const BACKSLASH = 0x5c;
 const NEWLINE = 0x0a;
 
@@ -48,7 +62,7 @@ export class TmuxControl {
       // captures and the cursor describe one moment, and output after it is new.
       this.send(
         `refresh-client -C ${cols}x${rows} ; ` +
-          `display -p '#{cursor_x} #{cursor_y} #{alternate_on} #{pane_height}' ; ` +
+          `display -p '#{cursor_x} #{cursor_y} #{alternate_on} #{pane_height} ${MODE_FORMAT}' ; ` +
           'capture-pane -p -e -a -q ; ' +
           `capture-pane -p -e -S -${REPLAY_LINES}`,
         [
@@ -199,10 +213,20 @@ function isOctal(bytes: Buffer, at: number): boolean {
  * the alternate screen, the normal screen behind it goes first.
  */
 function replay(state: string, normalBehind: string[], captured: string[]): string {
-  const [x, y, alternate, height] = state.split(' ').map(Number);
-  const cursor = `\x1b[${y + 1};${x + 1}H`;
-  if (!alternate) return captured.join('\r\n') + cursor;
-  const scrollback = captured.slice(0, captured.length - height);
-  const shown = captured.slice(captured.length - height);
+  const [x, y, alternate, height, ...flags] = state.split(' ');
+  const cursor = `\x1b[${Number(y) + 1};${Number(x) + 1}H${modes(flags)}`;
+  if (alternate !== '1') return captured.join('\r\n') + cursor;
+  const scrollback = captured.slice(0, captured.length - Number(height));
+  const shown = captured.slice(captured.length - Number(height));
   return `${[...scrollback, ...normalBehind].join('\r\n')}\x1b[?1049h\x1b[H${shown.join('\r\n')}${cursor}`;
+}
+
+/**
+ * The sequences that set the modes tmux reports on. tmux 3.4 has no format
+ * for bracketed paste, and Claude, which every pane runs, turns it on.
+ */
+function modes(flags: string[]): string {
+  return MODES.map(([format, set], i) =>
+    flags[i] === '1' || (format === 'bracket_paste_flag' && flags[i] !== '0') ? set : '',
+  ).join('');
 }
