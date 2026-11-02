@@ -11,7 +11,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   archiveScript,
-  attachCommand,
   diffScript,
   parseScriptOutput,
   prepareScript,
@@ -19,6 +18,7 @@ import {
   sessionSetupScript,
   worktreeScript,
 } from '../src/main/remote-host.ts';
+import { controlArgs } from '../src/main/tmux-session.ts';
 import { parseDiff } from '../src/shared/diff-parser.ts';
 
 let failed = 0;
@@ -44,7 +44,7 @@ const stubs = path.join(root, 'stubs');
 const record = path.join(root, 'record');
 fs.mkdirSync(stubs);
 fs.mkdirSync(record);
-// tmux runs the session's command in the -c directory, as TERM_PROGRAM=tmux with no COLORTERM.
+// tmux runs the session's command as TERM_PROGRAM=tmux with no COLORTERM.
 // That is all the attach needs from it.
 fs.writeFileSync(
   path.join(stubs, 'tmux'),
@@ -54,14 +54,13 @@ while [ "$1" != new-session ]; do shift; done; shift
 while [ $# -gt 0 ]; do
   case "$1" in
     -A) shift ;;
-    -s) shift 2 ;;
-    -c) dir="$2"; shift 2 ;;
+    -s | -x | -y) shift 2 ;;
     *) break ;;
   esac
 done
 export TERM_PROGRAM=tmux TERM_PROGRAM_VERSION=3.4
 unset COLORTERM
-cd "$dir" && exec "$@"
+exec "$@"
 `,
   { mode: 0o755 },
 );
@@ -103,12 +102,21 @@ runRemote(
   }),
 );
 
-const attach = () =>
-  execFileSync(process.env.SHELL ?? '/bin/sh', ['-c', attachCommand(taskId)], {
-    cwd: home,
-    env: { ...process.env, HOME: home, PATH: `${stubs}:${process.env.PATH}` },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+// ssh hands the command to the login shell, in the home directory.
+const attach = (configDir?: string) => {
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, PATH: `${stubs}:${process.env.PATH}` };
+  if (configDir) env.CLAUDE_CONFIG_DIR = configDir;
+  else delete env.CLAUDE_CONFIG_DIR;
+  return execFileSync(
+    process.env.SHELL ?? '/bin/sh',
+    ['-c', ['tmux', ...controlArgs('.bifrost', taskId, 80, 24)].join(' ')],
+    {
+      cwd: home,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+};
 const argsOf = (file: string) => fs.readFileSync(path.join(record, file), 'utf-8').split('\0').slice(0, -1);
 
 attach();
@@ -142,6 +150,25 @@ attach();
     argsOf('tmux-args').includes('-A') && argsOf('tmux-args').includes(taskId),
     show(argsOf('tmux-args')),
   );
+  const startedName = path.join(home, '.bifrost', 'sessions', taskId, 'started-name');
+  check(
+    'run.sh records the name the session started under',
+    fs.existsSync(startedName) && fs.readFileSync(startedName, 'utf-8') === `${awkwardName}\n`,
+    show(fs.existsSync(startedName) && fs.readFileSync(startedName, 'utf-8')),
+  );
+}
+
+{
+  const configDir = path.join(root, 'claude-config');
+  fs.mkdirSync(path.join(configDir, 'projects', 'elsewhere'), { recursive: true });
+  fs.writeFileSync(path.join(configDir, 'projects', 'elsewhere', `${sessionId}.jsonl`), '{}\n');
+  attach(configDir);
+  check(
+    'a transcript under CLAUDE_CONFIG_DIR is resumed',
+    argsOf('args').join(' ').includes(`--resume ${sessionId}`),
+    show(argsOf('args')),
+  );
+  fs.rmSync(configDir, { recursive: true });
 }
 
 fs.mkdirSync(path.join(home, '.claude', 'projects', 'some-project'), { recursive: true });
@@ -298,6 +325,7 @@ if (hasTmux) {
   const socket = path.join(root, 'tmux.sock');
   const conf = path.join(home3, '.bifrost', 'tmux.conf');
   const load = ['-S', socket, '-f', conf, 'start-server', ';', 'show-options', '-s', 'terminal-features'];
+  load.push(';', 'show-options', '-g', 'default-terminal');
   const listed = execFileSync('tmux', load).toString();
   try {
     execFileSync('tmux', ['-S', socket, 'kill-server'], { stdio: 'ignore' });
@@ -311,6 +339,11 @@ if (hasTmux) {
   check(
     'tmux is told the tab behind it shows links and 24-bit colour',
     forAnyTerminal.includes('hyperlinks') && forAnyTerminal.includes('RGB'),
+    show(listed),
+  );
+  check(
+    'a pane tells its programs they write to an xterm',
+    /^default-terminal "?xterm-256color"?$/m.test(listed),
     show(listed),
   );
 }

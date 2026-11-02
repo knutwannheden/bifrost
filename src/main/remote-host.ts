@@ -8,46 +8,19 @@ import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
 import { syncMachine } from './remote-sync.ts';
+import { type SessionSpec, sessionDir, sessionFiles, shQuote, TMUX_SOCKET, tmuxConf } from './tmux-session.ts';
+
+export { shQuote };
 
 const execFile = promisify(execFileCb);
 
 // Each script is handed to `sh -s` on the machine's stdin, so the remote login
 // shell, whichever it is, never parses a quoted value.
 
-/** POSIX single quoting, which `sh` reads back verbatim whatever the value holds. */
-export function shQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 /** Bifrost's directory on a machine, relative to the home directory `ssh` starts in. */
 const REMOTE_DIR = '.bifrost';
 /** A Bifrost install deletes `.bifrost/plugin` as a leftover, so the copy lives under another name. */
 const REMOTE_PLUGIN_DIR = `${REMOTE_DIR}/claude-plugin`;
-/** A tmux server of Bifrost's own, so its settings and sessions stay apart from the user's. */
-const TMUX_SOCKET = 'bifrost';
-
-/** Prefix keys and the status line would sit between the tab and Claude. */
-const TMUX_CONF = [
-  'set -g prefix None',
-  'set -g prefix2 None',
-  'set -g status off',
-  'set -g mouse off',
-  'set -g history-limit 50000',
-  'set -s escape-time 0',
-  'set -g focus-events on',
-  'set -g set-titles on',
-  "set -g set-titles-string '#T'",
-  'set -g window-size latest',
-  // Keeps tmux off the alternate screen, which has no scrollback.
-  "set -ga terminal-overrides ',*:smcup@:rmcup@'",
-  // The tab's xterm.js shows 24-bit colour and OSC 8 links, which tmux passes on only when told.
-  "set -as terminal-features ',*:RGB:hyperlinks'",
-];
-
-function sessionDir(taskId: string): string {
-  if (!/^[A-Za-z0-9-]+$/.test(taskId)) throw new Error(`Unsafe task id: ${taskId}`);
-  return `${REMOTE_DIR}/sessions/${taskId}`;
-}
 
 /**
  * Where a machine keeps a repo's clone, relative to its home directory. It is
@@ -84,66 +57,24 @@ export function attachCommand(taskId: string): string {
   return `sh ${sessionDir(taskId)}/attach.sh`;
 }
 
-export interface RemoteSessionSpec {
-  home: string;
-  taskId: string;
-  worktreePath: string;
-  /** The Claude session to resume, and to start under while it has no transcript. */
-  sessionId: string;
-  claudeArgs: string[];
-  env: Record<string, string>;
-  /** Sent as the first message of a session that has no transcript yet. */
-  prompt?: string;
-}
-
 /**
  * Writes the scripts a task's session runs from. attach.sh joins the task's tmux
  * session or starts it, so a dropped connection, a Bifrost restart and a reboot
- * of the machine all come back through it. run.sh resumes the transcript when
- * there is one, and otherwise starts the session with its prompt.
+ * of the machine all come back through it.
  */
-export function sessionSetupScript(spec: RemoteSessionSpec): string {
+export function sessionSetupScript(spec: SessionSpec): string {
   const dir = `${spec.home}/${sessionDir(spec.taskId)}`;
-  const exports = Object.entries(spec.env).map(([name, value]) => {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`Unsafe variable name: ${name}`);
-    return `export ${name}=${shQuote(value)}`;
-  });
-  const run = [
-    ...exports,
-    // Claude shows links in a terminal it recognises and takes its colour depth from COLORTERM.
-    // Inside tmux it sees neither, so the pane claims a terminal Claude knows.
-    // FORCE_HYPERLINK would also reach the tools Claude runs, and it overrides their check for a terminal.
-    'export TERM_PROGRAM=ghostty COLORTERM=truecolor',
-    `d=${shQuote(dir)}`,
-    // Tools such as headroom sit in ~/.local/bin, which only a login shell puts on PATH.
-    'export PATH="$HOME/.local/bin:$PATH"',
-    `cd ${shQuote(spec.worktreePath)} || exit 1`,
-    'sid=$(cat "$d/session-id")',
-    `set -- ${spec.claudeArgs.map(shQuote).join(' ')}`,
-    // Claude files the transcript under a directory named for the cwd, so it is found by session id alone.
-    'if ls "$HOME"/.claude/projects/*/"$sid".jsonl >/dev/null 2>&1; then',
-    '  rm -f "$d/prompt"',
-    '  exec claude "$@" --resume "$sid"',
-    'fi',
-    'if [ -f "$d/prompt" ]; then',
-    '  cat "$d/prompt" | claude "$@" --session-id "$sid"',
-    '  exit',
-    'fi',
-    'exec claude "$@" --session-id "$sid"',
-  ].join('\n');
   const conf = shQuote(`${spec.home}/${REMOTE_DIR}/tmux.conf`);
   const attach =
     `exec tmux -u -L ${TMUX_SOCKET} -f ${conf} new-session -A -s ${shQuote(spec.taskId)} ` +
     `-c ${shQuote(spec.worktreePath)} sh ${shQuote(`${dir}/run.sh`)}`;
+  const files = { ...sessionFiles(spec), 'attach.sh': attach };
   return [
     'set -e',
     `python3 -c ${shQuote(TRUST_PY)} ${shQuote(spec.worktreePath)} ${shQuote(JSON.stringify(TRUSTED_ENTRY))} || true`,
     `d=${shQuote(dir)}`,
     'mkdir -p "$d"',
-    `printf '%s\\n' ${shQuote(spec.sessionId)} > "$d/session-id"`,
-    ...(spec.prompt !== undefined ? [`printf '%s\\n' ${shQuote(spec.prompt)} > "$d/prompt"`] : []),
-    `printf '%s\\n' ${shQuote(run)} > "$d/run.sh"`,
-    `printf '%s\\n' ${shQuote(attach)} > "$d/attach.sh"`,
+    ...Object.entries(files).map(([name, content]) => `printf '%s\\n' ${shQuote(content)} > "$d/${name}"`),
   ].join('\n');
 }
 
@@ -332,8 +263,7 @@ export function prepareScript(opts: { apiPort: number; theme?: string }): string
     'cd "$HOME"',
     `mkdir -p ${REMOTE_DIR}/sessions`,
     `printf '%s\\n' ${opts.apiPort} > ${REMOTE_DIR}/api-port`,
-    'if infocmp tmux-256color >/dev/null 2>&1; then term=tmux-256color; else term=screen-256color; fi',
-    `printf '%s\\n' ${TMUX_CONF.map(shQuote).join(' ')} "set -g default-terminal $term" > ${REMOTE_DIR}/tmux.conf`,
+    `printf '%s' ${shQuote(tmuxConf())} > ${REMOTE_DIR}/tmux.conf`,
     `version=$(claude --version 2>/dev/null | cut -d' ' -f1)`,
     `python3 -c ${shQuote(ONBOARDING_PY)} ${shQuote(JSON.stringify(onboarding))} "$version" || true`,
     `printf 'HOME=%s\\n' "$HOME"`,
