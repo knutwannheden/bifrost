@@ -43,6 +43,7 @@ export class TmuxControl {
   private readonly decoder = new TextDecoder('utf-8');
   /** Output before the replay is in the replay, so it is dropped until then. */
   private live = false;
+  private readonly screenListeners: Array<(screen: { replay: string; joined: boolean }) => void> = [];
   private readonly outputListeners: Array<(data: string) => void> = [];
   private readonly exitListeners: Array<(code: number | null) => void> = [];
   private exited = false;
@@ -62,7 +63,7 @@ export class TmuxControl {
       // captures and the cursor describe one moment, and output after it is new.
       this.send(
         `refresh-client -C ${cols}x${rows} ; ` +
-          `display -p '#{cursor_x} #{cursor_y} #{alternate_on} #{pane_height} ${MODE_FORMAT}' ; ` +
+          `display -p '#{session_created} #{client_created} #{cursor_x} #{cursor_y} #{alternate_on} #{pane_height} ${MODE_FORMAT}' ; ` +
           'capture-pane -p -e -a -q ; ' +
           `capture-pane -p -e -S -${REPLAY_LINES}`,
         [
@@ -70,8 +71,13 @@ export class TmuxControl {
           collect,
           collect,
           (lines) => {
+            const [created, attached, ...state] = (answers[1][0] ?? '').split(' ');
+            // A session started by this client was created when the client was.
+            const screen = { replay: replay(state, answers[2], lines), joined: Number(created) < Number(attached) };
+            // Before any output, which carries on from the replay.
+            for (const listener of this.screenListeners) listener(screen);
             this.live = true;
-            resolve(replay(answers[1][0] ?? '0 0 0 0', answers[2], lines));
+            resolve(screen.replay);
           },
         ],
       );
@@ -98,6 +104,14 @@ export class TmuxControl {
     env: NodeJS.ProcessEnv = process.env,
   ): TmuxControl {
     return new TmuxControl(spawn(command, args, { stdio: 'pipe', env }), size.cols, size.rows);
+  }
+
+  /**
+   * Hands over the replay, and whether the session ran before this client
+   * joined it, ahead of any output.
+   */
+  onScreen(listener: (screen: { replay: string; joined: boolean }) => void): void {
+    this.screenListeners.push(listener);
   }
 
   onOutput(listener: (data: string) => void): void {
@@ -212,8 +226,8 @@ function isOctal(bytes: Buffer, at: number): boolean {
  * closes each captured line's attributes, so the lines join as they are. On
  * the alternate screen, the normal screen behind it goes first.
  */
-function replay(state: string, normalBehind: string[], captured: string[]): string {
-  const [x, y, alternate, height, ...flags] = state.split(' ');
+function replay(state: string[], normalBehind: string[], captured: string[]): string {
+  const [x = '0', y = '0', alternate, height, ...flags] = state;
   const cursor = `\x1b[${Number(y) + 1};${Number(x) + 1}H${modes(flags)}`;
   if (alternate !== '1') return captured.join('\r\n') + cursor;
   const scrollback = captured.slice(0, captured.length - Number(height));

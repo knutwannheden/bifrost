@@ -148,6 +148,15 @@ function noteSessionOutput(sessionId: string): void {
   }, READY_QUIET_MS);
 }
 
+function markReady(sessionId: string): void {
+  const gate = sessionReady.get(sessionId);
+  if (!gate || gate.ready) return;
+  if (gate.timer) clearTimeout(gate.timer);
+  gate.timer = null;
+  gate.ready = true;
+  gate.resolve();
+}
+
 /** Release waiters on a session that died before its TUI came up. */
 function disposeReadyGate(sessionId: string): void {
   const gate = sessionReady.get(sessionId);
@@ -456,12 +465,16 @@ function attachTmux(
   register(sessionId, stream, size.cols, size.rows);
   const current = () => sessions.get(sessionId) === stream;
   const output = outputHandler(sessionId, mainWindow, true, sessionId);
+  control.onScreen(({ replay, joined }) => {
+    if (!current()) return;
+    output(options.redraw ? `\x1bc${replay}` : replay, options.redraw === true);
+    // A session joined mid-turn never falls quiet, and it took its input before.
+    if (joined) markReady(sessionId);
+  });
   streamReady.set(
     sessionId,
     control.screen.then(
-      (replay) => {
-        if (current()) output(options.redraw ? `\x1bc${replay}` : replay, options.redraw === true);
-      },
+      () => {},
       () => {},
     ),
   );

@@ -18,6 +18,7 @@ import {
   detachAllSessions,
   getSessionName,
   killSession,
+  waitForSessionReady,
   writeToSession,
 } from '../src/main/session-manager.ts';
 import { controlArgs, writeLocalSession } from '../src/main/tmux-session.ts';
@@ -157,6 +158,18 @@ try {
       before > 0 && consecutive && numbers[numbers.length - 1] > before + 10,
       show({ before, numbers }),
     );
+  }
+
+  {
+    setUp('ready');
+    attachLocalSession('ready', win, { taskId: 'ready' });
+    await attachSession('ready', win, 80, 10);
+    // A join is told from a fresh start by the session being older than the client.
+    await sleep(1100);
+    detachAllSessions();
+    attachLocalSession('ready', win, { taskId: 'ready' });
+    const ready = await waitForSessionReady('ready', 3000);
+    check('a joined session that keeps printing is ready at once', ready);
   }
 
   {

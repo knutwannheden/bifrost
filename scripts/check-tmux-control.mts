@@ -166,6 +166,47 @@ try {
   }
 
   {
+    // tmux answering the replay's four commands and sending output in one write, as over a slow link.
+    const answers = ['', '1 2 0 0 0 10', '', 'replayed'].map(
+      (body, i) => `%begin 1 ${i} 1\n${body ? `${body}\n` : ''}%end 1 ${i} 1\n`,
+    );
+    // One file, so cat hands it over in one write.
+    const reply = path.join(root, 'reply');
+    fs.writeFileSync(reply, `${answers.join('')}%output %0 after\n`);
+    const stand = TmuxControl.start(
+      'sh',
+      ['-c', 'read -r line; cat "$1"; sleep 1', 'sh', reply],
+      { cols: 80, rows: 10 },
+      env,
+    );
+    const order: string[] = [];
+    stand.onScreen(({ replay }) => order.push(replay.startsWith('replayed') ? 'replay' : replay));
+    stand.onOutput((data) => order.push(data));
+    await stand.screen;
+    await until(() => order.length >= 2, 1000);
+    check(
+      'a client hands over its replay before the output that follows it',
+      show(order) === show(['replay', 'after']),
+      show(order),
+    );
+    stand.detach();
+  }
+
+  {
+    const joins: boolean[] = [];
+    for (const wait of [0, 1100]) {
+      await sleep(wait);
+      const s = attach('join', 'sleep 10');
+      s.control.onScreen(({ joined }) => joins.push(joined));
+      await s.control.screen;
+      s.control.detach();
+      await s.exited;
+    }
+    check('a client tells joining a session from starting it', show(joins) === show([false, true]), show(joins));
+    tmux('kill-session', '-t', '=join');
+  }
+
+  {
     const program = `printf '\\033[?2004h\\033[?1h'; sleep 5`;
     const first = attach('modes', program);
     await first.control.screen;
