@@ -237,6 +237,30 @@ try {
     check('a dropped connection reconnects and redraws the tab', redrawn && alive('remote'), show(alive('remote')));
     killSession('remote');
   }
+
+  {
+    // Loaded after HOME is set, since it settles its directory as it loads.
+    const consoleService = await import('../src/main/console-service.ts');
+    consoleService.initConsole(win);
+    await attachSession('console', win, 80, 10);
+    await sleep(400);
+    const before = lastNumber(dataOf('console').join(''));
+    detachAllSessions();
+    const from = events.length;
+    consoleService.initConsole(win);
+    await attachSession('console', win, 80, 10);
+    await sleep(300);
+    const chunks = events
+      .slice(from)
+      .filter((e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === 'console')
+      .map((e) => e.data as string);
+    const numbers = await numbersShown(chunks);
+    check(
+      'a console started again joins the one still running',
+      before > 0 && numbers[0] === 1 && numbers[numbers.length - 1] > before + 5,
+      show({ before, numbers }),
+    );
+  }
 } finally {
   detachAllSessions();
   try {

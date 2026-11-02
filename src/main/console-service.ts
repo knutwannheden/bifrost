@@ -1,10 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
-import { DEFAULT_CONSOLE_PROMPT } from '../shared/default-prompts';
-import { loadConfig } from './config';
-import { hasSession, killSession, spawnSession } from './session-manager';
+import { DEFAULT_CONSOLE_PROMPT } from '../shared/default-prompts.ts';
+import { loadConfig } from './config.ts';
+import { attachLocalSession, hasSession, killSession } from './session-manager.ts';
+import { writeLocalSession } from './tmux-session.ts';
 
 const CONSOLE_DIR = path.join(os.homedir(), '.bifrost', 'console');
 
@@ -33,30 +35,23 @@ function spawn(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   writeInstructions();
 
-  const extraEnv: Record<string, string> = { BIFROST_CONTEXT: 'console' };
-  try {
-    extraEnv.BIFROST_API_PORT = fs.readFileSync(path.join(os.homedir(), '.bifrost', 'api-port'), 'utf-8').trim();
-  } catch {
-    /* port file may not exist yet */
-  }
-
-  spawnSession(
-    CONSOLE_SESSION_ID,
-    'claude',
-    ['--name', CONSOLE_NAME, '--dangerously-skip-permissions'],
-    CONSOLE_DIR,
-    mainWindow,
-    {
-      extraEnv,
-      autoTrust: true,
-      onBeforeExit: () => {
-        // Being reachable is the whole point, so an exit is temporary.
-        if (respawnTimer) clearTimeout(respawnTimer);
-        respawnTimer = setTimeout(spawn, RESPAWN_DELAY_MS);
-        return false;
-      },
+  // A console still running in tmux is joined, and a new one starts under a fresh session id.
+  writeLocalSession({
+    home: os.homedir(),
+    taskId: CONSOLE_SESSION_ID,
+    worktreePath: CONSOLE_DIR,
+    sessionId: randomUUID(),
+    claudeArgs: ['--name', CONSOLE_NAME, '--dangerously-skip-permissions'],
+    env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: CONSOLE_NAME },
+  });
+  attachLocalSession(CONSOLE_SESSION_ID, mainWindow, {
+    name: CONSOLE_NAME,
+    onExit: () => {
+      // Being reachable is the whole point, so an exit is temporary.
+      if (respawnTimer) clearTimeout(respawnTimer);
+      respawnTimer = setTimeout(spawn, RESPAWN_DELAY_MS);
     },
-  );
+  });
 }
 
 export function initConsole(window: BrowserWindow): void {

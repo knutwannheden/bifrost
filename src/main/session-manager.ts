@@ -5,7 +5,6 @@ import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
-import { trustDirectory } from './claude-trust.ts';
 import type { RemoteHost } from './remote-host.ts';
 import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror.ts';
 import { TmuxControl } from './tmux-control.ts';
@@ -287,7 +286,7 @@ function collectSpawnDiagnostics(
   return diag;
 }
 
-export function spawnSession(
+function spawnSession(
   sessionId: string,
   command: string,
   args: string[],
@@ -297,8 +296,6 @@ export function spawnSession(
     cols?: number;
     rows?: number;
     extraEnv?: Record<string, string>;
-    autoTrust?: boolean;
-    onBeforeExit?: (buffer: string, exitCode: number) => boolean;
   },
 ): void {
   const env = { ...process.env } as Record<string, string>;
@@ -307,8 +304,6 @@ export function spawnSession(
   if (options?.extraEnv) {
     Object.assign(env, options.extraEnv);
   }
-
-  if (options?.autoTrust) trustDirectory(cwd);
 
   let shell: IPty;
   try {
@@ -339,17 +334,13 @@ export function spawnSession(
   };
   register(sessionId, stream, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
   if (options?.cols !== undefined || options?.rows !== undefined) fixedGeometry.add(sessionId);
-  const output = outputHandler(sessionId, mainWindow, options?.autoTrust === true, cwd);
+  const output = outputHandler(sessionId, mainWindow, false, cwd);
 
   shell.onData((data: string) => {
     if (sessions.get(sessionId) === stream) output(data, true);
   });
 
   shell.onExit(({ exitCode }: { exitCode: number }) => {
-    if (options?.onBeforeExit?.(startupBuffers.get(sessionId) ?? '', exitCode)) {
-      // Don't tear the session down or emit exit — caller already spawned a replacement
-      return;
-    }
     if (sessions.get(sessionId) === stream) ended(sessionId, mainWindow, exitCode);
   });
 }
@@ -450,8 +441,8 @@ function attachTmux(
   options: {
     /** The window still shows the session from before, so the replay replaces it. */
     redraw?: boolean;
-    /** Answers whether an exit is a lost connection it has taken over. */
-    lost?: (code: number | null) => boolean;
+    /** Answers whether it has taken the exit over, such as to reconnect. */
+    onExit?: (code: number | null) => boolean;
   } = {},
 ): void {
   const size = desiredGeometry.get(sessionId) ?? lastKnownGeometry;
@@ -478,7 +469,7 @@ function attachTmux(
     if (current()) output(data, true);
   });
   control.onExit((code) => {
-    if (current() && !options.lost?.(code)) ended(sessionId, mainWindow, code === 0 ? 0 : (code ?? 1));
+    if (current() && !options.onExit?.(code)) ended(sessionId, mainWindow, code === 0 ? 0 : (code ?? 1));
   });
 }
 
@@ -489,7 +480,7 @@ function attachTmux(
 export function attachLocalSession(
   sessionId: string,
   mainWindow: BrowserWindow,
-  options: { name?: string; taskId?: string } = {},
+  options: { name?: string; taskId?: string; onExit?: () => void } = {},
 ): void {
   const home = os.homedir();
   const rejoining = localTmux(['has-session', '-t', `=${sessionId}`]);
@@ -509,6 +500,12 @@ export function attachLocalSession(
     (control) => {
       localTmux(['kill-session', '-t', `=${sessionId}`]);
       control.detach();
+    },
+    {
+      onExit: () => {
+        options.onExit?.();
+        return false;
+      },
     },
   );
   const name = (rejoining ? startedName(home, sessionId) : undefined) ?? options.name;
@@ -626,7 +623,7 @@ export function createRemoteSession(
         host.release(sessionId);
         control.kill();
       },
-      { redraw, lost },
+      { redraw, onExit: lost },
     );
   };
   connect(false);
