@@ -40,7 +40,7 @@ import { lastChangedFile } from './last-changed-file.ts';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { cancelTaskRequests, resolveRequest, setWorktreePathResolver } from './permission-manager';
 import { getTaskPrs } from './pr-index';
-import { handleScrapeResponse, sendPrompt, workingTaskIds } from './prompt-sender';
+import { handleScrapeResponse, sendPrompt } from './prompt-sender';
 import {
   archiveScript,
   diffScript,
@@ -59,11 +59,11 @@ import {
 } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, matchRepo, removeRepo } from './repo-manager';
 import {
+  attachLocalSession,
   attachSession,
   claudeArgs,
   claudeEnv,
   createRemoteSession,
-  createSession,
   createShellSession,
   getSessionName,
   hasSession,
@@ -77,6 +77,7 @@ import { getStats } from './stats-service';
 import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store';
 import { claudeProjectDir, packTask, unpackScript } from './task-transfer';
 import { generateTaskTitle } from './title-generator';
+import { writeLocalSession } from './tmux-session';
 import { assessStaleness, currentHead, remapAnchor } from './walkthrough-anchor';
 import { generateWalkthrough, loadCurrentWalkthrough, storeWalkthrough } from './walkthrough-service';
 import {
@@ -131,22 +132,6 @@ export function clearInterrupted(taskId: string): void {
   if (!task?.interruptedAt) return;
   task.interruptedAt = undefined;
   saveInterrupted([taskId], null);
-}
-
-/**
- * Quitting kills every session, and a turn in flight dies with its Bash child —
- * which is the "Exit code 137" the task reads back on reopening. Recorded here
- * so the task can be offered the chance to pick it up. A session on another
- * machine runs on through the quit.
- */
-export function markSessionsInterrupted(): void {
-  const at = Date.now();
-  const working = workingTaskIds().filter((id) => tasks.some((t) => t.id === id && !t.machine));
-  for (const id of working) {
-    const task = tasks.find((t) => t.id === id);
-    if (task) task.interruptedAt = at;
-  }
-  if (working.length > 0) saveInterrupted(working, at);
 }
 
 /** Worktree removals still running, so a reopen can wait for its own. */
@@ -408,15 +393,6 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
   config.repos.push(containerRepo);
   saveConfig(config);
 
-  createSession(taskId, containerPath, mainWindow, {
-    taskId,
-    name,
-    apiPort: getApiPort() ?? undefined,
-    permissionMode: config.permissionMode,
-    agentTeams: config.agentTeams,
-    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
-  });
-
   const task: Task = {
     id: taskId,
     name,
@@ -424,18 +400,24 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
     baseBranch: 'main',
     branch: 'main',
     worktreePath: containerPath,
+    sessionId: randomUUID(),
     status: 'running',
     hasUnread: false,
     createdAt: Date.now(),
     ...(params.prompt ? { summary: params.prompt } : {}),
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
   };
+  startLocalSession(
+    task,
+    mainWindow,
+    params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
+  );
 
   tasks.push(task);
   saveTasks(tasks);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(task.id, containerPath, mainWindow, _claudeCallbacks, task.sessionId);
+  startWatching(task.id, containerPath, mainWindow, _claudeCallbacks);
 
   return task;
 }
@@ -524,7 +506,6 @@ export async function createTaskCore(
     return createMultiRepoTask(params, mainWindow);
   }
 
-  const config = loadConfig();
   const { repo, adopted } = target ?? (await resolveTaskTarget(params));
   if (params.machine) return createRemoteTask(params, mainWindow, repo, params.machine);
 
@@ -577,15 +558,6 @@ export async function createTaskCore(
   }
 
   const taskId = randomUUID();
-  createSession(taskId, worktreePath, mainWindow, {
-    taskId,
-    name,
-    apiPort: getApiPort() ?? undefined,
-    permissionMode: config.permissionMode,
-    agentTeams: config.agentTeams,
-    prompt: params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
-  });
-
   const task: Task = {
     id: taskId,
     name,
@@ -593,6 +565,7 @@ export async function createTaskCore(
     baseBranch,
     ...(taskBranch ? { branch: taskBranch } : {}),
     worktreePath,
+    sessionId: randomUUID(),
     status: 'running',
     hasUnread: false,
     createdAt: Date.now(),
@@ -600,12 +573,17 @@ export async function createTaskCore(
     ...(params.prompt ? { summary: params.prompt } : {}),
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
   };
+  startLocalSession(
+    task,
+    mainWindow,
+    params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
+  );
 
   tasks.push(task);
   saveTasks(tasks);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(task.id, worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
+  startWatching(task.id, worktreePath, mainWindow, _claudeCallbacks);
 
   return task;
 }
@@ -622,6 +600,36 @@ function remoteHostFor(task: Task): RemoteHost | null {
     console.warn(`[remote] task ${task.id}: ${(err as Error).message}`);
     return null;
   }
+}
+
+/**
+ * Writes the session files of a task on this machine with the settings as
+ * they are now, then joins its tmux session or starts it. A task without a
+ * session id gets one, which Claude starts under.
+ */
+function startLocalSession(task: Task, mainWindow: BrowserWindow, prompt?: string): void {
+  const config = loadConfig();
+  let sessionId = task.sessionId;
+  if (!sessionId) {
+    sessionId = randomUUID();
+    if (tasks.some((t) => t.id === task.id)) updateTask(task.id, { sessionId });
+  }
+  const launch = {
+    taskId: task.id,
+    name: task.name,
+    permissionMode: config.permissionMode,
+    agentTeams: config.agentTeams,
+  };
+  writeLocalSession({
+    home: os.homedir(),
+    taskId: task.id,
+    worktreePath: task.worktreePath,
+    sessionId,
+    claudeArgs: claudeArgs(launch),
+    env: claudeEnv(launch),
+    prompt,
+  });
+  attachLocalSession(task.id, mainWindow, { name: task.name, taskId: task.id });
 }
 
 /** Ends a task's session. On another machine that ends its tmux session, which killing the tab's ssh leaves running. */
@@ -897,17 +905,7 @@ export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): v
     startRemoteSession(task, mainWindow);
     return;
   }
-  const config = loadConfig();
-
-  createSession(taskId, task.worktreePath, mainWindow, {
-    resumeSessionId: task.sessionId,
-    taskId,
-    name: task.name,
-    apiPort: getApiPort() ?? undefined,
-    permissionMode: config.permissionMode,
-    agentTeams: config.agentTeams,
-    onResumeFailed: task.sessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
-  });
+  startLocalSession(task, mainWindow);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
   startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
@@ -950,8 +948,6 @@ export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow):
     }
   }
 
-  const reopenConfig = loadConfig();
-
   // Check if stored sessionId is stale; if so, clear it so user can select a session
   let resumeSessionId = task.sessionId;
   if (resumeSessionId && isSessionStale(worktreePath, resumeSessionId)) {
@@ -959,15 +955,7 @@ export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow):
     updateTask(taskId, { sessionId: undefined });
   }
 
-  createSession(taskId, worktreePath, mainWindow, {
-    resumeSessionId,
-    taskId,
-    name: task.name,
-    apiPort: getApiPort() ?? undefined,
-    permissionMode: reopenConfig.permissionMode,
-    agentTeams: reopenConfig.agentTeams,
-    onResumeFailed: resumeSessionId ? () => updateTask(taskId, { sessionId: undefined }) : undefined,
-  });
+  startLocalSession({ ...task, worktreePath, sessionId: resumeSessionId }, mainWindow);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
   startWatching(taskId, worktreePath, mainWindow, _claudeCallbacks, resumeSessionId);
@@ -1503,15 +1491,6 @@ end tell`;
       }
     }
 
-    createSession(taskId, cwd, mainWindow, {
-      resumeSessionId: externalSessionId,
-      taskId,
-      name,
-      apiPort: getApiPort() ?? undefined,
-      permissionMode: config.permissionMode,
-      agentTeams: config.agentTeams,
-    });
-
     const task: Task = {
       id: taskId,
       name,
@@ -1525,6 +1504,7 @@ end tell`;
       createdAt: Date.now(),
       isExternal: !matchedRepo,
     };
+    startLocalSession(task, mainWindow);
 
     tasks.push(task);
     saveTasks(tasks);

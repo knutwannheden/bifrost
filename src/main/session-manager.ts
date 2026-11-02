@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -288,10 +287,6 @@ function collectSpawnDiagnostics(
   return diag;
 }
 
-function shellEscape(arg: string): string {
-  return `'${arg.replace(/'/g, "'\\''")}'`;
-}
-
 export function spawnSession(
   sessionId: string,
   command: string,
@@ -303,7 +298,6 @@ export function spawnSession(
     rows?: number;
     extraEnv?: Record<string, string>;
     autoTrust?: boolean;
-    prompt?: string;
     onBeforeExit?: (buffer: string, exitCode: number) => boolean;
   },
 ): void {
@@ -314,29 +308,11 @@ export function spawnSession(
     Object.assign(env, options.extraEnv);
   }
 
-  let spawnCommand: string;
-  let spawnArgs: string[];
-
-  if (options?.prompt) {
-    // Pipe the prompt via stdin so Claude reads it as the initial message.
-    // This avoids terminal paste-detection issues that occur when writing
-    // multi-line text to the PTY after the welcome banner.
-    const tmpFile = path.join(os.tmpdir(), `bifrost-prompt-${sessionId}-${randomUUID().slice(0, 8)}`);
-    fs.writeFileSync(tmpFile, `${options.prompt}\n`);
-    const cmdParts = [command, ...args.map(shellEscape)].join(' ');
-    spawnCommand = 'sh';
-    spawnArgs = ['-c', `cat ${shellEscape(tmpFile)} | ${cmdParts}; rm -f ${shellEscape(tmpFile)}`];
-    console.log(`[session] Prompt piped for ${sessionId}: ${tmpFile} (${options.prompt.length} chars)`);
-  } else {
-    spawnCommand = command;
-    spawnArgs = args;
-  }
-
   if (options?.autoTrust) trustDirectory(cwd);
 
   let shell: IPty;
   try {
-    shell = loadPty().spawn(spawnCommand, spawnArgs, {
+    shell = loadPty().spawn(command, args, {
       name: 'xterm-256color',
       cols: options?.cols ?? lastKnownGeometry.cols,
       rows: options?.rows ?? lastKnownGeometry.rows,
@@ -346,9 +322,9 @@ export function spawnSession(
   } catch (err) {
     const cwdExists = fs.existsSync(cwd);
     const openSessions = sessions.size;
-    const diag = collectSpawnDiagnostics(spawnCommand, cwd, env, err);
+    const diag = collectSpawnDiagnostics(command, cwd, env, err);
     console.error(
-      `[session] pty.spawn failed for ${sessionId}: cmd=${spawnCommand}, cwd=${cwd} (exists=${cwdExists}), openSessions=${openSessions}`,
+      `[session] pty.spawn failed for ${sessionId}: cmd=${command}, cwd=${cwd} (exists=${cwdExists}), openSessions=${openSessions}`,
       err,
     );
     console.error('[session] diagnostics:', JSON.stringify(diag, null, 2));
@@ -579,53 +555,6 @@ function announceIdle(sessionId: string, mainWindow: BrowserWindow, taskId?: str
   if (taskId && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, taskId, false);
   }
-}
-
-export function createSession(
-  sessionId: string,
-  cwd: string,
-  mainWindow: BrowserWindow,
-  options?: ClaudeLaunchOptions & {
-    resumeSessionId?: string;
-    prompt?: string;
-    onResumeFailed?: () => void;
-  },
-): void {
-  announceIdle(sessionId, mainWindow, options?.taskId);
-
-  const buildArgs = (resume: boolean): string[] =>
-    resume && options?.resumeSessionId
-      ? ['--resume', options.resumeSessionId, ...claudeArgs(options)]
-      : claudeArgs(options);
-  const buildEnv = (): Record<string, string> => claudeEnv(options);
-
-  // When resuming, detect "No conversation found" and automatically retry without --resume
-  const onBeforeExit = options?.resumeSessionId
-    ? (buffer: string): boolean => {
-        if (buffer.includes('No conversation found')) {
-          console.log(`[session] Resume failed for ${sessionId}, restarting without --resume`);
-          spawnSession(sessionId, 'claude', buildArgs(false), cwd, mainWindow, {
-            extraEnv: buildEnv(),
-            autoTrust: true,
-          });
-          options?.onResumeFailed?.();
-          return true;
-        }
-        return false;
-      }
-    : undefined;
-
-  const prompt = options?.prompt && !options.resumeSessionId ? options.prompt : undefined;
-  spawnSession(sessionId, 'claude', buildArgs(true), cwd, mainWindow, {
-    extraEnv: buildEnv(),
-    autoTrust: true,
-    prompt,
-    onBeforeExit,
-  });
-  // After the spawn, so a failed one leaves no name behind claiming a session
-  // that was never born. This is where --name is decided, and a session keeps
-  // the name its task had then, which is how it stays addressable.
-  if (options?.name) sessionNames.set(sessionId, options.name);
 }
 
 /** Delays between attempts to reattach a remote session whose connection dropped, about a minute in all. */

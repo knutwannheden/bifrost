@@ -8,7 +8,7 @@ export interface WorktreeFacts {
   /** A repo's own checkout, as opposed to one added with `git worktree add`. */
   isMain: boolean;
   locked: boolean;
-  /** A PTY Bifrost is running for the task that owns this worktree. */
+  /** A session running for the task that owns this worktree. */
   hasLiveSession: boolean;
   /** Any staged, unstaged or untracked change. */
   dirty: boolean;

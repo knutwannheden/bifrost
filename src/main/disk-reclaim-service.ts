@@ -32,7 +32,8 @@ function taskLookup(): (worktreePath: string) => OwningTask | undefined {
       id: task.id,
       name: task.name,
       prMerged: task.curation?.prState === 'merged' || task.curation?.branchMerged === true,
-      hasLiveSession: hasSession(task.id),
+      // A running task's session can run in tmux with no stream reading it.
+      hasLiveSession: hasSession(task.id) || task.status === 'running',
     };
   };
 }

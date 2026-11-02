@@ -64,6 +64,7 @@ import {
   sessionOutputAt,
   waitForSessionReady,
 } from './session-manager';
+import { writeLocalSessionId } from './tmux-session';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -1057,6 +1058,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           getRemoteHost(task.machine)
             .exec(sessionIdScript(task.id, sessionId))
             .catch((err) => console.warn(`[api] session-start: ${(err as Error).message}`));
+        } else {
+          writeLocalSessionId(os.homedir(), task.id, sessionId);
         }
       }
       jsonResponse(res, { ok: true });
