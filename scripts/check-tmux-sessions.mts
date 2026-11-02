@@ -1,0 +1,218 @@
+/**
+ * A task session on this machine runs in tmux and is read through a control
+ * client, so it outlives Bifrost and its tab gets the program's own bytes.
+ * These run a real tmux on a server of their own, under a temporary home, with
+ * a stub `claude`. Run with `npm run check:tmux-sessions`.
+ */
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import headless from '@xterm/headless';
+import type { BrowserWindow } from 'electron';
+import {
+  attachLocalSession,
+  attachSession,
+  detachAllSessions,
+  getSessionName,
+  killSession,
+  writeToSession,
+} from '../src/main/session-manager.ts';
+import { writeLocalSession } from '../src/main/tmux-session.ts';
+import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
+
+const { Terminal } = headless;
+
+let failed = 0;
+function check(name: string, ok: boolean, detail = '') {
+  if (!ok) failed++;
+  console.log(`${ok ? 'ok' : 'FAIL'} — ${name}${ok || !detail ? '' : `\n  ${detail}`}`);
+}
+const show = (value: unknown) => JSON.stringify(value);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+try {
+  execFileSync('tmux', ['-V'], { stdio: 'ignore' });
+} catch {
+  console.log('skipped — no tmux');
+  process.exit(0);
+}
+
+const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-sessions-')));
+const home = path.join(root, 'home');
+const stubs = path.join(root, 'stubs');
+const worktree = path.join(root, 'worktree');
+for (const dir of [home, stubs, worktree]) fs.mkdirSync(dir);
+// The tmux server and every session take their environment from here.
+process.env.HOME = home;
+process.env.TMUX_TMPDIR = root;
+process.env.PATH = `${stubs}:${process.env.PATH}`;
+delete process.env.CLAUDE_CONFIG_DIR;
+delete process.env.TMUX;
+
+// Prints a link, then a numbered line every 20 ms, echoes each line it reads, and ends on `q`.
+fs.writeFileSync(
+  path.join(stubs, 'claude'),
+  `#!/bin/sh
+( i=0; while :; do i=$((i+1)); printf 'n%d\\n' $i; sleep 0.02; done ) &
+ticker=$!
+sleep 0.5
+printf '\\033]8;;https://example.com/stub\\033\\\\stub-link\\033]8;;\\033\\\\\\n'
+while IFS= read -r line; do
+  [ "$line" = q ] && break
+  printf 'echo:%s\\n' "$line"
+done
+kill $ticker
+`,
+  { mode: 0o755 },
+);
+
+const events: Array<{ channel: string; id: string; data: unknown; replay?: boolean }> = [];
+const win = {
+  isDestroyed: () => false,
+  webContents: {
+    send: (channel: string, id: string, data: unknown, replay?: boolean) => events.push({ channel, id, data, replay }),
+  },
+} as unknown as BrowserWindow;
+const dataOf = (id: string) =>
+  events.filter((e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === id).map((e) => e.data as string);
+const exitsOf = (id: string) => events.filter((e) => e.channel === IPC_STREAM.SESSION_EXIT && e.id === id).length;
+// The test server's socket by path, so a check can never reach a real Bifrost server.
+const socket = path.join(root, `tmux-${process.getuid?.()}`, 'bifrost');
+const alive = (id: string) => {
+  try {
+    execFileSync('tmux', ['-S', socket, 'has-session', '-t', `=${id}`], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+function setUp(taskId: string, name = taskId) {
+  writeLocalSession({
+    home,
+    taskId,
+    worktreePath: worktree,
+    sessionId: `0b8e2f34-0000-4000-8000-${taskId.padStart(12, '0').slice(-12)}`,
+    claudeArgs: [],
+    env: { BIFROST_SESSION_NAME: name },
+  });
+}
+
+async function until(condition: () => boolean, ms = 4000): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (condition()) return true;
+    await sleep(20);
+  }
+  return condition();
+}
+
+/** The numbered lines a terminal shows after being written these chunks. */
+async function numbersShown(chunks: string[]): Promise<number[]> {
+  const term = new Terminal({ cols: 80, rows: 10, scrollback: 1000, allowProposedApi: true });
+  for (const chunk of chunks) await new Promise<void>((r) => term.write(chunk, r));
+  const buffer = term.buffer.active;
+  const numbers: number[] = [];
+  for (let i = 0; i < buffer.length; i++) {
+    const match = /^n(\d+)$/.exec(buffer.getLine(i)?.translateToString(true) ?? '');
+    if (match) numbers.push(Number(match[1]));
+  }
+  return numbers;
+}
+const lastNumber = (text: string) => Math.max(0, ...[...text.matchAll(/n(\d+)/g)].map((m) => Number(m[1])));
+
+try {
+  {
+    setUp('bytes');
+    attachLocalSession('bytes', win, { taskId: 'bytes' });
+    await attachSession('bytes', win, 80, 10);
+    const link = '\x1b]8;;https://example.com/stub\x1b\\stub-link\x1b]8;;\x1b\\';
+    const arrived = await until(() => dataOf('bytes').join('').includes(link));
+    check("a tab gets the session's own bytes", arrived, show(dataOf('bytes').join('').slice(-300)));
+  }
+
+  {
+    setUp('rejoin');
+    attachLocalSession('rejoin', win, { taskId: 'rejoin' });
+    await attachSession('rejoin', win, 80, 10);
+    await sleep(300);
+    const before = lastNumber(dataOf('rejoin').join(''));
+    detachAllSessions();
+    await sleep(200);
+    const from = events.length;
+    attachLocalSession('rejoin', win, { taskId: 'rejoin' });
+    await attachSession('rejoin', win, 80, 10);
+    await sleep(300);
+    const chunks = events
+      .slice(from)
+      .filter((e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === 'rejoin')
+      .map((e) => e.data as string);
+    const numbers = await numbersShown(chunks);
+    const consecutive = numbers.every((n, i) => i === 0 || n === numbers[i - 1] + 1);
+    check(
+      'a session outlives detaching, and rejoining replays it once',
+      before > 0 && consecutive && numbers[numbers.length - 1] > before + 10,
+      show({ before, numbers }),
+    );
+  }
+
+  {
+    setUp('kill');
+    attachLocalSession('kill', win, { taskId: 'kill' });
+    await attachSession('kill', win, 80, 10);
+    detachAllSessions();
+    await sleep(100);
+    const survived = alive('kill');
+    killSession('kill');
+    check(
+      'killing a session nobody is attached to ends its tmux session',
+      survived && !alive('kill'),
+      show({ survived, alive: alive('kill') }),
+    );
+  }
+  setUp('exit');
+  attachLocalSession('exit', win, { taskId: 'exit' });
+  await attachSession('exit', win, 80, 10);
+  await sleep(600);
+  writeToSession('exit', 'q\r');
+  await until(() => exitsOf('exit') > 0);
+  await sleep(300);
+  check('a session ending reports its exit once', exitsOf('exit') === 1, show(exitsOf('exit')));
+  setUp('name', 'old');
+  attachLocalSession('name', win, { taskId: 'name', name: 'old' });
+  await attachSession('name', win, 80, 10);
+  await sleep(300);
+  detachAllSessions();
+  setUp('name', 'new');
+  attachLocalSession('name', win, { taskId: 'name', name: 'new' });
+  check(
+    'a rejoined session keeps the name it started under',
+    getSessionName('name') === 'old',
+    show(getSessionName('name')),
+  );
+
+  {
+    setUp('twice');
+    attachLocalSession('twice', win, { taskId: 'twice' });
+    attachLocalSession('twice', win, { taskId: 'twice' });
+    await attachSession('twice', win, 80, 10);
+    await sleep(600);
+    writeToSession('twice', 'x\r');
+    await until(() => dataOf('twice').join('').includes('echo:x'));
+    await sleep(300);
+    const echoes = dataOf('twice').join('').split('echo:x').length - 1;
+    check('attaching a session twice leaves one stream', echoes === 1, show(echoes));
+  }
+} finally {
+  detachAllSessions();
+  try {
+    execFileSync('tmux', ['-S', socket, 'kill-server'], { stdio: 'ignore' });
+  } catch {
+    /* a server with no sessions has already exited */
+  }
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+console.log(failed ? `\n${failed} check(s) failed` : '\nall checks passed');
+process.exit(failed ? 1 : 0);

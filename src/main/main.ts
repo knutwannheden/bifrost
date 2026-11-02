@@ -12,7 +12,7 @@ import { ensureHooks } from './integration-installer';
 import { markSessionsInterrupted, registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
 import { closeRemoteHosts } from './remote-host';
-import { killAllSessions } from './session-manager';
+import { detachAllSessions } from './session-manager';
 import { startPolling } from './slack-service';
 
 if (started) {
@@ -312,7 +312,7 @@ app.on('ready', async () => {
 app.on('before-quit', async () => {
   stopAllWatching();
   markSessionsInterrupted();
-  killAllSessions();
+  detachAllSessions();
   closeRemoteHosts();
   await stopApi();
   closeDatabase();

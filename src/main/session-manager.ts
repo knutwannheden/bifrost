@@ -5,14 +5,16 @@ import os from 'node:os';
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
-import { IPC_STREAM } from '../shared/ipc-channels';
+import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import { trustDirectory } from './claude-trust.ts';
 import type { RemoteHost } from './remote-host.ts';
-import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror';
+import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror.ts';
+import { TmuxControl } from './tmux-control.ts';
+import { controlArgs, startedName, TMUX_SOCKET } from './tmux-session.ts';
 
-// Use require for node-pty because it's externalized from Vite bundling
+// node-pty is externalized from the Vite bundle, so it is required at run time, and only by dev shells.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pty = require('node-pty');
+const loadPty = (): typeof import('node-pty') => require('node-pty');
 
 /**
  * Marks of the Claude Code session Bifrost itself may have been launched from.
@@ -38,7 +40,19 @@ export const INHERITED_SESSION_VARS = [
 const NEVER_STALE_MINUTES = 100 * 365 * 24 * 60;
 const NEVER_LARGE_TOKENS = 1_000_000_000;
 
-const sessions = new Map<string, IPty>();
+/** A session's terminal: a tmux control client for a Claude session, or a node-pty child for a dev shell. */
+interface SessionStream {
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  /** Stops reading the session. A session in tmux runs on. */
+  detach(): void;
+  /** Ends the session and what runs in it. */
+  kill(): void;
+}
+
+const sessions = new Map<string, SessionStream>();
+/** Settles once a session joined in tmux has its screen in the mirror. */
+const streamReady = new Map<string, Promise<void>>();
 /**
  * The name each live session was started under. Claude Code's cross-session
  * addressing is by session name, and a session keeps the name its task had
@@ -246,7 +260,7 @@ function collectSpawnDiagnostics(
 
   // Can we open a PTY at all? (quick test via posix_openpt equivalent)
   try {
-    const probe = pty.spawn('/bin/echo', ['ok'], { name: 'xterm-256color', cols: 10, rows: 1, cwd: '/tmp' });
+    const probe = loadPty().spawn('/bin/echo', ['ok'], { name: 'xterm-256color', cols: 10, rows: 1, cwd: '/tmp' });
     probe.kill();
     diag.ptyProbeOk = true;
   } catch (e) {
@@ -322,7 +336,7 @@ export function spawnSession(
 
   let shell: IPty;
   try {
-    shell = pty.spawn(spawnCommand, spawnArgs, {
+    shell = loadPty().spawn(spawnCommand, spawnArgs, {
       name: 'xterm-256color',
       cols: options?.cols ?? lastKnownGeometry.cols,
       rows: options?.rows ?? lastKnownGeometry.rows,
@@ -341,15 +355,56 @@ export function spawnSession(
     throw err;
   }
 
-  sessions.set(sessionId, shell);
+  const stream: SessionStream = {
+    write: (data) => shell.write(data),
+    resize: (cols, rows) => shell.resize(cols, rows),
+    detach: () => shell.kill('SIGTERM'),
+    kill: () => shell.kill('SIGTERM'),
+  };
+  register(sessionId, stream, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
   if (options?.cols !== undefined || options?.rows !== undefined) fixedGeometry.add(sessionId);
-  startupBuffers.set(sessionId, '');
-  createMirror(sessionId, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
-  createReadyGate(sessionId);
-
-  let trustScanned = !options?.autoTrust;
+  const output = outputHandler(sessionId, mainWindow, options?.autoTrust === true, cwd);
 
   shell.onData((data: string) => {
+    if (sessions.get(sessionId) === stream) output(data, true);
+  });
+
+  shell.onExit(({ exitCode }: { exitCode: number }) => {
+    if (options?.onBeforeExit?.(startupBuffers.get(sessionId) ?? '', exitCode)) {
+      // Don't tear the session down or emit exit — caller already spawned a replacement
+      return;
+    }
+    if (sessions.get(sessionId) === stream) ended(sessionId, mainWindow, exitCode);
+  });
+}
+
+/**
+ * Makes stream the session's only one. A stream it replaces stops being read,
+ * since two streams of one session would each forward its output.
+ */
+function register(sessionId: string, stream: SessionStream, cols: number, rows: number): void {
+  const previous = sessions.get(sessionId);
+  if (previous) {
+    sessions.delete(sessionId);
+    previous.detach();
+    disposeMirror(sessionId);
+    disposeReadyGate(sessionId);
+  }
+  sessions.set(sessionId, stream);
+  startupBuffers.set(sessionId, '');
+  createMirror(sessionId, cols, rows);
+  createReadyGate(sessionId);
+}
+
+/** Feeds a session's output to its mirror, its startup scan and readiness, and the window when toWindow. */
+function outputHandler(
+  sessionId: string,
+  mainWindow: BrowserWindow,
+  scanTrust: boolean,
+  where: string,
+): (data: string, toWindow: boolean) => void {
+  let trustScanned = !scanTrust;
+  return (data, toWindow) => {
     const forward = mirrorOutput(sessionId, data);
 
     const buf = (startupBuffers.get(sessionId) ?? '') + data;
@@ -372,25 +427,110 @@ export function spawnSession(
           gate.awaitingTrust = true;
           gate.resolve();
         }
-        console.warn(`[session] ${sessionId} is stopped on the workspace trust prompt for ${cwd}`);
+        console.warn(`[session] ${sessionId} is stopped on the workspace trust prompt for ${where}`);
       }
     }
 
-    if (forward) send(mainWindow, sessionId, data, false);
-  });
+    if (forward && toWindow) send(mainWindow, sessionId, data, false);
+  };
+}
 
-  shell.onExit(({ exitCode }: { exitCode: number }) => {
-    if (options?.onBeforeExit?.(startupBuffers.get(sessionId) ?? '', exitCode)) {
-      // Don't tear the session down or emit exit — caller already spawned a replacement
-      return;
-    }
-    sessions.delete(sessionId);
-    forgetSession(sessionId);
-    disposeReadyGate(sessionId);
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
-    }
+/** Tears down a session whose program has ended, and tells the window. */
+function ended(sessionId: string, mainWindow: BrowserWindow, exitCode: number): void {
+  sessions.delete(sessionId);
+  forgetSession(sessionId);
+  disposeReadyGate(sessionId);
+  if (!mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
+  }
+}
+
+/** A server started from here keeps this environment, and every session it runs inherits it. */
+function localTmuxEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of INHERITED_SESSION_VARS) delete env[name];
+  return env;
+}
+
+/** Runs a tmux command against Bifrost's server on this machine, answering whether it succeeded. */
+function localTmux(args: string[]): boolean {
+  try {
+    execFileSync('tmux', ['-L', TMUX_SOCKET, ...args], { env: localTmuxEnv(), stdio: 'ignore', timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Reads a session in tmux through a control client. Its replay fills the
+ * mirror without reaching the window, which gets it from attachSession.
+ */
+function attachTmux(
+  sessionId: string,
+  mainWindow: BrowserWindow,
+  start: (size: { cols: number; rows: number }) => TmuxControl,
+  end: (control: TmuxControl) => void,
+): void {
+  const size = desiredGeometry.get(sessionId) ?? lastKnownGeometry;
+  const control = start(size);
+  const stream: SessionStream = {
+    write: (data) => control.write(data),
+    resize: (cols, rows) => control.resize(cols, rows),
+    detach: () => control.detach(),
+    kill: () => end(control),
+  };
+  register(sessionId, stream, size.cols, size.rows);
+  const current = () => sessions.get(sessionId) === stream;
+  const output = outputHandler(sessionId, mainWindow, true, sessionId);
+  streamReady.set(
+    sessionId,
+    control.screen.then(
+      (replay) => {
+        if (current()) output(replay, false);
+      },
+      () => {},
+    ),
+  );
+  control.onOutput((data) => {
+    if (current()) output(data, true);
   });
+  control.onExit((code) => {
+    if (current()) ended(sessionId, mainWindow, code === 0 ? 0 : (code ?? 1));
+  });
+}
+
+/**
+ * Joins the task's tmux session on this machine, or starts it from the files
+ * writeLocalSession wrote. A session joined again keeps the name it started under.
+ */
+export function attachLocalSession(
+  sessionId: string,
+  mainWindow: BrowserWindow,
+  options: { name?: string; taskId?: string } = {},
+): void {
+  const home = os.homedir();
+  const rejoining = localTmux(['has-session', '-t', `=${sessionId}`]);
+  // A session joined again may be mid-turn.
+  if (!rejoining) announceIdle(sessionId, mainWindow, options.taskId);
+  attachTmux(
+    sessionId,
+    mainWindow,
+    ({ cols, rows }) =>
+      TmuxControl.start(
+        'tmux',
+        controlArgs(path.join(home, '.bifrost'), sessionId, cols, rows),
+        { cols, rows },
+        localTmuxEnv(),
+      ),
+    // kill-session runs here, so the session is over by the time killSession returns.
+    (control) => {
+      localTmux(['kill-session', '-t', `=${sessionId}`]);
+      control.detach();
+    },
+  );
+  const name = (rejoining ? startedName(home, sessionId) : undefined) ?? options.name;
+  if (name) sessionNames.set(sessionId, name);
 }
 
 export interface ClaudeLaunchOptions {
@@ -514,7 +654,7 @@ export function createRemoteSession(
 
   let attempt = 0;
   let startedAt = 0;
-  let pty: IPty | undefined;
+  let pty: SessionStream | undefined;
 
   const onBeforeExit = (_buffer: string, exitCode: number): boolean => {
     // killSession has already let go of a PTY it ended.
@@ -613,6 +753,7 @@ export function waitForSessionReady(sessionId: string, timeoutMs = 20_000): Prom
 
 function forgetSession(sessionId: string): void {
   sessionNames.delete(sessionId);
+  streamReady.delete(sessionId);
   disposeMirror(sessionId);
   startupBuffers.delete(sessionId);
   fixedGeometry.delete(sessionId);
@@ -636,6 +777,7 @@ export async function attachSession(
   rows: number,
 ): Promise<boolean> {
   noteGeometry(sessionId, cols, rows);
+  await streamReady.get(sessionId);
   const snapshot = await snapshotMirror(sessionId, cols, rows);
   if (!snapshot) return false;
 
@@ -656,23 +798,27 @@ function abandonReconnect(sessionId: string): void {
   forgetSession(sessionId);
 }
 
+/** Ends the session, including a session in tmux on this machine that no stream reads. */
 export function killSession(sessionId: string): void {
   abandonReconnect(sessionId);
   const session = sessions.get(sessionId);
-  if (session) {
-    session.kill('SIGTERM');
-    sessions.delete(sessionId);
-    lastOutputAt.delete(sessionId);
-    forgetSession(sessionId);
-    disposeReadyGate(sessionId);
+  if (!session) {
+    localTmux(['kill-session', '-t', `=${sessionId}`]);
+    return;
   }
+  sessions.delete(sessionId);
+  session.kill();
+  lastOutputAt.delete(sessionId);
+  forgetSession(sessionId);
+  disposeReadyGate(sessionId);
 }
 
-export function killAllSessions(): void {
+/** Stops reading every session. Sessions in tmux run on, and dev shells end. */
+export function detachAllSessions(): void {
   for (const id of [...pendingReconnects.keys()]) abandonReconnect(id);
-  for (const [id, session] of sessions) {
-    session.kill('SIGTERM');
+  for (const [id, session] of [...sessions]) {
     sessions.delete(id);
+    session.detach();
     forgetSession(id);
     disposeReadyGate(id);
   }
