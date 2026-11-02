@@ -155,6 +155,14 @@ attach();
   );
 }
 
+fs.rmSync(path.join(record, 'stdin'));
+attach();
+check(
+  'a later start with no transcript yet does not send the prompt again',
+  fs.readFileSync(path.join(record, 'stdin'), 'utf-8') === '',
+  show(fs.readFileSync(path.join(record, 'stdin'), 'utf-8')),
+);
+
 {
   const configDir = path.join(root, 'claude-config');
   fs.mkdirSync(path.join(configDir, 'projects', 'elsewhere'), { recursive: true });

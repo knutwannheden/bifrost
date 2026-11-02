@@ -74,8 +74,10 @@ export function sessionFiles(spec: SessionSpec): Record<string, string> {
     '  rm -f "$d/prompt"',
     '  exec claude "$@" --resume "$sid"',
     'fi',
+    // The prompt is moved aside as it is sent, so a later start under a new session id does not send it again.
     'if [ -f "$d/prompt" ]; then',
-    '  cat "$d/prompt" | claude "$@" --session-id "$sid"',
+    '  mv "$d/prompt" "$d/prompt.sent"',
+    '  cat "$d/prompt.sent" | claude "$@" --session-id "$sid"',
     '  exit',
     'fi',
     'exec claude "$@" --session-id "$sid"',
