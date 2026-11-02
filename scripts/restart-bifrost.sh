@@ -46,10 +46,14 @@ LIVE=$DIR/$RESTART_TS-live.txt WORKING=$DIR/$RESTART_TS-working.txt REPORT=$DIR/
 exec >> "$LOG" 2>&1 < /dev/null
 log() { echo "$(date +%T) $*"; }
 
-# A Claude session's markers in the environment would make every session started from here its child.
-unset CLAUDECODE CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_CODE_BRIDGE_SESSION_ID \
-  CLAUDE_CODE_MESSAGING_SOCKET CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_EXECPATH \
-  CLAUDE_CODE_TMPDIR CLAUDE_TMPDIR BIFROST_TASK_ID BIFROST_SESSION_NAME BIFROST_API_PORT BIFROST_CONTEXT
+# Run from a task, the environment holds the session's variables and what Claude's Bash tool adds, such as NO_COLOR.
+for name in $(compgen -e); do
+  case $name in
+    CLAUDE_CONFIG_DIR) ;; # the user's own, and Bifrost reads it
+    CLAUDE* | BIFROST_*) unset "$name" ;;
+  esac
+done
+unset NO_COLOR AI_AGENT GIT_EDITOR COREPACK_ENABLE_AUTO_PIN
 
 # pgrep -f cannot read other processes' arguments on macOS, so ps is matched instead.
 processes() { ps -axo pid=,command= | sed 's/^ *//'; }
