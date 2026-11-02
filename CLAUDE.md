@@ -24,7 +24,7 @@ Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Cod
 
 Standard Electron three-process split, all TypeScript:
 
-- **Main** (`src/main/`): Node.js process — PTY management, git operations, file watching, IPC handlers, HTTP API, MCP server
+- **Main** (`src/main/`): Node.js process — sessions in tmux and dev-terminal PTYs, git operations, file watching, IPC handlers, HTTP API, MCP server
 - **Preload** (`src/preload/preload.ts`): Bridges main↔renderer via `contextBridge`, exposing `window.bifrost` typed API
 - **Renderer** (`src/renderer/`): React 19 UI with Tailwind CSS
 

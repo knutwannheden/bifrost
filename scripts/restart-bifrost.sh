@@ -172,7 +172,7 @@ if command -v headroom >/dev/null; then
   log "waiting for an exclusive cpu claim, so no claimed run is cut off"
   # --force skips only the check for load nobody claimed, which a restart cannot cut off.
   if id=$(headroom acquire cpu --exclusive --force --wait -q --as bifrost-restart \
-    --why "restarting Bifrost: every session restarts, so no claimed run may be in flight"); then
+    --why "restarting Bifrost: dev terminals end, so no claimed run may be in flight"); then
     headroom hold "$id" --grace never -- bash "$0" --restart
     headroom release "$id" > /dev/null
   else

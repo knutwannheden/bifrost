@@ -18,6 +18,7 @@ import {
   detachAllSessions,
   getSessionName,
   killSession,
+  runningLocalSessions,
   waitForSessionReady,
   writeToSession,
 } from '../src/main/session-manager.ts';
@@ -178,12 +179,13 @@ try {
     await attachSession('kill', win, 80, 10);
     detachAllSessions();
     await sleep(100);
+    const listed = runningLocalSessions().has('kill');
     const survived = alive('kill');
     killSession('kill');
     check(
-      'killing a session nobody is attached to ends its tmux session',
-      survived && !alive('kill'),
-      show({ survived, alive: alive('kill') }),
+      'a detached session is listed as running, and killing it ends its tmux session',
+      listed && survived && !alive('kill') && !runningLocalSessions().has('kill'),
+      show({ listed, survived, alive: alive('kill') }),
     );
   }
   setUp('exit');

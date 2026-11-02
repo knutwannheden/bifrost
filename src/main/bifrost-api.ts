@@ -114,7 +114,7 @@ const SILENT_MS = 45_000;
 /**
  * A missed hook leaves a task pulsing green with nothing to correct it — a turn
  * ended while Bifrost was restarting, a curl timed out, a session was killed.
- * The PTY settles the question independently of any of that. A task holding
+ * The session's own output settles the question independently of any of that. A task holding
  * subagents open is exempt: Bifrost has its own record of that work, so silence
  * does not settle anything.
  */
@@ -840,8 +840,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         });
         return;
       }
-      // A session Bifrost has not spawned yet is invisible to ListAgents, so
-      // waking one is what makes it addressable.
+      // A session that has not started is invisible to ListAgents, so waking
+      // one is what makes it addressable.
       const alreadyAwake = hasSession(wakeId);
       if (!alreadyAwake) {
         if (!isPendingRestore(wakeId) || !mainWindow || mainWindow.isDestroyed()) {

@@ -58,6 +58,7 @@ import {
   worktreeScript,
 } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, matchRepo, removeRepo } from './repo-manager';
+import { planRestore } from './restore-plan';
 import {
   attachLocalSession,
   attachSession,
@@ -69,6 +70,7 @@ import {
   hasSession,
   killSession,
   resizeSession,
+  runningLocalSessions,
   writeToSession,
 } from './session-manager';
 import { getSessionMetricsData } from './session-metrics';
@@ -998,28 +1000,34 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   };
   _claudeCallbacks = claudeCallbacks;
 
-  // Mark previously-running tasks as running and defer session creation until tab activation
-  for (const task of tasksToRestore) {
-    // A remote worktree is not on this disk, so whether it still exists is for the attach to find out.
-    if (task.machine || fs.existsSync(task.worktreePath)) {
-      // Check if stored sessionId is stale; if so, clear it so user can select a session
-      if (!task.machine && task.sessionId && isSessionStale(task.worktreePath, task.sessionId)) {
-        const idx = tasks.findIndex((t) => t.id === task.id);
-        if (idx !== -1) {
-          tasks[idx] = { ...tasks[idx], sessionId: undefined };
-        }
-      }
-
-      const idx = tasks.findIndex((t) => t.id === task.id);
-      if (idx !== -1) {
-        tasks[idx] = { ...tasks[idx], status: 'running', hasUnread: false };
-      }
-
-      pendingRestore.add(task.id);
+  const plan = planRestore(
+    tasksToRestore,
+    runningLocalSessions(),
+    (task) => isSessionStale(task.worktreePath, task.sessionId),
+    fs.existsSync,
+  );
+  const dropped = new Set(plan.dropSessionId);
+  for (const id of [...plan.join, ...plan.defer]) {
+    const idx = tasks.findIndex((t) => t.id === id);
+    if (idx === -1) continue;
+    tasks[idx] = {
+      ...tasks[idx],
+      status: 'running',
+      hasUnread: false,
+      ...(dropped.has(id) ? { sessionId: undefined } : {}),
+    };
+  }
+  for (const id of plan.defer) pendingRestore.add(id);
+  saveTasks(tasks);
+  // Joined at once, so a session that ran on without Bifrost has its name and activity known.
+  for (const id of plan.join) {
+    try {
+      restoreTaskSession(id, mainWindow);
+    } catch (err) {
+      console.error(`[ipc] Failed to rejoin task ${id}:`, err);
+      updateTask(id, { status: 'error' });
     }
   }
-
-  saveTasks(tasks);
 
   // Config
   ipcMain.handle(IPC.LOAD_CONFIG, () => loadConfig());

@@ -112,7 +112,7 @@ interface ReadyGate {
   /** Stopped on the workspace trust prompt, which is quiet without being ready for a prompt. */
   awaitingTrust: boolean;
 }
-// A freshly spawned PTY accepts writes seconds before Claude's TUI reads them,
+// A freshly started session accepts writes seconds before Claude's TUI reads them,
 // so callers that inject input need a readiness signal rather than liveness.
 // Readiness is quiescence — output started, then stopped — because every
 // on-screen string Claude draws is subject to change between releases.
@@ -129,7 +129,7 @@ function createReadyGate(sessionId: string): void {
 }
 
 /** Restart the quiet-period countdown; the last output before silence wins. */
-/** Last PTY write per session: Claude animates while it works, so silence is telling. */
+/** Last output per session: Claude animates while it works, so silence is telling. */
 const lastOutputAt = new Map<string, number>();
 
 export function sessionOutputAt(sessionId: string): number | undefined {
@@ -438,6 +438,21 @@ function localTmux(args: string[]): boolean {
   }
 }
 
+/** The sessions running on Bifrost's tmux server here, by name, joined or not. */
+export function runningLocalSessions(): Set<string> {
+  try {
+    const out = execFileSync('tmux', ['-L', TMUX_SOCKET, 'list-sessions', '-F', '#{session_name}'], {
+      env: localTmuxEnv(),
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000,
+    });
+    return new Set(out.toString().split('\n').filter(Boolean));
+  } catch {
+    // No server runs when no session does.
+    return new Set();
+  }
+}
+
 /**
  * Reads a session in tmux through a control client. Its replay fills the
  * mirror without reaching the window, which gets it from attachSession.
@@ -713,7 +728,7 @@ export function resizeSession(sessionId: string, cols: number, rows: number): vo
 }
 
 /**
- * Send a connecting terminal the session's screen, then match the PTY to it.
+ * Send a connecting terminal the session's screen, then size the session to it.
  * The snapshot travels on the data stream so it stays ordered with live output.
  */
 export async function attachSession(

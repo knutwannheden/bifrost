@@ -194,9 +194,9 @@ export async function sendPrompt(
     return { ok: false, error: `Task ${taskId} not found` };
   }
 
-  // Sessions deferred on startup spawn on tab activation, so a send that
-  // arrives first has to start one and wait for Claude's TUI: a PTY accepts
-  // writes seconds before Claude reads them, and early bytes are discarded.
+  // Sessions deferred on startup start on tab activation, so a send that
+  // arrives first has to start one and wait for Claude's TUI: a new session
+  // accepts writes seconds before Claude reads them, and early bytes are discarded.
   if (isPendingRestore(taskId) && mainWindow && !mainWindow.isDestroyed()) {
     restoreTaskSession(taskId, mainWindow);
     if (!(await waitForSessionReady(taskId))) {
