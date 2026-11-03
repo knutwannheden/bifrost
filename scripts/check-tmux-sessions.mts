@@ -109,6 +109,19 @@ async function until(condition: () => boolean, ms = 4000): Promise<boolean> {
   return condition();
 }
 
+/** What a tab shows after rejoining. The renderer drops what arrives before the replay, since the replay holds it. */
+function shownAfterRejoin(from: number, id: string): string[] {
+  const data = events.slice(from).filter((e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === id);
+  return data
+    .slice(
+      Math.max(
+        0,
+        data.findIndex((e) => e.replay === true),
+      ),
+    )
+    .map((e) => e.data as string);
+}
+
 /** The numbered lines a terminal shows after being written these chunks. */
 async function numbersShown(chunks: string[]): Promise<number[]> {
   const term = new Terminal({ cols: 80, rows: 10, scrollback: 1000, allowProposedApi: true });
@@ -145,10 +158,7 @@ try {
     attachLocalSession('rejoin', { taskId: 'rejoin' });
     await attachSession('rejoin', 80, 10);
     await sleep(300);
-    const chunks = events
-      .slice(from)
-      .filter((e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === 'rejoin')
-      .map((e) => e.data as string);
+    const chunks = shownAfterRejoin(from, 'rejoin');
     const numbers = await numbersShown(chunks);
     const consecutive = numbers.every((n, i) => i === 0 || n === numbers[i - 1] + 1);
     check(
@@ -262,10 +272,7 @@ try {
     consoleService.initConsole();
     await attachSession('console', 80, 10);
     await sleep(300);
-    const chunks = events
-      .slice(from)
-      .filter((e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === 'console')
-      .map((e) => e.data as string);
+    const chunks = shownAfterRejoin(from, 'console');
     const numbers = await numbersShown(chunks);
     check(
       'a console started again joins the one still running',
