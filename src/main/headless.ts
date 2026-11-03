@@ -19,3 +19,4 @@ function stop(): void {
 }
 process.on('SIGTERM', stop);
 process.on('SIGINT', stop);
+process.on('SIGHUP', stop);
