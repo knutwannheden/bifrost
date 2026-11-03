@@ -17,13 +17,13 @@ import type {
 } from '../shared/types';
 import { getFileDiffOnDemand } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
-import { initChangeFeed, loadChangeFeed, setActiveFeedTask } from './change-feed-service';
+import { loadChangeFeed, setActiveFeedTask } from './change-feed-service';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
 import { loadConfig, mergeRendererConfig, saveConfig } from './config';
-import { getConsoleSession, initConsole, resetConsole } from './console-service';
-import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
-import { getCuratorState, initCurator, runCuratorNow } from './curator-service';
+import { getConsoleSession, resetConsole } from './console-service';
+import { findTranscriptMatch, getClaudeJsonlPath, store as storeContext } from './context-store';
+import { getCuratorState, runCuratorNow } from './curator-service';
 import { getDiff, getDiffStats, getFileStatuses, getRangeDiff, resolveDiffBase } from './diff-service';
 import { applyReclaim, noteWindowBlur, noteWindowFocus, scanReclaimable } from './disk-reclaim-service';
 import { emit } from './event-sink';
@@ -57,7 +57,6 @@ import {
   reorderTasks,
   resolveBaseBranch,
   restoreTaskSession,
-  restoreTasks,
   resumeClaudeSessionCore,
   stopTaskSession,
   transferTaskCore,
@@ -67,13 +66,6 @@ import { assessStaleness, currentHead, remapAnchor } from './walkthrough-anchor'
 import { generateWalkthrough, loadCurrentWalkthrough, storeWalkthrough } from './walkthrough-service';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
-  initChangeFeed();
-
-  // Load persisted context entries from DB
-  loadPersistedContexts();
-
-  restoreTasks();
-
   // Config
   ipcMain.handle(IPC.LOAD_CONFIG, () => loadConfig());
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => {
@@ -687,10 +679,8 @@ end tell`;
     }, since),
   );
 
-  initCurator();
   mainWindow.on('blur', noteWindowBlur);
   mainWindow.on('focus', noteWindowFocus);
-  initConsole();
 
   // Curator
   ipcMain.handle(IPC.CURATOR_GET_STATE, () => getCuratorState());

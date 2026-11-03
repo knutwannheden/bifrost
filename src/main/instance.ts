@@ -1,0 +1,31 @@
+import { stopAllWatching } from './activity-watcher.ts';
+import { initApi, startApi, stopApi } from './bifrost-api.ts';
+import { initChangeFeed } from './change-feed-service.ts';
+import { initConsole } from './console-service.ts';
+import { loadPersistedContexts } from './context-store.ts';
+import { initCurator } from './curator-service.ts';
+import { closeDatabase, openDatabase } from './db.ts';
+import { closeRemoteHosts } from './remote-host.ts';
+import { detachAllSessions } from './session-manager.ts';
+import { restoreTasks } from './task-service.ts';
+
+/** Starts the services a Bifrost instance runs. A window, if there is one, is the caller's. */
+export async function startInstance(): Promise<void> {
+  await startApi();
+  openDatabase();
+  initChangeFeed();
+  loadPersistedContexts();
+  restoreTasks();
+  initCurator();
+  initConsole();
+  initApi();
+}
+
+/** Stops them again. The sessions in tmux run on. */
+export async function stopInstance(): Promise<void> {
+  stopAllWatching();
+  detachAllSessions();
+  closeRemoteHosts();
+  await stopApi();
+  closeDatabase();
+}

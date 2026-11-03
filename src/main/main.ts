@@ -4,16 +4,12 @@ import started from 'electron-squirrel-startup';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { resolveKeymap, serializeBinding } from '../shared/keymap';
 import type { BifrostConfig } from '../shared/types';
-import { stopAllWatching } from './activity-watcher';
-import { initApi, startApi, stopApi } from './bifrost-api';
 import { loadConfig, saveConfig } from './config';
-import { closeDatabase, openDatabase } from './db';
 import { subscribe } from './event-sink';
+import { startInstance, stopInstance } from './instance';
 import { ensureHooks } from './integration-installer';
 import { registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
-import { closeRemoteHosts } from './remote-host';
-import { detachAllSessions } from './session-manager';
 import { startPolling } from './slack-service';
 
 if (started) {
@@ -293,16 +289,11 @@ app.on('ready', async () => {
   // Ensure plugin hooks are in the path Claude actually loads from
   ensureHooks();
 
-  // Start HTTP API
-  await startApi();
-
-  // Open SQLite DB before registering handlers (stores depend on it)
-  openDatabase();
+  await startInstance();
 
   if (mainWindow) {
     registerIpcHandlers(mainWindow);
     initNotificationService(mainWindow);
-    initApi();
     startPolling(mainWindow);
   }
 
@@ -315,11 +306,7 @@ app.on('ready', async () => {
 });
 
 app.on('before-quit', async () => {
-  stopAllWatching();
-  detachAllSessions();
-  closeRemoteHosts();
-  await stopApi();
-  closeDatabase();
+  await stopInstance();
 });
 
 app.on('will-quit', () => {

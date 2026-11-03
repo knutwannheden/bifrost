@@ -54,6 +54,7 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `tmux-control.ts` | A tmux control-mode client for one session: the pane's own bytes out, keys in, and a replay on joining |
 | `tmux-session.ts` | The files and tmux command line a session runs from, the same on every machine |
 | `session-mirror.ts` | Headless xterm per session; shapes the replay for the terminal that attaches |
+| `instance.ts` | Starts and stops the services a Bifrost instance runs, with or without a window |
 | `event-sink.ts` | Hands each event a service raises to everyone listening, such as the window |
 | `ipc-handlers.ts` | Registers the IPC handlers |
 | `task-service.ts` | The task list and the operations on tasks that the IPC handlers, the HTTP API and the background services share |
