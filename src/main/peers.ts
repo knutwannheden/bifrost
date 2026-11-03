@@ -101,12 +101,35 @@ export async function routeCall(
   if (!peer) return local(...args);
   try {
     await connectPeer(peer.name);
-    const result = await post(peer, '/call', { channel, args });
+    const result = await call(peer, channel, args);
     noteResult(peer, channel, args[0] as string, result);
     return isTask(result) ? { ...result, machine: peer.name } : result;
   } catch (err) {
-    throw new Error(`${peer.name}: ${(err as Error).message}`);
+    const message = `${peer.name}: ${(err as Error).message}`;
+    emit(IPC_STREAM.TOAST, message, 8000);
+    throw new Error(message);
   }
+}
+
+/** The name of the peer that owns the task, if one does. */
+export function peerOf(taskId: string): string | undefined {
+  for (const peer of peers.values()) if (peer.tasks.some((t) => t.id === taskId)) return peer.name;
+  return undefined;
+}
+
+/** Posts to one of the peer's routes, connecting first, and answers what it answers. */
+export async function postToPeer(name: string, route: string, body: unknown): Promise<Record<string, unknown>> {
+  await connectPeer(name);
+  const peer = peers.get(name);
+  if (!peer) throw new Error(`No instance named ${name}`);
+  return post(peer, route, body);
+}
+
+/** Lists the peer's tasks again, as after handing it some. */
+export async function refreshPeer(name: string): Promise<void> {
+  await connectPeer(name);
+  const peer = peers.get(name);
+  if (peer) await listTasks(peer);
 }
 
 export function closePeers(): void {
@@ -141,13 +164,11 @@ async function open(peer: Peer): Promise<void> {
   peer.stream = stream;
   void read(peer, res.body, stream);
   try {
-    peer.tasks = (await post(peer, '/call', { channel: IPC.LIST_TASKS, args: [] })) as Task[];
+    await listTasks(peer);
   } catch (err) {
     stream.abort();
     throw err;
   }
-  writeCache(peer);
-  emit(IPC_STREAM.TASKS_CHANGED);
 }
 
 async function read(peer: Peer, body: ReadableStream<Uint8Array>, stream: AbortController): Promise<void> {
@@ -210,16 +231,26 @@ function isTask(value: unknown): value is Task {
   return typeof value === 'object' && value !== null && 'id' in value && 'worktreePath' in value;
 }
 
-async function post(peer: Peer, route: string, body: unknown): Promise<unknown> {
+async function post(peer: Peer, route: string, body: unknown): Promise<Record<string, unknown>> {
   if (peer.port === null) throw new Error('not connected');
   const res = await fetch(`http://127.0.0.1:${peer.port}${route}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const answer = (await res.json()) as { result?: unknown; error?: string };
-  if (!res.ok) throw new Error(answer.error ?? `answered ${res.status}`);
-  return answer.result;
+  const answer = (await res.json()) as Record<string, unknown>;
+  if (!res.ok) throw new Error((answer.error as string | undefined) ?? `answered ${res.status}`);
+  return answer;
+}
+
+async function call(peer: Peer, channel: IpcChannel, args: unknown[]): Promise<unknown> {
+  return (await post(peer, '/call', { channel, args })).result;
+}
+
+async function listTasks(peer: Peer): Promise<void> {
+  peer.tasks = (await call(peer, IPC.LIST_TASKS, [])) as Task[];
+  writeCache(peer);
+  emit(IPC_STREAM.TASKS_CHANGED);
 }
 
 function readCache(name: string): Task[] {

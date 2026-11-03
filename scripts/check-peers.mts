@@ -67,7 +67,9 @@ process.env.HOME = homeB;
   db.closeDatabase();
 }
 process.env.HOME = homeA;
-const { closePeers, connectPeer, peerTasks, registerPeer, routeCall } = await import('../src/main/peers.ts');
+const { closePeers, connectPeer, peerOf, peerTasks, postToPeer, refreshPeer, registerPeer, routeCall } = await import(
+  '../src/main/peers.ts'
+);
 const { subscribe } = await import('../src/main/event-sink.ts');
 
 const env: NodeJS.ProcessEnv = { ...process.env, HOME: homeB, TMPDIR: tmp, TMUX_TMPDIR: root };
@@ -138,6 +140,27 @@ try {
   }
 
   {
+    const t3: Task = {
+      id: 't3',
+      name: 't3',
+      repoId: 'r',
+      baseBranch: 'main',
+      worktreePath: tmp,
+      status: 'stopped',
+      hasUnread: false,
+      createdAt: 3,
+    };
+    await postToPeer('b', '/import-tasks', { tasks: [t3], repos: [] });
+    await refreshPeer('b');
+    const listed = peerTasks().find((t) => t.id === 't3');
+    check(
+      "a task handed to a peer shows up there, and is known to be the peer's",
+      listed?.machine === 'b' && peerOf('t3') === 'b' && peerOf('t-unknown') === undefined,
+      show({ listed, owner: peerOf('t3') }),
+    );
+  }
+
+  {
     const from = seen.length;
     b.kill('SIGTERM');
     await exited;
@@ -147,10 +170,11 @@ try {
       () => 'resolved',
       (err: Error) => err.message,
     );
+    const told = seen.slice(from).some((e) => e.channel === IPC_STREAM.TOAST && String(e.args[0]).startsWith('b:'));
     check(
-      'a peer that goes away leaves its last list, greyed, and its calls fail',
-      noticed && greyed?.unreachable === true && greyed.name === 'x' && failure.startsWith('b:'),
-      show({ noticed, greyed, failure }),
+      'a peer that goes away leaves its last list, greyed, and its calls fail and say so',
+      noticed && greyed?.unreachable === true && greyed.name === 'x' && failure.startsWith('b:') && told,
+      show({ noticed, greyed, failure, told }),
     );
   }
 } finally {
