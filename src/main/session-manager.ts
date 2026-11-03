@@ -2,9 +2,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { BrowserWindow } from 'electron';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
+import { emit } from './event-sink.ts';
 import type { RemoteHost } from './remote-host.ts';
 import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror.ts';
 import { TmuxControl } from './tmux-control.ts';
@@ -63,10 +63,8 @@ export function getSessionName(sessionId: string): string | undefined {
   return sessionNames.get(sessionId);
 }
 
-function send(mainWindow: BrowserWindow, sessionId: string, data: string, isReplay: boolean): void {
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.SESSION_DATA, sessionId, data, isReplay);
-  }
+function send(sessionId: string, data: string, isReplay: boolean): void {
+  emit(IPC_STREAM.SESSION_DATA, sessionId, data, isReplay);
 }
 
 // Claude's startup banners are the only thing scanned as raw text, so this is
@@ -300,7 +298,6 @@ function spawnSession(
   command: string,
   args: string[],
   cwd: string,
-  mainWindow: BrowserWindow,
   options?: {
     cols?: number;
     rows?: number;
@@ -343,14 +340,14 @@ function spawnSession(
   };
   register(sessionId, stream, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
   if (options?.cols !== undefined || options?.rows !== undefined) fixedGeometry.add(sessionId);
-  const output = outputHandler(sessionId, mainWindow, false, cwd);
+  const output = outputHandler(sessionId, false, cwd);
 
   shell.onData((data: string) => {
     if (sessions.get(sessionId) === stream) output(data, true);
   });
 
   shell.onExit(({ exitCode }: { exitCode: number }) => {
-    if (sessions.get(sessionId) === stream) ended(sessionId, mainWindow, exitCode);
+    if (sessions.get(sessionId) === stream) ended(sessionId, exitCode);
   });
 }
 
@@ -375,7 +372,6 @@ function register(sessionId: string, stream: SessionStream, cols: number, rows: 
 /** Feeds a session's output to its mirror, its startup scan and readiness, and the window when toWindow. */
 function outputHandler(
   sessionId: string,
-  mainWindow: BrowserWindow,
   scanTrust: boolean,
   where: string,
 ): (data: string, toWindow: boolean) => void {
@@ -407,18 +403,16 @@ function outputHandler(
       }
     }
 
-    if (forward && toWindow) send(mainWindow, sessionId, data, false);
+    if (forward && toWindow) send(sessionId, data, false);
   };
 }
 
 /** Tears down a session whose program has ended, and tells the window. */
-function ended(sessionId: string, mainWindow: BrowserWindow, exitCode: number): void {
+function ended(sessionId: string, exitCode: number): void {
   sessions.delete(sessionId);
   forgetSession(sessionId);
   disposeReadyGate(sessionId);
-  if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
-  }
+  emit(IPC_STREAM.SESSION_EXIT, sessionId, exitCode);
 }
 
 /** A server started from here keeps this environment, and every session it runs inherits it. */
@@ -459,7 +453,6 @@ export function runningLocalSessions(): Set<string> {
  */
 function attachTmux(
   sessionId: string,
-  mainWindow: BrowserWindow,
   start: (size: { cols: number; rows: number }) => TmuxControl,
   end: (control: TmuxControl) => void,
   options: {
@@ -479,7 +472,7 @@ function attachTmux(
   };
   register(sessionId, stream, size.cols, size.rows);
   const current = () => sessions.get(sessionId) === stream;
-  const output = outputHandler(sessionId, mainWindow, true, sessionId);
+  const output = outputHandler(sessionId, true, sessionId);
   control.onScreen(({ replay, joined }) => {
     if (!current()) return;
     output(options.redraw ? `\x1bc${replay}` : replay, options.redraw === true);
@@ -497,7 +490,7 @@ function attachTmux(
     if (current()) output(data, true);
   });
   control.onExit((code) => {
-    if (current() && !options.onExit?.(code)) ended(sessionId, mainWindow, code === 0 ? 0 : (code ?? 1));
+    if (current() && !options.onExit?.(code)) ended(sessionId, code === 0 ? 0 : (code ?? 1));
   });
 }
 
@@ -507,16 +500,14 @@ function attachTmux(
  */
 export function attachLocalSession(
   sessionId: string,
-  mainWindow: BrowserWindow,
   options: { name?: string; taskId?: string; onExit?: () => void } = {},
 ): void {
   const home = os.homedir();
   const rejoining = localTmux(['has-session', '-t', `=${sessionId}`]);
   // A session joined again may be mid-turn.
-  if (!rejoining) announceIdle(sessionId, mainWindow, options.taskId);
+  if (!rejoining) announceIdle(sessionId, options.taskId);
   attachTmux(
     sessionId,
-    mainWindow,
     ({ cols, rows }) =>
       TmuxControl.start(
         'tmux',
@@ -581,11 +572,9 @@ export function claudeEnv(options?: ClaudeLaunchOptions): Record<string, string>
 }
 
 /** A session comes up with nothing in flight, whatever Bifrost last heard about the one before it. */
-function announceIdle(sessionId: string, mainWindow: BrowserWindow, taskId?: string): void {
+function announceIdle(sessionId: string, taskId?: string): void {
   lastOutputAt.set(sessionId, Date.now());
-  if (taskId && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, taskId, false);
-  }
+  if (taskId) emit(IPC_STREAM.CLAUDE_ACTIVE, taskId, false);
 }
 
 /** Delays between attempts to reattach a remote session whose connection dropped, about a minute in all. */
@@ -604,10 +593,9 @@ const pendingReconnects = new Map<string, { timer: ReturnType<typeof setTimeout>
 export function createRemoteSession(
   sessionId: string,
   host: RemoteHost,
-  mainWindow: BrowserWindow,
   options: { name?: string; onGiveUp?: () => void },
 ): void {
-  announceIdle(sessionId, mainWindow, sessionId);
+  announceIdle(sessionId, sessionId);
   host.hold(sessionId);
   // Brings up the link that carries the API to the machine.
   host.connect().catch((err) => console.warn(`[session] ${host.machine.name}: ${(err as Error).message}`));
@@ -629,7 +617,7 @@ export function createRemoteSession(
     }
     sessions.delete(sessionId);
     disposeMirror(sessionId);
-    send(mainWindow, sessionId, `\r\n[Connection to ${host.machine.name} lost, reconnecting…]\r\n`, false);
+    send(sessionId, `\r\n[Connection to ${host.machine.name} lost, reconnecting…]\r\n`, false);
     const timer = setTimeout(() => {
       pendingReconnects.delete(sessionId);
       connect(true);
@@ -642,7 +630,6 @@ export function createRemoteSession(
     startedAt = Date.now();
     attachTmux(
       sessionId,
-      mainWindow,
       ({ cols, rows }) => {
         const { command, args } = host.controlCommand(sessionId, cols, rows);
         return TmuxControl.start(command, args, { cols, rows });
@@ -665,19 +652,14 @@ function findShell(): string {
   return '/bin/sh';
 }
 
-export function createShellSession(
-  sessionId: string,
-  cwd: string,
-  mainWindow: BrowserWindow,
-  options?: { taskId?: string },
-): void {
+export function createShellSession(sessionId: string, cwd: string, options?: { taskId?: string }): void {
   const shellPath = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : findShell());
   const extraEnv: Record<string, string> = {
     BIFROST_CONTEXT: 'dev',
     BIFROST_WORKTREE: cwd,
   };
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
-  spawnSession(sessionId, shellPath, ['-l'], cwd, mainWindow, { rows: 15, extraEnv });
+  spawnSession(sessionId, shellPath, ['-l'], cwd, { rows: 15, extraEnv });
 }
 
 /** Returns false when no live session holds the id, so callers can report the miss. */
@@ -731,19 +713,14 @@ export function resizeSession(sessionId: string, cols: number, rows: number): vo
  * Send a connecting terminal the session's screen, then size the session to it.
  * The snapshot travels on the data stream so it stays ordered with live output.
  */
-export async function attachSession(
-  sessionId: string,
-  mainWindow: BrowserWindow,
-  cols: number,
-  rows: number,
-): Promise<boolean> {
+export async function attachSession(sessionId: string, cols: number, rows: number): Promise<boolean> {
   noteGeometry(sessionId, cols, rows);
   await streamReady.get(sessionId);
   const snapshot = await snapshotMirror(sessionId, cols, rows);
   if (!snapshot) return false;
 
-  send(mainWindow, sessionId, snapshot.replay, true);
-  for (const data of snapshot.held) send(mainWindow, sessionId, data, false);
+  send(sessionId, snapshot.replay, true);
+  for (const data of snapshot.held) send(sessionId, data, false);
 
   const desired = desiredGeometry.get(sessionId) ?? { cols, rows };
   sessions.get(sessionId)?.resize(desired.cols, desired.rows);

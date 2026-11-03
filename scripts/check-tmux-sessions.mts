@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import headless from '@xterm/headless';
-import type { BrowserWindow } from 'electron';
+import { subscribe } from '../src/main/event-sink.ts';
 import type { RemoteHost } from '../src/main/remote-host.ts';
 import {
   attachLocalSession,
@@ -72,12 +72,9 @@ kill $ticker
 );
 
 const events: Array<{ channel: string; id: string; data: unknown; replay?: boolean }> = [];
-const win = {
-  isDestroyed: () => false,
-  webContents: {
-    send: (channel: string, id: string, data: unknown, replay?: boolean) => events.push({ channel, id, data, replay }),
-  },
-} as unknown as BrowserWindow;
+subscribe((channel, [id, data, replay]) =>
+  events.push({ channel, id: id as string, data, replay: replay as boolean | undefined }),
+);
 const dataOf = (id: string) =>
   events.filter((e) => e.channel === IPC_STREAM.SESSION_DATA && e.id === id).map((e) => e.data as string);
 const exitsOf = (id: string) => events.filter((e) => e.channel === IPC_STREAM.SESSION_EXIT && e.id === id).length;
@@ -129,8 +126,8 @@ const lastNumber = (text: string) => Math.max(0, ...[...text.matchAll(/n(\d+)/g)
 try {
   {
     setUp('bytes');
-    attachLocalSession('bytes', win, { taskId: 'bytes' });
-    await attachSession('bytes', win, 80, 10);
+    attachLocalSession('bytes', { taskId: 'bytes' });
+    await attachSession('bytes', 80, 10);
     const link = '\x1b]8;;https://example.com/stub\x1b\\stub-link\x1b]8;;\x1b\\';
     const arrived = await until(() => dataOf('bytes').join('').includes(link));
     check("a tab gets the session's own bytes", arrived, show(dataOf('bytes').join('').slice(-300)));
@@ -138,15 +135,15 @@ try {
 
   {
     setUp('rejoin');
-    attachLocalSession('rejoin', win, { taskId: 'rejoin' });
-    await attachSession('rejoin', win, 80, 10);
+    attachLocalSession('rejoin', { taskId: 'rejoin' });
+    await attachSession('rejoin', 80, 10);
     await sleep(300);
     const before = lastNumber(dataOf('rejoin').join(''));
     detachAllSessions();
     await sleep(200);
     const from = events.length;
-    attachLocalSession('rejoin', win, { taskId: 'rejoin' });
-    await attachSession('rejoin', win, 80, 10);
+    attachLocalSession('rejoin', { taskId: 'rejoin' });
+    await attachSession('rejoin', 80, 10);
     await sleep(300);
     const chunks = events
       .slice(from)
@@ -163,20 +160,20 @@ try {
 
   {
     setUp('ready');
-    attachLocalSession('ready', win, { taskId: 'ready' });
-    await attachSession('ready', win, 80, 10);
+    attachLocalSession('ready', { taskId: 'ready' });
+    await attachSession('ready', 80, 10);
     // A join is told from a fresh start by the session being older than the client.
     await sleep(1100);
     detachAllSessions();
-    attachLocalSession('ready', win, { taskId: 'ready' });
+    attachLocalSession('ready', { taskId: 'ready' });
     const ready = await waitForSessionReady('ready', 3000);
     check('a joined session that keeps printing is ready at once', ready);
   }
 
   {
     setUp('kill');
-    attachLocalSession('kill', win, { taskId: 'kill' });
-    await attachSession('kill', win, 80, 10);
+    attachLocalSession('kill', { taskId: 'kill' });
+    await attachSession('kill', 80, 10);
     detachAllSessions();
     await sleep(100);
     const listed = runningLocalSessions().has('kill');
@@ -189,20 +186,20 @@ try {
     );
   }
   setUp('exit');
-  attachLocalSession('exit', win, { taskId: 'exit' });
-  await attachSession('exit', win, 80, 10);
+  attachLocalSession('exit', { taskId: 'exit' });
+  await attachSession('exit', 80, 10);
   await sleep(600);
   writeToSession('exit', 'q\r');
   await until(() => exitsOf('exit') > 0);
   await sleep(300);
   check('a session ending reports its exit once', exitsOf('exit') === 1, show(exitsOf('exit')));
   setUp('name', 'old');
-  attachLocalSession('name', win, { taskId: 'name', name: 'old' });
-  await attachSession('name', win, 80, 10);
+  attachLocalSession('name', { taskId: 'name', name: 'old' });
+  await attachSession('name', 80, 10);
   await sleep(300);
   detachAllSessions();
   setUp('name', 'new');
-  attachLocalSession('name', win, { taskId: 'name', name: 'new' });
+  attachLocalSession('name', { taskId: 'name', name: 'new' });
   check(
     'a rejoined session keeps the name it started under',
     getSessionName('name') === 'old',
@@ -211,9 +208,9 @@ try {
 
   {
     setUp('twice');
-    attachLocalSession('twice', win, { taskId: 'twice' });
-    attachLocalSession('twice', win, { taskId: 'twice' });
-    await attachSession('twice', win, 80, 10);
+    attachLocalSession('twice', { taskId: 'twice' });
+    attachLocalSession('twice', { taskId: 'twice' });
+    await attachSession('twice', 80, 10);
     await sleep(600);
     writeToSession('twice', 'x\r');
     await until(() => dataOf('twice').join('').includes('echo:x'));
@@ -235,8 +232,8 @@ try {
         args: ['-c', 'tmux "$@"; exit 255', 'sh', ...controlArgs(path.join(home, '.bifrost'), taskId, cols, rows)],
       }),
     } as unknown as RemoteHost;
-    createRemoteSession('remote', host, win, { name: 'remote' });
-    await attachSession('remote', win, 80, 10);
+    createRemoteSession('remote', host, { name: 'remote' });
+    await attachSession('remote', 80, 10);
     await sleep(300);
     const from = events.length;
     execFileSync('tmux', ['-S', socket, 'detach-client', '-s', 'remote']);
@@ -256,14 +253,14 @@ try {
   {
     // Loaded after HOME is set, since it settles its directory as it loads.
     const consoleService = await import('../src/main/console-service.ts');
-    consoleService.initConsole(win);
-    await attachSession('console', win, 80, 10);
+    consoleService.initConsole();
+    await attachSession('console', 80, 10);
     await sleep(400);
     const before = lastNumber(dataOf('console').join(''));
     detachAllSessions();
     const from = events.length;
-    consoleService.initConsole(win);
-    await attachSession('console', win, 80, 10);
+    consoleService.initConsole();
+    await attachSession('console', 80, 10);
     await sleep(300);
     const chunks = events
       .slice(from)

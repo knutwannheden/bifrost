@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { BrowserWindow } from 'electron';
 import { DEFAULT_CONSOLE_PROMPT } from '../shared/default-prompts.ts';
 import { loadConfig } from './config.ts';
 import { attachLocalSession, hasSession, killSession } from './session-manager.ts';
@@ -17,7 +16,6 @@ export const CONSOLE_NAME = 'bifrost';
 /** A crashing console must not respawn in a tight loop. */
 const RESPAWN_DELAY_MS = 5_000;
 
-let mainWindow: BrowserWindow | null = null;
 let respawnTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
@@ -32,7 +30,6 @@ function writeInstructions(): void {
 }
 
 function spawn(): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
   writeInstructions();
 
   // A console still running in tmux is joined, and a new one starts under a fresh session id.
@@ -44,7 +41,7 @@ function spawn(): void {
     claudeArgs: ['--name', CONSOLE_NAME, '--dangerously-skip-permissions'],
     env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: CONSOLE_NAME },
   });
-  attachLocalSession(CONSOLE_SESSION_ID, mainWindow, {
+  attachLocalSession(CONSOLE_SESSION_ID, {
     name: CONSOLE_NAME,
     onExit: () => {
       // Being reachable is the whole point, so an exit is temporary.
@@ -54,8 +51,7 @@ function spawn(): void {
   });
 }
 
-export function initConsole(window: BrowserWindow): void {
-  mainWindow = window;
+export function initConsole(): void {
   spawn();
 }
 

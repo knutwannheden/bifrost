@@ -411,7 +411,6 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
   };
   startLocalSession(
     task,
-    mainWindow,
     params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
   );
 
@@ -509,7 +508,7 @@ export async function createTaskCore(
   }
 
   const { repo, adopted } = target ?? (await resolveTaskTarget(params));
-  if (params.machine) return createRemoteTask(params, mainWindow, repo, params.machine);
+  if (params.machine) return createRemoteTask(params, repo, params.machine);
 
   // An adopted worktree's branch says what the work is.
   const name = params.branchName || params.name || adopted?.branch || generateTaskName();
@@ -577,7 +576,6 @@ export async function createTaskCore(
   };
   startLocalSession(
     task,
-    mainWindow,
     params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
   );
 
@@ -609,7 +607,7 @@ function remoteHostFor(task: Task): RemoteHost | null {
  * they are now, then joins its tmux session or starts it. A task without a
  * session id gets one, which Claude starts under.
  */
-function startLocalSession(task: Task, mainWindow: BrowserWindow, prompt?: string): void {
+function startLocalSession(task: Task, prompt?: string): void {
   const config = loadConfig();
   let sessionId = task.sessionId;
   if (!sessionId) {
@@ -631,7 +629,7 @@ function startLocalSession(task: Task, mainWindow: BrowserWindow, prompt?: strin
     env: claudeEnv(launch),
     prompt,
   });
-  attachLocalSession(task.id, mainWindow, { name: task.name, taskId: task.id });
+  attachLocalSession(task.id, { name: task.name, taskId: task.id });
 }
 
 /** Ends a task's session. On another machine the script also ends a tmux session no stream reads. */
@@ -655,12 +653,7 @@ async function localGitConfig(repoPath: string, key: string): Promise<string | u
  * Creates a task on another machine, in a worktree of a clone made there from
  * the repo's origin. Commits there carry the identity this repo commits with here.
  */
-async function createRemoteTask(
-  params: CreateTaskParams,
-  mainWindow: BrowserWindow,
-  repo: Repo,
-  machine: string,
-): Promise<Task> {
+async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: string): Promise<Task> {
   const host = getRemoteHost(machine);
   const info = await host.connectReady();
   let url: string;
@@ -709,7 +702,7 @@ async function createRemoteTask(
 
   tasks.push(task);
   saveTasks(tasks);
-  startRemoteSession(task, mainWindow);
+  startRemoteSession(task);
   return task;
 }
 
@@ -742,21 +735,21 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
   );
 }
 
-function startRemoteSession(task: Task, mainWindow: BrowserWindow): void {
+function startRemoteSession(task: Task): void {
   if (!task.machine) throw new Error(`Task ${task.id} runs on this machine`);
-  createRemoteSession(task.id, getRemoteHost(task.machine), mainWindow, {
+  createRemoteSession(task.id, getRemoteHost(task.machine), {
     name: task.name,
     // Given up on, the session waits for its tab to be opened again, as after a restart.
     onGiveUp: () => pendingRestore.add(task.id),
   });
 }
 
-async function reopenRemoteTask(task: Task, mainWindow: BrowserWindow): Promise<Task> {
+async function reopenRemoteTask(task: Task): Promise<Task> {
   const host = getRemoteHost(task.machine ?? '');
   const info = await host.connectReady();
   if (task.branch) await host.exec(restoreWorktreeScript(task.worktreePath, task.branch));
   await writeRemoteSession(task, host, info);
-  startRemoteSession(task, mainWindow);
+  startRemoteSession(task);
   return updateTask(task.id, { status: 'running', hasUnread: false, archivedAt: undefined });
 }
 
@@ -856,7 +849,7 @@ export async function transferTaskCore(taskId: string, machine: string, mainWind
     baseBranch: moved.baseBranch,
     status: 'running',
   });
-  startRemoteSession(updated, mainWindow);
+  startRemoteSession(updated);
   if (!mainWindow.isDestroyed()) mainWindow.webContents.send(IPC_STREAM.TASK_UPDATED, updated);
 
   const { stdout: untracked } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], {
@@ -904,10 +897,10 @@ export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): v
   pendingRestore.delete(taskId);
   const task = getTask(taskId);
   if (task.machine) {
-    startRemoteSession(task, mainWindow);
+    startRemoteSession(task);
     return;
   }
-  startLocalSession(task, mainWindow);
+  startLocalSession(task);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
   startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
@@ -924,7 +917,7 @@ export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow):
   if (multiRepoGuardRepo?.multiTaskId) {
     throw new Error('Multi-repo tasks cannot be reopened after archiving');
   }
-  if (task.machine) return reopenRemoteTask(task, mainWindow);
+  if (task.machine) return reopenRemoteTask(task);
 
   let worktreePath = task.worktreePath;
   let branch = task.branch;
@@ -957,7 +950,7 @@ export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow):
     updateTask(taskId, { sessionId: undefined });
   }
 
-  startLocalSession({ ...task, worktreePath, sessionId: resumeSessionId }, mainWindow);
+  startLocalSession({ ...task, worktreePath, sessionId: resumeSessionId });
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
   startWatching(taskId, worktreePath, mainWindow, _claudeCallbacks, resumeSessionId);
@@ -1202,7 +1195,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (existing) killSession(existing);
 
     const devSessionId = `${taskId}-dev`;
-    createShellSession(devSessionId, task.worktreePath, mainWindow, { taskId });
+    createShellSession(devSessionId, task.worktreePath, { taskId });
     devSessions.set(taskId, devSessionId);
     return devSessionId;
   });
@@ -1235,7 +1228,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         updateTask(sessionId, { status: 'error' });
       }
     }
-    return attachSession(sessionId, mainWindow, cols, rows);
+    return attachSession(sessionId, cols, rows);
   });
 
   // Diff
@@ -1512,7 +1505,7 @@ end tell`;
       createdAt: Date.now(),
       isExternal: !matchedRepo,
     };
-    startLocalSession(task, mainWindow);
+    startLocalSession(task);
 
     tasks.push(task);
     saveTasks(tasks);
@@ -1706,7 +1699,7 @@ end tell`;
 
   initCurator(mainWindow);
   initDiskReclaim(mainWindow);
-  initConsole(mainWindow);
+  initConsole();
 
   // Curator
   ipcMain.handle(IPC.CURATOR_GET_STATE, () => getCuratorState());

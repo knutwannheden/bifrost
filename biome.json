@@ -49,6 +49,40 @@
       "tailwindDirectives": true
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/main/session-manager.ts", "src/main/console-service.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "electron": "Only the window side imports Electron. A service reaches the window through event-sink.ts."
+                },
+                "patterns": [
+                  {
+                    "group": ["./main", "./main.ts", "./ipc-handlers*", "./notification-service*", "./slack-service*"],
+                    "message": "Only the window side imports the window side."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/main/main.ts",
+        "src/main/ipc-handlers.ts",
+        "src/main/notification-service.ts",
+        "src/main/slack-service.ts"
+      ],
+      "linter": { "rules": { "style": { "noRestrictedImports": "off" } } }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
