@@ -22,6 +22,7 @@ import {
   waitForSessionReady,
   writeToSession,
 } from '../src/main/session-manager.ts';
+import { TmuxControl } from '../src/main/tmux-control.ts';
 import { controlArgs, writeLocalSession } from '../src/main/tmux-session.ts';
 import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 
@@ -258,6 +259,27 @@ try {
     );
     check('a dropped connection reconnects and redraws the tab', redrawn && alive('remote'), show(alive('remote')));
     killSession('remote');
+  }
+
+  {
+    setUp('sized');
+    const base = path.join(home, '.bifrost');
+    const tab = TmuxControl.start('tmux', controlArgs(base, 'sized', 80, 24), { cols: 80, rows: 24 });
+    await tab.screen;
+    // An instance reads its sessions with no screen of its own.
+    const unseen = TmuxControl.start('tmux', controlArgs(base, 'sized', 120, 30, { ignoreSize: true }), {
+      cols: 120,
+      rows: 30,
+    });
+    await unseen.screen;
+    await sleep(300);
+    const width = execFileSync('tmux', ['-S', socket, 'list-windows', '-t', '=sized', '-F', '#{window_width}'], {
+      encoding: 'utf-8',
+    }).trim();
+    check('a client that ignores its size leaves the window to the tab', width === '80', show(width));
+    tab.detach();
+    unseen.detach();
+    killSession('sized');
   }
 
   {

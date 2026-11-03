@@ -25,6 +25,7 @@ import { getDiff } from './diff-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
+import { forwardTaskRoute, peerTasks } from './peers';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
 import { isIdle, markActive, markIdle, sendPrompt as sendPromptToTask, workingTaskIds } from './prompt-sender';
@@ -273,6 +274,18 @@ function killTaskSessions(task: Task): void {
   killSession(`${task.id}-dev`);
 }
 
+/** The routes that act on one task, named by the request. */
+const FORWARDED_ROUTES = new Set([
+  '/close-task',
+  '/get-task-diff',
+  '/get-activity-log',
+  '/wake-task',
+  '/open-task',
+  '/send-prompt',
+  '/list-notes',
+  '/delete-note',
+]);
+
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
     errorResponse(res, 'Method not allowed', 405);
@@ -280,6 +293,20 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   }
 
   const body = await readJsonBody(req);
+
+  // A request about a task another instance owns is answered by that instance.
+  if (req.url && FORWARDED_ROUTES.has(req.url)) {
+    try {
+      const answer = await forwardTaskRoute(req.url, body);
+      if (answer) {
+        jsonResponse(res, answer);
+        return;
+      }
+    } catch (err) {
+      errorResponse(res, (err as Error).message, 502);
+      return;
+    }
+  }
 
   switch (req.url) {
     case '/call': {
@@ -377,7 +404,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const listRepos = loadConfig().repos;
       const q = listQuery?.trim().toLowerCase();
       const rq = repoFilter?.trim().toLowerCase();
-      const matching = getTasks()
+      const matching = [...getTasks(), ...peerTasks()]
         .filter((t) => {
           if (filter === 'running') return t.status === 'running';
           if (filter !== 'all' && t.status === 'archived') return false;
@@ -762,7 +789,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       const lower = query.toLowerCase();
-      const all = getTasks();
+      const all = [...getTasks(), ...peerTasks()];
       // Most specific first, and a tier that matches more than one task is
       // reported rather than resolved: naming the wrong task to message is
       // worse than naming none. A directory is matched by containment, since

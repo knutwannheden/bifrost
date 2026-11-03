@@ -31,11 +31,26 @@ export function linkInstances(): void {
   }
 }
 
+/** One handover at a time per machine, since each settings save asks for one. */
+const handingOver = new Map<string, Promise<void>>();
+
 /**
  * Hands tasks to the machine's instance, with their repos at the paths they
  * have there, and forgets them here once it has taken them.
  */
-export async function handOver(machine: string, handed: Task[]): Promise<void> {
+export function handOver(machine: string, handed: Task[]): Promise<void> {
+  const previous = handingOver.get(machine) ?? Promise.resolve();
+  const next = previous
+    .catch(() => {})
+    .then(() => {
+      const still = handed.filter((t) => getTasks().some((held) => held.id === t.id));
+      return still.length > 0 ? handOverNow(machine, still) : undefined;
+    });
+  handingOver.set(machine, next);
+  return next;
+}
+
+async function handOverNow(machine: string, handed: Task[]): Promise<void> {
   const info = await getRemoteHost(machine).connectReady();
   const repos = loadConfig()
     .repos.filter((r) => handed.some((t) => t.repoId === r.id))

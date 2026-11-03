@@ -511,7 +511,10 @@ export function attachLocalSession(
     ({ cols, rows }) =>
       TmuxControl.start(
         'tmux',
-        controlArgs(path.join(home, '.bifrost'), sessionId, cols, rows),
+        // An instance on another machine has no screen there, so the tabs reading over ssh size the window.
+        controlArgs(path.join(home, '.bifrost'), sessionId, cols, rows, {
+          ignoreSize: process.env.BIFROST_PLUGIN_DIR !== undefined,
+        }),
         { cols, rows },
         localTmuxEnv(),
       ),

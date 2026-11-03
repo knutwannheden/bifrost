@@ -94,11 +94,19 @@ export function sessionFiles(spec: SessionSpec): Record<string, string> {
  * starting it from run.sh when it is missing. base is Bifrost's directory.
  * Every argument is safe for a login shell to read unquoted when base is.
  */
-export function controlArgs(base: string, taskId: string, cols: number, rows: number): string[] {
+/** A client that ignores its size leaves the window's size to the others, as one with no screen of its own should. */
+export function controlArgs(
+  base: string,
+  taskId: string,
+  cols: number,
+  rows: number,
+  options: { ignoreSize?: boolean } = {},
+): string[] {
   const dir = `${base}/sessions/${path.basename(sessionDir(taskId))}`;
   return [
     ...['-u', '-L', TMUX_SOCKET, '-f', `${base}/tmux.conf`, '-C'],
-    ...['new-session', '-A', '-s', taskId, '-x', `${cols}`, '-y', `${rows}`],
+    ...['new-session', '-A', ...(options.ignoreSize ? ['-f', 'ignore-size'] : [])],
+    ...['-s', taskId, '-x', `${cols}`, '-y', `${rows}`],
     ...['sh', `${dir}/run.sh`],
   ];
 }

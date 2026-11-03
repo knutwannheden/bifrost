@@ -196,15 +196,20 @@ try {
     const handed = { tasks: [t2], repos: [{ id: 'r', name: 'r', path: tmp, defaultBranch: 'main' }] };
     const first = await post('/import-tasks', handed);
     const ids = first.status === 200 ? ((await first.json()) as { ids: string[] }).ids : undefined;
-    await post('/import-tasks', handed);
+    // A repeated handover, carrying what the IDE held, does not replace what the instance knows by now.
+    await post('/import-tasks', { ...handed, tasks: [{ ...t2, name: 'stale' }] });
     const listed = (await (await post('/list-tasks', { status: 'all' })).json()) as {
-      tasks: Array<{ id: string; machine?: string }>;
+      tasks: Array<{ id: string; name: string; machine?: string }>;
     };
     const rows = listed.tasks.filter((t) => t.id === 't2');
     const woken = (await (await post('/wake-task', { taskId: 't2' })).json()) as { alreadyAwake?: boolean };
     check(
-      'an instance takes over a task, once, and joins its running session',
-      show(ids) === '["t2"]' && rows.length === 1 && rows[0].machine === 'perf' && woken.alreadyAwake === true,
+      'an instance takes over a task, once, keeping what it knows, and joins its running session',
+      show(ids) === '["t2"]' &&
+        rows.length === 1 &&
+        rows[0].name === 't2' &&
+        rows[0].machine === 'perf' &&
+        woken.alreadyAwake === true,
       show({ status: first.status, ids, rows, woken }),
     );
   }

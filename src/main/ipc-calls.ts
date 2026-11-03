@@ -247,12 +247,12 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
   [IPC.ATTACH_SESSION]: async (sessionId: string, cols: number, rows: number) => {
     const peer = peerOf(sessionId);
     if (peer) {
+      // Joining over ssh would start a session the owner has stopped, since the client creates one it does not find.
+      const task = peerTasks().find((t) => t.id === sessionId);
+      if (task?.status !== 'running') return false;
       // The owner starts a session it deferred, and this side reads it over ssh as any remote tab does.
       await routeCall(IPC.SET_ACTIVE_TASK_ID, [sessionId], () => undefined);
-      if (!hasSession(sessionId)) {
-        const name = peerTasks().find((t) => t.id === sessionId)?.name;
-        createRemoteSession(sessionId, getRemoteHost(peer), { name });
-      }
+      if (!hasSession(sessionId)) createRemoteSession(sessionId, getRemoteHost(peer), { name: task.name });
       return attachSession(sessionId, cols, rows);
     }
     // A task terminal mounts before the effect that marks it active, so this is

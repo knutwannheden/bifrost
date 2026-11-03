@@ -131,6 +131,24 @@ export async function postToPeer(name: string, route: string, body: unknown): Pr
   return post(peer, route, body);
 }
 
+/**
+ * Answers an API request about another instance's task by posting it to that
+ * instance, or null when the task it names is not a peer's.
+ */
+export async function forwardTaskRoute(
+  route: string,
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown> | null> {
+  const id = body.taskId ?? body.callerTaskId;
+  const peer = typeof id === 'string' ? peerOf(id) : undefined;
+  if (!peer) return null;
+  try {
+    return await postToPeer(peer, route, body);
+  } catch (err) {
+    throw new Error(`${peer}: ${(err as Error).message}`);
+  }
+}
+
 /** Lists the peer's tasks again, as after handing it some. */
 export async function refreshPeer(name: string): Promise<void> {
   await connectPeer(name);

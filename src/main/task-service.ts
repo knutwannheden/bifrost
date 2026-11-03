@@ -986,9 +986,10 @@ export function restoreTasks(): void {
 }
 
 /**
- * Takes over tasks another instance hands this one, keyed by id, so a repeated
- * handover finds them already here. A running task joins its session when that
- * still runs, and otherwise waits for its tab, as after a restart.
+ * Takes over tasks another instance hands this one, keyed by id. A task already
+ * here keeps the record it has, which may be newer than the one handed over. A
+ * running task joins its session when that still runs, and otherwise waits for
+ * its tab, as after a restart.
  */
 export function importTasks(handed: Task[], repos: Repo[]): string[] {
   const config = loadConfig();
@@ -997,10 +998,7 @@ export function importTasks(handed: Task[], repos: Repo[]): string[] {
   saveConfig({ ...config, repos: [...byId.values()] });
 
   for (const t of handed) {
-    const task: Task = { ...t, machine: undefined, unreachable: undefined };
-    const at = tasks.findIndex((x) => x.id === task.id);
-    if (at >= 0) tasks[at] = task;
-    else tasks.push(task);
+    if (!tasks.some((x) => x.id === t.id)) tasks.push({ ...t, machine: undefined, unreachable: undefined });
   }
   saveTasks(tasks);
 

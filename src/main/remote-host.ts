@@ -9,6 +9,7 @@ import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
 import { pack, plan } from './instance-deploy.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
+import { peerTasks } from './peers.ts';
 import { syncMachine } from './remote-sync.ts';
 import {
   controlArgs,
@@ -450,7 +451,8 @@ function localApiPort(): number | null {
  * open while a tab holds it and closes a minute after the last one lets go.
  */
 export class RemoteHost {
-  readonly machine: Machine;
+  /** Kept current as the machine's settings change. A new host name gets a new connection instead. */
+  machine: Machine;
   private readonly controlPath: string;
   private master: ChildProcess | null = null;
   private info: RemoteInfo | null = null;
@@ -609,7 +611,8 @@ export class RemoteHost {
     const prepare = prepareScript({
       apiPort: forwarded,
       theme: typeof theme === 'string' ? theme : undefined,
-      instance: this.machine.instance === true,
+      // Once its instance holds tasks, the machine keeps api-port for it, even with the setting turned off since.
+      instance: this.machine.instance === true || peerTasks().some((t) => t.machine === this.machine.name),
     });
     const out = parseScriptOutput(await this.run(prepare, EXEC_TIMEOUT_MS));
     if (!out.HOME) throw new Error(`${this.machine.name} could not be prepared`);
@@ -800,7 +803,10 @@ export function getRemoteHost(name: string): RemoteHost {
     );
   }
   const cached = hosts.get(name);
-  if (cached && cached.machine.host === machine.host) return cached;
+  if (cached && cached.machine.host === machine.host) {
+    cached.machine = machine;
+    return cached;
+  }
   cached?.close();
   const host = new RemoteHost(machine);
   hosts.set(name, host);

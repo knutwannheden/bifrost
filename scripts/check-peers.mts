@@ -67,9 +67,17 @@ process.env.HOME = homeB;
   db.closeDatabase();
 }
 process.env.HOME = homeA;
-const { closePeers, connectPeer, peerOf, peerTasks, postToPeer, refreshPeer, registerPeer, routeCall } = await import(
-  '../src/main/peers.ts'
-);
+const {
+  closePeers,
+  connectPeer,
+  forwardTaskRoute,
+  peerOf,
+  peerTasks,
+  postToPeer,
+  refreshPeer,
+  registerPeer,
+  routeCall,
+} = await import('../src/main/peers.ts');
 const { subscribe } = await import('../src/main/event-sink.ts');
 
 const env: NodeJS.ProcessEnv = { ...process.env, HOME: homeB, TMPDIR: tmp, TMUX_TMPDIR: root };
@@ -153,6 +161,13 @@ try {
     await postToPeer('b', '/import-tasks', { tasks: [t3], repos: [] });
     await refreshPeer('b');
     const listed = peerTasks().find((t) => t.id === 't3');
+    const forwarded = await forwardTaskRoute('/wake-task', { taskId: 't3' });
+    const kept = await forwardTaskRoute('/wake-task', { taskId: 't-local' });
+    check(
+      "an API request about a peer's task is answered there, and one about a task here is not",
+      forwarded !== null && 'ok' in forwarded && kept === null,
+      show({ forwarded, kept }),
+    );
     check(
       "a task handed to a peer shows up there, and is known to be the peer's",
       listed?.machine === 'b' && peerOf('t3') === 'b' && peerOf('t-unknown') === undefined,
