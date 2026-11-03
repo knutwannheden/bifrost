@@ -52,6 +52,7 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `tmux-control.ts` | A tmux control-mode client for one session: the pane's own bytes out, keys in, and a replay on joining |
 | `tmux-session.ts` | The files and tmux command line a session runs from, the same on every machine |
 | `session-mirror.ts` | Headless xterm per session; shapes the replay for the terminal that attaches |
+| `event-sink.ts` | Hands each event a service raises to everyone listening, such as the window |
 | `ipc-handlers.ts` | Registers all IPC handlers, manages in-memory task list |
 | `activity-watcher.ts` | Watches worktrees for commits and Claude JSONL events |
 | `claude-watcher.ts` | Parses Claude JSONL session files for token usage, turn boundaries, and tool attribution |

@@ -8,6 +8,7 @@ import { stopAllWatching } from './activity-watcher';
 import { initApi, startApi, stopApi } from './bifrost-api';
 import { loadConfig, saveConfig } from './config';
 import { closeDatabase, openDatabase } from './db';
+import { subscribe } from './event-sink';
 import { ensureHooks } from './integration-installer';
 import { registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
@@ -284,6 +285,10 @@ app.on('ready', async () => {
 
   buildMenu();
   createWindow();
+  // Read at each send, so a window created again on activate gets the events.
+  subscribe((channel, args) => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args);
+  });
 
   // Ensure plugin hooks are in the path Claude actually loads from
   ensureHooks();
