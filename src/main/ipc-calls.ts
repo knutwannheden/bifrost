@@ -23,11 +23,21 @@ import { scanRecentRepos } from './history-scanner';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { lastChangedFile } from './last-changed-file.ts';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
+import { peerOf, peerTasks, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
 import { handleScrapeResponse, sendPrompt } from './prompt-sender';
+import { getRemoteHost } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
-import { attachSession, createShellSession, killSession, resizeSession, writeToSession } from './session-manager';
+import {
+  attachSession,
+  createRemoteSession,
+  createShellSession,
+  hasSession,
+  killSession,
+  resizeSession,
+  writeToSession,
+} from './session-manager';
 import { getSessionMetricsData } from './session-metrics';
 import { getStats } from './stats-service';
 import {
@@ -234,7 +244,17 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
     resizeSession(sessionId, cols, rows);
   },
 
-  [IPC.ATTACH_SESSION]: (sessionId: string, cols: number, rows: number) => {
+  [IPC.ATTACH_SESSION]: async (sessionId: string, cols: number, rows: number) => {
+    const peer = peerOf(sessionId);
+    if (peer) {
+      // The owner starts a session it deferred, and this side reads it over ssh as any remote tab does.
+      await routeCall(IPC.SET_ACTIVE_TASK_ID, [sessionId], () => undefined);
+      if (!hasSession(sessionId)) {
+        const name = peerTasks().find((t) => t.id === sessionId)?.name;
+        createRemoteSession(sessionId, getRemoteHost(peer), { name });
+      }
+      return attachSession(sessionId, cols, rows);
+    }
     // A task terminal mounts before the effect that marks it active, so this is
     // where a deferred session is first asked for.
     if (isPendingRestore(sessionId)) {
