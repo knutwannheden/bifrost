@@ -1,11 +1,13 @@
 import { type ChildProcess, execFile as execFileCb, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { Machine } from '../shared/types.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
+import { pack, plan } from './instance-deploy.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
 import { syncMachine } from './remote-sync.ts';
 import {
@@ -387,6 +389,21 @@ function bifrostTool(name: string): string | undefined {
   return fs.existsSync(dir) ? dir : undefined;
 }
 
+/** A port nothing on this machine's loopback listens on, for a forward to take. */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address() as net.AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+/** The holder that keeps the connection open for the instance's forward. */
+const INSTANCE_HOLDER = 'instance';
+
 function localApiPort(): number | null {
   try {
     return Number(fs.readFileSync(path.join(os.homedir(), '.bifrost', 'api-port'), 'utf-8').trim()) || null;
@@ -407,6 +424,9 @@ export class RemoteHost {
   private info: RemoteInfo | null = null;
   private linking: Promise<RemoteInfo> | null = null;
   private readonly holders = new Set<string>();
+  /** The forward to the machine's instance, which a new master connection no longer has. */
+  private instanceForward: { localPort: number; remotePort: number } | null = null;
+  private ensuring: Promise<number> | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private relinkTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -454,6 +474,53 @@ export class RemoteHost {
     return this.run(script, timeoutMs);
   }
 
+  /**
+   * Brings the machine's Bifrost instance up to the build here and running, and
+   * answers a port on this machine's loopback forwarded to its API. The
+   * connection stays open from then on, since the forward lives on it.
+   */
+  ensureInstance(): Promise<number> {
+    this.ensuring ??= this.bringUpInstance().finally(() => {
+      this.ensuring = null;
+    });
+    return this.ensuring;
+  }
+
+  private async bringUpInstance(): Promise<number> {
+    this.hold(INSTANCE_HOLDER);
+    await this.connectReady();
+    const packed = await pack(process.cwd());
+    const status = parseScriptOutput(await this.exec(instanceStatusScript()));
+    let remotePort = Number(status.INSTANCE_PORT) || undefined;
+    const step = plan({ hash: status.INSTANCE_HASH || undefined, port: remotePort }, packed.hash);
+    if (step === 'install') {
+      await this.sendTar(
+        packed.dir,
+        `rm -rf ${INSTANCE_DIR}.new && mkdir -p ${INSTANCE_DIR}.new && tar -xzf - -C ${INSTANCE_DIR}.new`,
+        UPLOAD_TIMEOUT_MS,
+      );
+      await this.exec(installInstanceScript(packed.hash), UPLOAD_TIMEOUT_MS);
+    }
+    if (step !== 'none') remotePort = Number(parseScriptOutput(await this.exec(startInstanceScript())).INSTANCE_PORT);
+    if (!remotePort) throw new Error(`${this.machine.name}: its instance did not report a port`);
+    return this.forwardInstance(remotePort);
+  }
+
+  private async forwardInstance(remotePort: number): Promise<number> {
+    const current = this.instanceForward;
+    if (current?.remotePort === remotePort) return current.localPort;
+    if (current) await this.controlForward('cancel', current).catch(() => {});
+    const forward = { localPort: await freePort(), remotePort };
+    await this.controlForward('forward', forward);
+    this.instanceForward = forward;
+    return forward.localPort;
+  }
+
+  private controlForward(op: 'forward' | 'cancel', ports: { localPort: number; remotePort: number }) {
+    const spec = `127.0.0.1:${ports.localPort}:127.0.0.1:${ports.remotePort}`;
+    return execFile('ssh', ['-S', this.controlPath, '-O', op, '-L', spec, this.machine.host], { timeout: 30_000 });
+  }
+
   hold(holder: string): void {
     this.holders.add(holder);
     if (this.idleTimer) clearTimeout(this.idleTimer);
@@ -474,6 +541,7 @@ export class RemoteHost {
     this.idleTimer = null;
     this.relinkTimer = null;
     this.info = null;
+    this.instanceForward = null;
     try {
       execFileSync('ssh', ['-S', this.controlPath, '-O', 'exit', this.machine.host], {
         stdio: 'ignore',
@@ -491,6 +559,7 @@ export class RemoteHost {
     if (!apiPort) throw new Error('The Bifrost API is not running');
     fs.mkdirSync(CONTROL_DIR, { recursive: true, mode: 0o700 });
     if (!(await this.masterAlive())) {
+      this.instanceForward = null;
       fs.rmSync(this.controlPath, { force: true });
       await this.startMaster();
     }
