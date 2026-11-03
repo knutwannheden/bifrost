@@ -12,7 +12,7 @@ import { loadChangeFeed, setActiveFeedTask } from './change-feed-service';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
-import { getConsoleSession, resetConsole } from './console-service';
+import { getConsoleSession, getMachineConsole, resetConsole, resetMachineConsole } from './console-service';
 import { findTranscriptMatch, getClaudeJsonlPath } from './context-store';
 import { getCuratorState, runCuratorNow } from './curator-service';
 import { getDiff, getDiffStats, getFileStatuses, getRangeDiff, resolveDiffBase } from './diff-service';
@@ -610,9 +610,9 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
   [IPC.CURATOR_RUN_NOW]: () => runCuratorNow(),
 
   // Console
-  [IPC.CONSOLE_SESSION]: () => getConsoleSession(),
+  [IPC.CONSOLE_SESSION]: (machine?: string) => (machine ? getMachineConsole(machine) : getConsoleSession()),
 
-  [IPC.CONSOLE_RESET]: () => resetConsole(),
+  [IPC.CONSOLE_RESET]: (machine?: string) => (machine ? resetMachineConsole(machine) : resetConsole()),
 
   // Disk reclaim
   [IPC.DISK_RECLAIM_SCAN]: () => scanReclaimable(),

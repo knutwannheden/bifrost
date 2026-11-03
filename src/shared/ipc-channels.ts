@@ -332,7 +332,8 @@ export interface BifrostAPI {
     callback: (taskId: string, taskName: string, message: string, title: string, notificationType: string) => void,
   ): () => void;
 
-  onConsoleNotification(callback: (message: string, title: string) => void): () => void;
+  /** machine names the machine whose console it is, absent for this one's. */
+  onConsoleNotification(callback: (message: string, title: string, machine?: string) => void): () => void;
 
   // Permission prompts
   onPermissionPrompt(callback: (request: PermissionPromptData) => void): () => void;
@@ -359,8 +360,8 @@ export interface BifrostAPI {
   ): () => void;
 
   // Console
-  consoleSession(): Promise<string>;
-  resetConsole(): Promise<string>;
+  consoleSession(machine?: string): Promise<string>;
+  resetConsole(machine?: string): Promise<string>;
 
   // Claude activity
   onClaudeActive(callback: (taskId: string, active: boolean) => void): () => void;

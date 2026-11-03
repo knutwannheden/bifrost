@@ -596,7 +596,8 @@ const pendingReconnects = new Map<string, { timer: ReturnType<typeof setTimeout>
 export function createRemoteSession(
   sessionId: string,
   host: RemoteHost,
-  options: { name?: string; onGiveUp?: () => void },
+  /** tmuxName is the session's name there, when it differs from the id it is read under here. */
+  options: { name?: string; onGiveUp?: () => void; tmuxName?: string },
 ): void {
   announceIdle(sessionId, sessionId);
   host.hold(sessionId);
@@ -634,7 +635,7 @@ export function createRemoteSession(
     attachTmux(
       sessionId,
       ({ cols, rows }) => {
-        const { command, args } = host.controlCommand(sessionId, cols, rows);
+        const { command, args } = host.controlCommand(options.tmuxName ?? sessionId, cols, rows);
         return TmuxControl.start(command, args, { cols, rows });
       },
       (control) => {
@@ -755,6 +756,17 @@ export function killSession(sessionId: string): void {
 }
 
 /** Stops reading every session. Sessions in tmux run on, and dev shells end. */
+/** Stops reading one session, which runs on. */
+export function detachSession(sessionId: string): void {
+  abandonReconnect(sessionId);
+  const session = sessions.get(sessionId);
+  if (!session) return;
+  sessions.delete(sessionId);
+  session.detach();
+  forgetSession(sessionId);
+  disposeReadyGate(sessionId);
+}
+
 export function detachAllSessions(): void {
   for (const id of [...pendingReconnects.keys()]) abandonReconnect(id);
   for (const [id, session] of [...sessions]) {

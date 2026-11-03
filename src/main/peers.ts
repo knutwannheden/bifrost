@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels.ts';
 import type { Task } from '../shared/types.ts';
-import { type EventChannel, emit, emitFrom } from './event-sink.ts';
+import { BELL, type EventChannel, emit, emitFrom } from './event-sink.ts';
 
 /** The calls whose first argument is the id of the task they act on. */
 export const PER_TASK: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
@@ -231,6 +231,10 @@ function relay(peer: Peer, event: { channel: EventChannel; args: unknown[] }): v
     peer.requests.add((args[0] as { requestId: string }).requestId);
   } else if (channel === IPC_STREAM.SCRAPE_PROMPT_REQUEST) {
     peer.requests.add(args[1] as string);
+  } else if (channel === IPC_STREAM.CONSOLE_NOTIFICATION) {
+    args = [args[0], args[1], peer.name];
+  } else if (channel === BELL) {
+    args = [`${args[0]} on ${peer.name}`];
   }
   emitFrom(peer.name, channel, ...args);
 }

@@ -193,20 +193,20 @@ export default function App() {
   // A user with the console open is already reading it, so there is nothing
   // for a toast or the dot to tell them.
   useEffect(() => {
-    const unsub = window.bifrost.onConsoleNotification((message, title) => {
-      if (state.showConsole) return;
-      dispatch({ type: 'SET_CONSOLE_UNREAD', unread: true });
+    const unsub = window.bifrost.onConsoleNotification((message, title, machine) => {
+      if (state.showConsole && state.consoleMachine === (machine ?? '')) return;
+      dispatch({ type: 'SET_CONSOLE_UNREAD', unread: true, machine });
       const text = message || title || 'Waiting for input';
       const lines = text.split('\n').slice(0, 3).join('\n');
       dispatch({
         type: 'SHOW_TOAST',
-        message: `**Console**\n${lines.length < text.length ? `${lines}...` : lines}`,
+        message: `**Console${machine ? ` on ${machine}` : ''}**\n${lines.length < text.length ? `${lines}...` : lines}`,
         duration: 5000,
         hint: `${modSymbol}J to open`,
       });
     });
     return unsub;
-  }, [state.showConsole, dispatch]);
+  }, [state.showConsole, state.consoleMachine, dispatch]);
 
   // Listen for hook-based notifications (from Claude Code plugin)
   useEffect(() => {

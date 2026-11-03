@@ -3,9 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_CONSOLE_PROMPT } from '../shared/default-prompts.ts';
+import { IPC } from '../shared/ipc-channels.ts';
 import { loadConfig } from './config.ts';
-import { machineSession } from './remote-host.ts';
-import { attachLocalSession, hasSession, killSession } from './session-manager.ts';
+import { connectPeer, postToPeer } from './peers.ts';
+import { getRemoteHost, machineSession } from './remote-host.ts';
+import { attachLocalSession, createRemoteSession, detachSession, hasSession, killSession } from './session-manager.ts';
 import { writeLocalSession } from './tmux-session.ts';
 
 const CONSOLE_DIR = path.join(os.homedir(), '.bifrost', 'console');
@@ -81,4 +83,25 @@ export function resetConsole(): string {
   if (hasSession(CONSOLE_SESSION_ID)) killSession(CONSOLE_SESSION_ID);
   spawn();
   return CONSOLE_SESSION_ID;
+}
+
+/**
+ * A machine's own console, read here over ssh as one of its tasks is, under an
+ * id of its own. Its instance, which runs it, is brought up first.
+ */
+export async function getMachineConsole(machine: string): Promise<string> {
+  await connectPeer(machine);
+  const id = `${CONSOLE_SESSION_ID}@${machine}`;
+  if (!hasSession(id)) {
+    createRemoteSession(id, getRemoteHost(machine), { name: CONSOLE_NAME, tmuxName: CONSOLE_SESSION_ID });
+  }
+  return id;
+}
+
+/** Starts a machine's console over, through its instance, and reads the new one. */
+export async function resetMachineConsole(machine: string): Promise<string> {
+  // Let go of the old session first, so its end is not taken for the new one's.
+  detachSession(`${CONSOLE_SESSION_ID}@${machine}`);
+  await postToPeer(machine, '/call', { channel: IPC.CONSOLE_RESET, args: [] });
+  return getMachineConsole(machine);
 }

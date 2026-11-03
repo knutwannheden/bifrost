@@ -243,6 +243,18 @@ try {
         args: ['-c', 'tmux "$@"; exit 255', 'sh', ...controlArgs(path.join(home, '.bifrost'), taskId, cols, rows)],
       }),
     } as unknown as RemoteHost;
+    // Read here under another id than the tmux session's name, as a machine's console is.
+    setUp('shared');
+    createRemoteSession('shared@fake', host, { name: 'shared', tmuxName: 'shared' });
+    await attachSession('shared@fake', 80, 10);
+    const reached = await until(() => dataOf('shared@fake').join('').includes('stub-link'));
+    check(
+      'a session on another machine can be read under an id of its own',
+      reached && alive('shared') && !alive('shared@fake'),
+      show({ reached, shared: alive('shared') }),
+    );
+    killSession('shared@fake');
+
     createRemoteSession('remote', host, { name: 'remote' });
     await attachSession('remote', 80, 10);
     await sleep(300);

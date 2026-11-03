@@ -178,7 +178,8 @@ const api: BifrostAPI = {
   },
 
   onConsoleNotification: (callback) => {
-    const handler = (_event: Electron.IpcRendererEvent, message: string, title: string) => callback(message, title);
+    const handler = (_event: Electron.IpcRendererEvent, message: string, title: string, machine?: string) =>
+      callback(message, title, machine);
     ipcRenderer.on(IPC_STREAM.CONSOLE_NOTIFICATION, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.CONSOLE_NOTIFICATION, handler);
   },
@@ -251,8 +252,8 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.TERMINAL_UNLOCK, handler);
   },
 
-  consoleSession: () => ipcRenderer.invoke(IPC.CONSOLE_SESSION),
-  resetConsole: () => ipcRenderer.invoke(IPC.CONSOLE_RESET),
+  consoleSession: (machine) => ipcRenderer.invoke(IPC.CONSOLE_SESSION, machine),
+  resetConsole: (machine) => ipcRenderer.invoke(IPC.CONSOLE_RESET, machine),
 
   // Curator
   getCuratorState: () => ipcRenderer.invoke(IPC.CURATOR_GET_STATE),

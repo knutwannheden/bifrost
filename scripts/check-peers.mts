@@ -148,6 +148,24 @@ try {
   }
 
   {
+    await postB('/hook', {
+      cwd: tmp,
+      bifrost_context: 'console',
+      hook_event_name: 'Notification',
+      message: 'hello from b',
+      title: '',
+    });
+    const relayed = await until(() => seen.some((e) => e.channel === IPC_STREAM.CONSOLE_NOTIFICATION), 5_000);
+    const note = seen.find((e) => e.channel === IPC_STREAM.CONSOLE_NOTIFICATION);
+    const bell = seen.find((e) => e.channel === 'bell' && e.origin === 'b' && String(e.args[0]).startsWith('Console'));
+    check(
+      "a peer's console says which machine it is on",
+      relayed && note?.args[2] === 'b' && bell?.args[0] === 'Console on b',
+      show({ note: note?.args, bell: bell?.args }),
+    );
+  }
+
+  {
     const t3: Task = {
       id: 't3',
       name: 't3',
