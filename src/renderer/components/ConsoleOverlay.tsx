@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
-import { altSymbol } from '../utils/platform';
+import { consoleTabs } from '../utils/console-tabs';
+import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
 import CloseButton from './CloseButton';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
@@ -11,8 +12,7 @@ import TerminalPane from './TerminalPane';
 export default function ConsoleOverlay() {
   const { state, dispatch } = useApp();
   const machine = state.consoleMachine;
-  // This machine's console, then one for each machine that runs its own instance.
-  const consoles = ['', ...(state.config?.machines ?? []).filter((m) => m.instance).map((m) => m.name)];
+  const consoles = consoleTabs(state.config);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -52,16 +52,9 @@ export default function ConsoleOverlay() {
       close();
       return;
     }
-    if (!e.altKey) return;
-    if (e.code === 'KeyR') {
+    if (e.altKey && e.code === 'KeyR') {
       e.preventDefault();
       reset();
-      return;
-    }
-    const picked = consoles[Number(e.code.replace('Digit', '')) - 1];
-    if (e.code.startsWith('Digit') && picked !== undefined) {
-      e.preventDefault();
-      select(picked);
     }
   };
 
@@ -121,7 +114,8 @@ export default function ConsoleOverlay() {
           <span className="text-xs text-faint">
             {consoles.length > 1 && (
               <>
-                {altSymbol}1–{consoles.length} switch console &middot;{' '}
+                {modSymbol}
+                {shiftSymbol}[ ] switch console &middot;{' '}
               </>
             )}
             {altSymbol}R start over &middot; Esc close &middot; addressable as &ldquo;bifrost&rdquo;

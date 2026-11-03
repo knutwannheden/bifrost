@@ -5,6 +5,7 @@ import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
 import { defaultPaneState, getActiveDiffState, isAnyOverlayOpen } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
+import { consoleTabs, stepConsole } from '../utils/console-tabs';
 import { focusTaskTerminal } from '../utils/focus-terminal';
 import { changeFeedHasFocus, ownsKeystrokes } from '../utils/keyboard-target';
 import { nextActiveTaskId } from '../utils/next-active-task';
@@ -192,6 +193,11 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
 
         case 'nav.prevTab':
         case 'nav.nextTab': {
+          if (s.showConsole) {
+            const step = actionId === 'nav.prevTab' ? -1 : 1;
+            dispatch({ type: 'SELECT_CONSOLE', machine: stepConsole(consoleTabs(s.config), s.consoleMachine, step) });
+            break;
+          }
           // A published order of fewer than two entries has nowhere to navigate
           // (e.g. every group folded), so fall back to running-task order.
           const ids =

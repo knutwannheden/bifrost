@@ -44,6 +44,7 @@
     "check:database": "node scripts/check-database.mts",
     "check:headless": "node scripts/check-headless.mts",
     "check:peers": "node scripts/check-peers.mts",
+    "check:console-tabs": "node scripts/check-console-tabs.mts",
     "check:task-sync": "node scripts/check-task-sync.mts",
     "check:instance-deploy": "node scripts/check-instance-deploy.mts",
     "check:instance-scripts": "node scripts/check-instance-scripts.mts",
