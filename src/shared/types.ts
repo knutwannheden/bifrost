@@ -70,6 +70,8 @@ export interface Task {
   repoId: string;
   /** The machine the task runs on, by name, absent for this one. Its worktreePath is a path on that machine. */
   machine?: string;
+  /** Its machine's instance is not connected, so this is that instance's last word on the task. */
+  unreachable?: boolean;
   /** The ref this worktree was created from. */
   baseBranch: string;
   /** The worktree's own branch; undefined when it could not be recovered. */

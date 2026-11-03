@@ -178,6 +178,7 @@ export const IPC_STREAM = {
   PERMISSION_PROMPT: 'permission:prompt',
   STATS_UPDATE: 'stats:update',
   TASK_CREATED: 'task:created',
+  TASKS_CHANGED: 'tasks:changed',
   TASK_UPDATED: 'task:updated',
   TASK_CLOSED: 'task:closed',
   SLACK_REACTION: 'slack:reaction',
