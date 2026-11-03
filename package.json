@@ -43,6 +43,7 @@
     "check:event-sink": "node scripts/check-event-sink.mts",
     "check:database": "node scripts/check-database.mts",
     "check:headless": "node scripts/check-headless.mts",
+    "check:instance-reach": "node scripts/check-instance-reach.mts",
     "check:peers": "node scripts/check-peers.mts",
     "check:console-tabs": "node scripts/check-console-tabs.mts",
     "check:task-sync": "node scripts/check-task-sync.mts",

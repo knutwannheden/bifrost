@@ -394,6 +394,8 @@ export interface RemoteInfo {
   loggedIn: boolean;
   /** Where the Bifrost plugin sits there, or null when this machine has none to copy. */
   pluginDir: string | null;
+  /** The port this machine's API is forwarded to there. */
+  apiPort: number;
 }
 
 const CONTROL_DIR = path.join(os.homedir(), '.bifrost', 'ssh');
@@ -628,6 +630,7 @@ export class RemoteHost {
       missing: out.MISSING ? out.MISSING.split(' ') : [],
       loggedIn: out.LOGGED_IN === 'yes',
       pluginDir,
+      apiPort: forwarded,
     };
     return this.info;
   }

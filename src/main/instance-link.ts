@@ -11,15 +11,20 @@ export function isInstanceMachine(name: string | undefined): boolean {
 
 /**
  * Registers each machine that runs its own instance as a peer, whose connect
- * brings that instance up and copies it the preferences here. The tasks still
- * held here for such a machine are handed over.
+ * brings that instance up, copies it the preferences here and has it link
+ * back. The tasks still held here for such a machine are handed over.
  */
 export function linkInstances(): void {
   for (const machine of loadConfig().machines ?? []) {
     if (!machine.instance) continue;
     registerPeer(machine.name, async () => {
-      const port = await getRemoteHost(machine.name).ensureInstance();
+      const host = getRemoteHost(machine.name);
+      const port = await host.ensureInstance();
       await sendPreferences(port);
+      // The machine's view of this instance is its own concern, so a failure there leaves this link up.
+      await post(port, '/link-back', { name: 'ide', port: (await host.connect()).apiPort }).catch((err) =>
+        console.warn(`[instances] ${machine.name} did not link back: ${(err as Error).message}`),
+      );
       return port;
     });
     const held = getTasks().filter((t) => t.machine === machine.name);
@@ -60,18 +65,22 @@ async function handOverNow(machine: string, handed: Task[]): Promise<void> {
   await refreshPeer(machine);
 }
 
-async function sendPreferences(port: number): Promise<void> {
+function sendPreferences(port: number): Promise<void> {
   const config = loadConfig();
-  const res = await fetch(`http://127.0.0.1:${port}/preferences`, {
+  return post(port, '/preferences', {
+    permissionMode: config.permissionMode,
+    agentTeams: config.agentTeams,
+    managePermissions: config.managePermissions,
+    prompts: config.prompts,
+    remoteControlAtStartup: localClaudeValue('remoteControlAtStartup') === true,
+  });
+}
+
+async function post(port: number, route: string, body: unknown): Promise<void> {
+  const res = await fetch(`http://127.0.0.1:${port}${route}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      permissionMode: config.permissionMode,
-      agentTeams: config.agentTeams,
-      managePermissions: config.managePermissions,
-      prompts: config.prompts,
-      remoteControlAtStartup: localClaudeValue('remoteControlAtStartup') === true,
-    }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`preferences answered ${res.status}`);
+  if (!res.ok) throw new Error(`${route} answered ${res.status}`);
 }

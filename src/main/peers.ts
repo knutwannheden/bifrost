@@ -82,7 +82,7 @@ export function registerPeer(name: string, connect: () => Promise<number>): void
 
 export function peerTasks(): Task[] {
   return [...peers.values()].flatMap((peer) =>
-    peer.tasks.map((t) => ({ ...t, machine: peer.name, ...(peer.port === null ? { unreachable: true } : {}) })),
+    peer.tasks.map((t) => ({ ...tagged(peer, t), ...(peer.port === null ? { unreachable: true } : {}) })),
   );
 }
 
@@ -109,7 +109,7 @@ export async function routeCall(
     await connectPeer(peer.name);
     const result = await call(peer, channel, args);
     noteResult(peer, channel, args[0] as string, result);
-    return isTask(result) ? { ...result, machine: peer.name } : result;
+    return isTask(result) ? tagged(peer, result) : result;
   } catch (err) {
     const message = `${peer.name}: ${(err as Error).message}`;
     emit(IPC_STREAM.TOAST, message, 8000);
@@ -222,7 +222,7 @@ function relay(peer: Peer, event: { channel: EventChannel; args: unknown[] }): v
   if (channel === IPC_STREAM.TASK_CREATED || channel === IPC_STREAM.TASK_UPDATED) {
     const task = args[0] as Task;
     upsert(peer, task);
-    args = [{ ...task, machine: peer.name }];
+    args = [tagged(peer, task)];
   } else if (channel === IPC_STREAM.TASK_CLOSED) {
     const [id, archived] = args as [string, boolean];
     const task = peer.tasks.find((t) => t.id === id);
@@ -246,6 +246,11 @@ function noteResult(peer: Peer, channel: IpcChannel, id: string, result: unknown
     peer.tasks = peer.tasks.filter((t) => t.id !== id);
     writeCache(peer);
   } else if (isTask(result) && result.id === id) upsert(peer, result);
+}
+
+/** Names the machine a peer's task runs on. A task that names none runs on the peer's own. */
+function tagged(peer: Peer, task: Task): Task {
+  return { ...task, machine: task.machine ?? peer.name };
 }
 
 function upsert(peer: Peer, task: Task): void {

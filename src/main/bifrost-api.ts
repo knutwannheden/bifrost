@@ -25,7 +25,7 @@ import { getDiff } from './diff-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
-import { forwardTaskRoute, peerTasks } from './peers';
+import { connectPeer, forwardTaskRoute, peerTasks, registerPeer } from './peers';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
 import { isIdle, markActive, markIdle, sendPrompt as sendPromptToTask, workingTaskIds } from './prompt-sender';
@@ -72,11 +72,15 @@ function ringBell(key: string, name: string): boolean {
   return true;
 }
 
+/** A peer's tasks while it is reachable, so a tool lists what it can act on. */
+const reachablePeerTasks = () => peerTasks().filter((t) => !t.unreachable);
+
 /**
  * Check if a Claude session is still valid.
  * Claude encodes project paths by replacing `/` and `.` with `-` in ~/.claude/projects.
  * Session files are stored as {sessionId}.jsonl in the project directory.
  */
+
 export function isSessionStale(worktreePath: string, sessionId?: string): boolean {
   const encoded = worktreePath.replace(/[/.]/g, '-');
   const projectPath = path.join(os.homedir(), '.claude', 'projects', encoded);
@@ -348,6 +352,19 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    // The IDE's instance, linking to this one, names the port it is reached at from here.
+    case '/link-back': {
+      const { name, port } = body as { name?: string; port?: number };
+      if (!name || !port) {
+        errorResponse(res, 'name and port are required');
+        return;
+      }
+      registerPeer(name, async () => port);
+      connectPeer(name).catch((err) => console.warn(`[peers] ${name}: ${(err as Error).message}`));
+      jsonResponse(res, { ok: true });
+      return;
+    }
+
     // Tasks another instance hands this one. The sender forgets them once this answers.
     case '/import-tasks': {
       const { tasks: handed = [], repos = [] } = body as { tasks?: Task[]; repos?: Repo[] };
@@ -404,7 +421,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const listRepos = loadConfig().repos;
       const q = listQuery?.trim().toLowerCase();
       const rq = repoFilter?.trim().toLowerCase();
-      const matching = [...getTasks(), ...peerTasks()]
+      const matching = [...getTasks(), ...reachablePeerTasks()]
         .filter((t) => {
           if (filter === 'running') return t.status === 'running';
           if (filter !== 'all' && t.status === 'archived') return false;
@@ -789,7 +806,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       const lower = query.toLowerCase();
-      const all = [...getTasks(), ...peerTasks()];
+      const all = [...getTasks(), ...reachablePeerTasks()];
       // Most specific first, and a tier that matches more than one task is
       // reported rather than resolved: naming the wrong task to message is
       // worse than naming none. A directory is matched by containment, since
