@@ -248,6 +248,9 @@ function noteResult(peer: Peer, channel: IpcChannel, id: string, result: unknown
   } else if (isTask(result) && result.id === id) upsert(peer, result);
 }
 
+/** The name a machine's instance knows the IDE's by, which is also the machine value that means the IDE. */
+export const IDE = 'ide';
+
 /** Names the machine a peer's task runs on. A task that names none runs on the peer's own. */
 function tagged(peer: Peer, task: Task): Task {
   return { ...task, machine: task.machine ?? peer.name };

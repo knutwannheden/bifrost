@@ -1,6 +1,6 @@
 import type { Task } from '../shared/types.ts';
 import { loadConfig } from './config.ts';
-import { postToPeer, refreshPeer, registerPeer } from './peers.ts';
+import { IDE, postToPeer, refreshPeer, registerPeer } from './peers.ts';
 import { getRemoteHost, localClaudeValue, remoteClonePath } from './remote-host.ts';
 import { forgetTasks, getTasks } from './task-service.ts';
 
@@ -22,7 +22,7 @@ export function linkInstances(): void {
       const port = await host.ensureInstance();
       await sendPreferences(port);
       // The machine's view of this instance is its own concern, so a failure there leaves this link up.
-      await post(port, '/link-back', { name: 'ide', port: (await host.connect()).apiPort }).catch((err) =>
+      await post(port, '/link-back', { name: IDE, port: (await host.connect()).apiPort }).catch((err) =>
         console.warn(`[instances] ${machine.name} did not link back: ${(err as Error).message}`),
       );
       return port;

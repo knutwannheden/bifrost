@@ -25,7 +25,7 @@ import { getDiff } from './diff-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
-import { connectPeer, forwardTaskRoute, peerTasks, registerPeer } from './peers';
+import { connectPeer, forwardTaskRoute, IDE, peerTasks, postToPeer, registerPeer } from './peers';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
 import { isIdle, markActive, markIdle, sendPrompt as sendPromptToTask, workingTaskIds } from './prompt-sender';
@@ -461,7 +461,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/create-task': {
-      const { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId, machine } = body as {
+      const {
+        repoId,
+        repoPath,
+        worktreePath,
+        name,
+        branch,
+        branchName,
+        prompt,
+        createdByTaskId,
+        machine: asked,
+      } = body as {
         repoId?: string;
         repoPath?: string;
         worktreePath?: string;
@@ -480,7 +490,38 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       console.log(
         `[api] create-task: body keys=${Object.keys(body).join(',')}, name=${name}, async=${isAsync}, prompt=${prompt ? `${prompt.length} chars` : 'none'}`,
       );
+      const here = process.env.BIFROST_MACHINE;
+      const machine = asked === 'local' || asked === here || (!here && asked === IDE) ? undefined : asked;
       const params = { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId, machine };
+      // Only the IDE knows the machines, so a machine's instance has it create a task for anywhere else.
+      // It waits for the answer, so a failure is reported here, to whoever asked.
+      if (here && machine) {
+        const created = postToPeer(IDE, '/create-task', { ...body, async: false, callerContext: undefined }).then(
+          (task) => ({ ...task, machine: task.machine ?? IDE }),
+          (err: Error) => {
+            throw new Error(`${IDE}: ${err.message}`);
+          },
+        );
+        if (isAsync) {
+          jsonResponse(res, { ok: true, pending: true });
+          created.catch((e: Error) => {
+            emit(IPC_STREAM.TOAST, `Task creation failed: ${e.message}`, 5000);
+            reportCreateFailure(
+              params,
+              body.callerContext === 'console',
+              String(repoPath ?? worktreePath ?? repoId),
+              e.message,
+            );
+          });
+        } else {
+          try {
+            jsonResponse(res, await created);
+          } catch (e) {
+            errorResponse(res, (e as Error).message, 502);
+          }
+        }
+        return;
+      }
       // An async caller is answered before the work runs, so the arguments are
       // settled first and a bad one comes back as a failed request.
       let target: TaskTarget;

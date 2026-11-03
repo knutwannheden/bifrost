@@ -117,9 +117,37 @@ try {
   }
 
   {
+    const repo = path.join(a.tmp, 'repo');
+    fs.mkdirSync(repo);
+    execFileSync('sh', ['-c', 'git init -q && git commit -q --allow-empty -m init'], { cwd: repo });
+    const create = async (machine: string, repoPath: string) => {
+      const res = await post(perf.port, '/create-task', { machine, repoPath, name: `made-${machine}`, prompt: 'x' });
+      return { status: res.status, answer: (await res.json()) as Task & { error?: string } };
+    };
+    const made = await create('ide', repo);
+    const onIde = (await listed(ide.port)).find((t) => t.id === made.answer.id);
+    const stays = [await create('local', repo), await create('perf', repo)];
+    check(
+      'create_task on an instance goes to the IDE for "ide", and stays for "local" and its own name',
+      made.status === 200 &&
+        made.answer.machine === 'ide' &&
+        onIde !== undefined &&
+        !onIde.machine &&
+        stays.every((r) => r.status === 200 && !r.answer.machine),
+      show({ made, onIde, stays }),
+    );
+  }
+
+  {
     ide.proc.kill('SIGTERM');
     const left = await until(async () => !(await listed(perf.port)).some((t) => t.id === 'ta'), 5_000);
-    check('with the IDE away, an instance lists its own tasks', left, show(await listed(perf.port)));
+    const res = await post(perf.port, '/create-task', { machine: 'ide', repoPath: '/no/such/repo', prompt: 'x' });
+    const refused = ((await res.json()) as { error?: string }).error;
+    check(
+      'with the IDE away, an instance lists its own tasks, and a task for the IDE fails naming it',
+      left && res.status === 502 && !!refused?.startsWith('ide:'),
+      show({ tasks: await listed(perf.port), status: res.status, refused }),
+    );
   }
 } finally {
   for (const proc of processes) if (proc.exitCode === null) proc.kill('SIGKILL');
