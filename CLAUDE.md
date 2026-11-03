@@ -10,6 +10,7 @@ Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Cod
 
 - `npm start` — run in development mode (Electron Forge + Vite HMR)
 - `npm run lint` — Biome check (linting + formatting)
+- `npm run build:headless` — build a Bifrost instance with no window, run with `node .vite/headless/headless.js`
 - `npm run check:mirror` — verify a joining terminal replays a session's screen exactly once
 - `npm test` — vitest suite for `tools/postmortem`
 - `npm run package` — build packaged app
@@ -28,7 +29,7 @@ Standard Electron three-process split, all TypeScript:
 - **Preload** (`src/preload/preload.ts`): Bridges main↔renderer via `contextBridge`, exposing `window.bifrost` typed API
 - **Renderer** (`src/renderer/`): React 19 UI with Tailwind CSS
 
-Three separate Vite build targets configured in `forge.config.ts`.
+Three separate Vite build targets configured in `forge.config.ts`. A fourth, `vite.headless.config.mts`, builds `headless.ts` for plain Node. It runs an instance with no window, which `instance.ts` starts as it does for the IDE.
 
 Only `main.ts`, `ipc-handlers.ts`, `notification-service.ts` and `slack-service.ts` import Electron, and only they import each other. `biome.json` enforces this. Every other main-process module reaches the window through `event-sink.ts`. It raises an event there, and `main.ts` forwards each event to the window. The bell for a task that wants attention is an event too, which `notification-service.ts` plays.
 
