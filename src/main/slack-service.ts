@@ -3,7 +3,7 @@ import https from 'node:https';
 import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { loadConfig, saveConfig } from './config';
-import { getDb } from './db';
+import { getDb, transaction } from './db';
 
 // --- State persistence ---
 
@@ -22,7 +22,7 @@ function saveSlackState(state: SlackState): void {
     state.seenReactions = state.seenReactions.slice(-500);
   }
   const d = getDb();
-  const save = d.transaction(() => {
+  transaction(() => {
     const now = Date.now();
     d.prepare('DELETE FROM slack_seen_reactions').run();
     const stmt = d.prepare('INSERT INTO slack_seen_reactions (reaction_key, seen_at) VALUES (?, ?)');
@@ -30,7 +30,6 @@ function saveSlackState(state: SlackState): void {
       stmt.run(key, now);
     }
   });
-  save();
 }
 
 // --- Slack API helpers ---

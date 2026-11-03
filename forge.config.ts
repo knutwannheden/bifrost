@@ -13,7 +13,7 @@ import fs from 'node:fs';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: {
-      unpack: '**/{node-pty,node-pty/**,better-sqlite3,better-sqlite3/**,@parcel,@parcel/**}',
+      unpack: '**/{node-pty,node-pty/**,@parcel,@parcel/**}',
     },
     icon: './assets/icon',
     name: 'Bifrost',
@@ -50,7 +50,7 @@ const config: ForgeConfig = {
     },
     // Copy native modules and plugin source into the packaged app
     packageAfterCopy: async (_config, buildPath) => {
-      const nativeModules = ['node-pty', 'nan', 'node-addon-api', 'better-sqlite3', 'bindings', 'file-uri-to-path', '@parcel/watcher'];
+      const nativeModules = ['node-pty', 'nan', 'node-addon-api', '@parcel/watcher'];
       // @parcel/watcher resolves its prebuilt binary from a platform-specific
       // package (e.g. @parcel/watcher-darwin-arm64); copy whichever ones the
       // build host installed.

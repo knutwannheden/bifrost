@@ -1,5 +1,5 @@
 import type { Task, TaskCuration, TaskOutcome } from '../shared/types';
-import { getDb } from './db';
+import { getDb, transaction } from './db.ts';
 
 // biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
 type Row = Record<string, any>;
@@ -98,33 +98,32 @@ export function saveTurnBoundary(taskId: string, at: number): void {
 export function saveInterrupted(taskIds: string[], at: number | null): void {
   const d = getDb();
   const stmt = d.prepare('UPDATE tasks SET interrupted_at = ? WHERE id = ?');
-  d.transaction(() => {
+  transaction(() => {
     for (const id of taskIds) stmt.run(at, id);
-  })();
+  });
 }
 
 /** One transaction, since startup seeds every task at once. */
 export function saveTurnBoundaries(stamps: Array<[string, number]>): void {
   const d = getDb();
   const stmt = d.prepare('UPDATE tasks SET last_turn_boundary_at = ? WHERE id = ?');
-  d.transaction(() => {
+  transaction(() => {
     for (const [taskId, at] of stamps) stmt.run(at, taskId);
-  })();
+  });
 }
 
 export function loadTasks(): Task[] {
-  const rows = getDb().prepare<unknown[], Row>('SELECT * FROM tasks ORDER BY created_at').all();
+  const rows = getDb().prepare('SELECT * FROM tasks ORDER BY created_at').all();
   return rows.map(rowToTask);
 }
 
 export function saveTasks(tasks: Task[]): void {
   const d = getDb();
-  const save = d.transaction(() => {
+  transaction(() => {
     d.prepare('DELETE FROM tasks').run();
     const stmt = d.prepare(UPSERT_SQL);
     for (const t of tasks) {
       stmt.run(...taskParams(t));
     }
   });
-  save();
 }

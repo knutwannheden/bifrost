@@ -2,14 +2,14 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import Database from 'better-sqlite3';
-import { loadConfig } from './config';
-import { slugify } from './worktree-manager';
+import { DatabaseSync } from 'node:sqlite';
+import { loadConfig } from './config.ts';
+import { slugify } from './worktree-manager.ts';
 
 const BIFROST_DIR = path.join(os.homedir(), '.bifrost');
 const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
-let db: Database.Database | null = null;
+let db: DatabaseSync | null = null;
 
 const CURRENT_VERSION = 8;
 
@@ -121,7 +121,7 @@ const BACKFILL_TIME_BUDGET_MS = 30_000;
  * for whatever is still unrecovered, by matching the task name against the
  * repo's local branches. Both passes share one time budget.
  */
-function backfillTaskBranches(d: Database.Database): void {
+function backfillTaskBranches(d: DatabaseSync): void {
   const deadline = Date.now() + BACKFILL_TIME_BUDGET_MS;
   const fromHead = backfillFromWorktreeHead(d, deadline);
   const fromName = backfillFromTaskName(d, deadline);
@@ -139,14 +139,12 @@ function backfillTaskBranches(d: Database.Database): void {
  * is not a fact about the task and is left alone.
  */
 function backfillFromWorktreeHead(
-  d: Database.Database,
+  d: DatabaseSync,
   deadline: number,
 ): { recovered: number; processed: number; total: number } {
   const rows = d
-    .prepare<unknown[], { id: string; worktree_path: string; in_place: number }>(
-      'SELECT id, worktree_path, in_place FROM tasks WHERE worktree_path IS NOT NULL',
-    )
-    .all();
+    .prepare('SELECT id, worktree_path, in_place FROM tasks WHERE worktree_path IS NOT NULL')
+    .all() as Array<{ id: string; worktree_path: string; in_place: number }>;
   const update = d.prepare('UPDATE tasks SET branch = ? WHERE id = ?');
   let recovered = 0;
   let processed = 0;
@@ -189,12 +187,12 @@ function backfillFromWorktreeHead(
  * branch with that name exists — a shared slug (`resolveAvailableBranchName`'s
  * `-2` suffixing) could belong to either task, so it is left NULL.
  */
-function backfillFromTaskName(d: Database.Database, deadline: number): { recovered: number; total: number } {
-  const rows = d
-    .prepare<unknown[], { id: string; repo_id: string; name: string }>(
-      'SELECT id, repo_id, name FROM tasks WHERE branch IS NULL',
-    )
-    .all();
+function backfillFromTaskName(d: DatabaseSync, deadline: number): { recovered: number; total: number } {
+  const rows = d.prepare('SELECT id, repo_id, name FROM tasks WHERE branch IS NULL').all() as Array<{
+    id: string;
+    repo_id: string;
+    name: string;
+  }>;
   if (rows.length === 0) return { recovered: 0, total: 0 };
 
   const repoPaths = new Map(loadConfig().repos.map((r) => [r.id, r.path]));
@@ -209,11 +207,10 @@ function backfillFromTaskName(d: Database.Database, deadline: number): { recover
   // pass — branch names are scoped per repo, so the same name claimed in a different
   // repo is not a conflict.
   const claimedByRepo = new Map<string, Set<string>>();
-  for (const r of d
-    .prepare<unknown[], { repo_id: string; branch: string }>(
-      'SELECT repo_id, branch FROM tasks WHERE branch IS NOT NULL',
-    )
-    .all()) {
+  for (const r of d.prepare('SELECT repo_id, branch FROM tasks WHERE branch IS NOT NULL').all() as Array<{
+    repo_id: string;
+    branch: string;
+  }>) {
     const bucket = claimedByRepo.get(r.repo_id);
     if (bucket) bucket.add(r.branch);
     else claimedByRepo.set(r.repo_id, new Set([r.branch]));
@@ -274,7 +271,7 @@ export function openDatabase(): void {
   }
 
   try {
-    db = new Database(DB_PATH);
+    db = new DatabaseSync(DB_PATH);
   } catch (err) {
     console.error('[db] Failed to open database, attempting recovery:', err);
     const timestamp = Date.now();
@@ -285,11 +282,11 @@ export function openDatabase(): void {
         fs.renameSync(file, `${corruptPath}${ext}`);
       }
     }
-    db = new Database(DB_PATH);
+    db = new DatabaseSync(DB_PATH);
   }
 
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA synchronous = NORMAL');
 
   runMigrations();
 }
@@ -301,7 +298,21 @@ export function closeDatabase(): void {
   }
 }
 
-export function getDb(): Database.Database {
+/** Runs fn in one transaction, which a throw rolls back. */
+export function transaction<T>(fn: () => T): T {
+  const d = getDb();
+  d.exec('BEGIN');
+  try {
+    const result = fn();
+    d.exec('COMMIT');
+    return result;
+  } catch (err) {
+    d.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function getDb(): DatabaseSync {
   if (!db) throw new Error('Database not open — call openDatabase() first');
   return db;
 }
@@ -330,42 +341,42 @@ function runMigrations(): void {
       // Atomic: an interrupted run rolls back cleanly, so schema_version always
       // matches whether base_branch/branch exist and a retry never trips a
       // duplicate-column error.
-      d.transaction(() => {
+      transaction(() => {
         d.exec('ALTER TABLE tasks RENAME COLUMN branch TO base_branch');
         d.exec('ALTER TABLE tasks ADD COLUMN branch TEXT');
         d.prepare('UPDATE schema_version SET version = ?').run(3);
-      })();
+      });
       // branch is optional and updates are idempotent, so running this partially
       // or more than once is harmless.
       backfillTaskBranches(d);
       console.log('[db] Migration v3: split tasks.branch into base_branch + branch');
     }
     if (row.version < 4) {
-      d.transaction(() => {
+      transaction(() => {
         d.exec('ALTER TABLE tasks ADD COLUMN created_by_task_id TEXT');
         d.prepare('UPDATE schema_version SET version = ?').run(4);
-      })();
+      });
       console.log('[db] Migration v4: added tasks.created_by_task_id');
     }
     if (row.version < 5) {
-      d.transaction(() => {
+      transaction(() => {
         d.exec('ALTER TABLE tasks ADD COLUMN last_turn_boundary_at INTEGER');
         d.prepare('UPDATE schema_version SET version = ?').run(5);
-      })();
+      });
       console.log('[db] Migration v5: added tasks.last_turn_boundary_at');
     }
     if (row.version < 6) {
-      d.transaction(() => {
+      transaction(() => {
         d.exec('ALTER TABLE tasks ADD COLUMN interrupted_at INTEGER');
         d.prepare('UPDATE schema_version SET version = ?').run(6);
-      })();
+      });
       console.log('[db] Migration v6: added tasks.interrupted_at');
     }
     if (row.version < 8) {
-      d.transaction(() => {
+      transaction(() => {
         d.exec('ALTER TABLE tasks ADD COLUMN machine TEXT');
         d.prepare('UPDATE schema_version SET version = ?').run(8);
-      })();
+      });
       console.log('[db] Migration v8: added tasks.machine');
     }
   }
