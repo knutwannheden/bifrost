@@ -5,8 +5,8 @@ import { IPC_STREAM } from '../shared/ipc-channels';
 import type { DiskReclaimResult, DiskReclaimScan, Repo, Task } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { type OwningTask, runGit, type ScanRepo, scanRepos, sizeKb, stillReclaimable } from './disk-reclaim-scan';
-import { archiveTaskCore, getTasks } from './ipc-handlers';
 import { hasSession } from './session-manager';
+import { archiveTaskCore, getTasks } from './task-service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** How long the window has to have been away for this to read as a fresh start. */

@@ -56,7 +56,8 @@
         "src/main/console-service.ts",
         "src/main/activity-watcher.ts",
         "src/main/claude-watcher.ts",
-        "src/main/change-feed-service.ts"
+        "src/main/change-feed-service.ts",
+        "src/main/task-service.ts"
       ],
       "linter": {
         "rules": {

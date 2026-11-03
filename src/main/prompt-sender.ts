@@ -2,8 +2,8 @@ import type { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
-import { getTask, isPendingRestore, restoreTaskSession } from './ipc-handlers';
 import { hasSession, waitForSessionReady, writeToSession } from './session-manager';
+import { getTask, isPendingRestore, restoreTaskSession } from './task-service';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
 

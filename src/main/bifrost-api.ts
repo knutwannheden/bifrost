@@ -23,24 +23,7 @@ import { relayMessage } from './claude-oneshot';
 import { loadConfig, saveConfig } from './config';
 import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
-import {
-  archiveTaskCore,
-  broadcastRepos,
-  createTaskCore,
-  getRemoteDiff,
-  getTask,
-  getTasks,
-  isPendingRestore,
-  isRemoteWorktreeDirty,
-  markTurnBoundary,
-  reopenTaskCore,
-  resolveTaskTarget,
-  restoreTaskSession,
-  stopTaskSession,
-  type TaskTarget,
-  transferTaskCore,
-  updateTask,
-} from './ipc-handlers';
+import { emit } from './event-sink';
 import { deleteNote, listNotes } from './note-store';
 import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
@@ -64,6 +47,23 @@ import {
   sessionOutputAt,
   waitForSessionReady,
 } from './session-manager';
+import {
+  archiveTaskCore,
+  createTaskCore,
+  getRemoteDiff,
+  getTask,
+  getTasks,
+  isPendingRestore,
+  isRemoteWorktreeDirty,
+  markTurnBoundary,
+  reopenTaskCore,
+  resolveTaskTarget,
+  restoreTaskSession,
+  stopTaskSession,
+  type TaskTarget,
+  transferTaskCore,
+  updateTask,
+} from './task-service';
 import { writeLocalSessionId } from './tmux-session';
 
 let mainWindow: BrowserWindow | null = null;
@@ -327,7 +327,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         const repo = await addRepo({ type: 'local', path: repoPath });
         config.repos.push(repo);
         saveConfig(config);
-        broadcastRepos(mainWindow, config.repos);
+        emit(IPC_STREAM.REPOS_CHANGED, config.repos);
         jsonResponse(res, repo);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
@@ -879,7 +879,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       try {
-        jsonResponse(res, await transferTaskCore(transferId, machine, mainWindow));
+        jsonResponse(res, await transferTaskCore(transferId, machine));
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
       }
