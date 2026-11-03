@@ -63,6 +63,12 @@ const peers = new Map<string, Peer>();
 
 /** connect resolves to a loopback port where that instance's API answers. */
 export function registerPeer(name: string, connect: () => Promise<number>): void {
+  // Registering again, as after a settings change, keeps a link that is up.
+  const known = peers.get(name);
+  if (known) {
+    known.connect = connect;
+    return;
+  }
   peers.set(name, {
     name,
     connect,

@@ -249,13 +249,14 @@ const PLUGIN_VERSION_PY = `import json; print(json.load(open('${REMOTE_PLUGIN_DI
  * machine's theme, since its first screen would hold a session's prompt back.
  * Prints HOME, MISSING, LOGGED_IN and PLUGIN_VERSION.
  */
-export function prepareScript(opts: { apiPort: number; theme?: string }): string {
+export function prepareScript(opts: { apiPort: number; theme?: string; instance?: boolean }): string {
   const onboarding = { hasCompletedOnboarding: true, ...(opts.theme ? { theme: opts.theme } : {}) };
   return [
     'set -e',
     'cd "$HOME"',
     `mkdir -p ${REMOTE_DIR}/sessions`,
-    `printf '%s\\n' ${opts.apiPort} > ${REMOTE_DIR}/api-port`,
+    // On a machine that runs its own instance, api-port is that instance's, and the IDE's API is the peer it links back to.
+    `printf '%s\\n' ${opts.apiPort} > ${REMOTE_DIR}/${opts.instance ? 'ide-port' : 'api-port'}`,
     `printf '%s' ${shQuote(tmuxConf())} > ${REMOTE_DIR}/tmux.conf`,
     `version=$(claude --version 2>/dev/null | cut -d' ' -f1)`,
     `python3 -c ${shQuote(ONBOARDING_PY)} ${shQuote(JSON.stringify(onboarding))} "$version" || true`,
@@ -605,7 +606,11 @@ export class RemoteHost {
     if (!forwarded) throw new Error(`${this.machine.name} did not forward the Bifrost API`);
 
     const theme = localClaudeValue('theme');
-    const prepare = prepareScript({ apiPort: forwarded, theme: typeof theme === 'string' ? theme : undefined });
+    const prepare = prepareScript({
+      apiPort: forwarded,
+      theme: typeof theme === 'string' ? theme : undefined,
+      instance: this.machine.instance === true,
+    });
     const out = parseScriptOutput(await this.run(prepare, EXEC_TIMEOUT_MS));
     if (!out.HOME) throw new Error(`${this.machine.name} could not be prepared`);
     const pluginDir = await this.syncPlugin(out.PLUGIN_VERSION, out.HOME);

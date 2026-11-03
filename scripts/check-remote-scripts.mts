@@ -319,6 +319,19 @@ const prepared = parseScriptOutput(runRemote(home3, prepareScript({ apiPort: 436
   );
 }
 
+{
+  const home4 = path.join(root, 'home4');
+  fs.mkdirSync(home4);
+  runRemote(home4, prepareScript({ apiPort: 43670, instance: true }));
+  const ide = path.join(home4, '.bifrost', 'ide-port');
+  check(
+    "preparing a machine that runs its own instance leaves api-port to it, and says where the IDE's API is",
+    fs.existsSync(ide) &&
+      fs.readFileSync(ide, 'utf-8').trim() === '43670' &&
+      !fs.existsSync(path.join(home4, '.bifrost', 'api-port')),
+  );
+}
+
 let hasTmux = true;
 try {
   execFileSync('tmux', ['-V'], { stdio: 'ignore' });

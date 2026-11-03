@@ -17,6 +17,7 @@ import { lastConversationAt } from './claude-watcher.ts';
 import { loadConfig, saveConfig } from './config.ts';
 import { resolveBaseRef } from './diff-service.ts';
 import { emit } from './event-sink.ts';
+import { handOver, isInstanceMachine } from './instance-link.ts';
 import { cancelTaskRequests, setWorktreePathResolver } from './permission-manager.ts';
 import {
   archiveScript,
@@ -466,7 +467,11 @@ export async function createTaskCore(params: CreateTaskParams, target?: TaskTarg
   }
 
   const { repo, adopted } = target ?? (await resolveTaskTarget(params));
-  if (params.machine) return createRemoteTask(params, repo, params.machine);
+  if (params.machine) {
+    const task = await createRemoteTask(params, repo, params.machine);
+    if (isInstanceMachine(params.machine)) await handOverOrKeep(params.machine, task);
+    return task;
+  }
 
   // An adopted worktree's branch says what the work is.
   const name = params.branchName || params.name || adopted?.branch || generateTaskName();
@@ -667,6 +672,11 @@ async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: s
 
 /** Writes the scripts the task's session starts from, with the settings as they are now. */
 async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo, prompt?: string): Promise<void> {
+  // Kept on the task, since the instance it may be handed to learns it from the record.
+  if (!task.sessionId) {
+    task.sessionId = randomUUID();
+    if (tasks.some((t) => t.id === task.id)) updateTask(task.id, { sessionId: task.sessionId });
+  }
   const config = loadConfig();
   const launch = {
     taskId: task.id,
@@ -679,7 +689,7 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
       home: info.home,
       taskId: task.id,
       worktreePath: task.worktreePath,
-      sessionId: task.sessionId ?? randomUUID(),
+      sessionId: task.sessionId,
       claudeArgs: [
         ...claudeArgs(
           launch,
@@ -810,6 +820,7 @@ export async function transferTaskCore(taskId: string, machine: string): Promise
   });
   startRemoteSession(updated);
   emit(IPC_STREAM.TASK_UPDATED, updated);
+  if (isInstanceMachine(machine)) await handOverOrKeep(machine, updated);
 
   const { stdout: untracked } = await execFile('git', ['ls-files', '--others', '--exclude-standard'], {
     cwd: task.worktreePath,
@@ -1016,6 +1027,13 @@ export function forgetTasks(ids: string[]): void {
   tasks = tasks.filter((t) => !gone.has(t.id));
   for (const id of ids) pendingRestore.delete(id);
   saveTasks(tasks);
+}
+
+/** A task that could not be handed over stays here, working as before, and the next start hands it over. */
+async function handOverOrKeep(machine: string, task: Task): Promise<void> {
+  await handOver(machine, [task]).catch((err) =>
+    console.warn(`[instances] ${task.id} stays here for now: ${(err as Error).message}`),
+  );
 }
 
 export function reorderTasks(taskIds: string[]): void {

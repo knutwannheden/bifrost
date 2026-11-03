@@ -10,6 +10,7 @@ import { loadConfig, mergeRendererConfig, saveConfig } from './config';
 import { store as storeContext } from './context-store';
 import { noteWindowBlur, noteWindowFocus } from './disk-reclaim-service';
 import { openFileInIde, openInIde } from './ide-launcher';
+import { linkInstances } from './instance-link';
 import { calls } from './ipc-calls';
 import { peerTasks, routeCall } from './peers';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
@@ -24,6 +25,8 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => {
     saveConfig(mergeRendererConfig(config, loadConfig()));
     restartPolling(mainWindow);
+    // Turning "Run Bifrost there" on is when a machine's tasks move to its instance.
+    linkInstances();
   });
 
   // Shell
