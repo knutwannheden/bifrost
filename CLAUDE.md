@@ -37,7 +37,7 @@ Only `main.ts`, `ipc-handlers.ts`, `notification-service.ts` and `slack-service.
 All IPC is defined in `src/shared/ipc-channels.ts`:
 
 - `IPC` object: request-response channels (`ipcMain.handle` / `ipcRenderer.invoke`)
-- `IPC_STREAM` object: event channels (`webContents.send` / `ipcRenderer.on`)
+- `IPC_STREAM` object: event channels (`emit` from `event-sink.ts` / `ipcRenderer.on`)
 - `BifrostAPI` interface: fully typed API that the preload script implements and exposes as `window.bifrost`
 
 To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add the method signature to `BifrostAPI`, implement in `src/preload/preload.ts`, and register the handler in `src/main/ipc-handlers.ts`.
