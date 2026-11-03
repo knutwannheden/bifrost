@@ -12,6 +12,8 @@ const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 let db: DatabaseSync | null = null;
 
 const CURRENT_VERSION = 8;
+/** How long a write waits for a lock another connection holds, such as a sqlite3 shell's. */
+const BUSY_TIMEOUT_MS = 5_000;
 
 // SQLite schema — TEXT for strings, INTEGER for booleans/timestamps, JSON text for arrays
 const SCHEMA_SQL = `
@@ -271,7 +273,7 @@ export function openDatabase(): void {
   }
 
   try {
-    db = new DatabaseSync(DB_PATH);
+    db = new DatabaseSync(DB_PATH, { timeout: BUSY_TIMEOUT_MS });
   } catch (err) {
     console.error('[db] Failed to open database, attempting recovery:', err);
     const timestamp = Date.now();
@@ -282,7 +284,7 @@ export function openDatabase(): void {
         fs.renameSync(file, `${corruptPath}${ext}`);
       }
     }
-    db = new DatabaseSync(DB_PATH);
+    db = new DatabaseSync(DB_PATH, { timeout: BUSY_TIMEOUT_MS });
   }
 
   db.exec('PRAGMA journal_mode = WAL');
