@@ -41,7 +41,7 @@ All IPC is defined in `src/shared/ipc-channels.ts`:
 - `IPC_STREAM` object: event channels (`emit` from `event-sink.ts` / `ipcRenderer.on`)
 - `BifrostAPI` interface: fully typed API that the preload script implements and exposes as `window.bifrost`
 
-To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add the method signature to `BifrostAPI`, implement in `src/preload/preload.ts`, and register the handler in `src/main/ipc-handlers.ts`.
+To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add the method signature to `BifrostAPI`, implement in `src/preload/preload.ts`, and add the handler to `calls` in `src/main/ipc-calls.ts`. A handler that needs the window or Electron goes in `src/main/ipc-handlers.ts` instead.
 
 ### Renderer State
 
@@ -57,7 +57,8 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `session-mirror.ts` | Headless xterm per session; shapes the replay for the terminal that attaches |
 | `instance.ts` | Starts and stops the services a Bifrost instance runs, with or without a window |
 | `event-sink.ts` | Hands each event a service raises to everyone listening, such as the window |
-| `ipc-handlers.ts` | Registers the IPC handlers |
+| `ipc-calls.ts` | The IPC calls that need no window, by channel, which another instance can run too |
+| `ipc-handlers.ts` | Registers the IPC calls, and the handlers that need the window |
 | `task-service.ts` | The task list and the operations on tasks that the IPC handlers, the HTTP API and the background services share |
 | `activity-watcher.ts` | Watches worktrees for commits and Claude JSONL events |
 | `claude-watcher.ts` | Parses Claude JSONL session files for token usage, turn boundaries, and tool attribution |

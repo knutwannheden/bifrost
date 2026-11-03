@@ -162,6 +162,8 @@ export const IPC = {
   DISK_RECLAIM_APPLY: 'disk-reclaim:apply',
 } as const;
 
+export type IpcChannel = (typeof IPC)[keyof typeof IPC];
+
 // Streaming channels (send/on)
 export const IPC_STREAM = {
   SESSION_DATA: 'session:data',
