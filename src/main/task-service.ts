@@ -394,8 +394,9 @@ async function createMultiRepoTask(params: CreateTaskParams): Promise<Task> {
  */
 function creatorCoordinates(createdByTaskId: string | undefined, taskId: string, machine?: string): string {
   if (!createdByTaskId) return '';
-  // SendMessage reaches only sessions on the machine it is sent from.
-  if (tasks.find((t) => t.id === createdByTaskId)?.machine !== machine) return '';
+  // SendMessage reaches only sessions on the machine it is sent from, and a creator held by another instance runs elsewhere.
+  const creator = tasks.find((t) => t.id === createdByTaskId);
+  if (!creator || creator.machine !== machine) return '';
   const sessionName = getSessionName(createdByTaskId);
   if (!sessionName) return '';
   return (

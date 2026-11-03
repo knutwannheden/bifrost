@@ -327,7 +327,9 @@ server.registerTool(
         ),
     },
   },
-  async ({ name, repo, worktree, machine, prompt }) => {
+  async ({ name, repo, worktree, machine: asked, prompt }) => {
+    // The API this server reaches may be the IDE's, which cannot tell where "local" is.
+    const machine = asked === 'local' ? MACHINE || undefined : asked;
     let repoId;
     let repoPath;
 

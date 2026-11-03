@@ -48,6 +48,7 @@ const side = (name: string) => {
 };
 const a = side('a');
 const b = side('b');
+const c = side('c');
 
 // A, as the IDE, holds a task here and one it runs on another machine.
 process.env.HOME = a.home;
@@ -95,6 +96,7 @@ const listed = async (port: string): Promise<Task[]> =>
 try {
   const ide = await start(a);
   const perf = await start(b, 'perf');
+  const repo = path.join(a.tmp, 'repo');
 
   {
     // The IDE links to the machine's instance as it always does, and the machine links back.
@@ -117,30 +119,55 @@ try {
   }
 
   {
-    const repo = path.join(a.tmp, 'repo');
     fs.mkdirSync(repo);
     execFileSync('sh', ['-c', 'git init -q && git commit -q --allow-empty -m init'], { cwd: repo });
-    const create = async (machine: string, repoPath: string) => {
-      const res = await post(perf.port, '/create-task', { machine, repoPath, name: `made-${machine}`, prompt: 'x' });
+    const create = async (machine: string, repoPath: string, extra: object = {}) => {
+      const body = { machine, repoPath, name: `made-${machine}`, prompt: 'x', ...extra };
+      const res = await post(perf.port, '/create-task', body);
       return { status: res.status, answer: (await res.json()) as Task & { error?: string } };
     };
-    const made = await create('ide', repo);
+    // The creator has a session name on the IDE without being one of its tasks, as a perf task with an open tab does.
+    await post(ide.port, '/call', { channel: IPC.CONSOLE_SESSION, args: [] });
+    const made = await create('ide', repo, { createdByTaskId: 'console' });
     const onIde = (await listed(ide.port)).find((t) => t.id === made.answer.id);
+    const sessionDir = path.join(a.home, '.bifrost', 'sessions', String(made.answer.id));
+    const promptFile = () =>
+      ['prompt', 'prompt.sent'].map((f) => path.join(sessionDir, f)).find((f) => fs.existsSync(f));
+    await until(async () => promptFile() !== undefined, 5_000);
+    const sentPrompt = fs.readFileSync(promptFile() ?? '/dev/null', 'utf8');
     const stays = [await create('local', repo), await create('perf', repo)];
     check(
-      'create_task on an instance goes to the IDE for "ide", and stays for "local" and its own name',
+      'create_task on an instance goes to the IDE for "ide", which does not offer the creator as reachable, and stays for "local" and its own name',
       made.status === 200 &&
         made.answer.machine === 'ide' &&
         onIde !== undefined &&
+        sentPrompt.startsWith('x') &&
+        !sentPrompt.includes('SendMessage') &&
         !onIde.machine &&
         stays.every((r) => r.status === 200 && !r.answer.machine),
-      show({ made, onIde, stays }),
+      show({ made, onIde, sentPrompt, stays }),
+    );
+  }
+
+  const ide2 = await start(c);
+  {
+    // The IDE reconnects on a new forward while perf's link on the old one still looks up, as after the laptop slept.
+    const res = await post(ide2.port, '/create-task', { repoPath: repo, name: 'on-ide2', prompt: 'x' });
+    const id2 = ((await res.json()) as Task).id;
+    await post(perf.port, '/link-back', { name: 'ide', port: Number(ide2.port) });
+    const moved = await until(async () => (await listed(perf.port)).some((t) => t.id === id2), 5_000);
+    const there = await listed(perf.port);
+    check(
+      'a link back on a new port replaces the link that is up',
+      moved && !there.some((t) => t.id === 'ta'),
+      show(there.map((t) => [t.id, t.machine])),
     );
   }
 
   {
     ide.proc.kill('SIGTERM');
-    const left = await until(async () => !(await listed(perf.port)).some((t) => t.id === 'ta'), 5_000);
+    ide2.proc.kill('SIGTERM');
+    const left = await until(async () => (await listed(perf.port)).every((t) => t.machine === 'perf'), 5_000);
     const res = await post(perf.port, '/create-task', { machine: 'ide', repoPath: '/no/such/repo', prompt: 'x' });
     const refused = ((await res.json()) as { error?: string }).error;
     check(

@@ -25,7 +25,7 @@ import { getDiff } from './diff-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
-import { connectPeer, forwardTaskRoute, IDE, peerTasks, postToPeer, registerPeer } from './peers';
+import { connectPeer, disconnectPeer, forwardTaskRoute, IDE, peerTasks, postToPeer, registerPeer } from './peers';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
 import { isIdle, markActive, markIdle, sendPrompt as sendPromptToTask, workingTaskIds } from './prompt-sender';
@@ -80,7 +80,6 @@ const reachablePeerTasks = () => peerTasks().filter((t) => !t.unreachable);
  * Claude encodes project paths by replacing `/` and `.` with `-` in ~/.claude/projects.
  * Session files are stored as {sessionId}.jsonl in the project directory.
  */
-
 export function isSessionStale(worktreePath: string, sessionId?: string): boolean {
   const encoded = worktreePath.replace(/[/.]/g, '-');
   const projectPath = path.join(os.homedir(), '.claude', 'projects', encoded);
@@ -360,6 +359,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       registerPeer(name, async () => port);
+      // The IDE links back each time it connects, so a link on an earlier port is stale even while it looks up.
+      disconnectPeer(name);
       connectPeer(name).catch((err) => console.warn(`[peers] ${name}: ${(err as Error).message}`));
       jsonResponse(res, { ok: true });
       return;

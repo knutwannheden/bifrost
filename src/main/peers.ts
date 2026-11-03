@@ -156,12 +156,17 @@ export async function refreshPeer(name: string): Promise<void> {
   if (peer) await listTasks(peer);
 }
 
+/** Ends the link to the peer, which its next need opens again. */
+export function disconnectPeer(name: string): void {
+  const peer = peers.get(name);
+  if (!peer) return;
+  peer.stream?.abort();
+  peer.stream = null;
+  peer.port = null;
+}
+
 export function closePeers(): void {
-  for (const peer of peers.values()) {
-    peer.stream?.abort();
-    peer.stream = null;
-    peer.port = null;
-  }
+  for (const name of peers.keys()) disconnectPeer(name);
 }
 
 function ownerOf(channel: IpcChannel, args: unknown[]): Peer | undefined {
