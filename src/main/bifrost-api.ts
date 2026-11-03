@@ -45,6 +45,7 @@ import {
   getRemoteDiff,
   getTask,
   getTasks,
+  importTasks,
   isPendingRestore,
   isRemoteWorktreeDirty,
   markTurnBoundary,
@@ -317,6 +318,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       saveConfig(config as unknown as BifrostConfig);
       jsonResponse(res, { ok: true });
+      return;
+    }
+
+    // Tasks another instance hands this one. The sender forgets them once this answers.
+    case '/import-tasks': {
+      const { tasks: handed = [], repos = [] } = body as { tasks?: Task[]; repos?: Repo[] };
+      jsonResponse(res, { ids: importTasks(handed, repos) });
       return;
     }
 

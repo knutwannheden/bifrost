@@ -974,6 +974,50 @@ export function restoreTasks(): void {
   }
 }
 
+/**
+ * Takes over tasks another instance hands this one, keyed by id, so a repeated
+ * handover finds them already here. A running task joins its session when that
+ * still runs, and otherwise waits for its tab, as after a restart.
+ */
+export function importTasks(handed: Task[], repos: Repo[]): string[] {
+  const config = loadConfig();
+  const byId = new Map(config.repos.map((r) => [r.id, r]));
+  for (const repo of repos) byId.set(repo.id, { ...byId.get(repo.id), ...repo });
+  saveConfig({ ...config, repos: [...byId.values()] });
+
+  for (const t of handed) {
+    const task: Task = { ...t, machine: undefined, unreachable: undefined };
+    const at = tasks.findIndex((x) => x.id === task.id);
+    if (at >= 0) tasks[at] = task;
+    else tasks.push(task);
+  }
+  saveTasks(tasks);
+
+  const running = runningLocalSessions();
+  for (const task of handed) {
+    if (task.status !== 'running' || hasSession(task.id)) continue;
+    if (!running.has(task.id)) {
+      pendingRestore.add(task.id);
+      continue;
+    }
+    try {
+      restoreTaskSession(task.id);
+    } catch (err) {
+      console.error(`[tasks] Failed to join handed-over task ${task.id}:`, err);
+      updateTask(task.id, { status: 'error' });
+    }
+  }
+  return handed.map((t) => t.id);
+}
+
+/** Drops tasks that another instance now owns, leaving their worktrees and sessions as they are. */
+export function forgetTasks(ids: string[]): void {
+  const gone = new Set(ids);
+  tasks = tasks.filter((t) => !gone.has(t.id));
+  for (const id of ids) pendingRestore.delete(id);
+  saveTasks(tasks);
+}
+
 export function reorderTasks(taskIds: string[]): void {
   const idSet = new Set(taskIds);
   const reordered = taskIds.map((id) => tasks.find((t) => t.id === id)!).filter(Boolean);

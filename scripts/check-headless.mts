@@ -42,7 +42,7 @@ const tmp = path.join(root, 'tmp');
 for (const dir of [home, stubs, tmp]) fs.mkdirSync(dir);
 fs.writeFileSync(path.join(stubs, 'claude'), '#!/bin/sh\nprintf "stub\\n"\nexec cat\n', { mode: 0o755 });
 // The instance's tmp is its own, since starting the change feed empties a directory there.
-const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, TMPDIR: tmp, TMUX_TMPDIR: root };
+const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, TMPDIR: tmp, TMUX_TMPDIR: root, BIFROST_MACHINE: 'perf' };
 env.PATH = `${stubs}:${process.env.PATH}`;
 delete env.CLAUDE_CONFIG_DIR;
 delete env.TMUX;
@@ -177,6 +177,35 @@ try {
       'with nobody listening, an approval falls back to Claude at once',
       show(answer) === '{}',
       show({ status: asked?.status, answer }),
+    );
+  }
+
+  {
+    execFileSync('tmux', ['-S', socket, 'new-session', '-d', '-s', 't2', 'sleep 60']);
+    const t2: Task = {
+      id: 't2',
+      name: 't2',
+      repoId: 'r',
+      baseBranch: 'main',
+      worktreePath: tmp,
+      status: 'running',
+      hasUnread: false,
+      createdAt: 2,
+      machine: 'perf',
+    };
+    const handed = { tasks: [t2], repos: [{ id: 'r', name: 'r', path: tmp, defaultBranch: 'main' }] };
+    const first = await post('/import-tasks', handed);
+    const ids = first.status === 200 ? ((await first.json()) as { ids: string[] }).ids : undefined;
+    await post('/import-tasks', handed);
+    const listed = (await (await post('/list-tasks', { status: 'all' })).json()) as {
+      tasks: Array<{ id: string; machine?: string }>;
+    };
+    const rows = listed.tasks.filter((t) => t.id === 't2');
+    const woken = (await (await post('/wake-task', { taskId: 't2' })).json()) as { alreadyAwake?: boolean };
+    check(
+      'an instance takes over a task, once, and joins its running session',
+      show(ids) === '["t2"]' && rows.length === 1 && rows[0].machine === 'perf' && woken.alreadyAwake === true,
+      show({ status: first.status, ids, rows, woken }),
     );
   }
 
