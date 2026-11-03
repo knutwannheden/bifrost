@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_CONSOLE_PROMPT } from '../shared/default-prompts.ts';
 import { loadConfig } from './config.ts';
+import { machineSession } from './remote-host.ts';
 import { attachLocalSession, hasSession, killSession } from './session-manager.ts';
 import { writeLocalSession } from './tmux-session.ts';
 
@@ -32,14 +33,21 @@ function writeInstructions(): void {
 function spawn(): void {
   writeInstructions();
 
+  const machine = machineSession('skip-permissions', loadConfig().remoteControlAtStartup === true);
   // A console still running in tmux is joined, and a new one starts under a fresh session id.
   writeLocalSession({
     home: os.homedir(),
     taskId: CONSOLE_SESSION_ID,
     worktreePath: CONSOLE_DIR,
     sessionId: randomUUID(),
-    claudeArgs: ['--name', CONSOLE_NAME, '--dangerously-skip-permissions'],
-    env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: CONSOLE_NAME },
+    claudeArgs: [
+      '--name',
+      CONSOLE_NAME,
+      '--dangerously-skip-permissions',
+      ...(Object.keys(machine.settings).length ? ['--settings', JSON.stringify(machine.settings)] : []),
+      ...machine.args,
+    ],
+    env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: CONSOLE_NAME, ...machine.env },
   });
   attachLocalSession(CONSOLE_SESSION_ID, {
     name: CONSOLE_NAME,

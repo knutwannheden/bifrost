@@ -23,6 +23,7 @@ import {
   diffScript,
   getRemoteHost,
   localClaudeValue,
+  machineSession,
   parseScriptOutput,
   type RemoteHost,
   type RemoteInfo,
@@ -577,13 +578,14 @@ function startLocalSession(task: Task, prompt?: string): void {
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
   };
+  const machine = machineSession(config.permissionMode, config.remoteControlAtStartup === true);
   writeLocalSession({
     home: os.homedir(),
     taskId: task.id,
     worktreePath: task.worktreePath,
     sessionId,
-    claudeArgs: claudeArgs(launch),
-    env: claudeEnv(launch),
+    claudeArgs: [...claudeArgs(launch, machine.settings), ...machine.args],
+    env: { ...claudeEnv(launch), ...machine.env },
     prompt,
   });
   attachLocalSession(task.id, { name: task.name, taskId: task.id });

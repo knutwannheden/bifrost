@@ -121,7 +121,7 @@ try {
     unpack();
     run(installInstanceScript(packed.hash));
     const before = run(instanceStatusScript());
-    port = run(startInstanceScript()).INSTANCE_PORT;
+    port = run(startInstanceScript('perf')).INSTANCE_PORT;
     check(
       'an installed instance starts in tmux and answers, and another API on api-port is not taken for it',
       before.INSTANCE_HASH === packed.hash &&
@@ -129,6 +129,19 @@ try {
         port !== decoyPort &&
         (await answers(port)),
       show({ before, port, decoyPort }),
+    );
+  }
+
+  {
+    const runSh = path.join(home, '.bifrost', 'sessions', 'console', 'run.sh');
+    await until(() => fs.existsSync(runSh), 10_000);
+    const text = fs.existsSync(runSh) ? fs.readFileSync(runSh, 'utf-8') : '';
+    check(
+      "an instance on another machine starts its sessions with the plugin and that machine's name",
+      text.includes('--plugin-dir') &&
+        text.includes(path.join(home, '.bifrost', 'claude-plugin')) &&
+        /BIFROST_MACHINE=.?perf/.test(text),
+      text,
     );
   }
 
@@ -146,7 +159,7 @@ try {
     // tmux hangs the instance up when it kills its session, which a clean stop answers by giving up its port.
     tmux('kill-session', '-t', '=instance');
     const stoppedCleanly = await until(() => !fs.existsSync(portFile), 3_000);
-    port = run(startInstanceScript()).INSTANCE_PORT;
+    port = run(startInstanceScript('perf')).INSTANCE_PORT;
     const restarted = await answers(port);
     check(
       'starting it again restarts it and leaves the other sessions running',

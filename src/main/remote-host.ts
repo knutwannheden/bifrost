@@ -313,7 +313,7 @@ export function installInstanceScript(hash: string): string {
  * prints INSTANCE_PORT once its API answers. The loop restarts it after a
  * crash, and the other tmux sessions are left alone.
  */
-export function startInstanceScript(): string {
+export function startInstanceScript(machine: string): string {
   return [
     'cd "$HOME" || exit 1',
     ...PROBE,
@@ -323,7 +323,7 @@ export function startInstanceScript(): string {
     `while [ -f ${INSTANCE_PORT_FILE} ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done`,
     `rm -f ${INSTANCE_PORT_FILE}`,
     // Given as separate arguments, tmux runs it without the login shell, which need not be sh.
-    `${TMUX} new-session -d -s instance sh -c ${shQuote(`cd "$HOME/${INSTANCE_DIR}" && while :; do node headless.js; sleep 2; done`)}`,
+    `${TMUX} new-session -d -s instance sh -c ${shQuote(`cd "$HOME/${INSTANCE_DIR}" && while :; do BIFROST_MACHINE=${shQuote(machine)} BIFROST_PLUGIN_DIR="$HOME/${REMOTE_PLUGIN_DIR}" node headless.js; sleep 2; done`)}`,
     'i=0',
     'while [ $i -lt 300 ]; do',
     `  port=$(cat ${INSTANCE_PORT_FILE} 2>/dev/null)`,
@@ -341,6 +341,25 @@ export function startInstanceScript(): string {
  * hand, its offer of the fullscreen renderer and its warning about skipped
  * permissions would each hold the prompt back. Remote Control follows this machine.
  */
+/**
+ * What a session started by an instance on another machine needs, where nobody
+ * may ever have run Claude by hand: the plugin the IDE copied there, the
+ * settings a remote session starts with, and the machine's name. Empty in the IDE.
+ */
+export function machineSession(
+  permissionMode: string | undefined,
+  remoteControl: boolean,
+): { settings: Record<string, unknown>; args: string[]; env: Record<string, string> } {
+  const dir = process.env.BIFROST_PLUGIN_DIR;
+  if (!dir) return { settings: {}, args: [], env: {} };
+  const machine = process.env.BIFROST_MACHINE;
+  return {
+    settings: remoteSessionSettings(permissionMode, remoteControl),
+    args: ['--plugin-dir', dir],
+    env: machine ? { BIFROST_MACHINE: machine } : {},
+  };
+}
+
 export function remoteSessionSettings(permissionMode: string | undefined, remoteControl: boolean) {
   return {
     tui: 'default',
@@ -512,7 +531,8 @@ export class RemoteHost {
       );
       await this.exec(installInstanceScript(packed.hash), UPLOAD_TIMEOUT_MS);
     }
-    if (step !== 'none') remotePort = Number(parseScriptOutput(await this.exec(startInstanceScript())).INSTANCE_PORT);
+    if (step !== 'none')
+      remotePort = Number(parseScriptOutput(await this.exec(startInstanceScript(this.machine.name))).INSTANCE_PORT);
     if (!remotePort) throw new Error(`${this.machine.name}: its instance did not report a port`);
     const localPort = await this.forwardInstance(remotePort);
     this.hold(INSTANCE_HOLDER);

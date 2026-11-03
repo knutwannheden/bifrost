@@ -182,6 +182,8 @@ export interface BifrostConfig {
   machines?: Machine[];
   /** Files and directories synced to machines besides Claude's setup, relative to home or with ~/. */
   syncPaths?: string[];
+  /** This machine's Claude remoteControlAtStartup, which the IDE copies to an instance on another machine. */
+  remoteControlAtStartup?: boolean;
 }
 
 export interface CreateTaskParams {
