@@ -317,6 +317,8 @@ export interface BifrostAPI {
   // Task events
   onTaskSummary(callback: (taskId: string, summary: string) => void): () => void;
   onTaskCreated(callback: (task: Task) => void): () => void;
+  /** Another instance connected or went away, so the task list is to be loaded again. */
+  onTasksChanged(callback: () => void): () => void;
   /** A task changed in the main process by other means than this window, such as moving to another machine. */
   onTaskUpdated(callback: (task: Task) => void): () => void;
   onTaskClosed(callback: (taskId: string, archived: boolean) => void): () => void;

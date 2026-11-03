@@ -4,20 +4,22 @@ import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 
 const execFile = promisify(execFileCb);
 
-import { IPC } from '../shared/ipc-channels';
+import { IPC, type IpcChannel } from '../shared/ipc-channels';
 import type { BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, mergeRendererConfig, saveConfig } from './config';
 import { store as storeContext } from './context-store';
 import { noteWindowBlur, noteWindowFocus } from './disk-reclaim-service';
 import { openFileInIde, openInIde } from './ide-launcher';
 import { calls } from './ipc-calls';
+import { peerTasks, routeCall } from './peers';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getTasks } from './task-service';
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
-  for (const [channel, call] of Object.entries(calls)) {
+  for (const [channel, call] of Object.entries(calls) as Array<[IpcChannel, (...args: unknown[]) => unknown]>) {
     if (channel === IPC.WRITE_TO_SESSION) ipcMain.on(channel, (_event, ...args) => call(...args));
-    else ipcMain.handle(channel, (_event, ...args) => call(...args));
+    else if (channel === IPC.LIST_TASKS) ipcMain.handle(channel, () => [...getTasks(), ...peerTasks()]);
+    else ipcMain.handle(channel, (_event, ...args) => routeCall(channel, args, call));
   }
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => {
     saveConfig(mergeRendererConfig(config, loadConfig()));

@@ -488,15 +488,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.bifrost.getApiPort().then((port) => {
       dispatch({ type: 'SET_API_PORT', port });
     });
-    window.bifrost.listTasks().then((tasks) => {
-      dispatch({ type: 'SET_TASKS', tasks });
-    });
+    const loadTasks = () =>
+      window.bifrost.listTasks().then((tasks) => {
+        dispatch({ type: 'SET_TASKS', tasks });
+      });
+    loadTasks();
 
     const unsubSummary = window.bifrost.onTaskSummary((taskId, summary) => {
       dispatch({ type: 'SET_TASK_SUMMARY', taskId, summary });
     });
+    const unsubTasksChanged = window.bifrost.onTasksChanged(loadTasks);
     return () => {
       unsubSummary();
+      unsubTasksChanged();
     };
   }, []);
 

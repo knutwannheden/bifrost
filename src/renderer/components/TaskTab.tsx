@@ -181,9 +181,12 @@ export default function TaskTab({
       ? `Branch: ${task.branch}`
       : `Branch: ${task.branch} · Base: ${task.baseBranch}`;
 
-  const tooltipLines = [task.name, task.summary, branchLine, task.machine && `Runs on ${task.machine}`].filter(
-    Boolean,
-  ) as string[];
+  const tooltipLines = [
+    task.name,
+    task.summary,
+    branchLine,
+    task.machine && (task.unreachable ? `${task.machine} is not connected` : `Runs on ${task.machine}`),
+  ].filter(Boolean) as string[];
 
   // Activity indicator: green pulse while Claude works, then a solid bar for a
   // turn that ended — blue where it finished, red where it failed or was cut off.
@@ -201,7 +204,7 @@ export default function TaskTab({
         ref={buttonRef}
         className={`group relative flex w-full items-center px-3 py-1.5 text-left transition-colors ${
           isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
-        } ${isSelected ? 'ring-1 ring-inset ring-accent' : ''} ${task.status === 'stopped' ? 'opacity-60' : ''}`}
+        } ${isSelected ? 'ring-1 ring-inset ring-accent' : ''} ${task.status === 'stopped' || task.unreachable ? 'opacity-60' : ''}`}
         style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
         onClick={onClick}
         onMouseDown={(e) => {

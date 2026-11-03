@@ -5,6 +5,7 @@ import { initConsole } from './console-service.ts';
 import { loadPersistedContexts } from './context-store.ts';
 import { initCurator } from './curator-service.ts';
 import { closeDatabase, openDatabase } from './db.ts';
+import { closePeers } from './peers.ts';
 import { closeRemoteHosts } from './remote-host.ts';
 import { detachAllSessions } from './session-manager.ts';
 import { restoreTasks } from './task-service.ts';
@@ -26,6 +27,7 @@ export async function stopInstance(): Promise<void> {
   stopAllWatching();
   detachAllSessions();
   closeRemoteHosts();
+  closePeers();
   await stopApi();
   closeDatabase();
 }

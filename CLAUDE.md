@@ -75,6 +75,7 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 | `walkthrough-service.ts` | Generates a guided walkthrough of a branch's committed change, and stores it per task |
 | `walkthrough-anchor.ts` | Checks a walkthrough's anchors against the commits, and follows them onto a later head |
 | `remote-host.ts` | Runs task sessions and commands on a configured machine over a shared SSH connection |
+| `peers.ts` | Links this instance to the instances on other machines, whose tasks it lists and whose calls it forwards |
 
 ### Sessions in tmux
 
@@ -103,6 +104,8 @@ A machine with "Sync setup" on gets this machine's Claude setup on every connect
 - Bifrost's `tools/headroom`, linked into `~/.local/bin`, and the extra paths from the settings.
 
 `~/.claude/CLAUDE.md` is the exception. The machine's own may be written by something else, such as a provisioning script that rewrites a block of it on every start, so the rules go to `~/.bifrost/claude/CLAUDE.md` and the machine's file only gains a line importing them. Bifrost's own plugin stays out, since remote sessions load it with `--plugin-dir`.
+
+An instance can also link to the Bifrost instance on another machine (`peers.ts`). It subscribes to that instance's events (`POST /events`, one JSON object per line), then lists its tasks. It keeps the last list in `~/.bifrost/peers/<name>.json`, which the window shows greyed while that instance is away. A call about one of those tasks, or an answer to a request one of its sessions raised, goes to that instance's `POST /call`. That route runs the same table, `ipc-calls.ts`, as the IPC handlers here. Nothing registers a peer yet.
 
 Every remote step is a shell script built in `remote-host.ts`, `task-transfer.ts` or `remote-sync.ts`. The checks `check:remote-scripts`, `check:task-transfer` and `check:remote-sync` run them against a local home directory.
 
