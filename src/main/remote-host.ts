@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { Machine } from '../shared/types.ts';
+import { claudeConfigDir } from './claude-paths.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
 import { pack, plan } from './instance-deploy.ts';
@@ -382,10 +383,9 @@ export function remoteSessionSettings(permissionMode: string | undefined, remote
 
 /** A value from Claude Code's settings on this machine, or else from its global config. */
 export function localClaudeValue(key: string): unknown {
-  const configDir = process.env.CLAUDE_CONFIG_DIR;
   const files = [
-    path.join(configDir ?? path.join(os.homedir(), '.claude'), 'settings.json'),
-    path.join(configDir ?? os.homedir(), '.claude.json'),
+    path.join(claudeConfigDir(), 'settings.json'),
+    path.join(process.env.CLAUDE_CONFIG_DIR ?? os.homedir(), '.claude.json'),
   ];
   for (const file of files) {
     try {

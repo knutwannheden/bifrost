@@ -1,10 +1,10 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { RecentRepo } from '../shared/types';
+import { claudeConfigDir } from './claude-paths';
 import { getGitHubPath } from './repo-manager';
 
-const HISTORY_PATH = path.join(os.homedir(), '.claude', 'history.jsonl');
+const HISTORY_PATH = path.join(claudeConfigDir(), 'history.jsonl');
 const MAX_RESULTS = 5;
 
 export async function scanRecentRepos(excludePaths: Set<string>): Promise<RecentRepo[]> {

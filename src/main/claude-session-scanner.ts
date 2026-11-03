@@ -1,9 +1,8 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { ClaudeSession } from '../shared/types';
+import { claudeConfigDir } from './claude-paths.ts';
 
-const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function parseSessionInfo(filePath: string): { sessionId: string; cwd: string; slug?: string } | null {
@@ -34,7 +33,10 @@ function parseSessionInfo(filePath: string): { sessionId: string; cwd: string; s
   return null;
 }
 
-export function scanClaudeSessions(excludePaths: Set<string>, projectsDir = CLAUDE_PROJECTS_DIR): ClaudeSession[] {
+export function scanClaudeSessions(
+  excludePaths: Set<string>,
+  projectsDir = path.join(claudeConfigDir(), 'projects'),
+): ClaudeSession[] {
   if (!fs.existsSync(projectsDir)) return [];
 
   const now = Date.now();

@@ -2,6 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+/** Claude Code's own directory, which is ~/.claude unless CLAUDE_CONFIG_DIR moves it. */
+export function claudeConfigDir(): string {
+  return process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude');
+}
+
 /** The name of the directory Claude files a session's transcripts under, made from the session's working directory. */
 export function claudeProjectDir(cwd: string): string {
   return cwd.replace(/[^A-Za-z0-9]/g, '-');
@@ -9,7 +14,7 @@ export function claudeProjectDir(cwd: string): string {
 
 /** Where Claude files the transcripts of the sessions it runs in cwd. */
 export function transcriptDir(cwd: string): string {
-  return path.join(os.homedir(), '.claude', 'projects', claudeProjectDir(cwd));
+  return path.join(claudeConfigDir(), 'projects', claudeProjectDir(cwd));
 }
 
 /** Whether Claude has no transcript of the session left that it could resume. */

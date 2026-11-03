@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { PermissionDecision, PermissionPromptData, RuleOption } from '../shared/types';
+import { claudeConfigDir } from './claude-paths';
 
 const REQUEST_TIMEOUT_MS = 120_000;
 
@@ -106,7 +106,7 @@ export function checkExistingRules(
   const settingsFiles = [
     path.join(worktreePath, '.claude', 'settings.local.json'),
     path.join(worktreePath, '.claude', 'settings.json'),
-    path.join(os.homedir(), '.claude', 'settings.json'),
+    path.join(claudeConfigDir(), 'settings.json'),
   ];
 
   const allAllow: string[] = [];
@@ -267,7 +267,7 @@ function writeRule(
   let settingsPath: string;
 
   if (scope === 'user') {
-    settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+    settingsPath = path.join(claudeConfigDir(), 'settings.json');
   } else if (worktreePathResolver) {
     const worktreePath = worktreePathResolver(taskId);
     if (scope === 'local') {

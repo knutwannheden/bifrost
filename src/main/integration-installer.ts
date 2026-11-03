@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { claudeConfigDir } from './claude-paths.ts';
 
 const execFile = promisify(execFileCb);
 
@@ -30,11 +31,11 @@ const PLUGIN_NAME = 'bifrost';
 const PLUGIN_ID = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 const MARKETPLACE_DIR = path.join(os.homedir(), '.bifrost', 'marketplace');
 export const PLUGIN_DEPLOY_DIR = path.join(MARKETPLACE_DIR, PLUGIN_NAME);
-const PLUGINS_FILE = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
-const KNOWN_MARKETPLACES_FILE = path.join(os.homedir(), '.claude', 'plugins', 'known_marketplaces.json');
-const SETTINGS_FILE = path.join(os.homedir(), '.claude', 'settings.json');
+const PLUGINS_FILE = path.join(claudeConfigDir(), 'plugins', 'installed_plugins.json');
+const KNOWN_MARKETPLACES_FILE = path.join(claudeConfigDir(), 'plugins', 'known_marketplaces.json');
+const SETTINGS_FILE = path.join(claudeConfigDir(), 'settings.json');
 const MCP_CONFIG_PATH = path.join(os.homedir(), '.mcp.json');
-const OLD_COMMANDS_DIR = path.join(os.homedir(), '.claude', 'commands', 'bifrost');
+const OLD_COMMANDS_DIR = path.join(claudeConfigDir(), 'commands', 'bifrost');
 const OLD_MCP_DIR = path.join(os.homedir(), '.bifrost', 'mcp');
 const OLD_PLUGIN_DIR = path.join(os.homedir(), '.bifrost', 'plugin');
 const OLD_PLUGIN_ID = 'bifrost@local';

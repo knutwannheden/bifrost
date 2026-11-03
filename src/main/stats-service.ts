@@ -10,6 +10,7 @@ import type {
   StatsData,
   ToolUsageEntry,
 } from '../shared/types';
+import { claudeConfigDir } from './claude-paths';
 
 function sortedEntries<T extends { count: number }>(counts: Map<string, number>, keyName: string): T[] {
   const entries: T[] = [];
@@ -62,7 +63,7 @@ function buildStatsData(
 let currentGeneration = 0;
 
 /**
- * Scan all Claude Code JSONL session files under ~/.claude/projects/
+ * Scan all Claude Code JSONL session files under Claude's projects directory
  * and collect tool usage stats. Calls onUpdate after each project
  * directory with the current aggregated snapshot.
  * @param since Only count entries with timestamp >= this value (epoch ms). 0 = all time.
@@ -70,7 +71,7 @@ let currentGeneration = 0;
 export async function getStats(onUpdate: (data: StatsData) => void, since = 0): Promise<void> {
   const generation = ++currentGeneration;
 
-  const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+  const projectsDir = path.join(claudeConfigDir(), 'projects');
   if (!fs.existsSync(projectsDir)) return;
 
   const skillCounts = new Map<string, number>();

@@ -92,7 +92,7 @@ function move(worktreePath: string, slug: string, withTranscript: boolean): Reco
     execFileSync('sh', ['-s'], {
       cwd: there,
       input: script,
-      env: { ...process.env, HOME: there },
+      env: { ...process.env, HOME: there, CLAUDE_CONFIG_DIR: undefined },
       stdio: 'pipe',
     }).toString(),
   );

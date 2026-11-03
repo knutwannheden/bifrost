@@ -58,7 +58,7 @@ export function unpackScript(spec: UnpackSpec): string {
     'if [ -s "$d/staged.patch" ]; then git -C "$wt" apply --index "$d/staged.patch"; fi',
     'if [ -s "$d/unstaged.patch" ]; then git -C "$wt" apply "$d/unstaged.patch"; fi',
     'if [ -f "$d/transcript.jsonl" ]; then',
-    `  projects="$HOME/.claude/projects/$(printf '%s' "$wt" | sed 's/[^A-Za-z0-9]/-/g')"`,
+    `  projects="\${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$(printf '%s' "$wt" | sed 's/[^A-Za-z0-9]/-/g')"`,
     '  mkdir -p "$projects"',
     `  mv "$d/transcript.jsonl" "$projects"/${shQuote(`${spec.sessionId}.jsonl`)}`,
     'fi',

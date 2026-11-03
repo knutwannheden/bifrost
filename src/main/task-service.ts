@@ -12,7 +12,7 @@ import { generateTaskName } from '../shared/name-generator.ts';
 import type { CreateTaskParams, DiffResult, Repo, Task } from '../shared/types.ts';
 import { startWatching, stopWatching } from './activity-watcher.ts';
 import { forgetChangeFeed } from './change-feed-service.ts';
-import { claudeProjectDir, isSessionStale } from './claude-paths.ts';
+import { isSessionStale, transcriptDir } from './claude-paths.ts';
 import { lastConversationAt } from './claude-watcher.ts';
 import { loadConfig, saveConfig } from './config.ts';
 import { resolveBaseRef } from './diff-service.ts';
@@ -751,10 +751,7 @@ export async function transferTaskCore(taskId: string, machine: string): Promise
   const slug = path.basename(task.worktreePath);
   const clonePath = remoteClonePath(repo);
   const remoteWorktree = `${info.home}/${clonePath}/.worktrees/${slug}`;
-  const projects = path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude'), 'projects');
-  const transcript = task.sessionId
-    ? path.join(projects, claudeProjectDir(task.worktreePath), `${task.sessionId}.jsonl`)
-    : null;
+  const transcript = task.sessionId ? path.join(transcriptDir(task.worktreePath), `${task.sessionId}.jsonl`) : null;
   const dropDir = `.bifrost/transfer/${task.id}`;
 
   // The conversation is copied whole, so the session stops first and nothing writes to it meanwhile.
