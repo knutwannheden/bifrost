@@ -4,7 +4,7 @@
  * this checkout's node_modules in place of an install. Run with
  * `npm run check:instance-scripts`.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,6 +13,7 @@ import {
   installInstanceScript,
   instanceStatusScript,
   parseScriptOutput,
+  relinks,
   startInstanceScript,
 } from '../src/main/remote-host.ts';
 import { tmuxConf } from '../src/main/tmux-session.ts';
@@ -56,12 +57,15 @@ fs.writeFileSync(path.join(failing, 'npm'), '#!/bin/sh\nexit 1\n', { mode: 0o755
 fs.writeFileSync(path.join(home, '.bifrost', 'tmux.conf'), tmuxConf());
 const socket = path.join(root, `tmux-${process.getuid?.()}`, 'bifrost');
 const tmux = (...args: string[]) => execFileSync('tmux', ['-S', socket, ...args], { encoding: 'utf-8' }).trim();
-const portFile = path.join(home, '.bifrost', 'api-port');
+const portFile = path.join(home, '.bifrost', 'instance-port');
+const apiPortFile = path.join(home, '.bifrost', 'api-port');
 const panePid = (session: string) => tmux('list-panes', '-t', `=${session}`, '-F', '#{pane_pid}');
 
 function env(first: string): NodeJS.ProcessEnv {
   const e: NodeJS.ProcessEnv = { ...process.env, HOME: home, TMPDIR: tmp, TMUX_TMPDIR: root };
   e.PATH = `${first}:${stubs}:${process.env.PATH}`;
+  // A login shell that is not POSIX sh must not matter to what tmux runs.
+  if (fs.existsSync('/bin/csh')) e.SHELL = '/bin/csh';
   delete e.CLAUDE_CONFIG_DIR;
   delete e.TMUX;
   return e;
@@ -97,17 +101,34 @@ const alive = (pid: string) => {
   }
 };
 
+check(
+  'only a session keeps reconnecting a dropped connection, while the instance waits for its next use',
+  relinks(new Set(['instance', 'task-1'])) && !relinks(new Set(['instance'])) && !relinks(new Set()),
+);
+
+// What api-port names until the switch: the IDE's own API, forwarded, which answers like an instance.
+// It runs in a process of its own, since the scripts run synchronously here.
+const decoy = spawn(process.execPath, [
+  '-e',
+  `require('node:http').createServer((q, r) => r.end('{"tasks":[]}')).listen(0, '127.0.0.1', function () { console.log(this.address().port); });`,
+]);
+const decoyPort = await new Promise<string>((resolve) => decoy.stdout.once('data', (d) => resolve(String(d).trim())));
+
 try {
   let port: string | undefined;
   {
+    fs.writeFileSync(apiPortFile, decoyPort);
     unpack();
     run(installInstanceScript(packed.hash));
     const before = run(instanceStatusScript());
     port = run(startInstanceScript()).INSTANCE_PORT;
     check(
-      'an installed instance starts in tmux and answers',
-      before.INSTANCE_HASH === packed.hash && before.INSTANCE_PORT === undefined && (await answers(port)),
-      show({ before, port }),
+      'an installed instance starts in tmux and answers, and another API on api-port is not taken for it',
+      before.INSTANCE_HASH === packed.hash &&
+        before.INSTANCE_PORT === undefined &&
+        port !== decoyPort &&
+        (await answers(port)),
+      show({ before, port, decoyPort }),
     );
   }
 
@@ -150,6 +171,7 @@ try {
     );
   }
 } finally {
+  decoy.kill();
   try {
     execFileSync('tmux', ['-S', socket, 'kill-server'], { stdio: 'ignore' });
   } catch {

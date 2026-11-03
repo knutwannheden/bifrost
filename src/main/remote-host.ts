@@ -268,12 +268,9 @@ export function prepareScript(opts: { apiPort: number; theme?: string }): string
   ].join('\n');
 }
 
-/**
- * Settings a remote session starts with. On a machine where nobody ran Claude by
- * hand, its offer of the fullscreen renderer and its warning about skipped
- * permissions would each hold the prompt back. Remote Control follows this machine.
- */
 const INSTANCE_DIR = `${REMOTE_DIR}/instance`;
+/** The port file the instance writes for itself. */
+const INSTANCE_PORT_FILE = `${REMOTE_DIR}/instance-port`;
 const TMUX = `tmux -L ${TMUX_SOCKET} -f ${REMOTE_DIR}/tmux.conf`;
 
 /** Answers whether an instance's API answers on port $1 within 2 s. */
@@ -289,7 +286,7 @@ export function instanceStatusScript(): string {
     'cd "$HOME" || exit 1',
     ...PROBE,
     `printf 'INSTANCE_HASH=%s\\n' "$(cat ${INSTANCE_DIR}/build-hash 2>/dev/null)"`,
-    `port=$(cat ${REMOTE_DIR}/api-port 2>/dev/null)`,
+    `port=$(cat ${INSTANCE_PORT_FILE} 2>/dev/null)`,
     `if [ -n "$port" ] && probe "$port"; then printf 'INSTANCE_PORT=%s\\n' "$port"; fi`,
   ].join('\n');
 }
@@ -323,12 +320,13 @@ export function startInstanceScript(): string {
     `${TMUX} kill-session -t =instance 2>/dev/null || true`,
     // The instance stopping gives up its port file, and a new one must not race it.
     'i=0',
-    `while [ -f ${REMOTE_DIR}/api-port ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done`,
-    `rm -f ${REMOTE_DIR}/api-port`,
-    `${TMUX} new-session -d -s instance ${shQuote(`cd "$HOME/${INSTANCE_DIR}" && while :; do node headless.js; sleep 2; done`)}`,
+    `while [ -f ${INSTANCE_PORT_FILE} ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done`,
+    `rm -f ${INSTANCE_PORT_FILE}`,
+    // Given as separate arguments, tmux runs it without the login shell, which need not be sh.
+    `${TMUX} new-session -d -s instance sh -c ${shQuote(`cd "$HOME/${INSTANCE_DIR}" && while :; do node headless.js; sleep 2; done`)}`,
     'i=0',
     'while [ $i -lt 300 ]; do',
-    `  port=$(cat ${REMOTE_DIR}/api-port 2>/dev/null)`,
+    `  port=$(cat ${INSTANCE_PORT_FILE} 2>/dev/null)`,
     `  if [ -n "$port" ] && probe "$port"; then printf 'INSTANCE_PORT=%s\\n' "$port"; exit 0; fi`,
     '  sleep 0.1',
     '  i=$((i+1))',
@@ -338,6 +336,11 @@ export function startInstanceScript(): string {
   ].join('\n');
 }
 
+/**
+ * Settings a remote session starts with. On a machine where nobody ran Claude by
+ * hand, its offer of the fullscreen renderer and its warning about skipped
+ * permissions would each hold the prompt back. Remote Control follows this machine.
+ */
 export function remoteSessionSettings(permissionMode: string | undefined, remoteControl: boolean) {
   return {
     tui: 'default',
@@ -403,6 +406,15 @@ function freePort(): Promise<number> {
 
 /** The holder that keeps the connection open for the instance's forward. */
 const INSTANCE_HOLDER = 'instance';
+
+/**
+ * Whether a dropped connection is brought back at once: only for a session
+ * still holding it. The instance reconnects at its next use, since connecting
+ * starts a machine that stopped.
+ */
+export function relinks(holders: ReadonlySet<string>): boolean {
+  return [...holders].some((h) => h !== INSTANCE_HOLDER);
+}
 
 function localApiPort(): number | null {
   try {
@@ -487,7 +499,6 @@ export class RemoteHost {
   }
 
   private async bringUpInstance(): Promise<number> {
-    this.hold(INSTANCE_HOLDER);
     await this.connectReady();
     const packed = await pack(process.cwd());
     const status = parseScriptOutput(await this.exec(instanceStatusScript()));
@@ -503,7 +514,9 @@ export class RemoteHost {
     }
     if (step !== 'none') remotePort = Number(parseScriptOutput(await this.exec(startInstanceScript())).INSTANCE_PORT);
     if (!remotePort) throw new Error(`${this.machine.name}: its instance did not report a port`);
-    return this.forwardInstance(remotePort);
+    const localPort = await this.forwardInstance(remotePort);
+    this.hold(INSTANCE_HOLDER);
+    return localPort;
   }
 
   private async forwardInstance(remotePort: number): Promise<number> {
@@ -624,7 +637,9 @@ export class RemoteHost {
         if (this.master === master) {
           this.master = null;
           this.info = null;
-          if (this.holders.size > 0) this.scheduleRelink();
+          this.holders.delete(INSTANCE_HOLDER);
+          this.instanceForward = null;
+          if (relinks(this.holders)) this.scheduleRelink();
         }
         settle(new Error(`Could not connect to ${this.machine.name}: ${stderr.trim() || `ssh exited with ${code}`}`));
       });
@@ -643,7 +658,7 @@ export class RemoteHost {
     if (this.relinkTimer) return;
     this.relinkTimer = setTimeout(() => {
       this.relinkTimer = null;
-      if (this.holders.size === 0) return;
+      if (!relinks(this.holders)) return;
       this.connect().catch((err) => {
         console.warn(`[remote] ${this.machine.name}: ${(err as Error).message}`);
         this.scheduleRelink();

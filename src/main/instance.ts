@@ -10,9 +10,12 @@ import { closeRemoteHosts } from './remote-host.ts';
 import { detachAllSessions } from './session-manager.ts';
 import { restoreTasks } from './task-service.ts';
 
-/** Starts the services a Bifrost instance runs. A window, if there is one, is the caller's. */
-export async function startInstance(): Promise<void> {
-  await startApi();
+/**
+ * Starts the services a Bifrost instance runs, and answers the port its API
+ * listens on, or null when none was free. A window, if there is one, is the caller's.
+ */
+export async function startInstance(): Promise<number | null> {
+  const port = await startApi();
   openDatabase();
   initChangeFeed();
   loadPersistedContexts();
@@ -20,6 +23,7 @@ export async function startInstance(): Promise<void> {
   initCurator();
   initConsole();
   initApi();
+  return port;
 }
 
 /** Stops them again. The sessions in tmux run on. */
