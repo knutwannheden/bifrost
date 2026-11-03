@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { IPC, IPC_STREAM } from '../src/shared/ipc-channels.ts';
-import type { Task } from '../src/shared/types.ts';
+import type { BifrostConfig, Task } from '../src/shared/types.ts';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -152,6 +152,31 @@ try {
       'an instance streams its events to whoever subscribes',
       arrived && still === 200,
       show({ status: events?.status, seen, still }),
+    );
+  }
+
+  {
+    await post('/preferences', { permissionMode: 'auto-mode', managePermissions: true });
+    const loaded = await post('/call', { channel: IPC.LOAD_CONFIG, args: [] });
+    const config = loaded.status === 200 ? ((await loaded.json()) as { result: BifrostConfig }).result : undefined;
+    check(
+      'an instance takes the preferences it is sent',
+      config?.permissionMode === 'auto-mode' && config.managePermissions === true,
+      show({ status: loaded.status, permissionMode: config?.permissionMode }),
+    );
+  }
+
+  {
+    const asked = await post(
+      '/permission',
+      { bifrost_task_id: 't1', cwd: tmp, tool_name: 'Bash', tool_input: {} },
+      AbortSignal.timeout(3_000),
+    ).catch(() => undefined);
+    const answer = asked?.status === 200 ? await asked.json() : undefined;
+    check(
+      'with nobody listening, an approval falls back to Claude at once',
+      show(answer) === '{}',
+      show({ status: asked?.status, answer }),
     );
   }
 

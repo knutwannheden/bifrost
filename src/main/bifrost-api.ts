@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { Repo, Task } from '../shared/types';
+import type { BifrostConfig, Repo, Task } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
@@ -22,7 +22,7 @@ import { relayMessage } from './claude-oneshot';
 import { loadConfig, saveConfig } from './config';
 import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
-import { BELL, emit, subscribe } from './event-sink';
+import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
@@ -309,6 +309,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
+    // What the IDE copies to an instance on another machine, so its sessions start as the IDE's do.
+    case '/preferences': {
+      const config = loadConfig() as unknown as Record<string, unknown>;
+      for (const key of ['permissionMode', 'agentTeams', 'managePermissions', 'prompts', 'remoteControlAtStartup']) {
+        if (key in body) config[key] = body[key];
+      }
+      saveConfig(config as unknown as BifrostConfig);
+      jsonResponse(res, { ok: true });
+      return;
+    }
+
     case '/list-repos': {
       const config = loadConfig();
       const repos = config.repos.map(
@@ -589,6 +600,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
             permissionDecision: existingDecision,
           },
         });
+        return;
+      }
+
+      // With nobody to show the question to, Claude asks in its own terminal.
+      if (!listening()) {
+        jsonResponse(res, {});
         return;
       }
 

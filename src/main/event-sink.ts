@@ -30,6 +30,11 @@ function deliver(channel: EventChannel, args: unknown[], origin?: string): void 
   }
 }
 
+/** Whether anyone listens: a window, or another instance subscribed to this one. */
+export function listening(): boolean {
+  return listeners.length > 0;
+}
+
 /** Returns the unsubscribe. */
 export function subscribe(listener: Listener): () => void {
   listeners.push(listener);
