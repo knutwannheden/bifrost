@@ -271,6 +271,71 @@ export function prepareScript(opts: { apiPort: number; theme?: string }): string
  * hand, its offer of the fullscreen renderer and its warning about skipped
  * permissions would each hold the prompt back. Remote Control follows this machine.
  */
+const INSTANCE_DIR = `${REMOTE_DIR}/instance`;
+const TMUX = `tmux -L ${TMUX_SOCKET} -f ${REMOTE_DIR}/tmux.conf`;
+
+/** Answers whether an instance's API answers on port $1 within 2 s. */
+const PROBE = [
+  'probe() {',
+  `  node -e "fetch('http://127.0.0.1:'+process.argv[1]+'/list-tasks',{method:'POST',body:'{}',signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.status===200?0:1),()=>process.exit(1))" "$1" 2>/dev/null`,
+  '}',
+];
+
+/** Prints INSTANCE_HASH, the build there, and INSTANCE_PORT when its API answers. */
+export function instanceStatusScript(): string {
+  return [
+    'cd "$HOME" || exit 1',
+    ...PROBE,
+    `printf 'INSTANCE_HASH=%s\\n' "$(cat ${INSTANCE_DIR}/build-hash 2>/dev/null)"`,
+    `port=$(cat ${REMOTE_DIR}/api-port 2>/dev/null)`,
+    `if [ -n "$port" ] && probe "$port"; then printf 'INSTANCE_PORT=%s\\n' "$port"; fi`,
+  ].join('\n');
+}
+
+/**
+ * Installs the build unpacked into instance.new and puts it in place. A failure
+ * leaves the instance there as it was.
+ */
+export function installInstanceScript(hash: string): string {
+  return [
+    'set -e',
+    'cd "$HOME"',
+    `cd ${INSTANCE_DIR}.new`,
+    'npm install --omit=dev --no-audit --no-fund --loglevel=error >/dev/null',
+    `printf '%s\\n' ${shQuote(hash)} > build-hash`,
+    'cd "$HOME"',
+    `rm -rf ${INSTANCE_DIR}`,
+    `mv ${INSTANCE_DIR}.new ${INSTANCE_DIR}`,
+  ].join('\n');
+}
+
+/**
+ * (Re)starts the instance in a respawn loop in Bifrost's tmux server, then
+ * prints INSTANCE_PORT once its API answers. The loop restarts it after a
+ * crash, and the other tmux sessions are left alone.
+ */
+export function startInstanceScript(): string {
+  return [
+    'cd "$HOME" || exit 1',
+    ...PROBE,
+    `${TMUX} kill-session -t =instance 2>/dev/null || true`,
+    // The instance stopping gives up its port file, and a new one must not race it.
+    'i=0',
+    `while [ -f ${REMOTE_DIR}/api-port ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i+1)); done`,
+    `rm -f ${REMOTE_DIR}/api-port`,
+    `${TMUX} new-session -d -s instance ${shQuote(`cd "$HOME/${INSTANCE_DIR}" && while :; do node headless.js; sleep 2; done`)}`,
+    'i=0',
+    'while [ $i -lt 300 ]; do',
+    `  port=$(cat ${REMOTE_DIR}/api-port 2>/dev/null)`,
+    `  if [ -n "$port" ] && probe "$port"; then printf 'INSTANCE_PORT=%s\\n' "$port"; exit 0; fi`,
+    '  sleep 0.1',
+    '  i=$((i+1))',
+    'done',
+    "echo 'the instance did not answer within 30 s' >&2",
+    'exit 1',
+  ].join('\n');
+}
+
 export function remoteSessionSettings(permissionMode: string | undefined, remoteControl: boolean) {
   return {
     tui: 'default',

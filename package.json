@@ -46,6 +46,7 @@
     "check:peers": "node scripts/check-peers.mts",
     "check:task-sync": "node scripts/check-task-sync.mts",
     "check:instance-deploy": "node scripts/check-instance-deploy.mts",
+    "check:instance-scripts": "node scripts/check-instance-scripts.mts",
     "check:remote-sync": "node scripts/check-remote-sync.mts",
     "test": "npm --prefix tools/postmortem test && npm --prefix tools/headroom test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
