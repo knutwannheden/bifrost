@@ -8,7 +8,7 @@ import type { Repo, Task } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
-import { IPC_STREAM } from '../shared/ipc-channels';
+import { IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
 import {
   forgetTask,
   subagentStarted,
@@ -22,7 +22,8 @@ import { relayMessage } from './claude-oneshot';
 import { loadConfig, saveConfig } from './config';
 import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
-import { BELL, emit } from './event-sink';
+import { BELL, emit, subscribe } from './event-sink';
+import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
@@ -280,6 +281,33 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const body = await readJsonBody(req);
 
   switch (req.url) {
+    case '/call': {
+      const { channel, args = [] } = body as { channel?: IpcChannel; args?: unknown[] };
+      const call = channel ? calls[channel] : undefined;
+      if (!call) {
+        errorResponse(res, `No call ${channel}`, 404);
+        return;
+      }
+      try {
+        jsonResponse(res, { result: await call(...args) });
+      } catch (e) {
+        errorResponse(res, (e as Error).message, 500);
+      }
+      return;
+    }
+
+    // Held open, one event per line. The terminals belong to whoever attached to them.
+    case '/events': {
+      res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
+      res.flushHeaders();
+      const leave = subscribe((channel, args) => {
+        if (channel === IPC_STREAM.SESSION_DATA || channel === IPC_STREAM.SESSION_EXIT) return;
+        res.write(`${JSON.stringify({ channel, args })}\n`);
+      });
+      res.on('close', leave);
+      return;
+    }
+
     case '/list-repos': {
       const config = loadConfig();
       const repos = config.repos.map(
@@ -1053,6 +1081,8 @@ export function stopApi(): Promise<void> {
         activePort = null;
         resolve();
       });
+      // A held response, such as an event stream, would keep close() waiting for ever.
+      server.closeAllConnections();
     } else {
       try {
         fs.unlinkSync(PORT_FILE);

@@ -7,6 +7,8 @@ import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { IPC, IPC_STREAM } from '../src/shared/ipc-channels.ts';
+import type { Task } from '../src/shared/types.ts';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -45,6 +47,36 @@ env.PATH = `${stubs}:${process.env.PATH}`;
 delete env.CLAUDE_CONFIG_DIR;
 delete env.TMUX;
 const socket = path.join(root, `tmux-${process.getuid?.()}`, 'bifrost');
+
+// One task in the instance's database before it starts. db.ts fixes its path as it loads.
+const realHome = process.env.HOME;
+process.env.HOME = home;
+{
+  const db = await import('../src/main/db.ts');
+  const store = await import('../src/main/task-store.ts');
+  db.openDatabase();
+  const t1: Task = {
+    id: 't1',
+    name: 't1',
+    repoId: 'r',
+    baseBranch: 'main',
+    worktreePath: tmp,
+    status: 'stopped',
+    hasUnread: false,
+    createdAt: 1,
+  };
+  store.saveTasks([t1]);
+  db.closeDatabase();
+}
+process.env.HOME = realHome;
+let apiPort = '';
+const post = (route: string, body: unknown, signal?: AbortSignal) =>
+  fetch(`http://127.0.0.1:${apiPort}${route}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
 const consoleRuns = () => {
   try {
     execFileSync('tmux', ['-S', socket, 'has-session', '-t', '=console'], { stdio: 'ignore' });
@@ -67,28 +99,72 @@ try {
     const up = await until(() => fs.existsSync(portFile), 15_000);
     let answer: { status: number; list?: { tasks: unknown[] } } = { status: 0 };
     if (up) {
-      const res = await fetch(`http://127.0.0.1:${fs.readFileSync(portFile, 'utf8').trim()}/list-tasks`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: '{}',
-      });
+      apiPort = fs.readFileSync(portFile, 'utf8').trim();
+      const res = await post('/list-tasks', { status: 'all' });
       answer = { status: res.status, list: await res.json() };
     }
     check(
       'an instance comes up without Electron and serves its API',
-      answer.status === 200 && answer.list?.tasks.length === 0,
+      answer.status === 200 && answer.list?.tasks.length === 1,
       show({ up, answer, output: output.slice(-800) }),
     );
   }
 
   {
+    const renamed = await post('/call', { channel: IPC.RENAME_TASK, args: ['t1', 'renamed'] });
+    const result = renamed.status === 200 ? ((await renamed.json()) as { result: Task }).result : undefined;
+    const unknown = await post('/call', { channel: 'no-such-channel', args: [] });
+    check(
+      'an instance answers a call for one of its tasks',
+      result?.name === 'renamed' && unknown.status === 404,
+      show({ status: renamed.status, result, unknown: unknown.status }),
+    );
+  }
+
+  {
+    const repo = path.join(root, 'repo');
+    fs.mkdirSync(repo);
+    execFileSync('git', ['init', '-q', repo]);
+    const abort = new AbortController();
+    const seen: string[] = [];
+    const events = await post('/events', {}, AbortSignal.any([abort.signal, AbortSignal.timeout(15_000)])).catch(
+      () => undefined,
+    );
+    const reading = (async () => {
+      const reader = events?.body?.getReader();
+      const decoder = new TextDecoder();
+      let rest = '';
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        rest += decoder.decode(value, { stream: true });
+        const lines = rest.split('\n');
+        rest = lines.pop() ?? '';
+        for (const line of lines) if (line) seen.push((JSON.parse(line) as { channel: string }).channel);
+      }
+    })().catch(() => {});
+    await post('/call', { channel: IPC.ADD_REPO, args: [{ type: 'local', path: repo }] });
+    const arrived = await until(() => seen.includes(IPC_STREAM.REPOS_CHANGED), 5_000);
+    abort.abort();
+    await reading;
+    const still = (await post('/list-tasks', {})).status;
+    check(
+      'an instance streams its events to whoever subscribes',
+      arrived && still === 200,
+      show({ status: events?.status, seen, still }),
+    );
+  }
+
+  {
     const ran = await until(consoleRuns, 10_000);
+    // A subscriber still holding its stream must not keep the instance from stopping.
+    const subscriber = await post('/events', {}, AbortSignal.timeout(30_000)).catch(() => undefined);
     child.kill('SIGTERM');
     const code = await Promise.race([exited, sleep(10_000).then(() => 'timeout')]);
     check(
-      'stopping an instance leaves its sessions running',
-      ran && code === 0 && consoleRuns(),
-      show({ ran, code, still: consoleRuns(), output: output.slice(-800) }),
+      'stopping an instance, even with a subscriber, leaves its sessions running',
+      ran && subscriber?.status === 200 && code === 0 && consoleRuns(),
+      show({ ran, subscriber: subscriber?.status, code, still: consoleRuns(), output: output.slice(-800) }),
     );
   }
 } finally {
