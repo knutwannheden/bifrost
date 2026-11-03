@@ -678,7 +678,7 @@ function MachineEditor({
     if (!host || /\s/.test(host)) return setError('SSH host: one host name, as ssh takes it');
     if (machines.some((m, i) => i !== editIdx && m.name === name)) return setError(`"${name}" is taken`);
     const updated = [...machines];
-    updated[editIdx!] = { name, host } satisfies Machine;
+    updated[editIdx!] = { ...machines[editIdx!], name, host } satisfies Machine;
     updateConfig({ machines: updated });
     setEditIdx(null);
   };
@@ -712,6 +712,15 @@ function MachineEditor({
                 checked={m.sync === true}
                 onChange={(on) =>
                   updateConfig({ machines: machines.map((x, i) => (i === idx ? { ...x, sync: on } : x)) })
+                }
+              />
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-secondary" onClick={(e) => e.stopPropagation()}>
+              Run Bifrost there
+              <ToggleSwitch
+                checked={m.instance === true}
+                onChange={(on) =>
+                  updateConfig({ machines: machines.map((x, i) => (i === idx ? { ...x, instance: on } : x)) })
                 }
               />
             </span>

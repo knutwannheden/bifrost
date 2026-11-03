@@ -62,6 +62,8 @@ export interface Machine {
   host: string;
   /** Whether connecting brings the machine's Claude setup in line with this one's. */
   sync?: boolean;
+  /** Whether that machine's own Bifrost instance owns the tasks there. */
+  instance?: boolean;
 }
 
 export interface Task {
