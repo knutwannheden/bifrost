@@ -12,14 +12,17 @@ import { z } from 'zod';
 // Bifrost API access
 // ---------------------------------------------------------------------------
 
-function getApiPort() {
-  if (process.env.BIFROST_API_PORT) return Number(process.env.BIFROST_API_PORT);
+function readPort(file) {
   try {
-    const portFile = path.join(os.homedir(), '.bifrost', 'api-port');
-    return Number(fs.readFileSync(portFile, 'utf-8').trim());
+    return Number(fs.readFileSync(path.join(os.homedir(), '.bifrost', file), 'utf-8').trim());
   } catch {
     return null;
   }
+}
+
+function getApiPort() {
+  if (process.env.BIFROST_API_PORT) return Number(process.env.BIFROST_API_PORT);
+  return readPort('api-port');
 }
 
 const TASK_ID = process.env.BIFROST_TASK_ID || null;
@@ -73,6 +76,9 @@ function apiCall(endpoint, body, { timeout = 60000 } = {}) {
 
 /** The machine this session runs on, by its name in Bifrost's settings. Empty on the machine Bifrost runs on. */
 const MACHINE = process.env.BIFROST_MACHINE || '';
+
+/** Whether the API here is this machine's own Bifrost instance. Only an instance writes instance-port. */
+const OWN_INSTANCE = MACHINE !== '' && getApiPort() === readPort('instance-port');
 
 /** What to show in place of a task's session name, or null when that name is how to reach it. */
 function addressOf(t, unreachedHint) {
@@ -308,7 +314,11 @@ server.registerTool(
         .string()
         .optional()
         .describe(
-          "The machine to run the task on, by its name in Bifrost's settings (e.g. 'gpu-box'), when the user names one. Omitted, the task runs on the machine Bifrost runs on. A name Bifrost does not know is refused with the names it does. The repo is cloned there and the task starts from a fresh worktree, so this cannot be combined with 'worktree'. SendMessage does not cross machines, so a task elsewhere is not told how to reach its creator.",
+          `${
+            OWN_INSTANCE
+              ? `The machine to run the task on, when the user names one. Omitted or 'local', the task runs on this machine, "${MACHINE}". 'ide' is the machine Bifrost's window runs on, while that is connected. Any other name is a machine from Bifrost's settings there, and one it does not know is refused with the names it does.`
+              : "The machine to run the task on, by its name in Bifrost's settings (e.g. 'gpu-box'), when the user names one. Omitted, the task runs on the machine Bifrost runs on. A name Bifrost does not know is refused with the names it does."
+          } On another machine the repo is cloned there and the task starts from a fresh worktree, so naming one cannot be combined with 'worktree'. SendMessage does not cross machines, so a task elsewhere is not told how to reach its creator.`,
         ),
       prompt: z
         .string()

@@ -111,6 +111,8 @@ An instance can also link to the Bifrost instance on another machine (`peers.ts`
 
 A machine with "Run Bifrost there" on runs that instance, and it owns the tasks there (`instance-link.ts`). The IDE registers it as a peer, whose connect brings it up and copies it the preferences here. A task created or moved there still goes through the scripts below, then its record is handed to the instance with `POST /import-tasks` and forgotten here once the instance confirms. The tasks the IDE held for the machine move the same way when the setting is turned on, or at the next start. The machine's `api-port` then names its instance, and the connection writes the IDE's forwarded port to `ide-port`. Sessions the instance starts get the plugin directory and first-run settings that remote sessions get, and a tab still reads its session over ssh.
 
+Each time the IDE connects to such an instance, it posts `/link-back` with the port the IDE's API is forwarded to there. The instance then links to the IDE as its peer `ide`, and its tools list the IDE's tasks while that link is up. There `create_task` keeps a task for `"local"` or the machine's own name. It sends any other name to the IDE, `"ide"` included. The plugin describes these values where its API is the machine's own instance, which it tells by `api-port` matching `instance-port`.
+
 Every remote step is a shell script built in `remote-host.ts`, `task-transfer.ts` or `remote-sync.ts`. The checks `check:remote-scripts`, `check:task-transfer` and `check:remote-sync` run them against a local home directory.
 
 ### Restarting Bifrost from a task
