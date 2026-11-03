@@ -1,7 +1,7 @@
-import type { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
+import { emit } from './event-sink';
 import { hasSession, waitForSessionReady, writeToSession } from './session-manager';
 import { getTask, isPendingRestore, restoreTaskSession } from './task-service';
 
@@ -24,13 +24,8 @@ const activeSet = new Set<string>();
 const promptQueues = new Map<string, QueuedPrompt[]>();
 const turnWaiters = new Map<string, Array<() => void>>();
 
-let mainWindow: BrowserWindow | null = null;
 const scrapeResponseResolvers = new Map<string, (text: string) => void>();
 let scrapeIdCounter = 0;
-
-export function initPromptSender(window: BrowserWindow): void {
-  mainWindow = window;
-}
 
 /** Called by bifrost-api when UserPromptSubmit hook fires for a task. */
 export function markActive(taskId: string): void {
@@ -76,16 +71,12 @@ export function isIdle(taskId: string): boolean {
 }
 
 async function scrapePartialPrompt(taskId: string): Promise<string> {
-  if (!mainWindow || mainWindow.isDestroyed()) return '';
-
   const requestId = `scrape-${++scrapeIdCounter}`;
   return new Promise<string>((resolve) => {
     // Timeout after 2s — if renderer doesn't respond, assume empty and unlock
     const timer = setTimeout(() => {
       scrapeResponseResolvers.delete(requestId);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_STREAM.TERMINAL_UNLOCK, taskId);
-      }
+      emit(IPC_STREAM.TERMINAL_UNLOCK, taskId);
       resolve('');
     }, 2000);
 
@@ -94,7 +85,7 @@ async function scrapePartialPrompt(taskId: string): Promise<string> {
       resolve(text);
     });
 
-    mainWindow!.webContents.send(IPC_STREAM.SCRAPE_PROMPT_REQUEST, taskId, requestId);
+    emit(IPC_STREAM.SCRAPE_PROMPT_REQUEST, taskId, requestId);
   });
 }
 
@@ -150,9 +141,7 @@ async function doSendPrompt(text: string, taskId: string): Promise<SendPromptRes
   }
 
   // Unlock terminal input in the renderer
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.TERMINAL_UNLOCK, taskId);
-  }
+  emit(IPC_STREAM.TERMINAL_UNLOCK, taskId);
 
   return { ok: true };
 }
@@ -197,7 +186,7 @@ export async function sendPrompt(
   // Sessions deferred on startup start on tab activation, so a send that
   // arrives first has to start one and wait for Claude's TUI: a new session
   // accepts writes seconds before Claude reads them, and early bytes are discarded.
-  if (isPendingRestore(taskId) && mainWindow && !mainWindow.isDestroyed()) {
+  if (isPendingRestore(taskId)) {
     restoreTaskSession(taskId);
     if (!(await waitForSessionReady(taskId))) {
       return { ok: false, error: 'Session did not finish starting up' };

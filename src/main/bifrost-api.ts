@@ -4,7 +4,6 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { BrowserWindow } from 'electron';
 import type { Repo, Task } from '../shared/types';
 
 const execFile = promisify(execFileCb);
@@ -23,19 +22,11 @@ import { relayMessage } from './claude-oneshot';
 import { loadConfig, saveConfig } from './config';
 import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
-import { emit } from './event-sink';
+import { BELL, emit } from './event-sink';
 import { deleteNote, listNotes } from './note-store';
-import { handleBellNotification, isDebounced, markNotified } from './notification-service';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
-import {
-  initPromptSender,
-  isIdle,
-  markActive,
-  markIdle,
-  sendPrompt as sendPromptToTask,
-  workingTaskIds,
-} from './prompt-sender';
+import { isIdle, markActive, markIdle, sendPrompt as sendPromptToTask, workingTaskIds } from './prompt-sender';
 import { getRemoteHost, sessionIdScript } from './remote-host';
 import { addRepo } from './repo-manager';
 import { normalizeRepoPath } from './repo-path';
@@ -66,7 +57,17 @@ import {
 } from './task-service';
 import { writeLocalSessionId } from './tmux-session';
 
-let mainWindow: BrowserWindow | null = null;
+const BELL_DEBOUNCE_MS = 10_000;
+const lastBell = new Map<string, number>();
+
+/** Rings unless the key rang within BELL_DEBOUNCE_MS, and answers whether it did. */
+function ringBell(key: string, name: string): boolean {
+  const now = Date.now();
+  if (now - (lastBell.get(key) ?? 0) < BELL_DEBOUNCE_MS) return false;
+  lastBell.set(key, now);
+  emit(BELL, name);
+  return true;
+}
 
 /**
  * Check if a Claude session is still valid.
@@ -99,9 +100,7 @@ export function isSessionStale(worktreePath: string, sessionId?: string): boolea
   return false;
 }
 
-export function initApi(window: BrowserWindow): void {
-  mainWindow = window;
-  initPromptSender(window);
+export function initApi(): void {
   setInterval(sweepStaleWork, SWEEP_MS).unref();
 }
 
@@ -132,9 +131,7 @@ function sweepStaleWork(): void {
     const at = sessionOutputAt(taskId);
     if (at != null && now - at < SILENT_MS) continue;
     markIdle(taskId);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, taskId, false);
-    }
+    emit(IPC_STREAM.CLAUDE_ACTIVE, taskId, false);
   }
 }
 
@@ -196,16 +193,10 @@ function awaitUser(task: Task): void {
   if (turnEnded(task.id)) {
     markIdle(task.id);
     turnBoundary(task.id);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-    }
+    emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
   }
-  if (isDebounced(task.id)) return;
-  markNotified(task.id);
-  handleBellNotification(task.name);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, '', '', 'question');
-  }
+  if (!ringBell(task.id, task.name)) return;
+  emit(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, '', '', 'question');
 }
 
 /**
@@ -234,9 +225,7 @@ function hookTask(body: Record<string, unknown>): Task | undefined {
 function turnBoundary(taskId: string): void {
   const at = Date.now();
   markTurnBoundary(taskId, at);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.TASK_TURN_BOUNDARY, taskId, at);
-  }
+  emit(IPC_STREAM.TASK_TURN_BOUNDARY, taskId, at);
 }
 
 /** The end of a task's work: idle, notified, and the sidebar's bar turned. */
@@ -246,13 +235,8 @@ function finishTurn(task: Task): void {
   markIdle(task.id);
   // A turn that just ended is the likeliest moment for a PR to exist.
   markPrIndexStale(task.repoId);
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-  }
-  if (!isDebounced(task.id)) {
-    markNotified(task.id);
-    handleBellNotification(task.name);
-  }
+  emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+  ringBell(task.id, task.name);
 }
 
 /**
@@ -420,18 +404,18 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, { ok: true, pending: true });
         createTaskCore(params, target)
           .then((task) => {
-            mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
+            emit(IPC_STREAM.TASK_CREATED, task);
           })
           .catch((e) => {
             const msg = (e as Error).message;
             console.error('[api] async create-task failed:', msg);
-            mainWindow!.webContents.send(IPC_STREAM.TOAST, `Task creation failed: ${msg}`, 5000);
+            emit(IPC_STREAM.TOAST, `Task creation failed: ${msg}`, 5000);
             reportCreateFailure(params, body.callerContext === 'console', target.repo.name, msg);
           });
       } else {
         try {
           const task = await createTaskCore(params, target);
-          mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
+          emit(IPC_STREAM.TASK_CREATED, task);
 
           jsonResponse(res, task);
         } catch (e) {
@@ -490,16 +474,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           // the detached-worktree guard hold for an agent's archive as well.
           const updated = await archiveTaskCore(taskId);
 
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, taskId, true);
-          }
+          emit(IPC_STREAM.TASK_CLOSED, taskId, true);
           jsonResponse(res, updated);
         } else {
           // Close: stop sessions + set status to stopped, preserve worktree
           const updated = updateTask(taskId, { status: 'stopped' });
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, taskId, false);
-          }
+          emit(IPC_STREAM.TASK_CLOSED, taskId, false);
           jsonResponse(res, updated);
         }
       } catch (e) {
@@ -586,15 +566,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       const { promptData, response } = createRequest(task.id, task.name, toolName, toolInput);
 
       // Send to renderer
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_STREAM.PERMISSION_PROMPT, promptData);
-      }
+      emit(IPC_STREAM.PERMISSION_PROMPT, promptData);
 
       // Notify the user, under the same floor every other trigger observes
-      if (!isDebounced(task.id)) {
-        markNotified(task.id);
-        handleBellNotification(task.name);
-      }
+      ringBell(task.id, task.name);
 
       // Hold connection open until resolved
       const result = await response;
@@ -620,9 +595,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           forgetTask(task.id);
           markActive(task.id);
           turnBoundary(task.id);
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
-          }
+          emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
         }
         jsonResponse(res, { ok: true });
         return;
@@ -634,16 +607,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // two when both arrive.
       if (hookContext === 'console') {
         const wantsUser = hookEventName === 'Stop' || hookEventName === 'Notification';
-        if (wantsUser && !isDebounced(CONSOLE_SESSION_ID)) {
-          markNotified(CONSOLE_SESSION_ID);
-          handleBellNotification('Console');
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(
-              IPC_STREAM.CONSOLE_NOTIFICATION,
-              (body.message as string) || '',
-              (body.title as string) || '',
-            );
-          }
+        if (wantsUser && ringBell(CONSOLE_SESSION_ID, 'Console')) {
+          emit(IPC_STREAM.CONSOLE_NOTIFICATION, (body.message as string) || '', (body.title as string) || '');
         }
         jsonResponse(res, { ok: true });
         return;
@@ -661,9 +626,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           subagentStarted(task.id);
         }
         markActive(task.id);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
-        }
+        emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
         jsonResponse(res, { ok: true });
         return;
       }
@@ -679,9 +642,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (hookEventName === 'SessionEnd') {
         forgetTask(task.id);
         markIdle(task.id);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-        }
+        emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
         jsonResponse(res, { ok: true });
         return;
       }
@@ -693,30 +654,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           markIdle(task.id);
           turnBoundary(task.id);
         }
-        if (!isDebounced(task.id)) {
-          markNotified(task.id);
-          handleBellNotification(task.name);
-        }
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-          mainWindow.webContents.send(
-            IPC_STREAM.HOOK_NOTIFICATION,
-            task.id,
-            task.name,
-            'Claude stopped with an error',
-            '',
-            'stop_failure',
-          );
-        }
+        ringBell(task.id, task.name);
+        emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+        emit(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, 'Claude stopped with an error', '', 'stop_failure');
         jsonResponse(res, { ok: true });
         return;
       }
 
       // PreCompact — informational, forward to renderer
       if (hookEventName === 'PreCompact') {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, '', '', 'pre_compact');
-        }
+        emit(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, '', '', 'pre_compact');
         jsonResponse(res, { ok: true });
         return;
       }
@@ -740,22 +687,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         // Claude is waiting for input
         markIdle(task.id);
         turnBoundary(task.id);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
-        }
+        emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
       }
-      if (isDebounced(task.id)) {
+      if (!ringBell(task.id, task.name)) {
         jsonResponse(res, { ok: true, debounced: true });
         return;
       }
-      markNotified(task.id);
-      handleBellNotification(task.name);
       const message = (body.message as string) || '';
       const title = (body.title as string) || '';
       const notificationType = (body.notification_type as string) || '';
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType);
-      }
+      emit(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType);
       jsonResponse(res, { ok: true });
       return;
     }
@@ -844,7 +785,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // one is what makes it addressable.
       const alreadyAwake = hasSession(wakeId);
       if (!alreadyAwake) {
-        if (!isPendingRestore(wakeId) || !mainWindow || mainWindow.isDestroyed()) {
+        if (!isPendingRestore(wakeId)) {
           jsonResponse(res, { ok: false, error: 'Task has no session and cannot be restored' });
           return;
         }
@@ -874,7 +815,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     case '/transfer-task': {
       const transferId = resolveTaskId(body);
       const machine = body.machine as string | undefined;
-      if (!transferId || !machine || !mainWindow) {
+      if (!transferId || !machine) {
         errorResponse(res, 'taskId and machine are required');
         return;
       }
@@ -903,10 +844,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       // caller that cannot tell a live task from an archived one still gets one.
       const wasOpen = openTask.status === 'running' && hasSession(openId);
       if (!wasOpen) {
-        if (!mainWindow || mainWindow.isDestroyed()) {
-          jsonResponse(res, { ok: false, error: 'Bifrost window is gone' });
-          return;
-        }
         try {
           // A task still holding its worktree from before the restart needs the
           // session it is waiting for, not a reopen.

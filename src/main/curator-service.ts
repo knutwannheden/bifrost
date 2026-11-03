@@ -1,11 +1,11 @@
 import { execFile as execFileCb } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
-import type { BrowserWindow } from 'electron';
 
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { CuratorRunResult, CuratorState, Repo, Task, TaskCuration, TaskOutcome } from '../shared/types';
 import { loadConfig } from './config';
+import { emit } from './event-sink';
 import { archiveTaskCore, getTasks, refreshTaskBranches, updateTask } from './task-service';
 import { isWorktreeDisposable } from './worktree-manager';
 
@@ -14,7 +14,6 @@ const execFile = promisify(execFileCb);
 const CURATOR_INTERVAL_MS = 5 * 60 * 1000;
 const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
-let mainWindow: BrowserWindow | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 
 let curatorState: CuratorState = {
@@ -24,17 +23,14 @@ let curatorState: CuratorState = {
 };
 
 function broadcastCuration(taskId: string, curation: TaskCuration): void {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(IPC_STREAM.CURATOR_UPDATE, taskId, curation);
-  }
+  emit(IPC_STREAM.CURATOR_UPDATE, taskId, curation);
 }
 
 export function getCuratorState(): CuratorState {
   return curatorState;
 }
 
-export function initCurator(window: BrowserWindow): void {
-  mainWindow = window;
+export function initCurator(): void {
   setTimeout(() => runCuratorNow(), 30_000);
   timer = setInterval(() => runCuratorNow(), CURATOR_INTERVAL_MS);
 }
@@ -87,9 +83,7 @@ async function curatorTick(): Promise<void> {
       if (await isWorktreeDisposable(task.worktreePath, task.baseBranch)) {
         console.log(`[curator] auto-archiving clean stopped task: ${task.name}`);
         const archived = await archiveTaskCore(task.id);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, task.id, true);
-        }
+        emit(IPC_STREAM.TASK_CLOSED, task.id, true);
         results.push({
           taskId: task.id,
           taskName: task.name,

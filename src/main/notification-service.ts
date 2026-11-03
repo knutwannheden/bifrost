@@ -2,28 +2,19 @@ import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { app, BrowserWindow, Notification } from 'electron';
 import { loadConfig } from './config';
+import { BELL, subscribe } from './event-sink';
 
 let mainWindow: BrowserWindow | null = null;
 
 export function initNotificationService(window: BrowserWindow): void {
   mainWindow = window;
-}
-
-// Per-task debounce: suppress duplicate notifications within 10s
-const lastNotification = new Map<string, number>();
-
-export function isDebounced(taskId: string): boolean {
-  const now = Date.now();
-  const last = lastNotification.get(taskId) ?? 0;
-  return now - last < 10_000;
-}
-
-export function markNotified(taskId: string): void {
-  lastNotification.set(taskId, Date.now());
+  subscribe((channel, args) => {
+    if (channel === BELL) handleBellNotification(args[0] as string);
+  });
 }
 
 /** Sound, OS banner and dock bounce for a task that wants attention. */
-export function handleBellNotification(taskName: string): void {
+function handleBellNotification(taskName: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (loadConfig().notifications === false) return;
 

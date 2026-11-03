@@ -1,10 +1,10 @@
 import fs from 'node:fs';
-import type { BrowserWindow } from 'electron';
 
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { DiskReclaimResult, DiskReclaimScan, Repo, Task } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { type OwningTask, runGit, type ScanRepo, scanRepos, sizeKb, stillReclaimable } from './disk-reclaim-scan';
+import { emit } from './event-sink';
 import { hasSession } from './session-manager';
 import { archiveTaskCore, getTasks } from './task-service';
 
@@ -12,7 +12,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** How long the window has to have been away for this to read as a fresh start. */
 const AWAY_MS = 60 * 60 * 1000;
 
-let mainWindow: BrowserWindow | null = null;
 let lastBlurAt = Date.now();
 let scanning = false;
 
@@ -73,9 +72,7 @@ export async function applyReclaim(worktreePaths: string[]): Promise<DiskReclaim
     if (task && task.status !== 'archived') {
       try {
         await archiveTaskCore(task.id);
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(IPC_STREAM.TASK_CLOSED, task.id, true);
-        }
+        emit(IPC_STREAM.TASK_CLOSED, task.id, true);
         result.archivedTasks++;
       } catch {
         result.skipped++;
@@ -115,9 +112,7 @@ async function scanAndOffer(): Promise<void> {
   try {
     const scan = await scanReclaimable();
     if (scan.candidates.length === 0) return;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(IPC_STREAM.DISK_RECLAIM_READY, scan);
-    }
+    emit(IPC_STREAM.DISK_RECLAIM_READY, scan);
   } catch (err) {
     console.error('[disk-reclaim] scan failed:', err);
   } finally {
@@ -125,12 +120,10 @@ async function scanAndOffer(): Promise<void> {
   }
 }
 
-export function initDiskReclaim(window: BrowserWindow): void {
-  mainWindow = window;
-  window.on('blur', () => {
-    lastBlurAt = Date.now();
-  });
-  window.on('focus', () => {
-    if (shouldScanOnFocus()) void scanAndOffer();
-  });
+export function noteWindowBlur(): void {
+  lastBlurAt = Date.now();
+}
+
+export function noteWindowFocus(): void {
+  if (shouldScanOnFocus()) void scanAndOffer();
 }

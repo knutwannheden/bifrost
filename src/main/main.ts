@@ -302,7 +302,7 @@ app.on('ready', async () => {
   if (mainWindow) {
     registerIpcHandlers(mainWindow);
     initNotificationService(mainWindow);
-    initApi(mainWindow);
+    initApi();
     startPolling(mainWindow);
   }
 

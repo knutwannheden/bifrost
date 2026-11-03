@@ -30,6 +30,8 @@ Standard Electron three-process split, all TypeScript:
 
 Three separate Vite build targets configured in `forge.config.ts`.
 
+Only `main.ts`, `ipc-handlers.ts`, `notification-service.ts` and `slack-service.ts` import Electron, and only they import each other. `biome.json` enforces this. Every other main-process module reaches the window through `event-sink.ts`. It raises an event there, and `main.ts` forwards each event to the window. The bell for a task that wants attention is an event too, which `notification-service.ts` plays.
+
 ### IPC Pattern
 
 All IPC is defined in `src/shared/ipc-channels.ts`:

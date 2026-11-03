@@ -25,7 +25,7 @@ import { getConsoleSession, initConsole, resetConsole } from './console-service'
 import { findTranscriptMatch, getClaudeJsonlPath, loadPersistedContexts, store as storeContext } from './context-store';
 import { getCuratorState, initCurator, runCuratorNow } from './curator-service';
 import { getDiff, getDiffStats, getFileStatuses, getRangeDiff, resolveDiffBase } from './diff-service';
-import { applyReclaim, initDiskReclaim, scanReclaimable } from './disk-reclaim-service';
+import { applyReclaim, noteWindowBlur, noteWindowFocus, scanReclaimable } from './disk-reclaim-service';
 import { emit } from './event-sink';
 import { getGitLog } from './git-log-service';
 import { scanRecentRepos } from './history-scanner';
@@ -687,8 +687,9 @@ end tell`;
     }, since),
   );
 
-  initCurator(mainWindow);
-  initDiskReclaim(mainWindow);
+  initCurator();
+  mainWindow.on('blur', noteWindowBlur);
+  mainWindow.on('focus', noteWindowFocus);
   initConsole();
 
   // Curator
