@@ -84,8 +84,8 @@ const postB = (route: string, body: unknown) =>
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(15_000),
   });
-const seen: Array<{ channel: string; args: unknown[] }> = [];
-subscribe((channel, args) => seen.push({ channel, args }));
+const seen: Array<{ channel: string; args: unknown[]; origin?: string }> = [];
+subscribe((channel, args, origin) => seen.push({ channel, args, origin }));
 let localCalls = 0;
 const local = () => {
   localCalls++;
@@ -120,7 +120,10 @@ try {
     fs.mkdirSync(repo);
     execFileSync('git', ['init', '-q', repo]);
     await postB('/call', { channel: IPC.ADD_REPO, args: [{ type: 'local', path: repo }] });
-    const relayed = await until(() => seen.some((e) => e.channel === IPC_STREAM.REPOS_CHANGED), 5_000);
+    const relayed = await until(
+      () => seen.some((e) => e.channel === IPC_STREAM.REPOS_CHANGED && e.origin === 'b'),
+      5_000,
+    );
 
     const asking = postB('/permission', { bifrost_task_id: 't1', cwd: tmp, tool_name: 'Bash', tool_input: {} });
     const prompted = await until(() => seen.some((e) => e.channel === IPC_STREAM.PERMISSION_PROMPT), 5_000);

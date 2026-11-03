@@ -5,15 +5,25 @@ export const BELL = 'bell';
 
 export type EventChannel = (typeof IPC_STREAM)[keyof typeof IPC_STREAM] | typeof BELL;
 
-type Listener = (channel: EventChannel, args: unknown[]) => void;
+/** origin names the instance an event came from, and is absent for this one's own. */
+type Listener = (channel: EventChannel, args: unknown[], origin?: string) => void;
 
 const listeners: Listener[] = [];
 
-/** One listener failing must not cost the others the event, nor the service that raised it. */
 export function emit(channel: EventChannel, ...args: unknown[]): void {
+  deliver(channel, args);
+}
+
+/** Raises again an event that the instance named origin raised. */
+export function emitFrom(origin: string, channel: EventChannel, ...args: unknown[]): void {
+  deliver(channel, args, origin);
+}
+
+/** One listener failing must not cost the others the event, nor the service that raised it. */
+function deliver(channel: EventChannel, args: unknown[], origin?: string): void {
   for (const listener of [...listeners]) {
     try {
-      listener(channel, args);
+      listener(channel, args, origin);
     } catch (err) {
       console.error('[events] listener failed on', channel, err);
     }

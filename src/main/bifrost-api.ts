@@ -296,12 +296,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return;
     }
 
-    // Held open, one event per line. The terminals belong to whoever attached to them.
+    // Held open, one event per line, of this instance's own events. The terminals belong to whoever
+    // attached to them, and an event relayed from another instance would echo between the two.
     case '/events': {
       res.writeHead(200, { 'Content-Type': 'application/x-ndjson' });
       res.flushHeaders();
-      const leave = subscribe((channel, args) => {
-        if (channel === IPC_STREAM.SESSION_DATA || channel === IPC_STREAM.SESSION_EXIT) return;
+      const leave = subscribe((channel, args, origin) => {
+        if (origin !== undefined || channel === IPC_STREAM.SESSION_DATA || channel === IPC_STREAM.SESSION_EXIT) return;
         res.write(`${JSON.stringify({ channel, args })}\n`);
       });
       res.on('close', leave);

@@ -2,7 +2,7 @@
  * Services hand their events to the sink, and the sink hands each one to
  * everyone listening. Run with `npm run check:event-sink`.
  */
-import { BELL, emit, subscribe } from '../src/main/event-sink.ts';
+import { BELL, emit, emitFrom, subscribe } from '../src/main/event-sink.ts';
 import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 
 let failed = 0;
@@ -47,6 +47,18 @@ const show = (value: unknown) => JSON.stringify(value);
     'a listener that throws keeps the event from no other listener',
     !threw && c.at(-1) === IPC_STREAM.TOAST,
     show({ threw, c }),
+  );
+}
+
+{
+  const origins: unknown[] = [];
+  subscribe((_channel, _args, origin) => origins.push(origin));
+  emit(IPC_STREAM.TOAST, 'here');
+  emitFrom('b', IPC_STREAM.TOAST, 'there');
+  check(
+    'an event relayed from another instance says where it came from',
+    show(origins.slice(-2)) === show([undefined, 'b']),
+    show(origins.slice(-2)),
   );
 }
 

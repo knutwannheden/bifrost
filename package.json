@@ -44,6 +44,7 @@
     "check:database": "node scripts/check-database.mts",
     "check:headless": "node scripts/check-headless.mts",
     "check:peers": "node scripts/check-peers.mts",
+    "check:task-sync": "node scripts/check-task-sync.mts",
     "check:remote-sync": "node scripts/check-remote-sync.mts",
     "test": "npm --prefix tools/postmortem test && npm --prefix tools/headroom test",
     "typecheck": "tsc --noEmit -p tsconfig.json"

@@ -8,6 +8,7 @@ import type {
   Task,
   TaskStatus,
 } from '../../shared/types';
+import { syncTasks } from '../utils/sync-tasks';
 
 export type DiffMode = 'git' | 'activity' | 'log' | 'metrics' | 'walkthrough';
 export type PaneTarget = 'claude' | 'dev';
@@ -75,6 +76,7 @@ export type AppAction =
   | { type: 'SET_CONFIG'; config: BifrostConfig }
   | { type: 'SET_REPOS'; repos: Repo[] }
   | { type: 'SET_TASKS'; tasks: Task[] }
+  | { type: 'SYNC_TASKS'; tasks: Task[] }
   | { type: 'ADD_TASK'; task: Task }
   | { type: 'REMOVE_TASK'; taskId: string }
   | { type: 'UPDATE_TASK'; task: Task }
@@ -256,6 +258,8 @@ function appReducer(state: AppState, action: AppAction): AppState {
         : state.activeTaskId;
       return { ...state, tasks: action.tasks, tasksLoaded: true, activeTaskId: autoSelect };
     }
+    case 'SYNC_TASKS':
+      return { ...state, tasks: syncTasks(state.tasks, action.tasks) };
     case 'ADD_TASK':
       return { ...state, tasks: [...state.tasks, action.task] };
     case 'REMOVE_TASK': {
@@ -488,16 +492,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     window.bifrost.getApiPort().then((port) => {
       dispatch({ type: 'SET_API_PORT', port });
     });
-    const loadTasks = () =>
-      window.bifrost.listTasks().then((tasks) => {
-        dispatch({ type: 'SET_TASKS', tasks });
-      });
-    loadTasks();
+    window.bifrost.listTasks().then((tasks) => {
+      dispatch({ type: 'SET_TASKS', tasks });
+    });
 
     const unsubSummary = window.bifrost.onTaskSummary((taskId, summary) => {
       dispatch({ type: 'SET_TASK_SUMMARY', taskId, summary });
     });
-    const unsubTasksChanged = window.bifrost.onTasksChanged(loadTasks);
+    const unsubTasksChanged = window.bifrost.onTasksChanged(() => {
+      window.bifrost.listTasks().then((tasks) => dispatch({ type: 'SYNC_TASKS', tasks }));
+    });
     return () => {
       unsubSummary();
       unsubTasksChanged();

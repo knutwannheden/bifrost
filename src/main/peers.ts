@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels.ts';
 import type { Task } from '../shared/types.ts';
-import { type EventChannel, emit } from './event-sink.ts';
+import { type EventChannel, emit, emitFrom } from './event-sink.ts';
 
 /** The calls whose first argument is the id of the task they act on. */
 export const PER_TASK: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
@@ -187,7 +187,7 @@ function relay(peer: Peer, event: { channel: EventChannel; args: unknown[] }): v
   } else if (channel === IPC_STREAM.SCRAPE_PROMPT_REQUEST) {
     peer.requests.add(args[1] as string);
   }
-  emit(channel, ...args);
+  emitFrom(peer.name, channel, ...args);
 }
 
 /** A call's answer is the owner's newest word on the task, since such calls raise no event. */
