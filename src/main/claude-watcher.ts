@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type {
   ActivityEntry,
@@ -14,6 +13,7 @@ import type {
 } from '../shared/types';
 import { summarizeToolInput } from './change-feed';
 import { dropChangeFeed, pollChangeFeed } from './change-feed-service';
+import { emit } from './event-sink';
 import { type FsWatchHandle, watchDir } from './fs-watcher';
 import { summarizeTask } from './task-summarizer';
 
@@ -269,7 +269,6 @@ export function lastConversationAt(worktreePath: string): number | null {
 export function startClaudeWatching(
   taskId: string,
   worktreePath: string,
-  mainWindow: BrowserWindow,
   callbacks?: ClaudeWatcherCallbacks,
   sessionId?: string,
 ): void {
@@ -344,7 +343,7 @@ export function startClaudeWatching(
       for (const line of lines) {
         const entry = parseJsonlLine(line, taskId);
         if (entry) {
-          mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, entry);
+          emit(IPC_STREAM.ACTIVITY_ENTRY, entry);
         }
       }
 
@@ -368,7 +367,7 @@ export function startClaudeWatching(
 
     // Runs even with nothing new in the session's own transcript: subagents and
     // shell writes leave their traces elsewhere, and the feed collects them here.
-    pollChangeFeed(taskId, worktreePath, feedLines, w.sessionId, mainWindow);
+    pollChangeFeed(taskId, worktreePath, feedLines, w.sessionId);
   };
 
   // Subscribe to the project dir once it exists. Claude Code creates it lazily,

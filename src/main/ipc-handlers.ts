@@ -370,7 +370,7 @@ async function destroyTask(taskId: string): Promise<void> {
   saveTasks(tasks);
 }
 
-async function createMultiRepoTask(params: CreateTaskParams, mainWindow: BrowserWindow): Promise<Task> {
+async function createMultiRepoTask(params: CreateTaskParams): Promise<Task> {
   const config = loadConfig();
   const selectedRepos = params.multiRepoIds!.map((id) => {
     const repo = config.repos.find((r: Repo) => r.id === id);
@@ -418,7 +418,7 @@ async function createMultiRepoTask(params: CreateTaskParams, mainWindow: Browser
   saveTasks(tasks);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(task.id, containerPath, mainWindow, _claudeCallbacks);
+  startWatching(task.id, containerPath, _claudeCallbacks);
 
   return task;
 }
@@ -498,13 +498,9 @@ export async function resolveTaskTarget(params: CreateTaskParams): Promise<TaskT
   return { repo, adopted };
 }
 
-export async function createTaskCore(
-  params: CreateTaskParams,
-  mainWindow: BrowserWindow,
-  target?: TaskTarget,
-): Promise<Task> {
+export async function createTaskCore(params: CreateTaskParams, target?: TaskTarget): Promise<Task> {
   if (params.multiRepoIds?.length) {
-    return createMultiRepoTask(params, mainWindow);
+    return createMultiRepoTask(params);
   }
 
   const { repo, adopted } = target ?? (await resolveTaskTarget(params));
@@ -583,7 +579,7 @@ export async function createTaskCore(
   saveTasks(tasks);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(task.id, worktreePath, mainWindow, _claudeCallbacks);
+  startWatching(task.id, worktreePath, _claudeCallbacks);
 
   return task;
 }
@@ -836,7 +832,7 @@ export async function transferTaskCore(taskId: string, machine: string, mainWind
     await writeRemoteSession(moved, host, info);
   } catch (err) {
     // Nothing here has changed yet, so the task carries on where it was.
-    if (wasRunning) restoreTaskSession(taskId, mainWindow);
+    if (wasRunning) restoreTaskSession(taskId);
     throw err;
   } finally {
     fs.rmSync(pack, { recursive: true, force: true });
@@ -893,7 +889,7 @@ export function isPendingRestore(taskId: string): boolean {
   return pendingRestore.has(taskId);
 }
 
-export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): void {
+export function restoreTaskSession(taskId: string): void {
   pendingRestore.delete(taskId);
   const task = getTask(taskId);
   if (task.machine) {
@@ -903,11 +899,11 @@ export function restoreTaskSession(taskId: string, mainWindow: BrowserWindow): v
   startLocalSession(task);
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(taskId, task.worktreePath, mainWindow, _claudeCallbacks, task.sessionId);
+  startWatching(taskId, task.worktreePath, _claudeCallbacks, task.sessionId);
 }
 
 /** Bring an archived or stopped task back: worktree, session and watcher. */
-export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow): Promise<Task> {
+export async function reopenTaskCore(taskId: string): Promise<Task> {
   await cleanups.get(taskId);
   const task = getTask(taskId);
 
@@ -953,7 +949,7 @@ export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow):
   startLocalSession({ ...task, worktreePath, sessionId: resumeSessionId });
 
   if (!_claudeCallbacks) throw new Error('IPC handlers not yet initialized');
-  startWatching(taskId, worktreePath, mainWindow, _claudeCallbacks, resumeSessionId);
+  startWatching(taskId, worktreePath, _claudeCallbacks, resumeSessionId);
 
   return updateTask(taskId, {
     worktreePath,
@@ -965,7 +961,7 @@ export async function reopenTaskCore(taskId: string, mainWindow: BrowserWindow):
 }
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
-  initChangeFeed(mainWindow);
+  initChangeFeed();
 
   // Load persisted context entries from DB
   loadPersistedContexts();
@@ -1015,7 +1011,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   // Joined at once, so a session that ran on without Bifrost has its name and activity known.
   for (const id of plan.join) {
     try {
-      restoreTaskSession(id, mainWindow);
+      restoreTaskSession(id);
     } catch (err) {
       console.error(`[ipc] Failed to rejoin task ${id}:`, err);
       updateTask(id, { status: 'error' });
@@ -1082,7 +1078,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
   // Tasks
   ipcMain.handle(IPC.CREATE_TASK, async (_event, params: CreateTaskParams) => {
-    return createTaskCore(params, mainWindow);
+    return createTaskCore(params);
   });
 
   ipcMain.handle(IPC.CLOSE_TASK, async (_event, taskId: string) => {
@@ -1131,7 +1127,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
   });
 
-  ipcMain.handle(IPC.REOPEN_TASK, (_event, taskId: string) => reopenTaskCore(taskId, mainWindow));
+  ipcMain.handle(IPC.REOPEN_TASK, (_event, taskId: string) => reopenTaskCore(taskId));
 
   ipcMain.handle(IPC.TRANSFER_TASK, (_event, taskId: string, machine: string) =>
     transferTaskCore(taskId, machine, mainWindow),
@@ -1222,7 +1218,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     // where a deferred session is first asked for.
     if (pendingRestore.has(sessionId)) {
       try {
-        restoreTaskSession(sessionId, mainWindow);
+        restoreTaskSession(sessionId);
       } catch (err) {
         console.error(`[ipc] Failed to restore task ${sessionId}:`, err);
         updateTask(sessionId, { status: 'error' });
@@ -1510,7 +1506,7 @@ end tell`;
     tasks.push(task);
     saveTasks(tasks);
 
-    startWatching(taskId, cwd, mainWindow, claudeCallbacks, externalSessionId);
+    startWatching(taskId, cwd, claudeCallbacks, externalSessionId);
 
     return task;
   });
@@ -1538,7 +1534,7 @@ end tell`;
   ipcMain.handle(IPC.SET_ACTIVE_TASK_ID, (_event, taskId: string | null) => {
     if (taskId && pendingRestore.has(taskId)) {
       try {
-        restoreTaskSession(taskId, mainWindow);
+        restoreTaskSession(taskId);
       } catch (err) {
         console.error(`[ipc] Failed to restore task ${taskId}:`, err);
         updateTask(taskId, { status: 'error' });

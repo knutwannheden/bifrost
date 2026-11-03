@@ -418,7 +418,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (isAsync) {
         // Return immediately with a pending response, create in background
         jsonResponse(res, { ok: true, pending: true });
-        createTaskCore(params, mainWindow!, target)
+        createTaskCore(params, target)
           .then((task) => {
             mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
           })
@@ -430,7 +430,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           });
       } else {
         try {
-          const task = await createTaskCore(params, mainWindow!, target);
+          const task = await createTaskCore(params, target);
           mainWindow!.webContents.send(IPC_STREAM.TASK_CREATED, task);
 
           jsonResponse(res, task);
@@ -849,7 +849,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           return;
         }
         try {
-          restoreTaskSession(wakeId, mainWindow);
+          restoreTaskSession(wakeId);
         } catch (err) {
           // The restore drops the task from the pending set before it can fail,
           // so a task left running with neither is unreachable from here on.
@@ -911,10 +911,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           // A task still holding its worktree from before the restart needs the
           // session it is waiting for, not a reopen.
           if (isPendingRestore(openId)) {
-            restoreTaskSession(openId, mainWindow);
+            restoreTaskSession(openId);
             openTask = getTask(openId);
           } else {
-            openTask = await reopenTaskCore(openId, mainWindow);
+            openTask = await reopenTaskCore(openId);
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Task could not be opened';

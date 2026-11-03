@@ -198,7 +198,7 @@ export async function sendPrompt(
   // arrives first has to start one and wait for Claude's TUI: a new session
   // accepts writes seconds before Claude reads them, and early bytes are discarded.
   if (isPendingRestore(taskId) && mainWindow && !mainWindow.isDestroyed()) {
-    restoreTaskSession(taskId, mainWindow);
+    restoreTaskSession(taskId);
     if (!(await waitForSessionReady(taskId))) {
       return { ok: false, error: 'Session did not finish starting up' };
     }

@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ActivityEntry } from '../shared/types';
 import {
@@ -12,6 +11,7 @@ import {
   startClaudeWatching,
   stopClaudeWatching,
 } from './claude-watcher';
+import { emit } from './event-sink';
 import { type FsWatchHandle, watchDir } from './fs-watcher';
 
 const execFile = promisify(execFileCb);
@@ -89,7 +89,6 @@ async function getCommitMessage(worktreePath: string, sha: string): Promise<stri
 export function startWatching(
   taskId: string,
   worktreePath: string,
-  mainWindow: BrowserWindow,
   claudeCallbacks?: ClaudeWatcherCallbacks,
   sessionId?: string,
 ): void {
@@ -135,7 +134,7 @@ export function startWatching(
           commitMessage: commitMsg,
         };
         tw.entries = [commitEntry];
-        mainWindow.webContents.send(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
+        emit(IPC_STREAM.ACTIVITY_ENTRY, commitEntry);
       }
       if (currentSha) tw.headSha = currentSha;
     } catch (err) {
@@ -175,7 +174,7 @@ export function startWatching(
   }
 
   // Also watch Claude Code JSONL session files
-  startClaudeWatching(taskId, worktreePath, mainWindow, claudeCallbacks, sessionId);
+  startClaudeWatching(taskId, worktreePath, claudeCallbacks, sessionId);
 }
 
 export function stopWatching(taskId: string): void {

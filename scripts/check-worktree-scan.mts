@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { initChangeFeed, loadChangeFeed, pollChangeFeed, setActiveFeedTask } from '../src/main/change-feed-service.ts';
+import { subscribe } from '../src/main/event-sink.ts';
+import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 import type { FeedChange, FeedItem } from '../src/shared/types.ts';
 
 let failed = 0;
@@ -28,9 +30,10 @@ git('add', '-A');
 git('commit', '-qm', 'init');
 
 let items: FeedItem[] = [];
-const sink = { webContents: { send: (_c: string, _t: string, next: FeedItem[]) => (items = next) } };
-// The service only needs somewhere to send to; a window is more than that.
-initChangeFeed(sink as unknown as Parameters<typeof initChangeFeed>[0]);
+subscribe((channel, args) => {
+  if (channel === IPC_STREAM.CHANGE_FEED_ITEMS) items = args[1] as FeedItem[];
+});
+initChangeFeed();
 setActiveFeedTask('t');
 loadChangeFeed('t', repo, undefined);
 
@@ -59,7 +62,7 @@ async function scan(write?: () => void, ticks = 80): Promise<FeedChange[]> {
   write?.();
   call++;
   const before = shape(cards());
-  pollChangeFeed('t', repo, [bashLine(`b${call}`)], undefined, sink as never);
+  pollChangeFeed('t', repo, [bashLine(`b${call}`)], undefined);
   for (let i = 0; i < ticks && shape(cards()) === before; i++) {
     await new Promise((r) => setTimeout(r, 25));
   }

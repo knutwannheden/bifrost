@@ -51,7 +51,13 @@
   },
   "overrides": [
     {
-      "includes": ["src/main/session-manager.ts", "src/main/console-service.ts"],
+      "includes": [
+        "src/main/session-manager.ts",
+        "src/main/console-service.ts",
+        "src/main/activity-watcher.ts",
+        "src/main/claude-watcher.ts",
+        "src/main/change-feed-service.ts"
+      ],
       "linter": {
         "rules": {
           "style": {

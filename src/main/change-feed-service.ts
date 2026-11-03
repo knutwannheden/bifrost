@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { BrowserWindow } from 'electron';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import type { FeedChange, FeedItem } from '../shared/types.ts';
 import {
@@ -18,6 +17,7 @@ import {
   parseFeedLines,
 } from './change-feed.ts';
 import { loadConfig } from './config.ts';
+import { emit } from './event-sink.ts';
 
 const execFile = promisify(execFileCb);
 
@@ -98,13 +98,10 @@ interface Buffered {
   bashRuns: Map<string, { command: string; start: number; end?: number; background?: boolean }>;
 }
 
-let feedWindow: BrowserWindow | null = null;
-
 /** Only the task whose panel is open scans its worktree, which costs git a walk. */
 let activeTaskId: string | null = null;
 
-export function initChangeFeed(win: BrowserWindow): void {
-  feedWindow = win;
+export function initChangeFeed(): void {
   // No feed outlives a restart, so neither should the snapshots behind one.
   fs.rmSync(SCRATCH_ROOT, { recursive: true, force: true });
 }
@@ -559,7 +556,7 @@ async function scanWorktree(taskId: string, buf: Buffered): Promise<void> {
         -MAX_ITEMS,
       ),
     );
-    feedWindow?.webContents.send(IPC_STREAM.CHANGE_FEED_ITEMS, taskId, items);
+    emit(IPC_STREAM.CHANGE_FEED_ITEMS, taskId, items);
 
     await capScratch(buf);
   } catch {
@@ -651,10 +648,9 @@ export function pollChangeFeed(
   worktreePath: string,
   lines: string[],
   sessionId: string | undefined,
-  win: BrowserWindow,
 ): void {
   const items = appendChangeFeedLines(taskId, worktreePath, lines, sessionId);
-  if (items) win.webContents.send(IPC_STREAM.CHANGE_FEED_ITEMS, taskId, items);
+  if (items) emit(IPC_STREAM.CHANGE_FEED_ITEMS, taskId, items);
 
   const buf = buffers.get(taskId);
   if (buf && taskId === activeTaskId) void scanWorktree(taskId, buf);
