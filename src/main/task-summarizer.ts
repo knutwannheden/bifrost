@@ -1,24 +1,13 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { runOneShot } from './claude-oneshot';
-
-const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-
-/**
- * Derive the Claude projects directory name from a worktree path.
- * Claude Code uses the absolute path with `/` and `.` replaced by `-`.
- */
-function projectDirName(worktreePath: string): string {
-  return worktreePath.replace(/[/.]/g, '-');
-}
+import { transcriptDir } from './claude-paths';
 
 /**
  * Get the JSONL file path for a specific session ID.
  */
 function sessionJsonlPath(worktreePath: string, sessionId: string): string | null {
-  const dirName = projectDirName(worktreePath);
-  const filePath = path.join(CLAUDE_PROJECTS_DIR, dirName, `${sessionId}.jsonl`);
+  const filePath = path.join(transcriptDir(worktreePath), `${sessionId}.jsonl`);
   return fs.existsSync(filePath) ? filePath : null;
 }
 
@@ -54,8 +43,7 @@ function resolveJsonlPath(worktreePath: string, sessionId?: string): string | nu
     const p = sessionJsonlPath(worktreePath, sessionId);
     if (p) return p;
   }
-  const dirName = projectDirName(worktreePath);
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+  const projectDir = transcriptDir(worktreePath);
   if (!fs.existsSync(projectDir)) return null;
   return findLargestJsonl(projectDir);
 }

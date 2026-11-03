@@ -22,6 +22,7 @@
     "check:pr-verdicts": "node scripts/check-pr-verdicts.mts",
     "check:keyboard-target": "node scripts/check-keyboard-target.mts",
     "check:trust": "node scripts/check-claude-trust.mts",
+    "check:transcript-dir": "node scripts/check-transcript-dir.mts",
     "check:change-feed": "node scripts/check-change-feed.mts",
     "check:activity-state": "node scripts/check-activity-state.mts",
     "check:syntax-highlight": "node scripts/check-syntax-highlight.mts",

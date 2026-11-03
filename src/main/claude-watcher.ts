@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type {
@@ -13,11 +12,10 @@ import type {
 } from '../shared/types';
 import { summarizeToolInput } from './change-feed';
 import { dropChangeFeed, pollChangeFeed } from './change-feed-service';
+import { transcriptDir } from './claude-paths';
 import { emit } from './event-sink';
 import { type FsWatchHandle, watchDir } from './fs-watcher';
 import { summarizeTask } from './task-summarizer';
-
-const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 // The filesystem watch drives the low-latency path; this slow poll is a safety
 // net (dropped events) and bootstraps the watch once the project dir appears —
@@ -43,14 +41,6 @@ interface ClaudeWatcher {
 }
 
 const watchers = new Map<string, ClaudeWatcher>();
-
-/**
- * Derive the Claude projects directory name from a worktree path.
- * Claude Code uses the absolute path with `/` and `.` replaced by `-`.
- */
-function projectDirName(worktreePath: string): string {
-  return worktreePath.replace(/[/.]/g, '-');
-}
 
 function parseJsonlLine(line: string, taskId: string): ActivityEntry | null {
   let obj: Record<string, unknown>;
@@ -252,7 +242,7 @@ function lastEntryAt(filePath: string): number | null {
  * themselves: a file's mtime also moves for bookkeeping no one asked for.
  */
 export function lastConversationAt(worktreePath: string): number | null {
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, projectDirName(worktreePath));
+  const projectDir = transcriptDir(worktreePath);
   let newest: number | null = null;
   try {
     for (const name of fs.readdirSync(projectDir)) {
@@ -274,8 +264,7 @@ export function startClaudeWatching(
 ): void {
   stopClaudeWatching(taskId);
 
-  const dirName = projectDirName(worktreePath);
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+  const projectDir = transcriptDir(worktreePath);
 
   const fileOffsets = new Map<string, number>();
 
@@ -406,8 +395,7 @@ export function startClaudeWatching(
  * merges entries, and returns the most recent ones sorted by timestamp.
  */
 export function getRecentClaudeEntries(taskId: string, worktreePath: string): ActivityEntry[] {
-  const dirName = projectDirName(worktreePath);
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+  const projectDir = transcriptDir(worktreePath);
 
   if (!fs.existsSync(projectDir)) return [];
 
@@ -731,8 +719,7 @@ function readAndParseLines(files: string[]): ParsedLine[] {
  * Read all token usage data points from JSONL files for a task.
  */
 export function getTokenUsageData(worktreePath: string, sessionId?: string): TokenUsageResult {
-  const dirName = projectDirName(worktreePath);
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+  const projectDir = transcriptDir(worktreePath);
 
   if (!fs.existsSync(projectDir)) return { points: [], subagents: [] };
 

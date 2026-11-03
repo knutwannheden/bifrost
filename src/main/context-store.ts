@@ -1,7 +1,7 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import type { CaptureContextParams, ContextEntry, TranscriptContext } from '../shared/types';
+import { transcriptDir } from './claude-paths';
 import { getDb } from './db';
 
 const MAX_ENTRIES = 200;
@@ -192,14 +192,7 @@ function extractTranscriptContent(parsed: Record<string, unknown>): string | nul
 
 /** Find the Claude session JSONL path from a worktree path */
 export function getClaudeJsonlPath(worktreePath: string): string | null {
-  // ~/.claude/projects/ uses path with / replaced by -
-  const projectsDir = path.join(os.homedir(), '.claude', 'projects');
-  if (!fs.existsSync(projectsDir)) return null;
-
-  // Convert worktree path to the key format Claude uses: leading / removed, remaining / → -
-  const projectKey = worktreePath.replace(/^\//, '').replace(/\//g, '-');
-  const projectDir = path.join(projectsDir, projectKey);
-
+  const projectDir = transcriptDir(worktreePath);
   if (!fs.existsSync(projectDir)) return null;
 
   // Find the most recently modified .jsonl file

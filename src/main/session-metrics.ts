@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { flagMetrics } from '../../tools/postmortem/src/bucketing';
 import {
@@ -12,12 +11,7 @@ import { type ClusterModel, classifyPoint } from '../../tools/postmortem/src/clu
 import { parseDiff } from '../../tools/postmortem/src/diff-parser';
 import { computeMetrics } from '../../tools/postmortem/src/metrics';
 import type { SessionMetricEntry, SessionMetricsResult } from '../shared/types';
-
-const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
-
-function projectDirName(worktreePath: string): string {
-  return worktreePath.replace(/[/.]/g, '-');
-}
+import { transcriptDir } from './claude-paths';
 
 // aimlessBacktracks is computed but not shown: it warns at 40 where real
 // sessions top out around 20, so it can only ever report "fine".
@@ -59,8 +53,7 @@ export function getSessionMetricsData(
   const empty: SessionMetricsResult = { metrics: [], cluster: null, backtrackDetail: [] };
 
   // Find the JSONL file
-  const dirName = projectDirName(worktreePath);
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, dirName);
+  const projectDir = transcriptDir(worktreePath);
   if (!fs.existsSync(projectDir)) return empty;
 
   let jsonlPath: string | null = null;

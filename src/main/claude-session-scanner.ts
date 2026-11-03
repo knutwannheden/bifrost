@@ -66,8 +66,8 @@ export function scanClaudeSessions(excludePaths: Set<string>, projectsDir = CLAU
         // Skip old sessions
         if (now - fileStat.mtimeMs > MAX_AGE_MS) continue;
 
-        // The transcript records its own cwd. Claude's directory names encode a
-        // path with / → -, which a repo name containing a dash makes ambiguous.
+        // The transcript records its own cwd. Claude's directory name makes every
+        // character but a letter or digit a dash, so the path cannot be read back from it.
         const info = parseSessionInfo(filePath);
         if (!info) continue;
 

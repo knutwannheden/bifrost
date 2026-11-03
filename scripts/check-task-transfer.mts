@@ -8,8 +8,9 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { claudeProjectDir } from '../src/main/claude-paths.ts';
 import { parseScriptOutput } from '../src/main/remote-host.ts';
-import { claudeProjectDir, packTask, unpackScript } from '../src/main/task-transfer.ts';
+import { packTask, unpackScript } from '../src/main/task-transfer.ts';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {

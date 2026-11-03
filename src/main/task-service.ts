@@ -11,8 +11,8 @@ import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import { generateTaskName } from '../shared/name-generator.ts';
 import type { CreateTaskParams, DiffResult, Repo, Task } from '../shared/types.ts';
 import { startWatching, stopWatching } from './activity-watcher.ts';
-import { isSessionStale } from './bifrost-api.ts';
 import { forgetChangeFeed } from './change-feed-service.ts';
+import { claudeProjectDir, isSessionStale } from './claude-paths.ts';
 import { lastConversationAt } from './claude-watcher.ts';
 import { loadConfig, saveConfig } from './config.ts';
 import { resolveBaseRef } from './diff-service.ts';
@@ -49,7 +49,7 @@ import {
   runningLocalSessions,
 } from './session-manager.ts';
 import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store.ts';
-import { claudeProjectDir, packTask, unpackScript } from './task-transfer.ts';
+import { packTask, unpackScript } from './task-transfer.ts';
 import { generateTaskTitle } from './title-generator.ts';
 import { writeLocalSession } from './tmux-session.ts';
 import {

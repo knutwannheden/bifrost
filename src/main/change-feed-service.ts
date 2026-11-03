@@ -16,12 +16,11 @@ import {
   parseDiffTree,
   parseFeedLines,
 } from './change-feed.ts';
+import { transcriptDir } from './claude-paths.ts';
 import { loadConfig } from './config.ts';
 import { emit } from './event-sink.ts';
 
 const execFile = promisify(execFileCb);
-
-const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 
 const GIT_TIMEOUT_MS = 5000;
 
@@ -193,13 +192,9 @@ function newBuffer(taskId: string, worktreePath: string, sessionId?: string): Bu
   };
 }
 
-function projectDirFor(worktreePath: string): string {
-  return path.join(CLAUDE_PROJECTS_DIR, worktreePath.replace(/[/.]/g, '-'));
-}
-
 /** The transcript this task's feed follows: its session, or the newest one. */
 function transcriptFile(worktreePath: string, sessionId?: string): string | null {
-  const dir = projectDirFor(worktreePath);
+  const dir = transcriptDir(worktreePath);
   if (sessionId) {
     const p = path.join(dir, `${sessionId}.jsonl`);
     return fs.existsSync(p) ? p : null;
@@ -220,7 +215,7 @@ function transcriptFile(worktreePath: string, sessionId?: string): string | null
 
 function subagentFiles(buf: Buffered): string[] {
   if (!buf.sessionId) return [];
-  const dir = path.join(projectDirFor(buf.worktreePath), buf.sessionId, 'subagents');
+  const dir = path.join(transcriptDir(buf.worktreePath), buf.sessionId, 'subagents');
   try {
     return fs
       .readdirSync(dir)

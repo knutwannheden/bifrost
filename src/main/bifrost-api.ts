@@ -75,37 +75,6 @@ function ringBell(key: string, name: string): boolean {
 /** A peer's tasks while it is reachable, so a tool lists what it can act on. */
 const reachablePeerTasks = () => peerTasks().filter((t) => !t.unreachable);
 
-/**
- * Check if a Claude session is still valid.
- * Claude encodes project paths by replacing `/` and `.` with `-` in ~/.claude/projects.
- * Session files are stored as {sessionId}.jsonl in the project directory.
- */
-export function isSessionStale(worktreePath: string, sessionId?: string): boolean {
-  const encoded = worktreePath.replace(/[/.]/g, '-');
-  const projectPath = path.join(os.homedir(), '.claude', 'projects', encoded);
-
-  // Project directory doesn't exist = definitely stale
-  if (!fs.existsSync(projectPath)) {
-    return true;
-  }
-
-  // If sessionId provided, check if that specific session file exists and has content
-  if (sessionId) {
-    const sessionFilePath = path.join(projectPath, `${sessionId}.jsonl`);
-    try {
-      const stat = fs.statSync(sessionFilePath);
-      // Files under 4 KB typically contain only metadata (file-history-snapshot,
-      // progress entries) with no actual conversation — Claude cannot resume these.
-      return stat.size < 4096;
-    } catch {
-      return true;
-    }
-  }
-
-  // Project exists but no sessionId provided, so we can't confirm it's valid
-  return false;
-}
-
 export function initApi(): void {
   setInterval(sweepStaleWork, SWEEP_MS).unref();
 }

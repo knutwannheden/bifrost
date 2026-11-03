@@ -3,11 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { cloneLines, shQuote, type WorktreeSpec } from './remote-host.ts';
 
-/** The directory Claude files a session's transcript under, named after the session's working directory. */
-export function claudeProjectDir(cwd: string): string {
-  return cwd.replace(/[^A-Za-z0-9]/g, '-');
-}
-
 export interface PackSpec {
   worktreePath: string;
   /** A ref the other machine fetches fresh, so the commits on it travel without the bundle. */
