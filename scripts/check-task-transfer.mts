@@ -122,6 +122,16 @@ check(
   );
 }
 
+{
+  const other = path.join(here, '.worktrees', 'work-account');
+  git(here, 'worktree', 'add', '-q', '-b', 'work-account', other, 'origin/main');
+  process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), '.claude-work');
+  const arrived = move(other, 'work-account', true);
+  delete process.env.CLAUDE_CONFIG_DIR;
+  const placed = path.join(there, '.claude-work', 'projects', claudeProjectDir(arrived.WORKTREE), `${sessionId}.jsonl`);
+  check('a moved transcript is filed under the config dir sessions there use', fs.existsSync(placed), placed);
+}
+
 const plain = path.join(here, '.worktrees', 'plain');
 git(here, 'worktree', 'add', '-q', '-b', 'plain', plain, 'origin/main');
 fs.writeFileSync(path.join(plain, 'a.txt'), 'one\nedited\n');

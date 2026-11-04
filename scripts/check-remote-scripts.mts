@@ -72,6 +72,7 @@ cat > '${record}/stdin'
 pwd > '${record}/pwd'
 printf '%s\\n' "$BIFROST_TASK_ID" "$BIFROST_SESSION_NAME" "$PATH" > '${record}/env'
 printf '%s\\n' "$TERM_PROGRAM" "$COLORTERM" > '${record}/term'
+printf '%s' "$CLAUDE_CONFIG_DIR" > '${record}/config-dir'
 `,
   { mode: 0o755 },
 );
@@ -94,18 +95,23 @@ const awkwardName = `it's "quoted" $HOME \`date\` \\ back`;
 const injected = path.join(home, 'injected');
 const awkwardPrompt = `Fix the build.\nIt's "broken" since $(touch "$HOME/injected") and \`id\`.\n\\n is not a newline.\nEOF\n  trailing spaces  \nünïcödé`;
 
-runRemote(
-  home,
-  sessionSetupScript({
+/** Sets the first session up, with Bifrost running under configDir, or without one. */
+function setUpFirst(configDir: string | undefined, prompt?: string): void {
+  if (configDir) process.env.CLAUDE_CONFIG_DIR = configDir;
+  else delete process.env.CLAUDE_CONFIG_DIR;
+  const script = sessionSetupScript({
     home,
     taskId,
     worktreePath: worktree,
     sessionId,
     claudeArgs: ['--name', awkwardName, '--no-chrome'],
     env: { BIFROST_TASK_ID: taskId, BIFROST_SESSION_NAME: awkwardName },
-    prompt: awkwardPrompt,
-  }),
-);
+    prompt,
+  });
+  delete process.env.CLAUDE_CONFIG_DIR;
+  runRemote(home, script);
+}
+setUpFirst(undefined, awkwardPrompt);
 
 // ssh hands the command to the login shell, in the home directory.
 const attach = (configDir?: string) => {
@@ -169,16 +175,19 @@ check(
 );
 
 {
-  const configDir = path.join(root, 'claude-config');
+  // Set up again while Bifrost runs with a config dir, so run.sh exports its counterpart here.
+  const configDir = path.join(home, '.claude-alt');
   fs.mkdirSync(path.join(configDir, 'projects', 'elsewhere'), { recursive: true });
   fs.writeFileSync(path.join(configDir, 'projects', 'elsewhere', `${sessionId}.jsonl`), '{}\n');
-  attach(configDir);
+  setUpFirst(path.join(os.homedir(), '.claude-alt'));
+  attach();
   check(
-    'a transcript under CLAUDE_CONFIG_DIR is resumed',
+    'a transcript under the config dir Bifrost runs with is resumed',
     argsOf('args').join(' ').includes(`--resume ${sessionId}`),
     show(argsOf('args')),
   );
   fs.rmSync(configDir, { recursive: true });
+  setUpFirst(undefined);
 }
 
 fs.mkdirSync(path.join(home, '.claude', 'projects', 'some-project'), { recursive: true });
@@ -298,6 +307,62 @@ const files = (raw: string) => Object.fromEntries(parseDiff(raw).map((f) => [f.n
       !fs.existsSync(other) &&
       git(path.join(home2, clone), 'rev-parse', '--verify', 'refs/heads/fix-it-2') !== '',
     show(archived),
+  );
+}
+
+/** Runs a session's run.sh the way tmux does, with the stub claude on PATH. */
+const runSession = (id: string, env: NodeJS.ProcessEnv) =>
+  execFileSync('sh', [path.join(home, '.bifrost', 'sessions', id, 'run.sh')], {
+    cwd: home,
+    env: { ...process.env, HOME: home, PATH: `${stubs}:${process.env.PATH}`, ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'utf-8');
+
+{
+  const id = '6f9c1a52-0000-4000-8000-0000000000c1';
+  const workJson = path.join(home, '.claude-work', '.claude.json');
+  fs.mkdirSync(path.dirname(workJson), { recursive: true });
+  fs.writeFileSync(workJson, JSON.stringify({ projects: {} }));
+  process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), '.claude-work');
+  const script = sessionSetupScript({ home, taskId: id, worktreePath: worktree, sessionId, claudeArgs: [], env: {} });
+  delete process.env.CLAUDE_CONFIG_DIR;
+  runRemote(home, script);
+  runSession(id, {});
+  const used = configDirUsed();
+  const trusted = JSON.parse(fs.readFileSync(workJson, 'utf-8')).projects[fs.realpathSync(mainRepo)]
+    ?.hasTrustDialogAccepted;
+  check(
+    "a session runs with the config dir Bifrost runs with, and is trusted in that dir's config",
+    used === path.join(home, '.claude-work') && trusted === true,
+    show({ used, trusted }),
+  );
+}
+
+{
+  const id = '6f9c1a52-0000-4000-8000-0000000000c2';
+  runRemote(home, sessionSetupScript({ home, taskId: id, worktreePath: worktree, sessionId, claudeArgs: [], env: {} }));
+  runSession(id, { CLAUDE_CONFIG_DIR: '/stale' });
+  check(
+    'without one, a session runs with it unset, whatever its environment held',
+    configDirUsed() === '',
+    configDirUsed(),
+  );
+}
+
+{
+  const home5 = path.join(root, 'home5');
+  const workJson = path.join(home5, '.claude-work', '.claude.json');
+  fs.mkdirSync(path.dirname(workJson), { recursive: true });
+  fs.writeFileSync(workJson, JSON.stringify({}));
+  process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), '.claude-work');
+  const script = prepareScript({ apiPort: 43671 });
+  delete process.env.CLAUDE_CONFIG_DIR;
+  runRemote(home5, script);
+  check(
+    'connecting marks onboarding done in the config dir Bifrost runs with',
+    JSON.parse(fs.readFileSync(workJson, 'utf-8')).hasCompletedOnboarding === true,
+    fs.readFileSync(workJson, 'utf-8'),
   );
 }
 

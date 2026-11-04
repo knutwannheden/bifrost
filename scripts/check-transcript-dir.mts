@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { isSessionStale } from '../src/main/claude-paths.ts';
+import { claudeConfigDirAt, isSessionStale } from '../src/main/claude-paths.ts';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -28,6 +28,25 @@ process.env.CLAUDE_CONFIG_DIR = path.join(root, 'config');
     'a transcript under CLAUDE_CONFIG_DIR, of a worktree whose path holds _, is found to resume',
     !isSessionStale(worktree, sessionId),
     `looked for ${dir}`,
+  );
+}
+
+{
+  const home = os.homedir();
+  process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude-work');
+  const mapped = claudeConfigDirAt('/home/ann');
+  process.env.CLAUDE_CONFIG_DIR = '/opt/claude-x';
+  const outsideHere = claudeConfigDirAt(home);
+  const outsideThere = claudeConfigDirAt('/home/ann');
+  delete process.env.CLAUDE_CONFIG_DIR;
+  const unset = claudeConfigDirAt(home);
+  check(
+    "a config dir is the same path relative to each machine's home",
+    mapped === '/home/ann/.claude-work' &&
+      outsideHere === '/opt/claude-x' &&
+      outsideThere === undefined &&
+      unset === undefined,
+    JSON.stringify({ mapped, outsideHere, outsideThere, unset }),
   );
 }
 

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { claudeConfigDirAt, claudeConfigRelative } from './claude-paths.ts';
 import { trustDirectory } from './claude-trust.ts';
 
 /** POSIX single quoting, which `sh` reads back verbatim whatever the value holds. */
@@ -49,13 +50,22 @@ export interface SessionSpec {
  * newline after it. run.sh resumes the transcript when there is one, and
  * otherwise starts the session with its prompt.
  */
+/** The line that gives a script on another machine the config dir Bifrost runs with, or Claude's default. */
+export function configDirScript(): string {
+  const relative = claudeConfigRelative();
+  return relative ? `export CLAUDE_CONFIG_DIR="$HOME"/${shQuote(relative)}` : 'unset CLAUDE_CONFIG_DIR';
+}
+
 export function sessionFiles(spec: SessionSpec): Record<string, string> {
   const dir = `${spec.home}/${sessionDir(spec.taskId)}`;
   const exports = Object.entries(spec.env).map(([name, value]) => {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`Unsafe variable name: ${name}`);
     return `export ${name}=${shQuote(value)}`;
   });
+  const configDir = claudeConfigDirAt(spec.home);
   const run = [
+    // Set or cleared here, since the tmux server keeps whatever environment it started with.
+    configDir ? `export CLAUDE_CONFIG_DIR=${shQuote(configDir)}` : 'unset CLAUDE_CONFIG_DIR',
     ...exports,
     // Claude shows links in a terminal it recognises and takes its colour depth from COLORTERM.
     // Inside tmux it sees neither, so the pane claims a terminal Claude knows.

@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cloneLines, shQuote, type WorktreeSpec } from './remote-host.ts';
+import { configDirScript } from './tmux-session.ts';
 
 export interface PackSpec {
   worktreePath: string;
@@ -49,6 +50,7 @@ export interface UnpackSpec extends WorktreeSpec {
 export function unpackScript(spec: UnpackSpec): string {
   const base = shQuote(`origin/${spec.baseBranch}`);
   return [
+    configDirScript(),
     ...cloneLines(spec),
     `d="$HOME"/${shQuote(spec.dropDir)}`,
     'head=$(cat "$d/head")',

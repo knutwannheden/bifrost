@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import type { Machine } from '../shared/types.ts';
-import { claudeConfigDir } from './claude-paths.ts';
+import { claudeConfigDir, claudeConfigRelative } from './claude-paths.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
 import { pack, plan } from './instance-deploy.ts';
@@ -13,6 +13,7 @@ import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts
 import { peerTasks } from './peers.ts';
 import { syncMachine } from './remote-sync.ts';
 import {
+  configDirScript,
   controlArgs,
   type SessionSpec,
   sessionDir,
@@ -66,6 +67,7 @@ export function sessionSetupScript(spec: SessionSpec): string {
   const dir = `${spec.home}/${sessionDir(spec.taskId)}`;
   return [
     'set -e',
+    configDirScript(),
     `python3 -c ${shQuote(TRUST_PY)} ${shQuote(spec.worktreePath)} ${shQuote(JSON.stringify(TRUSTED_ENTRY))} || true`,
     `d=${shQuote(dir)}`,
     'mkdir -p "$d"',
@@ -265,6 +267,7 @@ export function prepareScript(opts: { apiPort: number; theme?: string; instance?
   const onboarding = { hasCompletedOnboarding: true, ...(opts.theme ? { theme: opts.theme } : {}) };
   return [
     'set -e',
+    configDirScript(),
     'cd "$HOME"',
     `mkdir -p ${REMOTE_DIR}/sessions`,
     // On a machine that runs its own instance, api-port is that instance's, and the IDE's API is the peer it links back to.
@@ -510,7 +513,11 @@ export class RemoteHost {
     const info = await this.connect();
     const name = this.machine.name;
     if (info.missing.length) throw new Error(`${name} is missing ${info.missing.join(', ')}`);
-    if (!info.loggedIn) throw new Error(`Claude is not logged in on ${name}: run claude there once and /login`);
+    if (!info.loggedIn) {
+      const relative = claudeConfigRelative();
+      const claude = relative ? `CLAUDE_CONFIG_DIR=~/${relative} claude` : 'claude';
+      throw new Error(`Claude is not logged in on ${name}: run ${claude} there once and /login`);
+    }
     return info;
   }
 
