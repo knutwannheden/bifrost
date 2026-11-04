@@ -790,6 +790,8 @@ export class RemoteHost {
         repoPaths: config.repos.filter((r) => !r.multiTaskId).map((r) => r.path),
         syncPaths: config.syncPaths ?? [],
         headroomDir: bifrostTool('headroom'),
+        // A config dir outside home has no counterpart there, so that machine keeps ~/.claude.
+        configDir: claudeConfigRelative() ? claudeConfigDir() : undefined,
       },
     );
     if (sent.length + removed.length > 0) {

@@ -167,6 +167,43 @@ check(
   show(second),
 );
 
+{
+  // A second config dir, as a second Claude account keeps, linking everything but its login into ~/.claude.
+  const work = `${here}/.claude-work`;
+  fs.mkdirSync(`${here}/.claude/projects`, { recursive: true });
+  write(`${here}/.claude/history.jsonl`, '');
+  fs.mkdirSync(work);
+  fs.symlinkSync(`${here}/.claude/skills`, `${work}/skills`);
+  fs.symlinkSync('../.claude/settings.json', `${work}/settings.json`);
+  fs.symlinkSync(`${here}/.claude/projects`, `${work}/projects`);
+  fs.symlinkSync(`${here}/.claude/history.jsonl`, `${work}/history.jsonl`);
+  write(`${work}/.claude.json`, '{"oauthAccount":{}}');
+  write(`${work}/.credentials.json`, '{}');
+  write(`${there}/.claude-work/history.jsonl`, 'mine');
+  await syncMachine(machine, { ...options([]), configDir: work });
+  const link = (p: string) =>
+    fs.lstatSync(p, { throwIfNoEntry: false })?.isSymbolicLink() ? fs.readlinkSync(p) : null;
+  const links = {
+    skills: link(`${there}/.claude-work/skills`),
+    settings: link(`${there}/.claude-work/settings.json`),
+    projects: link(`${there}/.claude-work/projects`),
+  };
+  check(
+    'another config dir arrives as links into ~/.claude there, and its own files stay here',
+    links.skills === '../.claude/skills' &&
+      fs.existsSync(`${there}/.claude/skills/plain/SKILL.md`) &&
+      links.settings === '../.claude/settings.json' &&
+      fs.existsSync(`${there}/.claude/settings.json`) &&
+      links.projects === '../.claude/projects' &&
+      fs.statSync(`${there}/.claude/projects`).isDirectory() &&
+      !fs.existsSync(`${there}/.claude-work/.claude.json`) &&
+      !fs.existsSync(`${there}/.claude-work/.credentials.json`) &&
+      link(`${there}/.claude-work/history.jsonl`) === null &&
+      read(`${there}/.claude-work/history.jsonl`) === 'mine',
+    show({ links, history: read(`${there}/.claude-work/history.jsonl`) }),
+  );
+}
+
 fs.rmSync(root, { recursive: true, force: true });
 if (failed) {
   console.log(`\n${failed} check(s) failed`);
