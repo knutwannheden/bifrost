@@ -1,4 +1,5 @@
 import type { Task } from '../shared/types.ts';
+import { claudeConfigRelative } from './claude-paths.ts';
 import { loadConfig } from './config.ts';
 import { IDE, postToPeer, refreshPeer, registerPeer } from './peers.ts';
 import { getRemoteHost, localClaudeValue, remoteClonePath } from './remote-host.ts';
@@ -73,6 +74,7 @@ function sendPreferences(port: number): Promise<void> {
     managePermissions: config.managePermissions,
     prompts: config.prompts,
     remoteControlAtStartup: localClaudeValue('remoteControlAtStartup') === true,
+    claudeConfigDir: claudeConfigRelative(),
   });
 }
 

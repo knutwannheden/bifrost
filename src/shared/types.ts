@@ -184,6 +184,8 @@ export interface BifrostConfig {
   syncPaths?: string[];
   /** This machine's Claude remoteControlAtStartup, which the IDE copies to an instance on another machine. */
   remoteControlAtStartup?: boolean;
+  /** On a machine's instance, the IDE's CLAUDE_CONFIG_DIR relative to home, as it last sent it. */
+  claudeConfigDir?: string | null;
 }
 
 export interface CreateTaskParams {

@@ -19,6 +19,7 @@ import {
 } from './activity-state';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { relayMessage } from './claude-oneshot';
+import { applyClaudeConfigDir } from './claude-paths';
 import { loadConfig, saveConfig } from './config';
 import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
@@ -312,10 +313,19 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     // What the IDE copies to an instance on another machine, so its sessions start as the IDE's do.
     case '/preferences': {
       const config = loadConfig() as unknown as Record<string, unknown>;
-      for (const key of ['permissionMode', 'agentTeams', 'managePermissions', 'prompts', 'remoteControlAtStartup']) {
+      const keys = [
+        'permissionMode',
+        'agentTeams',
+        'managePermissions',
+        'prompts',
+        'remoteControlAtStartup',
+        'claudeConfigDir',
+      ];
+      for (const key of keys) {
         if (key in body) config[key] = body[key];
       }
       saveConfig(config as unknown as BifrostConfig);
+      if ('claudeConfigDir' in body) applyClaudeConfigDir(body.claudeConfigDir as string | null);
       jsonResponse(res, { ok: true });
       return;
     }

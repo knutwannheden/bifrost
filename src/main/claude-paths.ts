@@ -17,6 +17,13 @@ export function claudeConfigRelative(): string | null {
     : null;
 }
 
+/** Runs this process with the config dir at relative under home, or with none when relative is null. */
+export function applyClaudeConfigDir(relative: string | null | undefined): void {
+  if (relative === undefined) return;
+  if (relative === null) delete process.env.CLAUDE_CONFIG_DIR;
+  else process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), relative);
+}
+
 let warnedOutsideHome = false;
 
 /**
