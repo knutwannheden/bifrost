@@ -45,17 +45,17 @@ export interface SessionSpec {
   prompt?: string;
 }
 
-/**
- * The files in a task's session directory, by name, each written with a
- * newline after it. run.sh resumes the transcript when there is one, and
- * otherwise starts the session with its prompt.
- */
 /** The line that gives a script on another machine the config dir Bifrost runs with, or Claude's default. */
 export function configDirScript(): string {
   const relative = claudeConfigRelative();
   return relative ? `export CLAUDE_CONFIG_DIR="$HOME"/${shQuote(relative)}` : 'unset CLAUDE_CONFIG_DIR';
 }
 
+/**
+ * The files in a task's session directory, by name, each written with a
+ * newline after it. run.sh resumes the transcript when there is one, and
+ * otherwise starts the session with its prompt.
+ */
 export function sessionFiles(spec: SessionSpec): Record<string, string> {
   const dir = `${spec.home}/${sessionDir(spec.taskId)}`;
   const exports = Object.entries(spec.env).map(([name, value]) => {

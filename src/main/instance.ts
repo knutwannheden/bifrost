@@ -1,6 +1,7 @@
 import { stopAllWatching } from './activity-watcher.ts';
 import { initApi, startApi, stopApi } from './bifrost-api.ts';
 import { initChangeFeed } from './change-feed-service.ts';
+import { recordClaudeConfigDir } from './claude-paths.ts';
 import { initConsole } from './console-service.ts';
 import { loadPersistedContexts } from './context-store.ts';
 import { initCurator } from './curator-service.ts';
@@ -15,6 +16,7 @@ import { restoreTasks } from './task-service.ts';
  * listens on, or null when none was free. A window, if there is one, is the caller's.
  */
 export async function startInstance(): Promise<number | null> {
+  recordClaudeConfigDir();
   const port = await startApi();
   openDatabase();
   initChangeFeed();

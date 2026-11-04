@@ -24,6 +24,13 @@ export function applyClaudeConfigDir(relative: string | null | undefined): void 
   else process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), relative);
 }
 
+/** Records the config dir this instance runs with, which restart-bifrost.sh starts the next one with. */
+export function recordClaudeConfigDir(): void {
+  const dir = path.join(os.homedir(), '.bifrost');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'claude-config-dir'), process.env.CLAUDE_CONFIG_DIR ?? '');
+}
+
 let warnedOutsideHome = false;
 
 /**

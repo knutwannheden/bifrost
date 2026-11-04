@@ -46,12 +46,21 @@ exec >> "$LOG" 2>&1 < /dev/null
 log() { echo "$(date +%T) $*"; }
 
 # Run from a task, the environment holds the session's variables and what Claude's Bash tool adds, such as NO_COLOR.
+# Its CLAUDE_CONFIG_DIR is the one the task started under, so the running Bifrost's record decides instead.
+# Without a record, the task's stands.
+inherited_config_dir=${CLAUDE_CONFIG_DIR-}
 for name in $(compgen -e); do
   case $name in
-    CLAUDE_CONFIG_DIR) ;; # the user's own, and Bifrost reads it
     CLAUDE* | BIFROST_*) unset "$name" ;;
   esac
 done
+if [ -f "$HOME/.bifrost/claude-config-dir" ]; then
+  config_dir=$(cat "$HOME/.bifrost/claude-config-dir")
+else
+  config_dir=$inherited_config_dir
+fi
+[ -n "$config_dir" ] && export CLAUDE_CONFIG_DIR=$config_dir
+log "Claude config dir: ${CLAUDE_CONFIG_DIR:-default}"
 unset NO_COLOR AI_AGENT GIT_EDITOR COREPACK_ENABLE_AUTO_PIN
 
 # pgrep -f cannot read other processes' arguments on macOS, so ps is matched instead.

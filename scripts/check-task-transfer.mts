@@ -12,6 +12,9 @@ import { claudeProjectDir } from '../src/main/claude-paths.ts';
 import { parseScriptOutput } from '../src/main/remote-host.ts';
 import { packTask, unpackScript } from '../src/main/task-transfer.ts';
 
+// The scripts read the config dir Bifrost runs with, so this run starts from none, wherever it is run.
+delete process.env.CLAUDE_CONFIG_DIR;
+
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
   if (!ok) failed++;

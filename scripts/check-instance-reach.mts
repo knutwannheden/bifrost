@@ -193,12 +193,19 @@ try {
     fs.rmSync(path.join(b.home, '.bifrost', 'api-port'), { force: true });
     const again = await start(b, 'perf');
     const second = runSh(await createHere(again.port, 'cfg-2'));
+    const recorded = fs.readFileSync(path.join(b.home, '.bifrost', 'claude-config-dir'), {
+      encoding: 'utf-8',
+      flag: 'a+',
+    });
     await post(again.port, '/preferences', { claudeConfigDir: null });
     const third = runSh(await createHere(again.port, 'cfg-3'));
     const line = `export CLAUDE_CONFIG_DIR='${b.home}/.claude-work'`;
     check(
       "a machine's instance runs its sessions with the config dir the IDE sent, and keeps it across a restart",
-      first.includes(line) && second.includes(line) && third.includes('unset CLAUDE_CONFIG_DIR'),
+      first.includes(line) &&
+        second.includes(line) &&
+        third.includes('unset CLAUDE_CONFIG_DIR') &&
+        recorded === `${b.home}/.claude-work`,
       show({ first: first.split('\n')[0], second: second.split('\n')[0], third: third.split('\n')[0] }),
     );
   }

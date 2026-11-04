@@ -99,7 +99,9 @@ const machine = {
     fs.cpSync(localDir, dest, { recursive: true });
   },
   async exec(script: string) {
-    return execFileSync('sh', ['-s'], { cwd: there, input: script, env: { ...process.env, HOME: there } }).toString();
+    // The machine has its own Claude config, not the one whoever runs this check uses.
+    const env = { ...process.env, HOME: there, CLAUDE_CONFIG_DIR: undefined };
+    return execFileSync('sh', ['-s'], { cwd: there, input: script, env }).toString();
   },
 };
 const options = (syncPaths: string[]): SyncOptions => ({
