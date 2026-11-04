@@ -220,8 +220,18 @@ function editClaudeJson(body: string[]): string {
 }
 
 // Claude rewrites its config often, so each edit writes only when something is missing.
+// The key is resolved as trustRoot in claude-trust.ts resolves it.
 const TRUST_PY = editClaudeJson([
-  'root = os.path.realpath(sys.argv[1])',
+  'import subprocess',
+  'd = os.path.realpath(sys.argv[1])',
+  'def git(arg):',
+  "    return subprocess.run(['git', '-C', d, 'rev-parse', arg], capture_output=True, text=True, check=True).stdout.strip()",
+  'try:',
+  "    common = os.path.join(d, git('--git-common-dir'))",
+  "    root = os.path.dirname(common) if os.path.basename(common) == '.git' else git('--show-toplevel')",
+  'except Exception:',
+  '    root = d',
+  'root = os.path.realpath(root)',
   "projects = config.setdefault('projects', {})",
   "if (projects.get(root) or {}).get('hasTrustDialogAccepted') is True:",
   '    sys.exit(0)',

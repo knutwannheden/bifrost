@@ -77,9 +77,14 @@ printf '%s\\n' "$TERM_PROGRAM" "$COLORTERM" > '${record}/term'
 );
 
 const home = path.join(root, 'home');
+const mainRepo = path.join(root, "re'po");
 const worktree = path.join(root, "work tree's");
 fs.mkdirSync(home);
-fs.mkdirSync(worktree);
+fs.mkdirSync(mainRepo);
+execFileSync('sh', ['-c', 'git init -q && git -c user.email=t@t -c user.name=t commit -q --allow-empty -m init'], {
+  cwd: mainRepo,
+});
+execFileSync('git', ['-C', mainRepo, 'worktree', 'add', '-q', '-b', 'session', worktree]);
 fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ projects: {} }));
 
 const taskId = '6f9c1a52-0000-4000-8000-000000000001';
@@ -133,8 +138,8 @@ attach();
     show({ args, stdin, env }),
   );
   check(
-    'setting a session up trusts its worktree, so Claude starts without asking',
-    JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf-8')).projects[worktree]?.hasTrustDialogAccepted ===
+    "setting a session up trusts its worktree's main repository, so Claude starts without asking",
+    JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf-8')).projects[mainRepo]?.hasTrustDialogAccepted ===
       true,
   );
   check(

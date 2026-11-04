@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -20,17 +21,35 @@ export const TRUSTED_ENTRY = {
 };
 
 /**
- * Grant a directory the workspace trust Claude Code would otherwise stop and
- * ask for, by writing the key its own dialog writes on accept. Answers whether
- * it wrote, which is once per directory: a session that never sees the prompt
- * is one an agent can drive unattended.
+ * The directory Claude keys a workspace's trust under. For a git worktree that
+ * is its main repository, for another checkout its top level, and outside git
+ * the directory itself.
+ */
+function trustRoot(dir: string): string {
+  const real = fs.realpathSync(dir);
+  const git = (arg: string) =>
+    execFileSync('git', ['-C', real, 'rev-parse', arg], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  try {
+    const common = path.resolve(real, git('--git-common-dir'));
+    return fs.realpathSync(path.basename(common) === '.git' ? path.dirname(common) : git('--show-toplevel'));
+  } catch {
+    return real;
+  }
+}
+
+/**
+ * Grant the workspace a directory belongs to the trust Claude Code would
+ * otherwise stop and ask for, under the key its own dialog writes on accept.
+ * Trust on a directory above that key does not count. Answers whether it wrote.
+ * A session that never sees the question is one an agent can drive unattended.
  */
 export function trustDirectory(dir: string, configPath = claudeConfigPath()): boolean {
-  // Claude looks a project up under the path it resolved, so a directory
-  // reached through a symlink is not the key it will read.
   let key: string;
   try {
-    key = fs.realpathSync(dir);
+    key = trustRoot(dir);
   } catch {
     return false;
   }
@@ -44,11 +63,7 @@ export function trustDirectory(dir: string, configPath = claudeConfigPath()): bo
   }
 
   const projects = config.projects ?? {};
-  // Claude honours trust granted to any ancestor, which is how a worktree inside its repo is trusted.
-  for (let d = key; ; d = path.dirname(d)) {
-    if (projects[d]?.hasTrustDialogAccepted === true) return false;
-    if (d === path.dirname(d)) break;
-  }
+  if (projects[key]?.hasTrustDialogAccepted === true) return false;
   config.projects = { ...projects, [key]: { ...TRUSTED_ENTRY, ...projects[key], hasTrustDialogAccepted: true } };
 
   // Claude Code rewrites this file whole and often. Renaming into place keeps a
