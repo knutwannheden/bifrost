@@ -177,6 +177,12 @@ const api: BifrostAPI = {
     return () => ipcRenderer.removeListener(IPC_STREAM.HOOK_NOTIFICATION, handler);
   },
 
+  onMachineLoginNeeded: (callback) => {
+    const handler = (_event: Electron.IpcRendererEvent, machine: string, configDir: string) =>
+      callback(machine, configDir);
+    ipcRenderer.on(IPC_STREAM.MACHINE_LOGIN_NEEDED, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.MACHINE_LOGIN_NEEDED, handler);
+  },
   onConsoleNotification: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, message: string, title: string, machine?: string) =>
       callback(message, title, machine);
@@ -254,6 +260,8 @@ const api: BifrostAPI = {
 
   consoleSession: (machine) => ipcRenderer.invoke(IPC.CONSOLE_SESSION, machine),
   resetConsole: (machine) => ipcRenderer.invoke(IPC.CONSOLE_RESET, machine),
+  startMachineLogin: (machine) => ipcRenderer.invoke(IPC.MACHINE_LOGIN_START, machine),
+  checkMachineLogin: (machine) => ipcRenderer.invoke(IPC.MACHINE_LOGIN_CHECK, machine),
 
   // Curator
   getCuratorState: () => ipcRenderer.invoke(IPC.CURATOR_GET_STATE),

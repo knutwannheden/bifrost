@@ -9,9 +9,11 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { subscribe } from '../src/main/event-sink.ts';
 import {
   archiveScript,
   diffScript,
+  loginScript,
   parseScriptOutput,
   prepareScript,
   RemoteHost,
@@ -20,6 +22,7 @@ import {
   worktreeScript,
 } from '../src/main/remote-host.ts';
 import { parseDiff } from '../src/shared/diff-parser.ts';
+import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -363,6 +366,40 @@ const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'ut
     'connecting marks onboarding done in the config dir Bifrost runs with',
     JSON.parse(fs.readFileSync(workJson, 'utf-8')).hasCompletedOnboarding === true,
     fs.readFileSync(workJson, 'utf-8'),
+  );
+}
+
+{
+  process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), '.claude-work');
+  const script = loginScript();
+  delete process.env.CLAUDE_CONFIG_DIR;
+  runRemote(home, script);
+  runSession('login', { CLAUDE_CONFIG_DIR: '/stale' });
+  check(
+    "logging in on a machine runs Claude's login under the config dir sessions there use",
+    argsOf('args').join(' ') === 'auth login --claudeai' && configDirUsed() === path.join(home, '.claude-work'),
+    show({ args: argsOf('args'), dir: configDirUsed() }),
+  );
+}
+
+{
+  delete process.env.CLAUDE_CONFIG_DIR;
+  const heard: unknown[][] = [];
+  const stop = subscribe((channel, args) => {
+    if (channel === IPC_STREAM.MACHINE_LOGIN_NEEDED) heard.push(args);
+  });
+  const box = new RemoteHost({ name: 'box', host: 'box' });
+  // The connection is made, and Claude there has no login.
+  (box as unknown as { info: object }).info = { home, missing: [], loggedIn: false, pluginDir: null, apiPort: 1 };
+  const refused = await box.connectReady().then(
+    () => '',
+    (err: Error) => err.message,
+  );
+  stop();
+  check(
+    'a machine whose Claude has no login says so, naming the config dir its sessions use',
+    refused.includes('not logged in') && show(heard) === show([['box', '~/.claude']]),
+    show({ refused, heard }),
   );
 }
 

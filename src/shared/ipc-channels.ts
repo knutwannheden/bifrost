@@ -149,6 +149,8 @@ export const IPC = {
   // Console
   CONSOLE_SESSION: 'console:session',
   CONSOLE_RESET: 'console:reset',
+  MACHINE_LOGIN_START: 'machine:login-start',
+  MACHINE_LOGIN_CHECK: 'machine:login-check',
 
   // Prompt sender
   SEND_PROMPT: 'prompt:send',
@@ -175,6 +177,7 @@ export const IPC_STREAM = {
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
   CONSOLE_NOTIFICATION: 'console:notification',
+  MACHINE_LOGIN_NEEDED: 'machine:login-needed',
   PERMISSION_PROMPT: 'permission:prompt',
   STATS_UPDATE: 'stats:update',
   TASK_CREATED: 'task:created',
@@ -334,6 +337,8 @@ export interface BifrostAPI {
 
   /** machine names the machine whose console it is, absent for this one's. */
   onConsoleNotification(callback: (message: string, title: string, machine?: string) => void): () => void;
+  /** A machine's Claude has no login in the config dir its sessions use. */
+  onMachineLoginNeeded(callback: (machine: string, configDir: string) => void): () => void;
 
   // Permission prompts
   onPermissionPrompt(callback: (request: PermissionPromptData) => void): () => void;
@@ -362,6 +367,10 @@ export interface BifrostAPI {
   // Console
   consoleSession(machine?: string): Promise<string>;
   resetConsole(machine?: string): Promise<string>;
+  /** Starts Claude's login on a machine, answering the session to show it in. */
+  startMachineLogin(machine: string): Promise<string>;
+  /** Whether Claude on a machine is logged in now. */
+  checkMachineLogin(machine: string): Promise<boolean>;
 
   // Claude activity
   onClaudeActive(callback: (taskId: string, active: boolean) => void): () => void;

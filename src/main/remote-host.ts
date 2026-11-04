@@ -4,10 +4,12 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import type { Machine } from '../shared/types.ts';
 import { claudeConfigDir, claudeConfigRelative } from './claude-paths.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
+import { emit } from './event-sink.ts';
 import { pack, plan } from './instance-deploy.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
 import { peerTasks } from './peers.ts';
@@ -279,8 +281,27 @@ export function prepareScript(opts: { apiPort: number; theme?: string; instance?
     'missing=',
     'for c in claude git tmux python3 curl; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done',
     `printf 'MISSING=%s\\n' "\${missing# }"`,
-    `if claude auth status </dev/null 2>/dev/null | grep -q '"loggedIn": *true'; then echo LOGGED_IN=yes; else echo LOGGED_IN=no; fi`,
+    LOGIN_CHECK,
     `printf 'PLUGIN_VERSION=%s\\n' "$(python3 -c ${shQuote(PLUGIN_VERSION_PY)} 2>/dev/null || true)"`,
+  ].join('\n');
+}
+
+const LOGIN_CHECK = `if claude auth status </dev/null 2>/dev/null | grep -q '"loggedIn": *true'; then echo LOGGED_IN=yes; else echo LOGGED_IN=no; fi`;
+
+/** The tmux session a login on the machine runs in, read here like any session. */
+export const LOGIN_SESSION = 'login';
+
+/** Readies Claude's login on the machine, under the config dir its sessions use, for a control client to start. */
+export function loginScript(): string {
+  const run = [configDirScript(), 'export PATH="$HOME/.local/bin:$PATH"', 'exec claude auth login --claudeai'].join(
+    '\n',
+  );
+  return [
+    'set -e',
+    `tmux -L ${TMUX_SOCKET} kill-session -t =${LOGIN_SESSION} 2>/dev/null || true`,
+    `d="$HOME"/${sessionDir(LOGIN_SESSION)}`,
+    'mkdir -p "$d"',
+    `printf '%s\\n' ${shQuote(run)} > "$d/run.sh"`,
   ].join('\n');
 }
 
@@ -515,10 +536,23 @@ export class RemoteHost {
     if (info.missing.length) throw new Error(`${name} is missing ${info.missing.join(', ')}`);
     if (!info.loggedIn) {
       const relative = claudeConfigRelative();
+      emit(IPC_STREAM.MACHINE_LOGIN_NEEDED, name, relative ? `~/${relative}` : '~/.claude');
       const claude = relative ? `CLAUDE_CONFIG_DIR=~/${relative} claude` : 'claude';
       throw new Error(`Claude is not logged in on ${name}: run ${claude} there once and /login`);
     }
     return info;
+  }
+
+  /** Readies a login there, which the session LOGIN_SESSION then runs. */
+  async prepareLogin(): Promise<void> {
+    await this.exec(loginScript());
+  }
+
+  /** Asks Claude there whether it is logged in, and keeps the answer for the next connect. */
+  async checkLogin(): Promise<boolean> {
+    const loggedIn = parseScriptOutput(await this.exec(`${configDirScript()}\n${LOGIN_CHECK}`)).LOGGED_IN === 'yes';
+    if (this.info) this.info = { ...this.info, loggedIn };
+    return loggedIn;
   }
 
   /** Runs a script on the machine with `sh -s`, answering its stdout. */

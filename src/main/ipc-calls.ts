@@ -23,16 +23,17 @@ import { scanRecentRepos } from './history-scanner';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { lastChangedFile } from './last-changed-file.ts';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
-import { peerOf, peerTasks, routeCall } from './peers';
+import { connectPeer, peerOf, peerTasks, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
 import { handleScrapeResponse, sendPrompt } from './prompt-sender';
-import { getRemoteHost } from './remote-host';
+import { getRemoteHost, LOGIN_SESSION } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
   attachSession,
   createRemoteSession,
   createShellSession,
+  detachSession,
   hasSession,
   killSession,
   resizeSession,
@@ -611,6 +612,22 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
 
   // Console
   [IPC.CONSOLE_SESSION]: (machine?: string) => (machine ? getMachineConsole(machine) : getConsoleSession()),
+
+  [IPC.MACHINE_LOGIN_START]: async (machine: string) => {
+    const host = getRemoteHost(machine);
+    await host.prepareLogin();
+    const id = `${LOGIN_SESSION}@${machine}`;
+    detachSession(id);
+    createRemoteSession(id, host, { name: LOGIN_SESSION, tmuxName: LOGIN_SESSION });
+    return id;
+  },
+
+  [IPC.MACHINE_LOGIN_CHECK]: async (machine: string) => {
+    const loggedIn = await getRemoteHost(machine).checkLogin();
+    // A machine that runs its own instance comes back at once. A machine without one has no peer to connect.
+    if (loggedIn) connectPeer(machine).catch(() => {});
+    return loggedIn;
+  },
 
   [IPC.CONSOLE_RESET]: (machine?: string) => (machine ? resetMachineConsole(machine) : resetConsole()),
 

@@ -53,6 +53,8 @@ export interface AppState {
   toastAction: { label: string; callback: () => void }[] | null;
   permissionQueue: PermissionPromptData[];
   showConsole: boolean;
+  /** The machine whose Claude login the overlay runs, if one does. */
+  machineLogin: string | null;
   /** The consoles that want the user, until they are shown: '' for this machine's, else a machine's name. */
   consoleUnread: string[];
   /** The console the overlay shows, keyed as consoleUnread is. */
@@ -121,6 +123,8 @@ export type AppAction =
   | { type: 'HIDE_ARCHIVE_CONFIRM' }
   | { type: 'SHOW_CONSOLE' }
   | { type: 'CLOSE_CONSOLE' }
+  | { type: 'SHOW_MACHINE_LOGIN'; machine: string }
+  | { type: 'CLOSE_MACHINE_LOGIN' }
   | { type: 'SET_CONSOLE_UNREAD'; unread: boolean; machine?: string }
   | { type: 'SELECT_CONSOLE'; machine: string }
   | { type: 'START_RENAME_TASK'; taskId: string }
@@ -158,6 +162,7 @@ const initialState: AppState = {
   toastDuration: 2000,
   toastAction: null,
   showConsole: false,
+  machineLogin: null,
   consoleUnread: [],
   consoleMachine: '',
   permissionQueue: [],
@@ -204,6 +209,7 @@ const allOverlaysClosed = {
   showNotes: false,
   showStats: false,
   showConsole: false,
+  machineLogin: null,
   consoleUnread: [],
   consoleMachine: '',
 };
@@ -226,7 +232,8 @@ export function isAnyOverlayOpen(state: AppState): boolean {
     state.showSettings ||
     state.showNotes ||
     state.showStats ||
-    state.showConsole
+    state.showConsole ||
+    state.machineLogin !== null
   )
     return true;
   if (state.activeTaskId) {
@@ -463,6 +470,10 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
     case 'CLOSE_CONSOLE':
       return { ...state, showConsole: false };
+    case 'SHOW_MACHINE_LOGIN':
+      return closeActiveTaskDiff({ ...state, ...allOverlaysClosed, machineLogin: action.machine });
+    case 'CLOSE_MACHINE_LOGIN':
+      return { ...state, machineLogin: null };
     case 'SET_CLAUDE_ACTIVE':
       return {
         ...state,

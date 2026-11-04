@@ -6,6 +6,7 @@ import ChangeFeedPanel from './components/ChangeFeedPanel';
 import ConsoleOverlay from './components/ConsoleOverlay';
 import DiffOverlay from './components/DiffOverlay';
 import KeyboardShortcutsPanel from './components/KeyboardShortcutsPanel';
+import MachineLoginOverlay from './components/MachineLoginOverlay';
 import NotesOverlay from './components/NotesOverlay';
 import NotificationPopover from './components/NotificationPopover';
 import PermissionPanel from './components/PermissionPanel';
@@ -207,6 +208,22 @@ export default function App() {
     });
     return unsub;
   }, [state.showConsole, state.consoleMachine, dispatch]);
+
+  // Each attempt to reach the machine says so again, so one notice a minute is enough.
+  const loginNoticeAt = useRef(new Map<string, number>());
+  useEffect(() => {
+    return window.bifrost.onMachineLoginNeeded((machine, configDir) => {
+      const last = loginNoticeAt.current.get(machine) ?? 0;
+      if (state.machineLogin === machine || Date.now() - last < 60_000) return;
+      loginNoticeAt.current.set(machine, Date.now());
+      dispatch({
+        type: 'SHOW_TOAST',
+        message: `**Claude is not logged in on ${machine}**\nSessions there use ${configDir}.`,
+        duration: 15_000,
+        action: { label: 'Log in', callback: () => dispatch({ type: 'SHOW_MACHINE_LOGIN', machine }) },
+      });
+    });
+  }, [state.machineLogin, dispatch]);
 
   // Listen for hook-based notifications (from Claude Code plugin)
   useEffect(() => {
@@ -524,6 +541,7 @@ export default function App() {
               {state.showNotes && <NotesOverlay />}
               {state.showStats && <StatsOverlay />}
               {state.showConsole && <ConsoleOverlay />}
+              {state.machineLogin && <MachineLoginOverlay machine={state.machineLogin} />}
             </div>
 
             {/* Status bar */}
