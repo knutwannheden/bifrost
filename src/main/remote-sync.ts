@@ -88,16 +88,17 @@ function linkTarget(entry: string): string | null {
 /** A config dir's own login and account, which stay on the machine they were made on. */
 const PER_ACCOUNT = ['.claude.json', '.credentials.json'];
 
-/**
- * Where a top-level entry of the config dir is read here and written there.
- * In a config dir other than ~/.claude, an entry linking into ~/.claude is that target.
- */
-function configPart(o: SyncOptions, name: string): { from: string; path: string } {
-  const claudeHome = `${o.localHome}/.claude`;
-  const entry = `${o.configDir ?? claudeHome}/${name}`;
-  const target = o.configDir && o.configDir !== claudeHome ? linkTarget(entry) : null;
-  const from = target && homeRelative(claudeHome, target) ? target : entry;
-  return { from, path: homeRelative(o.localHome, from) ?? `.claude/${name}` };
+/** p, with each link on its way that points into ~/.claude replaced by where it points. */
+function throughClaudeLinks(home: string, p: string): string {
+  const relative = homeRelative(home, p);
+  if (!relative) return p;
+  let resolved = home;
+  for (const part of relative.split('/')) {
+    resolved = `${resolved}/${part}`;
+    const target = linkTarget(resolved);
+    if (target && homeRelative(`${home}/.claude`, target)) resolved = target;
+  }
+  return resolved;
 }
 
 /** The top-level links of a config dir other than ~/.claude into ~/.claude, relative to home. */
@@ -142,12 +143,9 @@ function units(o: SyncOptions): Unit[] {
   };
   const resolve = (p: string) => (p.startsWith('~/') ? path.join(home, p.slice(2)) : path.resolve(home, p));
 
-  const rules = configPart(o, 'CLAUDE.md');
-  if (fs.existsSync(rules.from)) list.push({ path: RULES, from: rules.from });
-  for (const dir of ['skills', 'agents', 'commands']) add(configPart(o, dir).from);
-  const settingsPart = configPart(o, 'settings.json');
-  const plugins = configPart(o, 'plugins');
-  const settings = readJson<ClaudeSettings>(settingsPart.from) ?? {};
+  if (fs.existsSync(`${home}/.claude/CLAUDE.md`)) list.push({ path: RULES, from: `${home}/.claude/CLAUDE.md` });
+  for (const dir of ['skills', 'agents', 'commands']) add(`${home}/.claude/${dir}`);
+  const settings = readJson<ClaudeSettings>(`${home}/.claude/settings.json`) ?? {};
   if (typeof settings.statusLine?.command === 'string') add(resolve(settings.statusLine.command));
   for (const repo of o.repoPaths) {
     for (let dir = path.dirname(repo); homeRelative(home, dir); dir = path.dirname(dir)) add(`${dir}/CLAUDE.md`);
@@ -157,17 +155,22 @@ function units(o: SyncOptions): Unit[] {
   const enabled = Object.entries(settings.enabledPlugins ?? {})
     .filter(([id, on]) => on && id !== OWN_PLUGIN)
     .map(([id]) => id);
-  const installed = readJson<InstalledPlugins>(`${plugins.from}/installed_plugins.json`) ?? {};
-  const known = readJson<Record<string, Marketplace>>(`${plugins.from}/known_marketplaces.json`) ?? {};
+  const installed = readJson<InstalledPlugins>(`${home}/.claude/plugins/installed_plugins.json`) ?? {};
+  const known = readJson<Record<string, Marketplace>>(`${home}/.claude/plugins/known_marketplaces.json`) ?? {};
+  // A plugin installed while Claude ran from another config dir records its path through that dir's link.
+  const realPath = (entry: { installPath?: unknown }) =>
+    typeof entry.installPath === 'string'
+      ? { ...entry, installPath: throughClaudeLinks(home, entry.installPath) }
+      : entry;
   for (const id of enabled) {
-    const installPath = installed.plugins?.[id]?.[0]?.installPath;
+    const installPath = realPath(installed.plugins?.[id]?.[0] ?? {}).installPath;
     if (typeof installPath === 'string') add(installPath);
   }
   const knownThere: Record<string, Marketplace> = {};
   for (const name of new Set(enabled.map((id) => id.slice(id.indexOf('@') + 1)))) {
     const entry = known[name];
     if (!entry || name === OWN_MARKETPLACE || !fs.existsSync(entry.installLocation)) continue;
-    const dest = `${plugins.path}/marketplaces/${name}`;
+    const dest = `.claude/plugins/marketplaces/${name}`;
     const there = `${o.remoteHome}/${dest}`;
     if (entry.source?.source === 'directory') {
       // A directory marketplace is often a whole repo. Claude needs its manifest and the plugins enabled from it.
@@ -186,15 +189,15 @@ function units(o: SyncOptions): Unit[] {
 
   const rewrite = (value: unknown) => JSON.stringify(value, null, 2).split(home).join(o.remoteHome);
   const enabledThere = Object.fromEntries(enabled.map((id) => [id, true]));
-  list.push({ path: settingsPart.path, text: rewrite({ ...settings, enabledPlugins: enabledThere }) });
+  list.push({ path: '.claude/settings.json', text: rewrite({ ...settings, enabledPlugins: enabledThere }) });
   const installedThere = Object.fromEntries(
-    enabled.filter((id) => installed.plugins?.[id]).map((id) => [id, installed.plugins?.[id]]),
+    enabled.filter((id) => installed.plugins?.[id]).map((id) => [id, installed.plugins?.[id]?.map(realPath)]),
   );
   list.push({
-    path: `${plugins.path}/installed_plugins.json`,
+    path: '.claude/plugins/installed_plugins.json',
     text: rewrite({ ...installed, plugins: installedThere }),
   });
-  list.push({ path: `${plugins.path}/known_marketplaces.json`, text: rewrite(knownThere) });
+  list.push({ path: '.claude/plugins/known_marketplaces.json', text: rewrite(knownThere) });
 
   if (o.headroomDir && fs.existsSync(o.headroomDir)) {
     const parts = ['package.json', 'src', 'skill'].filter((p) => fs.existsSync(path.join(o.headroomDir as string, p)));
@@ -291,11 +294,10 @@ function safeRelative(p: string): boolean {
 export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{ sent: string[]; removed: string[] }> {
   const list = units(o);
   const local = Object.fromEntries(list.map((u) => [u.path, hashUnit(u)]));
-  const claudeMd = configPart(o, 'CLAUDE.md').path;
   const importRules =
     RULES in local
-      ? `grep -qxF ${shQuote(RULES_IMPORT)} ${shQuote(claudeMd)} 2>/dev/null || ` +
-        `{ mkdir -p "$(dirname ${shQuote(claudeMd)})" && printf '\\n%s\\n' ${shQuote(RULES_IMPORT)} >> ${shQuote(claudeMd)}; }\n`
+      ? `grep -qxF ${shQuote(RULES_IMPORT)} .claude/CLAUDE.md 2>/dev/null || ` +
+        `{ mkdir -p .claude && printf '\\n%s\\n' ${shQuote(RULES_IMPORT)} >> .claude/CLAUDE.md; }\n`
       : '';
   // Links are made on every sync and kept out of the manifest, which removes what it lists once gone here.
   const links = linkLines(configLinks(o));
@@ -321,7 +323,8 @@ export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{
     }
   }
 
-  const script = ['set -e', 'cd "$HOME"'];
+  // Physical paths from here on, so a link on the way to a path shows up as one.
+  const script = ['set -e', 'cd "$HOME"', 'cd "$(pwd -P)"'];
   for (const p of sent) {
     script.push(
       `rm -rf ${shQuote(p)}`,
@@ -329,16 +332,18 @@ export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{
       `mv ${shQuote(`${DROP}/${p}`)} ${shQuote(p)}`,
     );
   }
-  for (const p of removed) script.push(`rm -rf ${shQuote(p)}`);
+  // A path removed through a link would delete what the link points to, such as a fresh copy in ~/.claude.
+  for (const p of removed) {
+    script.push(`(cd "$(dirname ${shQuote(p)})" 2>/dev/null && [ "$(pwd -P)" = "$(pwd -L)" ]) && rm -rf ${shQuote(p)}`);
+  }
   script.push(`rm -rf ${DROP}`, `printf '%s\\n' ${shQuote(JSON.stringify(local))} > ${MANIFEST}`);
   if (sent.includes(HEADROOM)) {
     script.push('mkdir -p .local/bin', `ln -sfn "$HOME/${HEADROOM}/src/cli.ts" .local/bin/headroom`);
   }
-  const plugins = configPart(o, 'plugins');
-  if (sent.includes(`${plugins.path}/installed_plugins.json`)) {
+  if (sent.includes('.claude/plugins/installed_plugins.json')) {
     // A marketplace enabled here but with no copy, such as Anthropic's directory, has to be fetched there.
-    const known = readJson<Record<string, Marketplace>>(`${plugins.from}/known_marketplaces.json`) ?? {};
-    const settings = readJson<ClaudeSettings>(configPart(o, 'settings.json').from) ?? {};
+    const known = readJson<Record<string, Marketplace>>(`${o.localHome}/.claude/plugins/known_marketplaces.json`) ?? {};
+    const settings = readJson<ClaudeSettings>(`${o.localHome}/.claude/settings.json`) ?? {};
     const fetched = new Set(
       Object.entries(settings.enabledPlugins ?? {})
         .filter(([id, on]) => on && id !== OWN_PLUGIN)

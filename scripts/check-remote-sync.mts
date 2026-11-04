@@ -191,7 +191,7 @@ check(
     projects: link(`${there}/.claude-work/projects`),
   };
   check(
-    'another config dir arrives as links into ~/.claude there, and its own files stay here',
+    'another config dir arrives as links into ~/.claude there, its own files stay here, and nothing of ~/.claude moves',
     links.skills === '../.claude/skills' &&
       fs.existsSync(`${there}/.claude/skills/plain/SKILL.md`) &&
       links.settings === '../.claude/settings.json' &&
@@ -201,8 +201,43 @@ check(
       !fs.existsSync(`${there}/.claude-work/.claude.json`) &&
       !fs.existsSync(`${there}/.claude-work/.credentials.json`) &&
       link(`${there}/.claude-work/history.jsonl`) === null &&
-      read(`${there}/.claude-work/history.jsonl`) === 'mine',
+      read(`${there}/.claude-work/history.jsonl`) === 'mine' &&
+      // That dir has no plugins entry here, and the machine's own registry stays where it is.
+      fs.existsSync(`${there}/.claude/plugins/installed_plugins.json`) &&
+      !fs.existsSync(`${there}/.claude-work/plugins`),
     show({ links, history: read(`${there}/.claude-work/history.jsonl`) }),
+  );
+}
+
+{
+  // A plugin installed while Claude ran from the second config dir records its path through that dir's link.
+  const work = `${here}/.claude-work`;
+  fs.symlinkSync(`${here}/.claude/plugins`, `${work}/plugins`);
+  write(`${cache}/hub/fresh/2.0.0/.claude-plugin/plugin.json`, '{"name":"fresh"}');
+  const installed = json(`${here}/.claude/plugins/installed_plugins.json`);
+  installed.plugins['fresh@hub'] = [{ installPath: `${work}/plugins/cache/hub/fresh/2.0.0` }];
+  write(`${here}/.claude/plugins/installed_plugins.json`, JSON.stringify(installed));
+  const settings = json(`${here}/.claude/settings.json`);
+  settings.enabledPlugins['fresh@hub'] = true;
+  write(`${here}/.claude/settings.json`, JSON.stringify(settings));
+  // There, a sync before this one left a copy under the path that is now a link into ~/.claude.
+  fs.mkdirSync(`${there}/.claude-work`, { recursive: true });
+  fs.rmSync(`${there}/.claude-work/plugins`, { recursive: true, force: true });
+  fs.symlinkSync('../.claude/plugins', `${there}/.claude-work/plugins`);
+  const manifest = json(`${there}/.bifrost/sync-manifest.json`);
+  manifest['.claude-work/plugins/cache/hub/tool/1.0.0'] = 'stale';
+  write(`${there}/.bifrost/sync-manifest.json`, JSON.stringify(manifest));
+
+  await syncMachine(machine, { ...options([]), configDir: work });
+  const recorded = json(`${there}/.claude/plugins/installed_plugins.json`).plugins['fresh@hub']?.[0]?.installPath;
+  const sentTo = Object.keys(json(`${there}/.bifrost/sync-manifest.json`)).filter((k) => k.includes('fresh'));
+  check(
+    "a plugin installed through a config dir's link lands in ~/.claude there, and nothing is removed through a link",
+    recorded === `${there}/.claude/plugins/cache/hub/fresh/2.0.0` &&
+      show(sentTo) === show(['.claude/plugins/cache/hub/fresh/2.0.0']) &&
+      fs.existsSync(`${there}/.claude/plugins/cache/hub/fresh/2.0.0/.claude-plugin/plugin.json`) &&
+      fs.existsSync(`${there}/.claude/plugins/cache/hub/tool/1.0.0/.claude-plugin/plugin.json`),
+    show({ recorded, sentTo, tool: fs.existsSync(`${there}/.claude/plugins/cache/hub/tool/1.0.0`) }),
   );
 }
 
