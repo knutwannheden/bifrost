@@ -439,6 +439,7 @@ export async function resolveTaskTarget(params: CreateTaskParams): Promise<TaskT
       repo = await addRepo({ type: 'local', path: input });
       config.repos.push(repo);
       saveConfig(config);
+      emit(IPC_STREAM.REPOS_CHANGED, config.repos);
     }
   } else {
     repo = config.repos.find((r: Repo) => r.id === params.repoId);

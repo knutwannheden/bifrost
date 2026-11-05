@@ -106,7 +106,7 @@ While connected, each instance can query the other. Perf's MCP tools then also l
 ### Config
 
 *(my call)* The config splits in two:
-- **Repos belong to each instance.** Perf's repo list is its own clones, and `add_repo` from perf adds to it, offline or not. Each task an instance reports carries its repo's name and GitHub slug. The IDE can then show it without knowing the other instance's repo ids.
+- **Repos belong to each instance.** Perf's repo list is its own clones, and `add_repo` from perf adds to it, offline or not. The IDE also lists each instance's repos, and shows that instance's task with the repo here that has the same GitHub slug. It can then show it without knowing the other instance's repo ids.
 - **Preferences come from the IDE.** On connect, the IDE copies its prompts, permission mode, agent teams, and the Claude settings Bifrost reads, such as `remoteControlAtStartup`. Perf keeps the last copy for when the laptop is away.
 
 ### `create_task` across machines

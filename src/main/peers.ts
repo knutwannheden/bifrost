@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels.ts';
-import type { Task } from '../shared/types.ts';
+import type { Repo, Task } from '../shared/types.ts';
+import { loadConfig } from './config.ts';
 import { BELL, type EventChannel, emit, emitFrom } from './event-sink.ts';
 
 /** The calls whose first argument is the id of the task they act on. */
@@ -55,6 +56,8 @@ interface Peer {
   connecting: Promise<void> | null;
   /** Its own tasks, live while connected and the last list otherwise. */
   tasks: Task[];
+  /** Its own repos, kept like its tasks. */
+  repos: Repo[];
   /** Requests its sessions raised that are not answered yet. */
   requests: Set<string>;
 }
@@ -75,14 +78,16 @@ export function registerPeer(name: string, connect: () => Promise<number>): void
     port: null,
     stream: null,
     connecting: null,
-    tasks: readCache(name),
+    tasks: readCache(`${name}.json`),
+    repos: readCache(`${name}.repos.json`),
     requests: new Set(),
   });
 }
 
 export function peerTasks(): Task[] {
+  const here = loadConfig().repos;
   return [...peers.values()].flatMap((peer) =>
-    peer.tasks.map((t) => ({ ...tagged(peer, t), ...(peer.port === null ? { unreachable: true } : {}) })),
+    peer.tasks.map((t) => ({ ...tagged(peer, t, here), ...(peer.port === null ? { unreachable: true } : {}) })),
   );
 }
 
@@ -232,6 +237,11 @@ function relay(peer: Peer, event: { channel: EventChannel; args: unknown[] }): v
     const [id, archived] = args as [string, boolean];
     const task = peer.tasks.find((t) => t.id === id);
     if (task) upsert(peer, { ...task, status: archived ? 'archived' : 'stopped' });
+  } else if (channel === IPC_STREAM.REPOS_CHANGED) {
+    // The window keeps the repos here. The peer's serve only to match its tasks' repos to them.
+    saveRepos(peer, args[0] as Repo[]);
+    emit(IPC_STREAM.TASKS_CHANGED);
+    return;
   } else if (channel === IPC_STREAM.PERMISSION_PROMPT) {
     peer.requests.add((args[0] as { requestId: string }).requestId);
   } else if (channel === IPC_STREAM.SCRAPE_PROMPT_REQUEST) {
@@ -256,9 +266,14 @@ function noteResult(peer: Peer, channel: IpcChannel, id: string, result: unknown
 /** The peer name a machine's instance gives the IDE's instance, which is also the machine value that means the IDE. */
 export const IDE = 'ide';
 
-/** Names the machine a peer's task runs on. A task that names none runs on the peer's own. */
-function tagged(peer: Peer, task: Task): Task {
-  return { ...task, machine: task.machine ?? peer.name };
+/**
+ * Names the machine a peer's task runs on. A task that names none runs on the peer's own.
+ * Each instance gives a repo its own id, so the task takes the id of the repo here with the same GitHub slug.
+ */
+function tagged(peer: Peer, task: Task, here = loadConfig().repos): Task {
+  const slug = peer.repos.find((r) => r.id === task.repoId)?.githubPath;
+  const mine = slug ? here.find((r) => r.githubPath === slug) : undefined;
+  return { ...task, machine: task.machine ?? peer.name, ...(mine && { repoId: mine.id }) };
 }
 
 function upsert(peer: Peer, task: Task): void {
@@ -289,20 +304,30 @@ async function call(peer: Peer, channel: IpcChannel, args: unknown[]): Promise<u
 }
 
 async function listTasks(peer: Peer): Promise<void> {
+  saveRepos(peer, (await call(peer, IPC.LIST_REPOS, [])) as Repo[]);
   peer.tasks = (await call(peer, IPC.LIST_TASKS, [])) as Task[];
   writeCache(peer);
   emit(IPC_STREAM.TASKS_CHANGED);
 }
 
-function readCache(name: string): Task[] {
+function saveRepos(peer: Peer, repos: Repo[]): void {
+  peer.repos = repos;
+  writeFile(`${peer.name}.repos.json`, repos);
+}
+
+function readCache<T>(file: string): T[] {
   try {
-    return JSON.parse(fs.readFileSync(path.join(PEERS_DIR, `${name}.json`), 'utf-8')) as Task[];
+    return JSON.parse(fs.readFileSync(path.join(PEERS_DIR, file), 'utf-8')) as T[];
   } catch {
     return [];
   }
 }
 
 function writeCache(peer: Peer): void {
+  writeFile(`${peer.name}.json`, peer.tasks);
+}
+
+function writeFile(file: string, value: unknown): void {
   fs.mkdirSync(PEERS_DIR, { recursive: true });
-  fs.writeFileSync(path.join(PEERS_DIR, `${peer.name}.json`), JSON.stringify(peer.tasks));
+  fs.writeFileSync(path.join(PEERS_DIR, file), JSON.stringify(value));
 }

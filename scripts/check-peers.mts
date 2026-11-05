@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { IPC, IPC_STREAM } from '../src/shared/ipc-channels.ts';
-import type { Task } from '../src/shared/types.ts';
+import type { Repo, Task } from '../src/shared/types.ts';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -47,25 +47,31 @@ fs.writeFileSync(path.join(stubs, 'claude'), '#!/bin/sh\nprintf "stub\\n"\nexec 
 fs.writeFileSync(path.join(homeB, '.bifrost', 'config.json'), JSON.stringify({ managePermissions: true }));
 const socket = path.join(root, `tmux-${process.getuid?.()}`, 'bifrost');
 
-// db.ts and peers.ts fix their paths as they load: B's database first, then this side's home.
-process.env.HOME = homeB;
-{
-  const db = await import('../src/main/db.ts');
-  const store = await import('../src/main/task-store.ts');
-  db.openDatabase();
-  const t1: Task = {
-    id: 't1',
-    name: 't1',
-    repoId: 'r',
-    baseBranch: 'main',
-    worktreePath: tmp,
-    status: 'stopped',
-    hasUnread: false,
-    createdAt: 1,
-  };
-  store.saveTasks([t1]);
-  db.closeDatabase();
-}
+// Each side gives the same GitHub repo its own id.
+const repoHere = (id: string, slug: string): Repo => ({
+  id,
+  name: slug,
+  path: path.join(homeA, slug),
+  defaultBranch: 'main',
+  githubPath: `org/${slug}`,
+});
+fs.mkdirSync(path.join(homeA, '.bifrost'));
+fs.writeFileSync(
+  path.join(homeA, '.bifrost', 'config.json'),
+  JSON.stringify({ repos: [repoHere('ra', 'r'), repoHere('sa', 's')] }),
+);
+const t1: Task = {
+  id: 't1',
+  name: 't1',
+  repoId: 'r',
+  baseBranch: 'main',
+  worktreePath: tmp,
+  status: 'stopped',
+  hasUnread: false,
+  createdAt: 1,
+};
+
+// peers.ts and config.ts fix their paths as they load.
 process.env.HOME = homeA;
 const {
   closePeers,
@@ -109,16 +115,18 @@ try {
   if (!(await until(() => fs.existsSync(portFile), 15_000))) throw new Error('B did not come up');
   portB = fs.readFileSync(portFile, 'utf8').trim();
   registerPeer('b', async () => Number(portB));
+  await postB('/import-tasks', { tasks: [t1], repos: [{ ...repoHere('r', 'r'), path: path.join(homeB, 'r') }] });
 
   {
     await connectPeer('b');
     const renamed = (await routeCall(IPC.RENAME_TASK, ['t1', 'x'], local)) as Task;
     const listed = peerTasks().find((t) => t.id === 't1');
     check(
-      "a peer's tasks come back marked with its machine, and its calls run there",
+      "a peer's tasks come back marked with its machine and this side's repo, and its calls run there",
       renamed?.name === 'x' &&
         localCalls === 0 &&
         listed?.machine === 'b' &&
+        listed?.repoId === 'ra' &&
         listed?.name === 'x' &&
         !listed.unreachable,
       show({ renamed, localCalls, listed }),
@@ -126,15 +134,35 @@ try {
   }
 
   {
-    const repo = path.join(root, 'repo');
-    fs.mkdirSync(repo);
-    execFileSync('git', ['init', '-q', repo]);
-    await postB('/call', { channel: IPC.ADD_REPO, args: [{ type: 'local', path: repo }] });
-    const relayed = await until(
-      () => seen.some((e) => e.channel === IPC_STREAM.REPOS_CHANGED && e.origin === 'b'),
-      5_000,
+    const repo = path.join(root, 's');
+    execFileSync('git', ['init', '-q', '-b', 'main', repo]);
+    execFileSync('git', ['-C', repo, 'remote', 'add', 'origin', 'https://github.com/org/s.git']);
+    execFileSync('git', [
+      '-C',
+      repo,
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@t',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      's',
+    ]);
+    const from = seen.length;
+    const created = (await (await postB('/create-task', { repoPath: repo, name: 'in s' })).json()) as Task;
+    const arrived = await until(() => peerTasks().some((t) => t.id === created.id), 5_000);
+    const listed = peerTasks().find((t) => t.id === created.id);
+    const passedOn = seen.slice(from).some((e) => e.channel === IPC_STREAM.REPOS_CHANGED);
+    check(
+      "a task a peer creates in a repo new to it shows this side's repo, and the peer's repo list stays the peer's",
+      arrived && listed?.repoId === 'sa' && !passedOn,
+      show({ created, listed, passedOn }),
     );
+  }
 
+  {
     const asking = postB('/permission', { bifrost_task_id: 't1', cwd: tmp, tool_name: 'Bash', tool_input: {} });
     const prompted = await until(() => seen.some((e) => e.channel === IPC_STREAM.PERMISSION_PROMPT), 5_000);
     const prompt = seen.find((e) => e.channel === IPC_STREAM.PERMISSION_PROMPT)?.args[0] as { requestId: string };
@@ -142,8 +170,8 @@ try {
     const answered = await Promise.race([asking.then((r) => r.status), sleep(5_000).then(() => 'still waiting')]);
     check(
       "a peer's events arrive here, and an answer to its request goes back to it",
-      relayed && prompted && answered === 200 && localCalls === 0,
-      show({ relayed, prompted, answered, localCalls }),
+      prompted && answered === 200 && localCalls === 0,
+      show({ prompted, answered, localCalls }),
     );
   }
 
@@ -208,6 +236,18 @@ try {
       'a peer that goes away leaves its last list, greyed, and its calls fail and say so',
       noticed && greyed?.unreachable === true && greyed.name === 'x' && failure.startsWith('b:') && told,
       show({ noticed, greyed, failure, told }),
+    );
+  }
+
+  {
+    // A second copy of the module starts from what the first left on disk, as after a restart here.
+    const restarted = (await import('../src/main/peers.ts?restarted')) as typeof import('../src/main/peers.ts');
+    restarted.registerPeer('b', async () => Number(portB));
+    const greyed = restarted.peerTasks().find((t) => t.id === 't1');
+    check(
+      "after a restart here, a peer that is away still shows its last list with this side's repo",
+      greyed?.unreachable === true && greyed.repoId === 'ra',
+      show({ greyed }),
     );
   }
 } finally {
