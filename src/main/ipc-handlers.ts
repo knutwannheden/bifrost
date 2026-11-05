@@ -4,17 +4,21 @@ import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 
 const execFile = promisify(execFileCb);
 
-import { IPC, type IpcChannel } from '../shared/ipc-channels';
+import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
 import type { BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, mergeRendererConfig, saveConfig } from './config';
 import { store as storeContext } from './context-store';
 import { noteWindowBlur, noteWindowFocus } from './disk-reclaim-service';
-import { openFileInIde, openInIde } from './ide-launcher';
+import { emit } from './event-sink';
+import { openFileInIde, openInIde, remoteHost } from './ide-launcher';
 import { linkInstances } from './instance-link';
 import { calls } from './ipc-calls';
 import { peerTasks, routeCall } from './peers';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getTasks } from './task-service';
+
+const allTasks = () => [...getTasks(), ...peerTasks()];
+const hostOf = (filePath: string) => remoteHost(filePath, allTasks(), loadConfig().machines ?? []);
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   for (const [channel, call] of Object.entries(calls) as Array<[IpcChannel, (...args: unknown[]) => unknown]>) {
@@ -41,10 +45,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
           parseInt(parsed.searchParams.get('line') ?? '', 10) ||
           undefined;
         // Match file path to a task worktree so the IDE opens in the right window
-        const worktree = getTasks().find(
+        const worktree = allTasks().find(
           (t) => t.worktreePath && filePath.startsWith(`${t.worktreePath}/`),
         )?.worktreePath;
-        return openFileInIde(filePath, line, worktree);
+        return openFileInIde(filePath, line, worktree, hostOf(filePath));
       } catch {
         return;
       }
@@ -86,9 +90,11 @@ end tell`;
   });
 
   // IDE
-  ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string, filePath?: string, line?: number) => {
-    return openInIde(worktreePath, undefined, filePath, line);
-  });
+  ipcMain.handle(IPC.OPEN_IN_IDE, (_event, worktreePath: string, filePath?: string, line?: number) =>
+    openInIde(worktreePath, undefined, filePath, line, hostOf(worktreePath)).catch((err: Error) => {
+      emit(IPC_STREAM.TOAST, err.message, 5000);
+    }),
+  );
 
   // Terminal title
   ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, _taskId: string, title: string) => {
