@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { PrerequisiteStatus, Task } from '../../shared/types';
 import type { PaneTarget } from '../context/AppContext';
-import { defaultPaneState, useApp } from '../context/AppContext';
+import { defaultPaneState, isAnyOverlayOpen, useApp } from '../context/AppContext';
 import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
+import ActionLabel from './ActionLabel';
 import InterruptedBanner from './InterruptedBanner';
 import Kbd from './Kbd';
 import PrimaryButton from './PrimaryButton';
@@ -37,11 +38,13 @@ const tips = [
 ];
 
 /** The pane for a closed task, whose worktree is kept until the task is archived. */
-function ClosedTaskPane({ task }: { task: Task }) {
-  const { dispatch } = useApp();
+function ClosedTaskPane({ task, active }: { task: Task; active: boolean }) {
+  const { state, dispatch } = useApp();
   const [reopening, setReopening] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const anyOverlay = isAnyOverlayOpen(state);
 
-  const reopen = async () => {
+  const reopen = useCallback(async () => {
     setReopening(true);
     try {
       const updated = await window.bifrost.reopenTask(task.id);
@@ -49,7 +52,28 @@ function ClosedTaskPane({ task }: { task: Task }) {
     } catch {
       setReopening(false);
     }
-  };
+  }, [task.id, dispatch]);
+
+  // The pane stays mounted while hidden, so its button takes focus each time its task is shown, for Enter.
+  useEffect(() => {
+    if (active && !anyOverlay) button.current?.focus();
+  }, [active, anyOverlay]);
+
+  useEffect(() => {
+    if (!active || anyOverlay || reopening) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)
+        return;
+      // e.code, since Option turns the letter into another character on macOS.
+      if (e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'KeyO') {
+        e.preventDefault();
+        reopen();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, anyOverlay, reopening, reopen]);
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3">
@@ -57,8 +81,8 @@ function ClosedTaskPane({ task }: { task: Task }) {
         This task is closed. Its worktree is kept until the task is archived.
         <span className="mt-1 block font-mono text-xs">{task.worktreePath}</span>
       </div>
-      <PrimaryButton autoFocus onClick={reopen} disabled={reopening}>
-        {reopening ? 'Reopening\u2026' : 'Reopen task'}
+      <PrimaryButton ref={button} onClick={reopen} disabled={reopening}>
+        {reopening ? 'Reopening\u2026' : <ActionLabel text="Reopen task" hintIndex={2} showHint />}
       </PrimaryButton>
     </div>
   );
@@ -219,7 +243,7 @@ export default function TaskView() {
               className="absolute inset-0 flex flex-col"
               style={{ display: isActive ? 'flex' : 'none' }}
             >
-              <ClosedTaskPane task={task} />
+              <ClosedTaskPane task={task} active={isActive} />
             </div>
           );
         }
