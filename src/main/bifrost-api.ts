@@ -111,6 +111,9 @@ function sweepStaleWork(): void {
   }
 }
 
+/** Node's fetch gives up on a response that stays silent for five minutes, so an event stream beats well within that. */
+const EVENTS_BEAT_MS = 15_000;
+
 const PORT_START = 7623;
 const PORT_END = 7632;
 const PORT_FILE = path.join(os.homedir(), '.bifrost', 'api-port');
@@ -306,7 +309,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         if (origin !== undefined || channel === IPC_STREAM.SESSION_DATA || channel === IPC_STREAM.SESSION_EXIT) return;
         res.write(`${JSON.stringify({ channel, args })}\n`);
       });
-      res.on('close', leave);
+      const beat = setInterval(() => res.write('\n'), EVENTS_BEAT_MS);
+      res.on('close', () => {
+        clearInterval(beat);
+        leave();
+      });
       return;
     }
 

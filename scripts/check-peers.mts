@@ -108,12 +108,33 @@ const local = () => {
   return 'local';
 };
 
-try {
+const portFile = path.join(homeB, '.bifrost', 'api-port');
+/** Starts B, and answers once it has written its port. */
+async function startB(): Promise<{ exited: Promise<unknown> }> {
+  fs.rmSync(portFile, { force: true });
   b = spawn('node', ['.vite/headless/headless.js'], { env, stdio: 'ignore' });
   const exited = new Promise((resolve) => b?.on('exit', resolve));
-  const portFile = path.join(homeB, '.bifrost', 'api-port');
   if (!(await until(() => fs.existsSync(portFile), 15_000))) throw new Error('B did not come up');
   portB = fs.readFileSync(portFile, 'utf8').trim();
+  return { exited };
+}
+
+// B's own event stream, read directly, where an empty line is a beat.
+let beats = 0;
+const raw = new AbortController();
+
+try {
+  const { exited } = await startB();
+  void fetch(`http://127.0.0.1:${portB}/events`, { method: 'POST', body: '{}', signal: raw.signal })
+    .then(async (res) => {
+      let rest = '';
+      for await (const chunk of res.body ?? []) {
+        const lines = (rest + Buffer.from(chunk).toString()).split('\n');
+        rest = lines.pop() ?? '';
+        beats += lines.filter((line) => line === '').length;
+      }
+    })
+    .catch(() => {});
   registerPeer('b', async () => Number(portB));
   await postB('/import-tasks', { tasks: [t1], repos: [{ ...repoHere('r', 'r'), path: path.join(homeB, 'r') }] });
 
@@ -222,8 +243,18 @@ try {
   }
 
   {
+    const beat = await until(() => beats > 0, 20_000);
+    raw.abort();
+    check(
+      "an instance's event stream beats every 15 seconds, so a reader that gives up on a silent one stays",
+      beat,
+      show({ beats }),
+    );
+  }
+
+  {
     const from = seen.length;
-    b.kill('SIGTERM');
+    b?.kill('SIGTERM');
     await exited;
     const noticed = await until(() => seen.slice(from).some((e) => e.channel === IPC_STREAM.TASKS_CHANGED), 5_000);
     const greyed = peerTasks().find((t) => t.id === 't1');
@@ -250,7 +281,18 @@ try {
       show({ greyed }),
     );
   }
+
+  {
+    await startB();
+    const back = await until(() => peerTasks().find((t) => t.id === 't1')?.unreachable !== true, 30_000);
+    check(
+      'a peer that comes back is linked again without anything asking for it',
+      back,
+      show({ listed: peerTasks().find((t) => t.id === 't1') }),
+    );
+  }
 } finally {
+  raw.abort();
   closePeers();
   if (b && b.exitCode === null) b.kill('SIGKILL');
   try {

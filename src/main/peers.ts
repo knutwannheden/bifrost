@@ -46,6 +46,8 @@ export const BY_REQUEST: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
 const REMOVES: ReadonlySet<IpcChannel> = new Set<IpcChannel>([IPC.CLOSE_TASK, IPC.DELETE_TASK]);
 
 const PEERS_DIR = path.join(os.homedir(), '.bifrost', 'peers');
+const RETRY_FIRST_MS = 5_000;
+const RETRY_MAX_MS = 60_000;
 
 interface Peer {
   name: string;
@@ -60,6 +62,8 @@ interface Peer {
   repos: Repo[];
   /** Requests its sessions raised that are not answered yet. */
   requests: Set<string>;
+  /** The next attempt to open a link that ended without being closed here. */
+  retry: ReturnType<typeof setTimeout> | null;
 }
 
 const peers = new Map<string, Peer>();
@@ -81,6 +85,7 @@ export function registerPeer(name: string, connect: () => Promise<number>): void
     tasks: readCache(`${name}.json`),
     repos: readCache(`${name}.repos.json`),
     requests: new Set(),
+    retry: null,
   });
 }
 
@@ -165,6 +170,8 @@ export async function refreshPeer(name: string): Promise<void> {
 export function disconnectPeer(name: string): void {
   const peer = peers.get(name);
   if (!peer) return;
+  if (peer.retry) clearTimeout(peer.retry);
+  peer.retry = null;
   peer.stream?.abort();
   peer.stream = null;
   peer.port = null;
@@ -222,8 +229,18 @@ async function read(peer: Peer, body: ReadableStream<Uint8Array>, stream: AbortC
       peer.stream = null;
       peer.port = null;
       emit(IPC_STREAM.TASKS_CHANGED);
+      reconnect(peer, RETRY_FIRST_MS);
     }
   }
+}
+
+/** Tries to open the link until it is up or closed here, waiting twice as long after each failure, up to a minute. */
+function reconnect(peer: Peer, delay: number): void {
+  peer.retry = setTimeout(() => {
+    peer.retry = null;
+    connectPeer(peer.name).catch(() => reconnect(peer, Math.min(delay * 2, RETRY_MAX_MS)));
+  }, delay);
+  peer.retry.unref();
 }
 
 function relay(peer: Peer, event: { channel: EventChannel; args: unknown[] }): void {
