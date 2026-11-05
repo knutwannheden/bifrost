@@ -93,6 +93,7 @@ export const IPC = {
 
   // IDE
   OPEN_IN_IDE: 'ide:open',
+  PASTE_IMAGE: 'clipboard:paste-image',
   GET_LAST_CHANGED_FILE: 'ide:last-changed-file',
 
   // Terminal title
@@ -287,6 +288,8 @@ export interface BifrostAPI {
 
   // IDE
   openInIde(worktreePath: string, filePath?: string, line?: number): Promise<void>;
+  /** Stores the clipboard's image on the session's machine and answers its path there, or null when there is none to send. */
+  pasteImage(sessionId: string, remoteOnly: boolean): Promise<string | null>;
   getLastChangedFile(taskId: string): Promise<string | null>;
 
   // Context capture

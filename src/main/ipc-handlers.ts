@@ -1,4 +1,5 @@
 import { execFile as execFileCb } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 
@@ -7,6 +8,7 @@ const execFile = promisify(execFileCb);
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
 import type { BifrostConfig, CaptureContextParams } from '../shared/types';
 import { loadConfig, mergeRendererConfig, saveConfig } from './config';
+import { CONSOLE_SESSION_ID } from './console-service';
 import { store as storeContext } from './context-store';
 import { noteWindowBlur, noteWindowFocus } from './disk-reclaim-service';
 import { emit } from './event-sink';
@@ -14,11 +16,17 @@ import { openFileInIde, openInIde, remoteHost } from './ide-launcher';
 import { linkInstances } from './instance-link';
 import { calls } from './ipc-calls';
 import { peerTasks, routeCall } from './peers';
+import { getRemoteHost, storePasteHere } from './remote-host';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getTasks } from './task-service';
 
 const allTasks = () => [...getTasks(), ...peerTasks()];
 const hostOf = (filePath: string) => remoteHost(filePath, allTasks(), loadConfig().machines ?? []);
+/** The machine a session runs on when it is another one: its task's, or the one a console's id names after the @. */
+const sessionMachine = (sessionId: string) => {
+  const [name, machine] = sessionId.split('@');
+  return name === CONSOLE_SESSION_ID && machine ? machine : allTasks().find((t) => t.id === sessionId)?.machine;
+};
 
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   for (const [channel, call] of Object.entries(calls) as Array<[IpcChannel, (...args: unknown[]) => unknown]>) {
@@ -95,6 +103,23 @@ end tell`;
       emit(IPC_STREAM.TOAST, err.message, 5000);
     }),
   );
+
+  // An image reaches a session as a file on its machine, and the window pastes its path at the prompt.
+  ipcMain.handle(IPC.PASTE_IMAGE, async (_event, sessionId: string, remoteOnly: boolean) => {
+    const machine = sessionMachine(sessionId);
+    if (remoteOnly && !machine) return null;
+    const image = clipboard.readImage();
+    if (image.isEmpty()) return null;
+    const name = `${randomUUID()}.png`;
+    try {
+      return await (machine
+        ? getRemoteHost(machine).storePaste(image.toPNG(), name)
+        : storePasteHere(image.toPNG(), name));
+    } catch (err) {
+      emit(IPC_STREAM.TOAST, `Could not paste the image: ${(err as Error).message}`, 5000);
+      throw err;
+    }
+  });
 
   // Terminal title
   ipcMain.handle(IPC.SET_TERMINAL_TITLE, (_event, _taskId: string, title: string) => {

@@ -103,6 +103,7 @@ const api: BifrostAPI = {
   // IDE
   openInIde: (worktreePath, filePath?, line?) => ipcRenderer.invoke(IPC.OPEN_IN_IDE, worktreePath, filePath, line),
   getLastChangedFile: (taskId) => ipcRenderer.invoke(IPC.GET_LAST_CHANGED_FILE, taskId),
+  pasteImage: (sessionId, remoteOnly) => ipcRenderer.invoke(IPC.PASTE_IMAGE, sessionId, remoteOnly),
 
   // Context capture
   captureContext: (params) => ipcRenderer.invoke(IPC.CAPTURE_CONTEXT, params),

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import type { Machine } from '../shared/types.ts';
@@ -288,6 +289,33 @@ export function prepareScript(opts: { apiPort: number; theme?: string; instance?
 
 const LOGIN_CHECK = `if claude auth status </dev/null 2>/dev/null | grep -q '"loggedIn": *true'; then echo LOGGED_IN=yes; else echo LOGGED_IN=no; fi`;
 
+/** Stores the image arriving on stdin among the pastes under ~/.bifrost, removing day-old ones, and prints its path. */
+export function pasteScript(name: string): string {
+  return [
+    `d="$HOME"/${REMOTE_DIR}/paste`,
+    'mkdir -p "$d"',
+    'find "$d" -type f -mtime +0 -delete',
+    `cat > "$d/${name}"`,
+    `printf '%s\\n' "$d/${name}"`,
+  ].join(' && ');
+}
+
+/** Stores an image among the pastes on this machine, and answers its path. */
+export function storePasteHere(png: Buffer, name: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('sh', ['-c', pasteScript(name)], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    child.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) =>
+      code === 0 ? resolve(stdout.trim()) : reject(new Error(`storing the paste exited ${code}`)),
+    );
+    child.stdin.end(png);
+  });
+}
+
 /** The tmux session a login on the machine runs in, read here like any session. */
 export const LOGIN_SESSION = 'login';
 
@@ -541,6 +569,12 @@ export class RemoteHost {
       throw new Error(`Claude is not logged in on ${name}: run ${claude} there once and /login`);
     }
     return info;
+  }
+
+  /** Stores an image among the pastes there, and answers its path there. */
+  async storePaste(png: Buffer, name: string): Promise<string> {
+    await this.connect();
+    return (await this.run('', EXEC_TIMEOUT_MS, `sh -c ${shQuote(pasteScript(name))}`, Readable.from([png]))).trim();
   }
 
   /** Readies a login there, which the session LOGIN_SESSION then runs. */

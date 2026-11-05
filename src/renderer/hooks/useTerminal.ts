@@ -270,6 +270,10 @@ export function useTerminal(
           return false;
         }
       }
+      if (paneType === 'claude' && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'v') {
+        if (e.type === 'keydown') pasteImage(true);
+        return false;
+      }
       // On macOS a Cmd chord belongs to the app and the OS, never to the session.
       // Returning false leaves the browser's own clipboard handling to run, and
       // keeps the Kitty protocol from encoding the chord as a super-modified key.
@@ -328,6 +332,16 @@ export function useTerminal(
         window.bifrost.writeToSession(sessionId, data);
       }
     };
+
+    // Claude here reads this machine's clipboard itself on Ctrl+V, so that key sends an image only to a session elsewhere.
+    const pasteImage = (remoteOnly: boolean) =>
+      window.bifrost
+        .pasteImage(sessionId, remoteOnly)
+        .then((path) => {
+          if (path) sendInput(`\x1b[200~${path}\x1b[201~`);
+          else if (remoteOnly) sendInput('\x16');
+        })
+        .catch(() => {});
 
     terminal.onData((data) => {
       resetHippieState();
@@ -414,7 +428,13 @@ export function useTerminal(
     const onPaste = (e: ClipboardEvent) => {
       if (paneType !== 'claude') return;
       const text = e.clipboardData?.getData('text/plain');
-      if (!text) return;
+      if (!text) {
+        if (!Array.from(e.clipboardData?.items ?? []).some((item) => item.type.startsWith('image/'))) return;
+        e.preventDefault();
+        e.stopPropagation();
+        pasteImage(false);
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       // Mirror xterm's prepareTextForTerminal (\n→\r); replace embedded ESC

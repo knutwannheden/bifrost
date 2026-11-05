@@ -15,6 +15,7 @@ import {
   diffScript,
   loginScript,
   parseScriptOutput,
+  pasteScript,
   prepareScript,
   RemoteHost,
   remoteClonePath,
@@ -468,6 +469,31 @@ check(
   remoteClonePath({ path: path.join(os.homedir(), 'git', 'acme', 'widget'), name: 'widget' }) === 'git/acme/widget' &&
     remoteClonePath({ path: '/opt/src/widget', githubPath: 'acme/widget', name: 'widget' }) === 'git/acme/widget',
 );
+
+{
+  const home = path.join(root, 'paste-home');
+  const pastes = path.join(home, '.bifrost', 'paste');
+  fs.mkdirSync(pastes, { recursive: true });
+  fs.writeFileSync(path.join(pastes, 'old.png'), 'old');
+  fs.writeFileSync(path.join(pastes, 'recent.png'), 'recent');
+  const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000);
+  fs.utimesSync(path.join(pastes, 'old.png'), twoDaysAgo, twoDaysAgo);
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x0a, 0x0d]);
+  const printed = execFileSync('sh', ['-c', pasteScript('new.png')], {
+    input: png,
+    env: { ...process.env, HOME: home },
+  })
+    .toString()
+    .trim();
+  check(
+    'a pasted image is stored byte for byte among the pastes, its path printed, and pastes over a day old are removed',
+    printed === path.join(pastes, 'new.png') &&
+      fs.readFileSync(printed).equals(png) &&
+      !fs.existsSync(path.join(pastes, 'old.png')) &&
+      fs.existsSync(path.join(pastes, 'recent.png')),
+    show({ printed, left: fs.readdirSync(pastes) }),
+  );
+}
 
 fs.rmSync(root, { recursive: true, force: true });
 if (failed) {
