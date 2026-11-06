@@ -3,7 +3,7 @@
  * leaves the rest for their tabs. A session id that cannot resume is dropped,
  * but never one a running session uses. Run with `npm run check:restore-plan`.
  */
-import { planRestore } from '../src/main/restore-plan.ts';
+import { machinesInUse, planRestore } from '../src/main/restore-plan.ts';
 import type { Task } from '../src/shared/types.ts';
 
 let failed = 0;
@@ -49,6 +49,21 @@ const everyWorktreeThere = () => true;
     'a task on another machine waits for its tab with its session id, and one whose worktree is gone stays stopped',
     plan.join.length === 0 && show(plan.defer) === show(['remote']) && plan.dropSessionId.length === 0,
     show(plan),
+  );
+}
+
+{
+  const machines = machinesInUse([
+    task('a', { machine: 'perf' }),
+    task('b', { machine: 'perf' }),
+    task('c', { machine: 'recipes', status: 'stopped' }),
+    task('d', { machine: 'old', status: 'archived' }),
+    task('e'),
+  ]);
+  check(
+    'a starting Bifrost connects ahead to each machine an open task is on, once, and to none a closed task is on',
+    show(machines) === show(['perf']),
+    show(machines),
   );
 }
 

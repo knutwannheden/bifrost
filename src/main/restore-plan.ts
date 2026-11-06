@@ -37,3 +37,8 @@ export function planRestore(
   }
   return plan;
 }
+
+/** The machines an open task runs on. */
+export function machinesInUse(tasks: Task[]): string[] {
+  return [...new Set(tasks.flatMap((t) => (t.status === 'running' && t.machine ? [t.machine] : [])))];
+}

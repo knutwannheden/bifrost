@@ -7,7 +7,7 @@ import type { BifrostConfig } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { subscribe } from './event-sink';
 import { startInstance, stopInstance } from './instance';
-import { linkInstances } from './instance-link';
+import { connectMachinesInUse, linkInstances } from './instance-link';
 import { ensureHooks } from './integration-installer';
 import { registerIpcHandlers } from './ipc-handlers';
 import { initNotificationService } from './notification-service';
@@ -292,6 +292,7 @@ app.on('ready', async () => {
 
   await startInstance();
   linkInstances();
+  connectMachinesInUse();
 
   if (mainWindow) {
     registerIpcHandlers(mainWindow);

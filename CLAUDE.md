@@ -87,7 +87,7 @@ Quitting Bifrost only detaches, so its sessions run on, and opening a tab or wak
 
 A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. Cmd+O or a file link opens one of its files in Zed with an `ssh://` URL to that machine's host. Other editors refuse it. An image pasted into one of its sessions, with Cmd+V or Ctrl+V, is copied to `~/.bifrost/paste` on that machine, and its path is pasted at the prompt. SendMessage does not cross machines.
 
-Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there.
+Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there. At start, Bifrost connects to each machine a task was open on when it last quit.
 
 On the machine, a repo is cloned once, at the path it has here relative to home, so `~/git/org/repo` there too. A task's worktree sits in the clone's `.worktrees/`. Claude runs in tmux there as it does here, and the tab's control client reaches it over `ssh`, so Claude outlives the connection and Bifrost. A connection that drops is retried, and the tab is redrawn from the new client's replay.
 

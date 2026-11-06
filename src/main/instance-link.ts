@@ -1,8 +1,9 @@
 import type { Task } from '../shared/types.ts';
 import { claudeConfigRelative } from './claude-paths.ts';
 import { loadConfig } from './config.ts';
-import { IDE, postToPeer, refreshPeer, registerPeer } from './peers.ts';
+import { connectPeer, IDE, peerTasks, postToPeer, refreshPeer, registerPeer } from './peers.ts';
 import { getRemoteHost, localClaudeValue, remoteClonePath } from './remote-host.ts';
+import { machinesInUse } from './restore-plan.ts';
 import { forgetTasks, getTasks } from './task-service.ts';
 
 /** Whether the named machine runs its own instance, which owns the tasks there. */
@@ -34,6 +35,19 @@ export function linkInstances(): void {
         console.warn(`[instances] ${machine.name} kept none of ${held.length} tasks: ${(err as Error).message}`),
       );
     }
+  }
+}
+
+/**
+ * Connects to each machine an open task runs on, so the first tab there finds the
+ * link up and the setup synced. A machine that is away waits for its first tab.
+ */
+export function connectMachinesInUse(): void {
+  for (const name of machinesInUse([...getTasks(), ...peerTasks()])) {
+    const connecting = isInstanceMachine(name)
+      ? connectPeer(name)
+      : Promise.resolve().then(() => getRemoteHost(name).connect());
+    connecting.catch((err) => console.warn(`[instances] ${name} not connected at start: ${(err as Error).message}`));
   }
 }
 
