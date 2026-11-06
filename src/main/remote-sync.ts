@@ -21,6 +21,8 @@ export interface SyncOptions {
 export interface SyncTarget {
   upload(localDir: string, remoteDir: string): Promise<void>;
   exec(script: string): Promise<string>;
+  /** Runs rsync with rsyncArgs from localDir to remoteDir there, on a machine that has rsync. */
+  rsync?(localDir: string, remoteDir: string): Promise<void>;
 }
 
 /** A file or directory that lands at path, relative to home on the machine, and is replaced there whole. */
@@ -34,6 +36,8 @@ interface Unit {
 
 const MANIFEST = '.bifrost/sync-manifest.json';
 const DROP = '.bifrost/sync-drop';
+/** The whole setup as the last sync over rsync staged it, which the next one sends its differences against. */
+const COPY = '.bifrost/sync-copy';
 const HEADROOM = '.bifrost/tools/headroom';
 /** The user's rules, which the machine's CLAUDE.md imports. That file is added to, never replaced. */
 const RULES = '.bifrost/claude/CLAUDE.md';
@@ -45,6 +49,12 @@ const OWN_MARKETPLACE = 'bifrost';
 const LOCAL_ONLY = new Set(['.in_use']);
 /** A unit is replaced whole, so none may contain these. */
 const PROTECTED = ['.claude/.credentials.json', '.claude/projects', '.claude.json', '.ssh', '.bifrost', '.config/gh'];
+
+/** Makes dest hold exactly what localDir holds, with links followed. */
+export function rsyncArgs(localDir: string, dest: string): string[] {
+  const excluded = [...LOCAL_ONLY].map((name) => `--exclude=${name}`);
+  return ['-a', '-L', '-z', '--delete', ...excluded, `${localDir}/`, `${dest}/`];
+}
 
 /** The parts of Claude Code's config files that syncing reads. */
 interface ClaudeSettings {
@@ -281,6 +291,23 @@ function stageUnit(unit: Unit, stage: string): void {
   });
 }
 
+/** Lays a unit out in the staging directory as links to what it holds, which rsync follows. */
+function linkUnit(unit: Unit, stage: string): void {
+  const dest = path.join(stage, unit.path);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  if (unit.text !== undefined) {
+    fs.writeFileSync(dest, unit.text);
+    return;
+  }
+  for (const part of unit.only ?? ['']) {
+    const from = path.join(unit.from as string, part);
+    const to = path.join(dest, part);
+    if (!fs.existsSync(from)) continue;
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.symlinkSync(from, to);
+  }
+}
+
 /** A path the manifest names, accepted only when it stays inside the home directory. */
 function safeRelative(p: string): boolean {
   return p !== '' && !path.isAbsolute(p) && !p.split('/').includes('..');
@@ -304,7 +331,11 @@ export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{
   let remote: Record<string, string> = {};
   try {
     remote = JSON.parse(
-      (await target.exec(`cd "$HOME"\n${importRules}cat ${MANIFEST} 2>/dev/null || true`)).trim() || '{}',
+      (
+        await target.exec(
+          `cd "$HOME"\n${target.rsync ? `mkdir -p ${COPY}\n` : ''}${importRules}cat ${MANIFEST} 2>/dev/null || true`,
+        )
+      ).trim() || '{}',
     );
   } catch {
     /* no manifest yet, or an unreadable one, and everything travels */
@@ -313,11 +344,14 @@ export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{
   const removed = Object.keys(remote).filter((p) => !(p in local) && safeRelative(p));
   if (sent.length === 0 && removed.length === 0 && links.length === 0) return { sent, removed };
 
+  const from = target.rsync ? COPY : DROP;
   if (sent.length > 0) {
     const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-sync-'));
     try {
-      for (const unit of list) if (sent.includes(unit.path)) stageUnit(unit, stage);
-      await target.upload(stage, DROP);
+      // rsync removes from the copy whatever the stage lacks, so the stage holds every unit.
+      if (target.rsync) for (const unit of list) linkUnit(unit, stage);
+      else for (const unit of list) if (sent.includes(unit.path)) stageUnit(unit, stage);
+      await (target.rsync ? target.rsync(stage, COPY) : target.upload(stage, DROP));
     } finally {
       fs.rmSync(stage, { recursive: true, force: true });
     }
@@ -329,7 +363,7 @@ export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{
     script.push(
       `rm -rf ${shQuote(p)}`,
       `mkdir -p "$(dirname ${shQuote(p)})"`,
-      `mv ${shQuote(`${DROP}/${p}`)} ${shQuote(p)}`,
+      `cp -a ${shQuote(`${from}/${p}`)} ${shQuote(p)}`,
     );
   }
   // A path removed through a link would delete what the link points to, such as a fresh copy in ~/.claude.

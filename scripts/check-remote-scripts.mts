@@ -415,14 +415,15 @@ const prepared = parseScriptOutput(runRemote(home3, prepareScript({ apiPort: 436
 {
   const config = JSON.parse(fs.readFileSync(claudeJson, 'utf-8'));
   check(
-    'preparing a machine points its hooks at the forwarded port and completes onboarding, keeping what is set',
+    'preparing a machine points its hooks at the forwarded port, completes onboarding keeping what is set, and says it has rsync',
     fs.readFileSync(path.join(home3, '.bifrost', 'api-port'), 'utf-8').trim() === '43669' &&
       config.hasCompletedOnboarding === true &&
       typeof config.lastOnboardingVersion === 'string' &&
       config.theme === 'light' &&
       config.numStartups === 3 &&
       config.projects['/elsewhere'].lastCost === 1 &&
-      prepared.HOME === home3,
+      prepared.HOME === home3 &&
+      prepared.RSYNC === 'yes',
     show({ prepared, config }),
   );
 }

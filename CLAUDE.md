@@ -103,6 +103,8 @@ A machine with "Sync setup" on gets this machine's Claude setup on every connect
 - The enabled plugins and their marketplaces. A directory marketplace sends only its manifest and the enabled plugins.
 - Bifrost's `tools/headroom`, linked into `~/.local/bin`, and the extra paths from the settings.
 
+On a machine with rsync, a sync that changes anything runs rsync once over the whole setup into `~/.bifrost/sync-copy` there, and the changed parts are copied into place from it. rsync then sends only the files that differ from what the last sync left in that copy. A machine without rsync gets the changed parts as a tarball. With `-R`, macOS's openrsync leaves files deleted here in place on a GNU rsync, so it is one directory, not one call naming several paths.
+
 `~/.claude/CLAUDE.md` is the exception. The machine's own may be written by something else, such as a provisioning script that rewrites a block of it on every start, so the rules go to `~/.bifrost/claude/CLAUDE.md` and the machine's file only gains a line importing them. Bifrost's own plugin stays out, since remote sessions load it with `--plugin-dir`.
 
 Sessions run with the Claude config dir Bifrost runs with, `CLAUDE_CONFIG_DIR`, at the same path relative to home on every machine. Each `run.sh` and each remote script sets it, or clears it when Bifrost runs without one. A machine's instance keeps the IDE's from the preferences. When that dir is not `~/.claude`, sync recreates its top-level links into `~/.claude` there as relative links, and never writes its `.claude.json` or login. Each machine needs its own login in that dir, made once there. When it has none, connecting says so, and the notification's Log in runs Claude's login there in a terminal here.

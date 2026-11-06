@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type SyncOptions, syncMachine } from '../src/main/remote-sync.ts';
+import { rsyncArgs, type SyncOptions, syncMachine } from '../src/main/remote-sync.ts';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -103,7 +103,11 @@ const machine = {
     const env = { ...process.env, HOME: there, CLAUDE_CONFIG_DIR: undefined };
     return execFileSync('sh', ['-s'], { cwd: there, input: script, env }).toString();
   },
+  async rsync(localDir: string, remoteDir: string) {
+    execFileSync('rsync', rsyncArgs(localDir, path.join(there, remoteDir)));
+  },
 };
+const withoutRsync = { upload: machine.upload, exec: machine.exec };
 const options = (syncPaths: string[]): SyncOptions => ({
   localHome: here,
   remoteHome: there,
@@ -165,8 +169,20 @@ check(
     show(second.removed) === show(['.local/bin/gw']) &&
     read(`${there}/.bifrost/claude/CLAUDE.md`) === 'global rules, revised\n' &&
     read(`${there}/.claude/CLAUDE.md`) === '<!-- machine block -->\n\n@~/.bifrost/claude/CLAUDE.md\n' &&
-    !fs.existsSync(`${there}/.local/bin/gw`),
+    !fs.existsSync(`${there}/.local/bin/gw`) &&
+    // The copy there keeps what this sync did not send.
+    read(`${there}/.bifrost/sync-copy/.claude/skills/plain/SKILL.md`) === 'a skill\n',
   show(second),
+);
+
+write(`${here}/.claude/skills/plain/notes.md`, 'notes\n');
+await syncMachine(machine, options([]));
+fs.rmSync(`${here}/.claude/skills/plain/notes.md`);
+await syncMachine(machine, options([]));
+check(
+  'a file removed from a synced directory here is removed there too',
+  !fs.existsSync(`${there}/.claude/skills/plain/notes.md`) &&
+    read(`${there}/.claude/skills/plain/SKILL.md`) === 'a skill\n',
 );
 
 {
@@ -228,7 +244,8 @@ check(
   manifest['.claude-work/plugins/cache/hub/tool/1.0.0'] = 'stale';
   write(`${there}/.bifrost/sync-manifest.json`, JSON.stringify(manifest));
 
-  await syncMachine(machine, { ...options([]), configDir: work });
+  // A machine without rsync gets the changed parts as a tarball.
+  await syncMachine(withoutRsync, { ...options([]), configDir: work });
   const recorded = json(`${there}/.claude/plugins/installed_plugins.json`).plugins['fresh@hub']?.[0]?.installPath;
   const sentTo = Object.keys(json(`${there}/.bifrost/sync-manifest.json`)).filter((k) => k.includes('fresh'));
   check(

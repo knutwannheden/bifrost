@@ -14,7 +14,7 @@ import { emit } from './event-sink.ts';
 import { pack, plan } from './instance-deploy.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
 import { peerTasks } from './peers.ts';
-import { syncMachine } from './remote-sync.ts';
+import { rsyncArgs, syncMachine } from './remote-sync.ts';
 import {
   configDirScript,
   controlArgs,
@@ -282,6 +282,7 @@ export function prepareScript(opts: { apiPort: number; theme?: string; instance?
     'missing=',
     'for c in claude git tmux python3 curl; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done',
     `printf 'MISSING=%s\\n' "\${missing# }"`,
+    `printf 'RSYNC=%s\\n' "$(command -v rsync >/dev/null 2>&1 && echo yes)"`,
     LOGIN_CHECK,
     `printf 'PLUGIN_VERSION=%s\\n' "$(python3 -c ${shQuote(PLUGIN_VERSION_PY)} 2>/dev/null || true)"`,
   ].join('\n');
@@ -706,7 +707,7 @@ export class RemoteHost {
     const pluginDir = await this.syncPlugin(out.PLUGIN_VERSION, out.HOME);
     if (this.machine.sync) {
       // A sync that fails is logged, and the connection goes on without it.
-      await this.syncSetup(out.HOME).catch((err) =>
+      await this.syncSetup(out.HOME, out.RSYNC === 'yes').catch((err) =>
         console.warn(`[sync] ${this.machine.name}: ${(err as Error).message}`),
       );
     }
@@ -845,12 +846,13 @@ export class RemoteHost {
   }
 
   /** Brings the machine's Claude setup in line with this one's, over the link being opened. */
-  private async syncSetup(home: string): Promise<void> {
+  private async syncSetup(home: string, rsync: boolean): Promise<void> {
     const config = loadConfig();
     const { sent, removed } = await syncMachine(
       {
         upload: (localDir, remoteDir) => this.uploadOverLink(localDir, remoteDir),
         exec: (script) => this.run(script, UPLOAD_TIMEOUT_MS),
+        ...(rsync && { rsync: (localDir: string, remoteDir: string) => this.rsyncOverLink(localDir, remoteDir) }),
       },
       {
         localHome: os.homedir(),
@@ -867,6 +869,12 @@ export class RemoteHost {
         `[sync] ${this.machine.name}: sent ${sent.join(', ') || 'nothing'}; removed ${removed.join(', ') || 'nothing'}`,
       );
     }
+  }
+
+  private async rsyncOverLink(localDir: string, remoteDir: string): Promise<void> {
+    const ssh = ['ssh', ...this.sshOptions(), '-o', 'BatchMode=yes'].join(' ');
+    const dest = `${this.machine.host}:${remoteDir}`;
+    await execFile('rsync', ['-e', ssh, ...rsyncArgs(localDir, dest)], { timeout: UPLOAD_TIMEOUT_MS });
   }
 
   private sendTar(localDir: string, remoteCommand: string, timeoutMs: number): Promise<string> {
