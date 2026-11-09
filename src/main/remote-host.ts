@@ -10,6 +10,7 @@ import type { Machine } from '../shared/types.ts';
 import { claudeConfigDir, claudeConfigRelative } from './claude-paths.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
+import { dotfilesProblems, syncDotfiles } from './dotfiles.ts';
 import { emit } from './event-sink.ts';
 import { pack, plan } from './instance-deploy.ts';
 import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts';
@@ -848,6 +849,7 @@ export class RemoteHost {
   /** Brings the machine's Claude setup in line with this one's, over the link being opened. */
   private async syncSetup(home: string, rsync: boolean): Promise<void> {
     const config = loadConfig();
+    const cloned = config.dotfiles ? await this.syncDotfiles(config.dotfiles) : [];
     const { sent, removed } = await syncMachine(
       {
         upload: (localDir, remoteDir) => this.uploadOverLink(localDir, remoteDir),
@@ -862,12 +864,28 @@ export class RemoteHost {
         headroomDir: bifrostTool('headroom'),
         // A config dir outside home has no counterpart there, so that machine keeps ~/.claude.
         configDir: claudeConfigRelative() ? claudeConfigDir() : undefined,
+        cloned,
       },
     );
     if (sent.length + removed.length > 0) {
       console.log(
         `[sync] ${this.machine.name}: sent ${sent.join(', ') || 'nothing'}; removed ${removed.join(', ') || 'nothing'}`,
       );
+    }
+  }
+
+  /** Brings the machine's clone of the dotfiles repo along, answering the entries it keeps. */
+  private async syncDotfiles(setting: string): Promise<string[]> {
+    const home = os.homedir();
+    const gitDir = setting.startsWith('~/') ? path.join(home, setting.slice(2)) : path.resolve(home, setting);
+    try {
+      const result = await syncDotfiles({ gitDir, home }, (script) => this.run(script, UPLOAD_TIMEOUT_MS));
+      const problems = dotfilesProblems(result);
+      if (problems.length > 0) emit(IPC_STREAM.TOAST, `${this.machine.name}: ${problems.join('; ')}`, 10_000);
+      return result.cloned;
+    } catch (err) {
+      emit(IPC_STREAM.TOAST, `${this.machine.name}: dotfiles not synced: ${(err as Error).message}`, 10_000);
+      return [];
     }
   }
 

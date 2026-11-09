@@ -182,6 +182,8 @@ export interface BifrostConfig {
   machines?: Machine[];
   /** Files and directories synced to machines besides Claude's setup, relative to home or with ~/. */
   syncPaths?: string[];
+  /** The git dir of a dotfiles repo whose work tree is home, which machines with Sync setup on clone for Claude's parts. */
+  dotfiles?: string;
   /** This machine's Claude remoteControlAtStartup, which the IDE copies to an instance on another machine. */
   remoteControlAtStartup?: boolean;
   /** On a machine's instance, the IDE's CLAUDE_CONFIG_DIR relative to home, as it last sent it. */

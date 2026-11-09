@@ -15,6 +15,8 @@ export interface SyncOptions {
   headroomDir?: string;
   /** The Claude config dir sessions use, under localHome. Without it, ~/.claude. */
   configDir?: string;
+  /** The entries a dotfiles clone there keeps, which syncing neither sends nor removes. */
+  cloned?: string[];
 }
 
 /** What syncing needs from the machine. */
@@ -154,7 +156,10 @@ function units(o: SyncOptions): Unit[] {
   const resolve = (p: string) => (p.startsWith('~/') ? path.join(home, p.slice(2)) : path.resolve(home, p));
 
   if (fs.existsSync(`${home}/.claude/CLAUDE.md`)) list.push({ path: RULES, from: `${home}/.claude/CLAUDE.md` });
-  for (const dir of ['skills', 'agents', 'commands']) add(`${home}/.claude/${dir}`);
+  for (const dir of ['skills', 'agents', 'commands']) {
+    const parent = `${home}/.claude/${dir}`;
+    if (fs.existsSync(parent)) for (const name of fs.readdirSync(parent).sort()) add(`${parent}/${name}`);
+  }
   const settings = readJson<ClaudeSettings>(`${home}/.claude/settings.json`) ?? {};
   if (typeof settings.statusLine?.command === 'string') add(resolve(settings.statusLine.command));
   for (const repo of o.repoPaths) {
@@ -319,7 +324,8 @@ function safeRelative(p: string): boolean {
  * what changed travels. A unit synced before and gone here is removed there.
  */
 export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{ sent: string[]; removed: string[] }> {
-  const list = units(o);
+  const cloned = o.cloned ?? [];
+  const list = units(o).filter((u) => !cloned.includes(u.path));
   const local = Object.fromEntries(list.map((u) => [u.path, hashUnit(u)]));
   const importRules =
     RULES in local
@@ -340,8 +346,10 @@ export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{
   } catch {
     /* no manifest yet, or an unreadable one, and everything travels */
   }
+  // A part holding an entry the clone keeps stays, and so does that entry.
+  const overlaps = (p: string) => cloned.some((c) => c === p || c.startsWith(`${p}/`) || p.startsWith(`${c}/`));
+  const removed = Object.keys(remote).filter((p) => !(p in local) && safeRelative(p) && !overlaps(p));
   const sent = list.filter((u) => remote[u.path] !== local[u.path]).map((u) => u.path);
-  const removed = Object.keys(remote).filter((p) => !(p in local) && safeRelative(p));
   if (sent.length === 0 && removed.length === 0 && links.length === 0) return { sent, removed };
 
   const from = target.rsync ? COPY : DROP;
@@ -359,16 +367,17 @@ export async function syncMachine(target: SyncTarget, o: SyncOptions): Promise<{
 
   // Physical paths from here on, so a link on the way to a path shows up as one.
   const script = ['set -e', 'cd "$HOME"', 'cd "$(pwd -P)"'];
+  // A path removed through a link would delete what the link points to, such as a fresh copy in ~/.claude.
+  // Removals go first, since a part may be removed as a whole while its entries are sent.
+  for (const p of removed) {
+    script.push(`(cd "$(dirname ${shQuote(p)})" 2>/dev/null && [ "$(pwd -P)" = "$(pwd -L)" ]) && rm -rf ${shQuote(p)}`);
+  }
   for (const p of sent) {
     script.push(
       `rm -rf ${shQuote(p)}`,
       `mkdir -p "$(dirname ${shQuote(p)})"`,
       `cp -a ${shQuote(`${from}/${p}`)} ${shQuote(p)}`,
     );
-  }
-  // A path removed through a link would delete what the link points to, such as a fresh copy in ~/.claude.
-  for (const p of removed) {
-    script.push(`(cd "$(dirname ${shQuote(p)})" 2>/dev/null && [ "$(pwd -P)" = "$(pwd -L)" ]) && rm -rf ${shQuote(p)}`);
   }
   script.push(`rm -rf ${DROP}`, `printf '%s\\n' ${shQuote(JSON.stringify(local))} > ${MANIFEST}`);
   if (sent.includes(HEADROOM)) {

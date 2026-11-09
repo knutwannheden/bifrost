@@ -97,13 +97,15 @@ A task here moves to another machine with "Move to" in its context menu (`task-t
 
 A machine with "Sync setup" on gets this machine's Claude setup on every connect (`remote-sync.ts`). Each part travels to the same path relative to home, is replaced whole, and travels only when its hash changed:
 
-- Skills, agents, commands and the status line script under `~/.claude`.
+- Each skill, agent and command under `~/.claude`, and the status line script.
 - The `CLAUDE.md` files in the directories above the configured repos.
 - `settings.json`, with home paths rewritten.
 - The enabled plugins and their marketplaces. A directory marketplace sends only its manifest and the enabled plugins.
 - Bifrost's `tools/headroom`, linked into `~/.local/bin`, and the extra paths from the settings.
 
 On a machine with rsync, a sync that changes anything runs rsync once over the whole setup into `~/.bifrost/sync-copy` there, and the changed parts are copied into place from it. rsync then sends only the files that differ from what the last sync left in that copy. A machine without rsync gets the changed parts as a tarball. With `-R`, macOS's openrsync leaves files deleted here in place on a GNU rsync, so it is one directory, not one call naming several paths.
+
+A dotfiles repo set in the settings, one whose work tree is home, gives each machine with Sync setup on a clone of its own at the same path (`dotfiles.ts`). The clone checks out only Claude's skills, agents, commands and status line, and the machine keeps its own shell and git setup. Its first checkout writes only missing files, so a file the machine already holds stays, and an edit there shows as a change. Every connect fast-forwards the repo here, then the clone there. Neither moves past a change in the way or a diverged history, and a toast says what is behind, unpushed or not committed. The sync leaves the entries the repo tracks to the clone, and neither sends nor removes them.
 
 `~/.claude/CLAUDE.md` is the exception. The machine's own may be written by something else, such as a provisioning script that rewrites a block of it on every start, so the rules go to `~/.bifrost/claude/CLAUDE.md` and the machine's file only gains a line importing them. Bifrost's own plugin stays out, since remote sessions load it with `--plugin-dir`.
 
@@ -117,7 +119,7 @@ A machine with "Run Bifrost there" on runs that instance, and it owns the tasks 
 
 Each time the IDE connects to such an instance, it posts `/link-back` with the port the IDE's API is forwarded to there. The instance then links to the IDE as its peer `ide`, and its tools list the IDE's tasks while that link is up. There `create_task` keeps a task for `"local"` or the machine's own name. It sends any other name to the IDE, `"ide"` included. The plugin describes these values where its API is the machine's own instance, which it tells by `api-port` matching `instance-port`.
 
-Every remote step is a shell script built in `remote-host.ts`, `task-transfer.ts` or `remote-sync.ts`. The checks `check:remote-scripts`, `check:task-transfer` and `check:remote-sync` run them against a local home directory.
+Every remote step is a shell script built in `remote-host.ts`, `task-transfer.ts`, `remote-sync.ts` or `dotfiles.ts`. The checks `check:remote-scripts`, `check:task-transfer`, `check:remote-sync` and `check:dotfiles` run them against a local home directory.
 
 ### Restarting Bifrost from a task
 

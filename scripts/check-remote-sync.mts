@@ -186,6 +186,41 @@ check(
 );
 
 {
+  // A sync before skills travelled one by one left them there as one part.
+  const manifest = json(`${there}/.bifrost/sync-manifest.json`);
+  for (const key of Object.keys(manifest)) if (key.startsWith('.claude/skills/')) delete manifest[key];
+  manifest['.claude/skills'] = 'whole';
+  write(`${there}/.bifrost/sync-manifest.json`, JSON.stringify(manifest));
+  const split = await syncMachine(machine, options([]));
+  check(
+    'a sync that splits a directory into its entries removes the old whole before sending them',
+    show(split.removed) === show(['.claude/skills']) &&
+      read(`${there}/.claude/skills/plain/SKILL.md`) === 'a skill\n' &&
+      read(`${there}/.claude/skills/linked/SKILL.md`) === 'a skill kept outside\n',
+    show(split),
+  );
+}
+
+{
+  write(`${here}/.claude/skills/plain/SKILL.md`, 'a skill, revised here\n');
+  write(`${there}/.claude/skills/plain/SKILL.md`, 'a skill, edited there\n');
+  write(`${here}/.claude/skills/linked/SKILL.md`, 'a skill kept outside, revised\n');
+  const manifest = json(`${there}/.bifrost/sync-manifest.json`);
+  manifest['.claude/skills'] = 'whole';
+  write(`${there}/.bifrost/sync-manifest.json`, JSON.stringify(manifest));
+  const kept = await syncMachine(machine, { ...options([]), cloned: ['.claude/skills/plain'] });
+  check(
+    'an entry a dotfiles clone there keeps is neither sent nor removed, while the others travel',
+    read(`${there}/.claude/skills/plain/SKILL.md`) === 'a skill, edited there\n' &&
+      read(`${there}/.claude/skills/linked/SKILL.md`) === 'a skill kept outside, revised\n' &&
+      !kept.sent.includes('.claude/skills/plain') &&
+      !kept.removed.includes('.claude/skills'),
+    show(kept),
+  );
+  write(`${here}/.claude/skills/plain/SKILL.md`, 'a skill\n');
+}
+
+{
   // A second config dir, as a second Claude account keeps, linking everything but its login into ~/.claude.
   const work = `${here}/.claude-work`;
   fs.mkdirSync(`${here}/.claude/projects`, { recursive: true });

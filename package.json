@@ -55,6 +55,7 @@
     "check:remote-host": "node scripts/check-remote-host.mts",
     "check:restart-config-dir": "node scripts/check-restart-config-dir.mts",
     "check:remote-sync": "node scripts/check-remote-sync.mts",
+    "check:dotfiles": "node scripts/check-dotfiles.mts",
     "test": "npm --prefix tools/postmortem test && npm --prefix tools/headroom test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

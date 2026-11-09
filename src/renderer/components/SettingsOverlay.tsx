@@ -790,6 +790,18 @@ function MachineEditor({
           className="mt-1 w-full px-2 py-1 font-mono"
         />
       </div>
+      <div className="mt-3">
+        <span className="text-xs text-secondary">
+          Dotfiles repo with home as its work tree. Machines with Sync setup on clone its skills, agents, commands and
+          status line
+        </span>
+        <FormInput
+          defaultValue={config.dotfiles ?? ''}
+          onBlur={(e) => updateConfig({ dotfiles: e.target.value.trim() || undefined })}
+          placeholder="~/.dotfiles"
+          className="mt-1 w-full px-2 py-1 font-mono"
+        />
+      </div>
       <p className="mt-2 text-xs text-muted">
         A task runs on one of these when its prompt names it. Any host ssh reaches without a password works, with Claude
         logged in there and git, tmux, python3 and curl installed.
