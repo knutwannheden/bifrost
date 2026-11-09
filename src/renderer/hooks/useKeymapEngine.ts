@@ -10,6 +10,7 @@ import { focusTaskTerminal } from '../utils/focus-terminal';
 import { changeFeedHasFocus, ownsKeystrokes } from '../utils/keyboard-target';
 import { nextActiveTaskId } from '../utils/next-active-task';
 import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
+import { restartBifrost } from '../utils/restart-bifrost';
 import { restartSessions } from '../utils/restart-sessions';
 import { taskReference } from '../utils/task-reference';
 import { terminalRegistry } from './useTerminal';
@@ -437,6 +438,10 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           openFile();
           break;
         }
+
+        case 'app.restart':
+          void restartBifrost(dispatch);
+          break;
 
         case 'action.restartSessions':
           void restartSessions(s.tasks, dispatch);

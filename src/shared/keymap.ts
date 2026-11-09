@@ -67,6 +67,7 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
   'action.capture': { id: 'action.capture', label: 'Capture context', category: 'actions', requiresTask: true },
   'app.shortcuts': { id: 'app.shortcuts', label: 'Keyboard shortcuts', category: 'app' },
   'app.settings': { id: 'app.settings', label: 'Settings', category: 'app' },
+  'app.restart': { id: 'app.restart', label: 'Restart Bifrost', category: 'app' },
 };
 
 export const ACTION_CATEGORIES: { id: ActionCategory; label: string }[] = [

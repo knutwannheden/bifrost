@@ -1,5 +1,6 @@
-import { execFile as execFileCb } from 'node:child_process';
+import { execFile as execFileCb, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { promisify } from 'node:util';
 import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 
@@ -17,6 +18,7 @@ import { linkInstances } from './instance-link';
 import { calls } from './ipc-calls';
 import { peerTasks, routeCall } from './peers';
 import { getRemoteHost, storePasteHere } from './remote-host';
+import { devTerminalCount } from './session-manager';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getTasks } from './task-service';
 
@@ -63,6 +65,15 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     }
     if (!/^https?:\/\//i.test(url)) return;
     return shell.openExternal(url);
+  });
+
+  // The script asks this process to quit, so it runs detached from it.
+  ipcMain.handle(IPC.RESTART_APP, (_event, force: boolean) => {
+    const devTerminals = devTerminalCount();
+    if (devTerminals > 0 && !force) return { restarting: false, devTerminals };
+    const script = path.join(process.cwd(), 'scripts', 'restart-bifrost.sh');
+    spawn('bash', [script], { cwd: process.cwd(), detached: true, stdio: 'ignore' }).unref();
+    return { restarting: true, devTerminals };
   });
 
   ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, dirPath: string) => {

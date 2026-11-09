@@ -49,6 +49,8 @@ interface SessionStream {
   detach(): void;
   /** Ends the session and what runs in it. */
   kill(): void;
+  /** A dev terminal, which ends with Bifrost. */
+  devShell?: boolean;
 }
 
 const sessions = new Map<string, SessionStream>();
@@ -340,6 +342,7 @@ function spawnSession(
     resize: (cols, rows) => shell.resize(cols, rows),
     detach: () => shell.kill('SIGTERM'),
     kill: () => shell.kill('SIGTERM'),
+    devShell: true,
   };
   register(sessionId, stream, options?.cols ?? lastKnownGeometry.cols, options?.rows ?? lastKnownGeometry.rows);
   if (options?.cols !== undefined || options?.rows !== undefined) fixedGeometry.add(sessionId);
@@ -423,6 +426,10 @@ function localTmuxEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   for (const name of INHERITED_SESSION_VARS) delete env[name];
   return env;
+}
+
+export function devTerminalCount(): number {
+  return [...sessions.values()].filter((s) => s.devShell).length;
 }
 
 /** A session's pane as tmux here shows it, escape codes included, or null when no such session runs. */
