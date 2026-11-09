@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { ACTION_REGISTRY, type KeyBinding, strokeMatchesEvent } from '../../shared/keymap';
+import { ACTION_REGISTRY, type KeyBinding, RUN_ACTION_EVENT, strokeMatchesEvent } from '../../shared/keymap';
 import type { CaptureContextParams } from '../../shared/types';
 import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
 import { defaultPaneState, getActiveDiffState, isAnyOverlayOpen } from '../context/AppContext';
@@ -591,6 +591,12 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
     },
     [executeAction, dispatch],
   );
+
+  useEffect(() => {
+    const run = (e: Event) => executeAction((e as CustomEvent<string>).detail);
+    window.addEventListener(RUN_ACTION_EVENT, run);
+    return () => window.removeEventListener(RUN_ACTION_EVENT, run);
+  }, [executeAction]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

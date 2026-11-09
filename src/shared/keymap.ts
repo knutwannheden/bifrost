@@ -247,3 +247,6 @@ export function getBindingDisplay(binding: KeyBinding): string {
 export function isCustomized(actionId: string, keybindings?: Record<string, string | null>): boolean {
   return !!keybindings && actionId in keybindings;
 }
+
+/** The window event the shortcuts panel raises to run an action no key binding reaches, its id as the detail. */
+export const RUN_ACTION_EVENT = 'bifrost:run-action';

@@ -5,6 +5,7 @@ import {
   isCustomized,
   type KeyStroke,
   parseBinding,
+  RUN_ACTION_EVENT,
   serializeBinding,
 } from '../../shared/keymap';
 import { useApp } from '../context/AppContext';
@@ -107,8 +108,11 @@ export default function KeyboardShortcutsPanel() {
     }
 
     const binding = item.binding;
-    if (!binding) return;
     close();
+    if (!binding) {
+      requestAnimationFrame(() => window.dispatchEvent(new CustomEvent(RUN_ACTION_EVENT, { detail: item.actionId })));
+      return;
+    }
     const strokes = parseBinding(binding);
     if (strokes.length === 0) return;
     const first = strokes[0];
