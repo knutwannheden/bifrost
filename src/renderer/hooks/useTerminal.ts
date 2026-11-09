@@ -9,6 +9,7 @@ import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../
 import { applyUnicodeWidths } from '../../shared/terminal-unicode';
 import { resolveTerminalTheme } from '../terminal-themes';
 import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
+import { keepsClickFromProgram } from '../utils/link-click';
 import { decodeOsc52 } from '../utils/osc52';
 import { isMac, isModKey } from '../utils/platform';
 import { createLeadingCoalescer, type LeadingCoalescer } from '../utils/resize-scheduler';
@@ -118,6 +119,15 @@ export function useTerminal(
 
     const paneType = options?.paneType;
     const selectedTheme = resolveTerminalTheme(options?.terminalTheme ?? 'Auto', options?.isDark ?? true);
+    let overLink = false;
+    const linkHover = {
+      hover: () => {
+        overLink = true;
+      },
+      leave: () => {
+        overLink = false;
+      },
+    };
     const terminal = new Terminal({
       // Claude Code draws no caret of its own: it parks the real cursor at the
       // insertion point and shows it with DECTCEM. It also moves the cursor as
@@ -140,6 +150,7 @@ export function useTerminal(
         activate: (_event, uri) => {
           window.bifrost.openUrl(uri);
         },
+        ...linkHover,
         allowNonHttpProtocols: true,
       },
       theme: selectedTheme,
@@ -148,7 +159,7 @@ export function useTerminal(
     const fitAddon = new FitAddon();
     const webLinksAddon = new WebLinksAddon((_e, uri) => {
       window.bifrost.openUrl(uri);
-    });
+    }, linkHover);
 
     const searchAddon = new SearchAddon();
 
@@ -157,6 +168,10 @@ export function useTerminal(
     terminal.loadAddon(searchAddon);
     applyUnicodeWidths(terminal);
     terminal.open(containerRef.current);
+    // Added after xterm's own listener on this element, which opens the link, and before the press bubbles to the program.
+    terminal.element?.querySelector<HTMLElement>('.xterm-screen')?.addEventListener('mousedown', (e) => {
+      if (keepsClickFromProgram(e.button, overLink, terminal.modes.mouseTrackingMode !== 'none')) e.stopPropagation();
+    });
 
     // Copy requests the session makes on the user's behalf (OSC 52).
     terminal.parser.registerOscHandler(52, (payload) => {

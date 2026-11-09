@@ -3,9 +3,11 @@
  * the child's grid, and decides how many cells a character occupies. Each is
  * unforgiving — a stray OSC 52 payload replaces what the user copied, a late
  * resize is time the child spends drawing against the wrong grid, and a narrow
- * emoji shifts every column after it. Run with `npm run check:terminal-io`.
+ * emoji shifts every column after it. A click on a link opens it once.
+ * Run with `npm run check:terminal-io`.
  */
 import headless from '@xterm/headless';
+import { keepsClickFromProgram } from '../src/renderer/utils/link-click.ts';
 import { decodeOsc52 } from '../src/renderer/utils/osc52.ts';
 import { createLeadingCoalescer } from '../src/renderer/utils/resize-scheduler.ts';
 import { applyUnicodeWidths } from '../src/shared/terminal-unicode.ts';
@@ -87,5 +89,13 @@ const encode = (text: string) => Buffer.from(text, 'utf8').toString('base64');
   );
   coalescer.cancel();
 }
+
+check(
+  'a left click on a link stays with the terminal only while the program tracks the mouse',
+  keepsClickFromProgram(0, true, true) &&
+    !keepsClickFromProgram(0, false, true) &&
+    !keepsClickFromProgram(0, true, false) &&
+    !keepsClickFromProgram(2, true, true),
+);
 
 process.exit(failed === 0 ? 0 : 1);
