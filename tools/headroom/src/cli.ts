@@ -73,7 +73,7 @@ function pollMs(): number {
   return Number(process.env.HEADROOM_POLL_MS ?? 2000);
 }
 
-async function waitFor(board: Board, id: number, timeoutMs: number, force = false): Promise<number> {
+async function waitFor(board: Board, id: number, timeoutMs: number, force = false, quiet = false): Promise<number> {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     const c = board.get(id);
@@ -88,7 +88,7 @@ async function waitFor(board: Board, id: number, timeoutMs: number, force = fals
         console.log(refusal);
         return 4;
       }
-      console.log(granted(board, c));
+      console.log(quiet ? c.id : granted(board, c));
       return 0;
     }
     if (Date.now() >= deadline) {
@@ -340,12 +340,12 @@ async function main(argv: string[]): Promise<number> {
           console.log(values.quiet ? claim.id : granted(board, claim));
           return 0;
         }
-        if (values.wait) return await waitFor(board, claim.id, timeoutMs, values.force ?? false);
+        if (values.wait) return await waitFor(board, claim.id, timeoutMs, values.force ?? false, values.quiet);
         console.log(values.quiet ? claim.id : queued(board, claim));
         return 1;
       }
       case 'wait':
-        return await waitFor(board, Number(arg), timeoutMs, values.force ?? false);
+        return await waitFor(board, Number(arg), timeoutMs, values.force ?? false, values.quiet);
       case 'renew': {
         const c = board.renew(Number(arg), parseDuration(values.ttl ?? '10m'), values.why);
         console.log(c.grantedAt !== null ? granted(board, c) : queued(board, c));

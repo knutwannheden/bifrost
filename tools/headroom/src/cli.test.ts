@@ -51,13 +51,28 @@ describe('cli', () => {
     expect(third.out).toMatch(/2nd in line/);
   });
 
-  test('-q prints only the claim id, for shell composition', () => {
+  test('-q prints only the claim id, for shell composition, also once a wait for it ends', async () => {
     const r = run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench', '-q']);
     expect(r.code).toBe(0);
     expect(r.out.trim()).toBe('1');
     const queued = run(['acquire', 'cpu', '--exclusive', '--why', 'profiling', '--as', 'prof', '-q']);
     expect(queued.code).toBe(1);
     expect(queued.out.trim()).toBe('2');
+
+    const waiting = spawn(
+      process.execPath,
+      [CLI, 'acquire', 'cpu', '--exclusive', '--why', 'restart', '--as', 'restart', '--wait', '--force', '-q'],
+      { env },
+    );
+    let out = '';
+    waiting.stdout.on('data', (d) => {
+      out += d;
+    });
+    const exited = new Promise<number | null>((resolve) => waiting.on('exit', resolve));
+    run(['release', '1']);
+    run(['release', '2']);
+    expect(await exited).toBe(0);
+    expect(out.trim()).toBe('3');
   });
 
   test('hold with a grace period lets the command see the yield request and finish on its own', async () => {
