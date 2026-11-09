@@ -34,11 +34,11 @@ const screen = (input: string) =>
   const task = (id: string) => ({ id, name: id }) as Task;
   const state = (s: Partial<SessionState>): SessionState => ({ live: true, busy: false, draft: '', ...s });
   const plan = planRestart([
-    { task: task('idle'), state: state({}) },
-    { task: task('typed'), state: state({ draft: 'half a thought' }) },
-    { task: task('busy'), state: state({ busy: true }) },
-    { task: task('none'), state: state({ live: false }) },
-    { task: task('away'), state: null },
+    { session: task('idle'), state: state({}) },
+    { session: task('typed'), state: state({ draft: 'half a thought' }) },
+    { session: task('busy'), state: state({ busy: true }) },
+    { session: task('none'), state: state({ live: false }) },
+    { session: task('away'), state: null },
   ]);
   const ids = (tasks: Task[]) => tasks.map((t) => t.id);
   check(

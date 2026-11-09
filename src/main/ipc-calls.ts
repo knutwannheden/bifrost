@@ -20,7 +20,13 @@ import { loadChangeFeed, setActiveFeedTask } from './change-feed-service';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
-import { getConsoleSession, getMachineConsole, resetConsole, resetMachineConsole } from './console-service';
+import {
+  CONSOLE_SESSION_ID,
+  getConsoleSession,
+  getMachineConsole,
+  resetConsole,
+  resetMachineConsole,
+} from './console-service';
 import { findTranscriptMatch, getClaudeJsonlPath } from './context-store';
 import { getCuratorState, runCuratorNow } from './curator-service';
 import { getDiff, getDiffStats, getFileStatuses, getRangeDiff, resolveDiffBase } from './diff-service';
@@ -31,7 +37,7 @@ import { scanRecentRepos } from './history-scanner';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { lastChangedFile } from './last-changed-file.ts';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
-import { connectPeer, peerOf, peerTasks, routeCall } from './peers';
+import { connectPeer, peerOf, peerTasks, postToPeer, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
 import { handleScrapeResponse, isIdle, sendPrompt } from './prompt-sender';
@@ -83,6 +89,10 @@ const walkthroughErrors = new Map<string, string>();
 const walkthroughChanged = (taskId: string) => {
   emit(IPC_STREAM.WALKTHROUGH_UPDATED, taskId);
 };
+
+function sessionState(sessionId: string, screen: string | null): SessionState {
+  return { live: screen !== null, busy: !isIdle(sessionId), draft: screen === null ? '' : promptDraft(screen) };
+}
 
 /** The IPC calls that need no window, by channel, so the renderer's and another instance's run the same code. */
 // biome-ignore lint/suspicious/noExplicitAny: each call declares its own arguments
@@ -161,7 +171,7 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
           .exec(captureScript(taskId))
           .catch(() => null)
       : await captureLocalSession(taskId);
-    return { live: screen !== null, busy: !isIdle(taskId), draft: screen === null ? '' : promptDraft(screen) };
+    return sessionState(taskId, screen);
   },
 
   [IPC.STOP_TASK]: (taskId: string) => {
@@ -648,7 +658,13 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
     return loggedIn;
   },
 
-  [IPC.CONSOLE_RESET]: (machine?: string) => (machine ? resetMachineConsole(machine) : resetConsole()),
+  [IPC.CONSOLE_RESET]: (machine?: string, resume?: boolean) =>
+    machine ? resetMachineConsole(machine, resume) : resetConsole(resume),
+
+  [IPC.CONSOLE_STATE]: async (machine?: string): Promise<SessionState> =>
+    machine
+      ? ((await postToPeer(machine, '/call', { channel: IPC.CONSOLE_STATE, args: [] })).result as SessionState)
+      : sessionState(CONSOLE_SESSION_ID, await captureLocalSession(CONSOLE_SESSION_ID)),
 
   // Disk reclaim
   [IPC.DISK_RECLAIM_SCAN]: () => scanReclaimable(),

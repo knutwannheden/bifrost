@@ -153,6 +153,7 @@ export const IPC = {
   // Console
   CONSOLE_SESSION: 'console:session',
   CONSOLE_RESET: 'console:reset',
+  CONSOLE_STATE: 'console:state',
   MACHINE_LOGIN_START: 'machine:login-start',
   MACHINE_LOGIN_CHECK: 'machine:login-check',
 
@@ -376,7 +377,8 @@ export interface BifrostAPI {
 
   // Console
   consoleSession(machine?: string): Promise<string>;
-  resetConsole(machine?: string): Promise<string>;
+  resetConsole(machine?: string, resume?: boolean): Promise<string>;
+  consoleState(machine?: string): Promise<SessionState>;
   /** Starts Claude's login on a machine, answering the session to show it in. */
   startMachineLogin(machine: string): Promise<string>;
   /** Whether Claude on a machine is logged in now. */

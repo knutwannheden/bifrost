@@ -8,7 +8,7 @@ import { loadConfig } from './config.ts';
 import { connectPeer, postToPeer } from './peers.ts';
 import { getRemoteHost, machineSession } from './remote-host.ts';
 import { attachLocalSession, createRemoteSession, detachSession, hasSession, killSession } from './session-manager.ts';
-import { writeLocalSession } from './tmux-session.ts';
+import { sessionDir, writeLocalSession } from './tmux-session.ts';
 
 const CONSOLE_DIR = path.join(os.homedir(), '.bifrost', 'console');
 
@@ -32,16 +32,16 @@ function writeInstructions(): void {
   fs.writeFileSync(path.join(CONSOLE_DIR, 'CLAUDE.md'), `${instructions}\n`, 'utf-8');
 }
 
-function spawn(): void {
+function spawn(sessionId: string = randomUUID()): void {
   writeInstructions();
 
   const machine = machineSession('skip-permissions', loadConfig().remoteControlAtStartup === true);
-  // A console still running in tmux is joined, and a new one starts under a fresh session id.
+  // A console still running in tmux is joined, and a new one starts under sessionId.
   writeLocalSession({
     home: os.homedir(),
     taskId: CONSOLE_SESSION_ID,
     worktreePath: CONSOLE_DIR,
-    sessionId: randomUUID(),
+    sessionId,
     claudeArgs: [
       '--name',
       CONSOLE_NAME,
@@ -72,17 +72,30 @@ export function getConsoleSession(): string {
 }
 
 /**
- * Start the conversation over. The console is a fixed address rather than a
- * memory: days of orchestration chatter are worth less than a clean window.
+ * Start the conversation over, or with `resume` carry it on in a new process.
+ * The console is a fixed address rather than a memory: days of orchestration
+ * chatter are worth less than a clean window.
  */
-export function resetConsole(): string {
+export function resetConsole(resume = false): string {
+  const sessionId = resume ? currentSessionId() : undefined;
   if (respawnTimer) {
     clearTimeout(respawnTimer);
     respawnTimer = null;
   }
   if (hasSession(CONSOLE_SESSION_ID)) killSession(CONSOLE_SESSION_ID);
-  spawn();
+  spawn(sessionId);
   return CONSOLE_SESSION_ID;
+}
+
+function currentSessionId(): string | undefined {
+  try {
+    return (
+      fs.readFileSync(path.join(os.homedir(), sessionDir(CONSOLE_SESSION_ID), 'session-id'), 'utf-8').trim() ||
+      undefined
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -98,10 +111,10 @@ export async function getMachineConsole(machine: string): Promise<string> {
   return id;
 }
 
-/** Starts a machine's console over, through its instance, and reads the new one. */
-export async function resetMachineConsole(machine: string): Promise<string> {
+/** Starts a machine's console again, through its instance, and reads the new one. */
+export async function resetMachineConsole(machine: string, resume = false): Promise<string> {
   // Let go of the old session first, so its end is not taken for the new one's.
   detachSession(`${CONSOLE_SESSION_ID}@${machine}`);
-  await postToPeer(machine, '/call', { channel: IPC.CONSOLE_RESET, args: [] });
+  await postToPeer(machine, '/call', { channel: IPC.CONSOLE_RESET, args: [null, resume] });
   return getMachineConsole(machine);
 }

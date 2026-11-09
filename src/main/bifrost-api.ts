@@ -728,10 +728,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
 
       // The console has no worktree and no task to attribute an event to, so it
-      // is answered here. Stop ends a turn and Notification means it has been
-      // waiting. Either way it wants the user, and the debounce collapses the
-      // two when both arrive.
+      // is answered here, and its turn is kept under its session id. Stop ends a
+      // turn and Notification means it has been waiting. Either way it wants the
+      // user, and the debounce collapses the two when both arrive.
       if (hookContext === 'console') {
+        if (hookEventName === 'UserPromptSubmit') markActive(CONSOLE_SESSION_ID);
+        if (hookEventName === 'Stop') markIdle(CONSOLE_SESSION_ID);
         const wantsUser = hookEventName === 'Stop' || hookEventName === 'Notification';
         if (wantsUser && ringBell(CONSOLE_SESSION_ID, 'Console')) {
           emit(IPC_STREAM.CONSOLE_NOTIFICATION, (body.message as string) || '', (body.title as string) || '');

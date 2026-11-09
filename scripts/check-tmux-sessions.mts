@@ -313,6 +313,27 @@ try {
       before > 0 && numbers[0] === 1 && numbers[numbers.length - 1] > before + 5,
       show({ before, numbers }),
     );
+
+    const sessionId = () =>
+      fs.readFileSync(path.join(home, '.bifrost', 'sessions', 'console', 'session-id'), 'utf-8').trim();
+    const pid = () =>
+      alive('console')
+        ? execFileSync('tmux', ['-S', socket, 'display', '-p', '-t', '=console:', '#{pane_pid}'], {
+            encoding: 'utf-8',
+          }).trim()
+        : '';
+    const first = { id: sessionId(), pid: pid() };
+    consoleService.resetConsole(true);
+    await until(() => ![first.pid, ''].includes(pid()));
+    const restarted = { id: sessionId(), pid: pid() };
+    consoleService.resetConsole();
+    await until(() => ![restarted.pid, ''].includes(pid()));
+    const reset = { id: sessionId(), pid: pid() };
+    check(
+      'a console restarted carries on under its session id, and one reset starts a new one',
+      restarted.pid !== first.pid && restarted.id === first.id && reset.pid !== restarted.pid && reset.id !== first.id,
+      show({ first, restarted, reset }),
+    );
   }
 } finally {
   detachAllSessions();

@@ -262,7 +262,8 @@ const api: BifrostAPI = {
   },
 
   consoleSession: (machine) => ipcRenderer.invoke(IPC.CONSOLE_SESSION, machine),
-  resetConsole: (machine) => ipcRenderer.invoke(IPC.CONSOLE_RESET, machine),
+  resetConsole: (machine, resume) => ipcRenderer.invoke(IPC.CONSOLE_RESET, machine, resume),
+  consoleState: (machine) => ipcRenderer.invoke(IPC.CONSOLE_STATE, machine),
   startMachineLogin: (machine) => ipcRenderer.invoke(IPC.MACHINE_LOGIN_START, machine),
   checkMachineLogin: (machine) => ipcRenderer.invoke(IPC.MACHINE_LOGIN_CHECK, machine),
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { consoleTabs } from '../utils/console-tabs';
 import { formatBytes } from '../utils/format-bytes';
 import { restartSessions } from '../utils/restart-sessions';
 import PrimaryButton from './PrimaryButton';
@@ -105,7 +106,7 @@ export default function NotificationPopover() {
         });
     } else if (handler === 'restart-sessions') {
       dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
-      void restartSessions(state.tasks, dispatch);
+      void restartSessions(state.tasks, consoleTabs(state.config), dispatch);
     }
   };
 

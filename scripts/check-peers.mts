@@ -215,6 +215,26 @@ try {
   }
 
   {
+    const consoleHook = (hook_event_name: string) =>
+      postB('/hook', { cwd: tmp, bifrost_context: 'console', hook_event_name });
+    const busy = async () => {
+      const answer = (await (await postB('/call', { channel: IPC.CONSOLE_STATE, args: [] })).json()) as {
+        result?: { busy?: boolean };
+      };
+      return answer.result?.busy;
+    };
+    await consoleHook('UserPromptSubmit');
+    const working = await busy();
+    await consoleHook('Stop');
+    const done = await busy();
+    check(
+      'a console is busy from the prompt it is given to the end of its turn',
+      working === true && done === false,
+      show({ working, done }),
+    );
+  }
+
+  {
     const t3: Task = {
       id: 't3',
       name: 't3',

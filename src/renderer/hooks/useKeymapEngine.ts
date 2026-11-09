@@ -444,7 +444,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
 
         case 'action.restartSessions':
-          void restartSessions(s.tasks, dispatch);
+          void restartSessions(s.tasks, consoleTabs(s.config), dispatch);
           break;
 
         case 'action.openPr':
