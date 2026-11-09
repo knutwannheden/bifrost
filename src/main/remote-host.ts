@@ -318,6 +318,11 @@ export function storePasteHere(png: Buffer, name: string): Promise<string> {
   });
 }
 
+/** Prints a session's pane as tmux there shows it, escape codes included, and fails when no such session runs. */
+export function captureScript(taskId: string): string {
+  return `tmux -L ${TMUX_SOCKET} capture-pane -e -p -t ${shQuote(`=${taskId}:`)}`;
+}
+
 /** The tmux session a login on the machine runs in, read here like any session. */
 export const LOGIN_SESSION = 'login';
 

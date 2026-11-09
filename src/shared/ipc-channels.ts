@@ -19,6 +19,7 @@ import type {
   RecentRepo,
   Repo,
   SessionMetricsResult,
+  SessionState,
   StatsData,
   Task,
   TaskCuration,
@@ -47,6 +48,7 @@ export const IPC = {
   CREATE_TASK: 'task:create',
   CLOSE_TASK: 'task:close',
   STOP_TASK: 'task:stop',
+  SESSION_STATE: 'session:state',
   ARCHIVE_TASK: 'task:archive',
   IS_WORKTREE_DIRTY: 'task:is-worktree-dirty',
   REOPEN_TASK: 'task:reopen',
@@ -215,6 +217,8 @@ export interface BifrostAPI {
   createTask(params: CreateTaskParams): Promise<Task>;
   closeTask(taskId: string): Promise<void>;
   stopTask(taskId: string): Promise<Task>;
+  /** Whether the task's session runs, is mid-turn, or holds text typed at its prompt, asked of the instance that owns it. */
+  getSessionState(taskId: string): Promise<SessionState>;
   archiveTask(taskId: string): Promise<Task>;
   isWorktreeDirty(taskId: string): Promise<boolean>;
   reopenTask(taskId: string): Promise<Task>;

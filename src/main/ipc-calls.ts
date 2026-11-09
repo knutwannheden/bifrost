@@ -5,7 +5,15 @@ import { promisify } from 'node:util';
 const execFile = promisify(execFileCb);
 
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
-import type { ActivityEntry, AddRepoParams, CreateTaskParams, PermissionDecision, Repo } from '../shared/types';
+import { promptDraft } from '../shared/prompt-draft';
+import type {
+  ActivityEntry,
+  AddRepoParams,
+  CreateTaskParams,
+  PermissionDecision,
+  Repo,
+  SessionState,
+} from '../shared/types';
 import { getFileDiffOnDemand } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
 import { loadChangeFeed, setActiveFeedTask } from './change-feed-service';
@@ -26,11 +34,12 @@ import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { connectPeer, peerOf, peerTasks, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
-import { handleScrapeResponse, sendPrompt } from './prompt-sender';
-import { getRemoteHost, LOGIN_SESSION } from './remote-host';
+import { handleScrapeResponse, isIdle, sendPrompt } from './prompt-sender';
+import { captureScript, getRemoteHost, LOGIN_SESSION } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
   attachSession,
+  captureLocalSession,
   createRemoteSession,
   createShellSession,
   detachSession,
@@ -143,6 +152,16 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
       devSessions.delete(taskId);
     }
     await destroyTask(taskId);
+  },
+
+  [IPC.SESSION_STATE]: async (taskId: string): Promise<SessionState> => {
+    const { machine } = getTask(taskId);
+    const screen = machine
+      ? await getRemoteHost(machine)
+          .exec(captureScript(taskId))
+          .catch(() => null)
+      : await captureLocalSession(taskId);
+    return { live: screen !== null, busy: !isIdle(taskId), draft: screen === null ? '' : promptDraft(screen) };
   },
 
   [IPC.STOP_TASK]: (taskId: string) => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatBytes } from '../utils/format-bytes';
+import { restartSessions } from '../utils/restart-sessions';
 import PrimaryButton from './PrimaryButton';
 
 export default function NotificationPopover() {
@@ -75,16 +76,15 @@ export default function NotificationPopover() {
         .installIntegration()
         .then(() => {
           dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
-          const runningTasks = state.tasks.filter((t) => t.status === 'running');
-          if (runningTasks.length > 0) {
+          if (state.tasks.some((t) => t.status === 'running')) {
             dispatch({
               type: 'PUSH_NOTIFICATION',
               notification: {
                 id: 'restart-sessions',
                 type: 'plugin-update',
                 title: 'Restart Sessions?',
-                message: `${runningTasks.length} running task${runningTasks.length > 1 ? 's' : ''} will be restarted to use the updated plugin.`,
-                action: { label: 'Restart All', handler: 'restart-sessions' },
+                message: 'Restart the sessions that run, so they use the updated plugin.',
+                action: { label: 'Restart sessions', handler: 'restart-sessions' },
                 read: false,
                 timestamp: Date.now(),
               },
@@ -105,25 +105,7 @@ export default function NotificationPopover() {
         });
     } else if (handler === 'restart-sessions') {
       dispatch({ type: 'DISMISS_NOTIFICATION', id: notificationId });
-      const runningTasks = state.tasks.filter((t) => t.status === 'running');
-      dispatch({
-        type: 'SHOW_TOAST',
-        message: `Restarting ${runningTasks.length} session${runningTasks.length > 1 ? 's' : ''}...`,
-      });
-      Promise.all(
-        runningTasks.map(async (task) => {
-          const stopped = await window.bifrost.stopTask(task.id);
-          dispatch({ type: 'UPDATE_TASK', task: stopped });
-          const reopened = await window.bifrost.reopenTask(task.id);
-          dispatch({ type: 'UPDATE_TASK', task: reopened });
-        }),
-      )
-        .then(() => {
-          dispatch({ type: 'SHOW_TOAST', message: 'All sessions restarted.' });
-        })
-        .catch(() => {
-          dispatch({ type: 'SHOW_TOAST', message: 'Some sessions failed to restart.' });
-        });
+      void restartSessions(state.tasks, dispatch);
     }
   };
 

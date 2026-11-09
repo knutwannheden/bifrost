@@ -1,7 +1,8 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import { emit } from './event-sink.ts';
@@ -9,6 +10,8 @@ import type { RemoteHost } from './remote-host.ts';
 import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror.ts';
 import { TmuxControl } from './tmux-control.ts';
 import { controlArgs, startedName, TMUX_SOCKET } from './tmux-session.ts';
+
+const execFileAsync = promisify(execFile);
 
 // node-pty is externalized from the Vite bundle, so it is required at run time, and only by dev shells.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -420,6 +423,16 @@ function localTmuxEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   for (const name of INHERITED_SESSION_VARS) delete env[name];
   return env;
+}
+
+/** A session's pane as tmux here shows it, escape codes included, or null when no such session runs. */
+export async function captureLocalSession(sessionId: string): Promise<string | null> {
+  const args = ['-L', TMUX_SOCKET, 'capture-pane', '-e', '-p', '-t', `=${sessionId}:`];
+  try {
+    return (await execFileAsync('tmux', args, { env: localTmuxEnv(), timeout: 5000 })).stdout;
+  } catch {
+    return null;
+  }
 }
 
 /** Runs a tmux command against Bifrost's server on this machine, answering whether it succeeded. */

@@ -83,6 +83,8 @@ Every Claude session, the console included, runs in a tmux session named after i
 
 Quitting Bifrost only detaches, so its sessions run on, and opening a tab or waking a task joins them again. A client that joins replays the pane's scrollback, its screen and the terminal modes tmux reports. Dev terminals are plain PTYs and end with Bifrost.
 
+"Restart sessions" in the command palette restarts the Claude session of each running task that has one, here and on other machines, one after another. It leaves a session that is mid-turn alone. It first warns about text typed at a prompt, which a restart loses, and reads that from the pane, where Claude draws its own suggested prompt faint.
+
 ### Tasks on other machines
 
 A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. Cmd+O or a file link opens one of its files in Zed with an `ssh://` URL to that machine's host. Other editors refuse it. An image pasted into one of its sessions, with Cmd+V or Ctrl+V, is copied to `~/.bifrost/paste` on that machine, and its path is pasted at the prompt. SendMessage does not cross machines.

@@ -574,6 +574,14 @@ export interface DiskReclaimResult {
   skipped: number;
 }
 
+/** A task's Claude session as the instance that owns it sees it. */
+export interface SessionState {
+  live: boolean;
+  busy: boolean;
+  /** Text typed at Claude's prompt and not yet sent. */
+  draft: string;
+}
+
 export interface AppNotification {
   id: string;
   type: 'plugin-update' | 'restart-sessions' | 'info' | 'slack-reaction' | 'disk-reclaim';

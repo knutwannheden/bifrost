@@ -10,6 +10,7 @@ import { BELL, type EventChannel, emit, emitFrom } from './event-sink.ts';
 export const PER_TASK: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
   IPC.CLOSE_TASK,
   IPC.STOP_TASK,
+  IPC.SESSION_STATE,
   IPC.ARCHIVE_TASK,
   IPC.IS_WORKTREE_DIRTY,
   IPC.REOPEN_TASK,
