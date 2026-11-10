@@ -74,15 +74,16 @@ check(
   show(start('copilot')) === show(['--flag', 'value with spaces', '--session-id', sid]),
 );
 
+const trusted = (dir: string) => ['-c', `projects={"${dir}"={trust_level="trusted"}}`];
 setUp('codex', '');
 check(
   'Codex, which picks its own id, starts with the prompt as its argument',
-  show(start('codex')) === show(['--flag', 'value with spaces', '--', prompt]),
+  show(start('codex')) === show([...trusted(worktree), '--flag', 'value with spaces', '--', prompt]),
 );
 setUp('codex', sid, false);
 check(
   'a Codex session whose id is known but has no transcript starts afresh',
-  show(start('codex')) === show(['--flag', 'value with spaces']),
+  show(start('codex')) === show([...trusted(worktree), '--flag', 'value with spaces']),
 );
 const day = path.join(home, '.codex', 'sessions', '2026', '11', '10');
 fs.mkdirSync(day, { recursive: true });
@@ -90,8 +91,31 @@ fs.writeFileSync(path.join(day, `rollout-2026-11-10T00-00-00-${sid}.jsonl`), '{}
 setUp('codex', sid);
 check(
   'a Codex session with a transcript resumes it by id without the prompt',
-  show(start('codex')) === show(['resume', '--flag', 'value with spaces', sid]),
+  show(start('codex')) === show(['resume', ...trusted(worktree), '--flag', 'value with spaces', sid]),
 );
+
+{
+  const main = path.join(root, 'main');
+  const linked = path.join(main, '.worktrees', 'linked');
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: main, stdio: 'pipe' });
+  fs.mkdirSync(main);
+  git('init', '-q', '-b', 'main');
+  git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'init');
+  git('worktree', 'add', '-q', linked);
+  writeLocalSession({
+    home,
+    taskId: 't-agent',
+    worktreePath: linked,
+    agent: 'codex',
+    sessionId: '',
+    args: [],
+    env: {},
+  });
+  check(
+    'Codex in a worktree is told its main checkout is trusted, which is where it looks',
+    show(start('codex').slice(0, 2)) === show(trusted(main)),
+  );
+}
 
 fs.rmSync(root, { recursive: true, force: true });
 if (failed) {

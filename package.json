@@ -40,6 +40,7 @@
     "check:tmux-control": "node scripts/check-tmux-control.mts",
     "check:tmux-sessions": "node scripts/check-tmux-sessions.mts",
     "check:agent-sessions": "node scripts/check-agent-sessions.mts",
+    "check:conversation-handover": "node scripts/check-conversation-handover.mts",
     "check:diff-paths": "node scripts/check-diff-paths.mts",
     "check:task-transfer": "node scripts/check-task-transfer.mts",
     "check:restore-plan": "node scripts/check-restore-plan.mts",

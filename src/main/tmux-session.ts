@@ -86,6 +86,7 @@ export function sessionFiles(spec: SessionSpec): Record<string, string> {
     ...startLines(spec.agent ?? 'claude'),
   ].join('\n');
   return {
+    agent: spec.agent ?? 'claude',
     'session-id': spec.sessionId,
     ...(spec.prompt !== undefined ? { prompt: spec.prompt } : {}),
     'run.sh': run,

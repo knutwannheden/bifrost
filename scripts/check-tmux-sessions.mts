@@ -334,6 +334,19 @@ try {
       restarted.pid !== first.pid && restarted.id === first.id && reset.pid !== restarted.pid && reset.id !== first.id,
       show({ first, restarted, reset }),
     );
+
+    fs.copyFileSync(path.join(stubs, 'claude'), path.join(stubs, 'copilot'));
+    const configFile = path.join(home, '.bifrost', 'config.json');
+    const config = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFile, 'utf-8')) : {};
+    fs.writeFileSync(configFile, JSON.stringify({ ...config, agent: 'copilot' }));
+    consoleService.resetConsole(true);
+    await until(() => ![reset.pid, ''].includes(pid()));
+    check(
+      'a console restarted under another agent starts a new conversation with it',
+      sessionId() !== reset.id &&
+        fs.readFileSync(path.join(home, '.bifrost', 'sessions', 'console', 'run.sh'), 'utf-8').includes('exec copilot'),
+      show({ reset, id: sessionId() }),
+    );
   }
 } finally {
   detachAllSessions();

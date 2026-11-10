@@ -734,7 +734,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (hookContext === 'console') {
         if (hookEventName === 'UserPromptSubmit') markActive(CONSOLE_SESSION_ID);
         if (hookEventName === 'Stop') markIdle(CONSOLE_SESSION_ID);
-        const wantsUser = hookEventName === 'Stop' || hookEventName === 'Notification';
+        const wantsUser =
+          hookEventName === 'Stop' || hookEventName === 'Notification' || hookEventName === 'PermissionRequest';
         if (wantsUser && ringBell(CONSOLE_SESSION_ID, 'Console')) {
           emit(IPC_STREAM.CONSOLE_NOTIFICATION, (body.message as string) || '', (body.title as string) || '');
         }
@@ -804,9 +805,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
-      // Notification is the one event that speaks to the user; anything else
-      // reaching here is a hook this build does not act on.
-      if (hookEventName !== 'Notification') {
+      // Notification is the one event that speaks to the user, and Codex's
+      // PermissionRequest stands in for it. Anything else reaching here is a
+      // hook this build does not act on.
+      if (hookEventName !== 'Notification' && hookEventName !== 'PermissionRequest') {
         jsonResponse(res, { ok: true });
         return;
       }
@@ -823,7 +825,8 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       const message = (body.message as string) || '';
       const title = (body.title as string) || '';
-      const notificationType = (body.notification_type as string) || '';
+      const notificationType =
+        (body.notification_type as string) || (hookEventName === 'PermissionRequest' ? 'permission_prompt' : '');
       emit(IPC_STREAM.HOOK_NOTIFICATION, task.id, task.name, message, title, notificationType);
       jsonResponse(res, { ok: true });
       return;
@@ -1110,8 +1113,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       //   1. source=startup with a transient wrapper session ID
       //   2. source=resume  with the actual resumed session ID
       // Skip the wrapper event so it never overwrites the stored sessionId.
+      // Codex reports its own id this way, at the first turn of each session it starts.
       const source = body.source as string;
-      if (task.sessionId && source === 'startup') {
+      if (task.sessionId && source === 'startup' && (task.agent ?? 'claude') === 'claude') {
         jsonResponse(res, { ok: true });
         return;
       }

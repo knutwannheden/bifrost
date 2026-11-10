@@ -4,7 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { DEFAULT_CONSOLE_PROMPT } from '../shared/default-prompts.ts';
 import { IPC } from '../shared/ipc-channels.ts';
+import type { AgentKind } from '../shared/types.ts';
+import { agentLaunch } from './agents.ts';
+import { claudeConfigDir } from './claude-paths.ts';
 import { loadConfig } from './config.ts';
+import { PLUGIN_DEPLOY_DIR } from './integration-installer.ts';
 import { connectPeer, postToPeer } from './peers.ts';
 import { getRemoteHost, machineSession } from './remote-host.ts';
 import { attachLocalSession, createRemoteSession, detachSession, hasSession, killSession } from './session-manager.ts';
@@ -32,24 +36,38 @@ function writeInstructions(): void {
   fs.writeFileSync(path.join(CONSOLE_DIR, 'CLAUDE.md'), `${instructions}\n`, 'utf-8');
 }
 
-function spawn(sessionId: string = randomUUID()): void {
+function spawn(sessionId?: string): void {
   writeInstructions();
 
-  const machine = machineSession('skip-permissions', loadConfig().remoteControlAtStartup === true);
+  const config = loadConfig();
+  const agent = config.agent ?? 'claude';
+  const machine = machineSession('skip-permissions', config.remoteControlAtStartup === true);
+  const launch =
+    agent === 'claude'
+      ? {
+          args: [
+            '--name',
+            CONSOLE_NAME,
+            '--dangerously-skip-permissions',
+            ...(Object.keys(machine.settings).length ? ['--settings', JSON.stringify(machine.settings)] : []),
+            ...machine.args,
+          ],
+          env: {},
+        }
+      : agentLaunch(agent, 'skip-permissions', {
+          home: os.homedir(),
+          pluginDir: process.env.BIFROST_PLUGIN_DIR ?? PLUGIN_DEPLOY_DIR,
+          claudeDir: claudeConfigDir(),
+        });
   // A console still running in tmux is joined, and a new one starts under sessionId.
   writeLocalSession({
     home: os.homedir(),
     taskId: CONSOLE_SESSION_ID,
     worktreePath: CONSOLE_DIR,
-    sessionId,
-    args: [
-      '--name',
-      CONSOLE_NAME,
-      '--dangerously-skip-permissions',
-      ...(Object.keys(machine.settings).length ? ['--settings', JSON.stringify(machine.settings)] : []),
-      ...machine.args,
-    ],
-    env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: CONSOLE_NAME, ...machine.env },
+    agent,
+    sessionId: sessionId ?? (agent === 'codex' ? '' : randomUUID()),
+    args: launch.args,
+    env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: CONSOLE_NAME, ...machine.env, ...launch.env },
   });
   attachLocalSession(CONSOLE_SESSION_ID, {
     name: CONSOLE_NAME,
@@ -77,7 +95,7 @@ export function getConsoleSession(): string {
  * chatter are worth less than a clean window.
  */
 export function resetConsole(resume = false): string {
-  const sessionId = resume ? currentSessionId() : undefined;
+  const sessionId = resume ? currentSessionId(loadConfig().agent ?? 'claude') : undefined;
   if (respawnTimer) {
     clearTimeout(respawnTimer);
     respawnTimer = null;
@@ -87,12 +105,12 @@ export function resetConsole(resume = false): string {
   return CONSOLE_SESSION_ID;
 }
 
-function currentSessionId(): string | undefined {
+/** The id the console's conversation resumes under, when the agent that kept it is the one about to start. */
+function currentSessionId(agent: AgentKind): string | undefined {
+  const dir = path.join(os.homedir(), sessionDir(CONSOLE_SESSION_ID));
   try {
-    return (
-      fs.readFileSync(path.join(os.homedir(), sessionDir(CONSOLE_SESSION_ID), 'session-id'), 'utf-8').trim() ||
-      undefined
-    );
+    if (fs.readFileSync(path.join(dir, 'agent'), 'utf-8').trim() !== agent) return undefined;
+    return fs.readFileSync(path.join(dir, 'session-id'), 'utf-8').trim() || undefined;
   } catch {
     return undefined;
   }

@@ -9,15 +9,18 @@ const execFile = promisify(execFileCb);
 
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import { generateTaskName } from '../shared/name-generator.ts';
-import type { CreateTaskParams, DiffResult, Repo, Task } from '../shared/types.ts';
+import type { AgentKind, CreateTaskParams, DiffResult, Repo, Task } from '../shared/types.ts';
 import { startWatching, stopWatching } from './activity-watcher.ts';
+import { agentLaunch } from './agents.ts';
 import { forgetChangeFeed } from './change-feed-service.ts';
-import { isSessionStale, transcriptDir } from './claude-paths.ts';
+import { claudeConfigDir, claudeConfigDirAt, isSessionStale, transcriptDir } from './claude-paths.ts';
 import { lastConversationAt } from './claude-watcher.ts';
 import { loadConfig, saveConfig } from './config.ts';
+import { handOverConversation, remoteHandOver, switchAgent, transcriptFile } from './conversation-handover.ts';
 import { resolveBaseRef } from './diff-service.ts';
 import { emit } from './event-sink.ts';
 import { handOver, isInstanceMachine } from './instance-link.ts';
+import { PLUGIN_DEPLOY_DIR } from './integration-installer.ts';
 import { cancelTaskRequests, setWorktreePathResolver } from './permission-manager.ts';
 import {
   archiveScript,
@@ -365,7 +368,6 @@ async function createMultiRepoTask(params: CreateTaskParams): Promise<Task> {
     baseBranch: 'main',
     branch: 'main',
     worktreePath: containerPath,
-    sessionId: randomUUID(),
     status: 'running',
     hasUnread: false,
     createdAt: Date.now(),
@@ -531,7 +533,6 @@ export async function createTaskCore(params: CreateTaskParams, target?: TaskTarg
     baseBranch,
     ...(taskBranch ? { branch: taskBranch } : {}),
     worktreePath,
-    sessionId: randomUUID(),
     status: 'running',
     hasUnread: false,
     createdAt: Date.now(),
@@ -567,18 +568,36 @@ function remoteHostFor(task: Task): RemoteHost | null {
   }
 }
 
+/** Whether the conversation the task's session id names can no longer be resumed. */
+function conversationGone(task: Task, worktreePath: string): boolean {
+  const agent = task.agent ?? 'claude';
+  if (agent === 'claude') return isSessionStale(worktreePath, task.sessionId);
+  return !task.sessionId || !transcriptFile(agent, task.sessionId);
+}
+
+/** The agent sessions on a machine run: its own setting, else this machine's. */
+function agentOn(machine?: string): AgentKind {
+  const config = loadConfig();
+  return (machine && config.machines?.find((m) => m.name === machine)?.agent) || config.agent || 'claude';
+}
+
+/** switchAgent, applied to the task and its record in the list. */
+function adoptAgent(task: Task, agent: AgentKind, handOver: (was: AgentKind, sessionId: string) => string | undefined) {
+  const { changes, prompt } = switchAgent(task, agent, handOver);
+  if (Object.keys(changes).length === 0) return prompt;
+  Object.assign(task, changes);
+  if (tasks.some((t) => t.id === task.id)) updateTask(task.id, changes);
+  return prompt;
+}
+
 /**
  * Writes the session files of a task on this machine with the settings as
- * they are now, then joins its tmux session or starts it. A task without a
- * session id gets one, which Claude starts under.
+ * they are now, then joins its tmux session or starts it.
  */
 function startLocalSession(task: Task, prompt?: string): void {
   const config = loadConfig();
-  let sessionId = task.sessionId;
-  if (!sessionId) {
-    sessionId = randomUUID();
-    if (tasks.some((t) => t.id === task.id)) updateTask(task.id, { sessionId });
-  }
+  const agent = agentOn();
+  const carried = adoptAgent(task, agent, (was, id) => handOverConversation(task.id, was, id));
   const launch = {
     taskId: task.id,
     name: task.name,
@@ -586,14 +605,28 @@ function startLocalSession(task: Task, prompt?: string): void {
     agentTeams: config.agentTeams,
   };
   const machine = machineSession(config.permissionMode, config.remoteControlAtStartup === true);
-  writeLocalSession({
-    home: os.homedir(),
-    taskId: task.id,
-    worktreePath: task.worktreePath,
-    sessionId,
+  const claude = {
     args: [...claudeArgs(launch, machine.settings), ...machine.args],
     env: { ...claudeEnv(launch), ...machine.env },
-    prompt,
+  };
+  const home = os.homedir();
+  const other =
+    agent === 'claude'
+      ? claude
+      : agentLaunch(agent, config.permissionMode, {
+          home,
+          pluginDir: process.env.BIFROST_PLUGIN_DIR ?? PLUGIN_DEPLOY_DIR,
+          claudeDir: claudeConfigDir(),
+        });
+  writeLocalSession({
+    home,
+    taskId: task.id,
+    worktreePath: task.worktreePath,
+    agent,
+    sessionId: task.sessionId ?? '',
+    args: other.args,
+    env: { ...claude.env, ...other.env },
+    prompt: prompt ?? carried,
   });
   attachLocalSession(task.id, { name: task.name, taskId: task.id });
 }
@@ -654,7 +687,6 @@ async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: s
     baseBranch: created.BASE,
     branch: created.BRANCH,
     worktreePath: created.WORKTREE,
-    sessionId: randomUUID(),
     status: 'running',
     hasUnread: false,
     createdAt: Date.now(),
@@ -674,11 +706,9 @@ async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: s
 
 /** Writes the scripts the task's session starts from, with the settings as they are now. */
 async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo, prompt?: string): Promise<void> {
+  const agent = agentOn(task.machine);
   // Kept on the task, since the instance it may be handed to learns it from the record.
-  if (!task.sessionId) {
-    task.sessionId = randomUUID();
-    if (tasks.some((t) => t.id === task.id)) updateTask(task.id, { sessionId: task.sessionId });
-  }
+  const carried = adoptAgent(task, agent, remoteHandOver);
   const config = loadConfig();
   const launch = {
     taskId: task.id,
@@ -686,22 +716,35 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
   };
+  // The port is left to the file each connection rewrites, which follows Bifrost to a new port while tmux lives on.
+  const env = { ...claudeEnv(launch), BIFROST_MACHINE: task.machine ?? '' };
+  let args = [
+    ...claudeArgs(
+      launch,
+      remoteSessionSettings(config.permissionMode, localClaudeValue('remoteControlAtStartup') === true),
+    ),
+    ...(info.pluginDir ? ['--plugin-dir', info.pluginDir] : []),
+  ];
+  if (agent !== 'claude') {
+    if (!info.pluginDir) throw new Error(`Bifrost's plugin is not on ${task.machine}, which ${agent} sessions need`);
+    const other = agentLaunch(agent, config.permissionMode, {
+      home: info.home,
+      pluginDir: info.pluginDir,
+      claudeDir: claudeConfigDirAt(info.home) ?? `${info.home}/.claude`,
+    });
+    args = other.args;
+    Object.assign(env, other.env);
+  }
   await host.exec(
     sessionSetupScript({
       home: info.home,
       taskId: task.id,
       worktreePath: task.worktreePath,
-      sessionId: task.sessionId,
-      args: [
-        ...claudeArgs(
-          launch,
-          remoteSessionSettings(config.permissionMode, localClaudeValue('remoteControlAtStartup') === true),
-        ),
-        ...(info.pluginDir ? ['--plugin-dir', info.pluginDir] : []),
-      ],
-      // The port is left to the file each connection rewrites, which follows Bifrost to a new port while tmux lives on.
-      env: { ...claudeEnv(launch), BIFROST_MACHINE: task.machine ?? '' },
-      prompt,
+      agent,
+      sessionId: task.sessionId ?? '',
+      args,
+      env,
+      prompt: prompt ?? carried,
     }),
   );
 }
@@ -914,7 +957,7 @@ export async function reopenTaskCore(taskId: string): Promise<Task> {
 
   // Check if stored sessionId is stale; if so, clear it so user can select a session
   let resumeSessionId = task.sessionId;
-  if (resumeSessionId && isSessionStale(worktreePath, resumeSessionId)) {
+  if (resumeSessionId && conversationGone(task, worktreePath)) {
     resumeSessionId = undefined;
     updateTask(taskId, { sessionId: undefined });
   }
@@ -957,7 +1000,7 @@ export function restoreTasks(): void {
   const plan = planRestore(
     tasksToRestore,
     runningLocalSessions(),
-    (task) => isSessionStale(task.worktreePath, task.sessionId),
+    (task) => conversationGone(task, task.worktreePath),
     fs.existsSync,
   );
   const dropped = new Set(plan.dropSessionId);
