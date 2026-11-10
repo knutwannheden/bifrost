@@ -62,6 +62,8 @@ fi
 [ -n "$config_dir" ] && export CLAUDE_CONFIG_DIR=$config_dir
 log "Claude config dir: ${CLAUDE_CONFIG_DIR:-default}"
 unset NO_COLOR AI_AGENT GIT_EDITOR COREPACK_ENABLE_AUTO_PIN
+# A Copilot session's: allow-all would reach every session a fresh tmux server starts.
+unset COPILOT_ALLOW_ALL COPILOT_SKILLS_DIRS COPILOT_CLI COPILOT_AGENT_SESSION_ID
 
 # pgrep -f cannot read other processes' arguments on macOS, so ps is matched instead.
 processes() { ps -axo pid=,command= | sed 's/^ *//'; }

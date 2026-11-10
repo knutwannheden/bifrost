@@ -582,8 +582,13 @@ function agentOn(machine?: string): AgentKind {
 }
 
 /** switchAgent, applied to the task and its record in the list. */
-function adoptAgent(task: Task, agent: AgentKind, handOver: (was: AgentKind, sessionId: string) => string | undefined) {
-  const { changes, prompt } = switchAgent(task, agent, handOver);
+function adoptAgent(
+  task: Task,
+  agent: AgentKind,
+  handOver: (was: AgentKind, sessionId: string) => string | undefined,
+  running = false,
+) {
+  const { changes, prompt } = switchAgent(task, agent, handOver, running);
   if (Object.keys(changes).length === 0) return prompt;
   Object.assign(task, changes);
   if (tasks.some((t) => t.id === task.id)) updateTask(task.id, changes);
@@ -596,8 +601,13 @@ function adoptAgent(task: Task, agent: AgentKind, handOver: (was: AgentKind, ses
  */
 function startLocalSession(task: Task, prompt?: string): void {
   const config = loadConfig();
-  const agent = agentOn();
-  const carried = adoptAgent(task, agent, (was, id) => handOverConversation(task.id, was, id));
+  const carried = adoptAgent(
+    task,
+    agentOn(),
+    (was, id) => handOverConversation(task.id, was, id),
+    runningLocalSessions().has(task.id),
+  );
+  const agent = task.agent ?? 'claude';
   const launch = {
     taskId: task.id,
     name: task.name,
@@ -695,7 +705,8 @@ async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: s
   const prompt = params.prompt
     ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId, machine)
     : undefined;
-  await writeRemoteSession(task, host, info, prompt);
+  // Kept on the task, since the instance it may be handed to learns it from the record.
+  Object.assign(task, await writeRemoteSession(task, host, info, prompt));
 
   tasks.push(task);
   saveTasks(tasks);
@@ -703,11 +714,22 @@ async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: s
   return task;
 }
 
-/** Writes the scripts the task's session starts from, with the settings as they are now. */
-async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo, prompt?: string): Promise<void> {
+/**
+ * Writes the scripts the task's session starts from, with the settings as they
+ * are now, and returns what the task's record becomes once they are written.
+ */
+async function writeRemoteSession(
+  task: Task,
+  host: RemoteHost,
+  info: RemoteInfo,
+  prompt?: string,
+): Promise<Partial<Task>> {
   const agent = agentOn(task.machine);
-  // Kept on the task, since the instance it may be handed to learns it from the record.
-  const carried = adoptAgent(task, agent, remoteHandOver);
+  if (agent !== 'claude' && !info.pluginDir) {
+    throw new Error(`Bifrost's plugin is not on ${task.machine}, which ${agent} sessions need`);
+  }
+  const { changes, prompt: carried } = switchAgent(task, agent, remoteHandOver);
+  const sessionId = 'sessionId' in changes ? changes.sessionId : task.sessionId;
   const config = loadConfig();
   const launch = {
     taskId: task.id,
@@ -724,8 +746,7 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
     ),
     ...(info.pluginDir ? ['--plugin-dir', info.pluginDir] : []),
   ];
-  if (agent !== 'claude') {
-    if (!info.pluginDir) throw new Error(`Bifrost's plugin is not on ${task.machine}, which ${agent} sessions need`);
+  if (agent !== 'claude' && info.pluginDir) {
     const other = agentLaunch(agent, config.permissionMode, {
       pluginDir: info.pluginDir,
       claudeDir: claudeConfigDirAt(info.home) ?? `${info.home}/.claude`,
@@ -739,12 +760,13 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
       taskId: task.id,
       worktreePath: task.worktreePath,
       agent,
-      sessionId: task.sessionId ?? '',
+      sessionId: sessionId ?? '',
       args,
       env,
       prompt: prompt ?? carried,
     }),
   );
+  return changes;
 }
 
 function startRemoteSession(task: Task): void {
@@ -760,9 +782,9 @@ async function reopenRemoteTask(task: Task): Promise<Task> {
   const host = getRemoteHost(task.machine ?? '');
   const info = await host.connectReady();
   if (task.branch) await host.exec(restoreWorktreeScript(task.worktreePath, task.branch));
-  await writeRemoteSession(task, host, info);
+  const changes = await writeRemoteSession(task, host, info);
   startRemoteSession(task);
-  return updateTask(task.id, { status: 'running', hasUnread: false, archivedAt: undefined });
+  return updateTask(task.id, { ...changes, status: 'running', hasUnread: false, archivedAt: undefined });
 }
 
 /**
@@ -803,6 +825,7 @@ export async function transferTaskCore(taskId: string, machine: string): Promise
   killSession(taskId);
   const pack = fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-transfer-'));
   let moved: Task;
+  let switched: Partial<Task>;
   try {
     packTask(
       {
@@ -842,7 +865,7 @@ export async function transferTaskCore(taskId: string, machine: string): Promise
       baseBranch: out.BASE,
       status: 'running',
     };
-    await writeRemoteSession(moved, host, info);
+    switched = await writeRemoteSession(moved, host, info);
   } catch (err) {
     // Nothing here has changed yet, so the task carries on where it was.
     if (wasRunning) restoreTaskSession(taskId);
@@ -852,6 +875,7 @@ export async function transferTaskCore(taskId: string, machine: string): Promise
   }
 
   const updated = updateTask(taskId, {
+    ...switched,
     machine,
     worktreePath: moved.worktreePath,
     branch: moved.branch,

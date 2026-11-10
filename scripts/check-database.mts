@@ -49,6 +49,7 @@ try {
       lastTurnBoundaryAt: 3,
       interruptedAt: 4,
       machine: 'perf',
+      agent: 'codex',
       curation: {
         outcome: 'merged',
         confidence: 'user',

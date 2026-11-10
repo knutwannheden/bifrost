@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AgentKind, Task } from '../shared/types.ts';
-import { claudeConfigDir } from './claude-paths.ts';
+import { claudeConfigDir, claudeConfigRelative } from './claude-paths.ts';
 import { sessionDir } from './tmux-session.ts';
 
 const NAMES: Record<AgentKind, string> = { claude: 'Claude', codex: 'Codex', copilot: 'Copilot' };
@@ -129,7 +129,7 @@ function handOverPrompt(agent: AgentKind, where: string): string {
  */
 export function remoteHandOver(agent: AgentKind, sessionId: string): string {
   const where = {
-    claude: `~/.claude/projects/*/${sessionId}.jsonl`,
+    claude: `~/${claudeConfigRelative() ?? '.claude'}/projects/*/${sessionId}.jsonl`,
     copilot: `~/.copilot/session-state/${sessionId}/events.jsonl`,
     codex: `~/.codex/sessions/*/*/*/rollout-*-${sessionId}.jsonl`,
   }[agent];
@@ -140,13 +140,16 @@ export function remoteHandOver(agent: AgentKind, sessionId: string): string {
  * What a task's record becomes as its session starts under agent. A
  * conversation another agent kept moves to the history, and handOver gives the
  * prompt that carries it on. Every agent but Codex starts under an id chosen here.
+ * A session still running in tmux is only joined, so its task keeps the agent it has.
  */
 export function switchAgent(
   task: Pick<Task, 'agent' | 'sessionId' | 'sessionHistory'>,
-  agent: AgentKind,
+  chosen: AgentKind,
   handOver: (was: AgentKind, sessionId: string) => string | undefined,
+  running = false,
 ): { changes: Partial<Task>; prompt?: string } {
   const was = task.agent ?? 'claude';
+  const agent = running ? was : chosen;
   const changes: Partial<Task> = {};
   let prompt: string | undefined;
   let sessionId = task.sessionId;

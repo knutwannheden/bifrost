@@ -20,7 +20,7 @@ delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.COPILOT_HOME;
 delete process.env.CODEX_HOME;
 
-const { handOverConversation, switchAgent } = await import('../src/main/conversation-handover.ts');
+const { handOverConversation, remoteHandOver, switchAgent } = await import('../src/main/conversation-handover.ts');
 
 const lines = (...records: unknown[]) => `${records.map((r) => JSON.stringify(r)).join('\n')}\n`;
 const write = (file: string, content: string) => {
@@ -170,6 +170,13 @@ check(
     JSON.stringify(codex),
   );
 
+  const running = switchAgent({ agent: undefined, sessionId: 'c3' }, 'codex', handOver, true);
+  check(
+    'a task whose session is still running keeps its agent and conversation until it starts again',
+    Object.keys(running.changes).length === 0 && running.prompt === undefined && asked.length === 2,
+    JSON.stringify(running),
+  );
+
   const same = switchAgent({ agent: 'copilot', sessionId: 'p1' }, 'copilot', handOver);
   check(
     'a task staying with its agent keeps its conversation',
@@ -177,6 +184,14 @@ check(
     JSON.stringify(same),
   );
 }
+
+process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude-work');
+check(
+  "a session on another machine is pointed at Claude's transcript under the config dir sessions run with",
+  remoteHandOver('claude', 'c9').includes('~/.claude-work/projects/*/c9.jsonl'),
+  remoteHandOver('claude', 'c9'),
+);
+delete process.env.CLAUDE_CONFIG_DIR;
 
 fs.rmSync(home, { recursive: true, force: true });
 if (failed) {
