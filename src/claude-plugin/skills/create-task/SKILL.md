@@ -1,7 +1,7 @@
 ---
 name: bifrost:create-task
 description: Use when the user asks to "create a task", "spawn a task", "start a new task", or invokes /bifrost:create-task. Creates a new Bifrost task with a well-formed prompt.
-argument-hint: [description of the work]
+argument-hint: "[description of the work]"
 ---
 
 Create a new Bifrost task, synthesizing context from the current conversation into a well-formed prompt for the new task's Claude session.

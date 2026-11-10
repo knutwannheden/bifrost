@@ -1,7 +1,7 @@
 ---
 name: bifrost:merge-and-close
 description: Use when the user asks to "merge and close", "merge the PR", "land and archive", "finish this task", or invokes /bifrost:merge-and-close. Checks open review feedback and CI, merges the PR, and archives the Bifrost task.
-argument-hint: [task-id or PR number]
+argument-hint: "[task-id or PR number]"
 ---
 
 ## 🚨 IRON LAW

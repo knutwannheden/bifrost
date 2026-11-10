@@ -1,7 +1,7 @@
 ---
 name: bifrost:pickup
 description: Use when asked to "pick up", "continue from", "read handoff", or "receive handoff" from another Bifrost task. Reads and continues work from a structured handoff document.
-argument-hint: [source-task-name]
+argument-hint: "[source-task-name]"
 ---
 
 Read a handoff document from another Bifrost task and continue the work described in it.

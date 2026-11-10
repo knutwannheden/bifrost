@@ -111,7 +111,7 @@ export function agentLaunch(
   const skip = permissionMode === 'skip-permissions';
   if (agent === 'copilot') {
     return {
-      args: ['--plugin-dir', places.pluginDir, '--no-auto-update'],
+      args: ['--plugin-dir', places.pluginDir, '--no-auto-update', ...(skip ? ['--allow-all'] : [])],
       env: {
         BIFROST_AGENT: agent,
         COPILOT_SKILLS_DIRS: `${places.claudeDir}/skills`,

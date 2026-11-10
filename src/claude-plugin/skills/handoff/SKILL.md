@@ -1,7 +1,7 @@
 ---
 name: bifrost:handoff
 description: Use when the user explicitly asks to "hand off", "write a handoff", or "/handoff". Writes a structured handoff document summarizing this session's work. Do NOT use when creating new tasks.
-argument-hint: [instructions]
+argument-hint: "[instructions]"
 ---
 
 Write a handoff document summarizing the current session's work so another Bifrost task can pick it up.

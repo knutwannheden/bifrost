@@ -16,5 +16,5 @@ RESPONSE=$(curl -s --max-time 2 \
   -X POST -H "Content-Type: application/json" \
   -d "$ENRICHED" \
   "http://127.0.0.1:${PORT}/hook" 2>/dev/null)
-[ -z "$RESPONSE" ] && exit 0
-echo "$RESPONSE"
+# Codex rejects output that is not a hook answer, such as the API's {"ok":true}.
+case "$RESPONSE" in *hookSpecificOutput*) echo "$RESPONSE" ;; esac
