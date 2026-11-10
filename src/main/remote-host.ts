@@ -555,6 +555,13 @@ export class RemoteHost {
     return { command: 'ssh', args: [...this.sshOptions(), '-T', '-o', 'BatchMode=yes', this.machine.host, remote] };
   }
 
+  /** The command that opens a login shell with a terminal in a directory on the machine, with env set. */
+  shellCommand(dir: string, env: Record<string, string>): { command: string; args: string[] } {
+    const vars = Object.entries(env).map(([name, value]) => `${name}=${shQuote(value)}`);
+    const remote = `cd ${shQuote(dir)} && exec env ${vars.join(' ')} "$SHELL" -l`;
+    return { command: 'ssh', args: [...this.sshOptions(), '-t', '-o', 'BatchMode=yes', this.machine.host, remote] };
+  }
+
   /** The machine, connected and prepared. */
   connect(): Promise<RemoteInfo> {
     if (this.info) return Promise.resolve(this.info);

@@ -676,13 +676,23 @@ function findShell(): string {
   return '/bin/sh';
 }
 
-export function createShellSession(sessionId: string, cwd: string, options?: { taskId?: string }): void {
-  const shellPath = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : findShell());
+/** A login shell in cwd, on the machine host reaches when one is given. */
+export function createShellSession(
+  sessionId: string,
+  cwd: string,
+  options?: { taskId?: string; host?: RemoteHost },
+): void {
   const extraEnv: Record<string, string> = {
     BIFROST_CONTEXT: 'dev',
     BIFROST_WORKTREE: cwd,
   };
   if (options?.taskId) extraEnv.BIFROST_TASK_ID = options.taskId;
+  if (options?.host) {
+    const { command, args } = options.host.shellCommand(cwd, extraEnv);
+    spawnSession(sessionId, command, args, os.homedir(), { rows: 15 });
+    return;
+  }
+  const shellPath = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : findShell());
   spawnSession(sessionId, shellPath, ['-l'], cwd, { rows: 15, extraEnv });
 }
 

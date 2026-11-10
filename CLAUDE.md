@@ -103,7 +103,7 @@ Copilot and Codex have no SendMessage, so the MCP server tells their sessions to
 
 ### Tasks on other machines
 
-A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. Cmd+O or a file link opens one of its files in Zed with an `ssh://` URL to that machine's host. Other editors refuse it. An image pasted into one of its sessions, with Cmd+V or Ctrl+V, is copied to `~/.bifrost/paste` on that machine, and its path is pasted at the prompt. SendMessage does not cross machines.
+A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. Cmd+O or a file link opens one of its files in Zed with an `ssh://` URL to that machine's host. Other editors refuse it. An image pasted into one of its sessions, with Cmd+V or Ctrl+V, is copied to `~/.bifrost/paste` on that machine, and its path is pasted at the prompt. Its dev terminal is a login shell in that worktree over `ssh`, and ends with Bifrost like any dev terminal. SendMessage does not cross machines.
 
 Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there. At start, Bifrost connects to each machine a task was open on when it last quit.
 

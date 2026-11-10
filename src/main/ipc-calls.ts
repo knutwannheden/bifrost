@@ -245,14 +245,15 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
   },
 
   [IPC.CREATE_DEV_TERMINAL]: (taskId: string) => {
-    const task = getTask(taskId);
-    if (task.machine) throw new Error(`A task on ${task.machine} has no dev terminal`);
+    // A task another machine's instance holds is known here only from its list.
+    const task = peerTasks().find((t) => t.id === taskId) ?? getTask(taskId);
     // Kill existing dev session if any
     const existing = devSessions.get(taskId);
     if (existing) killSession(existing);
 
     const devSessionId = `${taskId}-dev`;
-    createShellSession(devSessionId, task.worktreePath, { taskId });
+    const host = task.machine ? getRemoteHost(task.machine) : undefined;
+    createShellSession(devSessionId, task.worktreePath, { taskId, host });
     devSessions.set(taskId, devSessionId);
     return devSessionId;
   },

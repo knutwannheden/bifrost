@@ -170,6 +170,28 @@ attach();
   );
 }
 
+{
+  // The login shell there reads the command, and the shell it opens is the one its $SHELL names.
+  const shell = path.join(stubs, 'dev-shell');
+  fs.writeFileSync(
+    shell,
+    `#!/bin/sh\nprintf '%s\\n' "$*" "$(pwd)" "$BIFROST_TASK_ID" "$BIFROST_WORKTREE" "$BIFROST_CONTEXT" > '${record}/dev-shell'\n`,
+    { mode: 0o755 },
+  );
+  const env = { BIFROST_TASK_ID: taskId, BIFROST_WORKTREE: worktree, BIFROST_CONTEXT: 'dev' };
+  const { command, args } = new RemoteHost({ name: 'machine', host: 'machine' }).shellCommand(worktree, env);
+  execFileSync('/bin/sh', ['-c', args[args.length - 1]], {
+    cwd: home,
+    env: { ...process.env, HOME: home, SHELL: shell },
+  });
+  const seen = fs.readFileSync(path.join(record, 'dev-shell'), 'utf-8');
+  check(
+    "a dev terminal on a machine is a login shell with a terminal in the task's worktree there, told which task it serves",
+    command === 'ssh' && args.includes('-t') && seen === ['-l', worktree, taskId, worktree, 'dev', ''].join('\n'),
+    show({ args, seen }),
+  );
+}
+
 fs.rmSync(path.join(record, 'stdin'));
 attach();
 check(
