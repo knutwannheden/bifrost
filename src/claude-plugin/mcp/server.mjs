@@ -88,33 +88,49 @@ function addressOf(t, unreachedHint) {
   return t.sessionName ? null : unreachedHint;
 }
 
+/** The agent this session runs, which Bifrost names only for agents other than Claude. */
+const AGENT = process.env.BIFROST_AGENT || 'claude';
+
+const CLAUDE_MESSAGING = [
+  'Bifrost runs each task as its own Claude Code session in its own git worktree.',
+  '',
+  'To talk to another task, use the built-in SendMessage tool, not a Bifrost tool.',
+  "It delivers into the recipient's turn, and a reply comes back by copying the",
+  'incoming `from` attribute as your `to`. Find the recipient with ListAgents.',
+  '',
+  'A task Bifrost has not opened yet has no session, so it is absent from',
+  'ListAgents and cannot be messaged. Call wake_task first: it starts the',
+  'session and reports how to address it. A task that is archived or stopped',
+  'has to be reopened instead, which is open_task. list_tasks shows every task,',
+  'so it is where to look when ListAgents does not list the one you want.',
+  '',
+  'A session is named after its task as of when the session started, so a task',
+  'renamed since then is addressed by its former name. list_tasks, find_task and',
+  'wake_task all report the name a task is actually reachable by.',
+  '',
+  'SendMessage reaches only tasks on the machine you run on, which is',
+  MACHINE ? `"${MACHINE}", not the one Bifrost runs on.` : 'the one Bifrost runs on.',
+  'list_tasks and find_task name the machine of a task that runs elsewhere.',
+];
+
+// The tool descriptions below speak of SendMessage and ListAgents, which only Claude has.
+const OTHER_MESSAGING = [
+  'Bifrost runs each task as its own agent session in its own git worktree.',
+  '',
+  'This session has no SendMessage or ListAgents, whatever a tool description',
+  'below says. To reach another task, use send_prompt with its task id, which',
+  'list_tasks and find_task report. Say who you are in the prompt, since it',
+  'arrives as typed input with no sender. A task with no session yet is started',
+  'with wake_task, and one that is archived or stopped is reopened with open_task.',
+];
+
 const server = new McpServer(
   {
     name: 'bifrost',
     version: '1.0.0',
   },
   {
-    instructions: [
-      'Bifrost runs each task as its own Claude Code session in its own git worktree.',
-      '',
-      'To talk to another task, use the built-in SendMessage tool, not a Bifrost tool.',
-      "It delivers into the recipient's turn, and a reply comes back by copying the",
-      'incoming `from` attribute as your `to`. Find the recipient with ListAgents.',
-      '',
-      'A task Bifrost has not opened yet has no session, so it is absent from',
-      'ListAgents and cannot be messaged. Call wake_task first: it starts the',
-      'session and reports how to address it. A task that is archived or stopped',
-      'has to be reopened instead, which is open_task. list_tasks shows every task,',
-      'so it is where to look when ListAgents does not list the one you want.',
-      '',
-      'A session is named after its task as of when the session started, so a task',
-      'renamed since then is addressed by its former name. list_tasks, find_task and',
-      'wake_task all report the name a task is actually reachable by.',
-      '',
-      'SendMessage reaches only tasks on the machine you run on, which is',
-      MACHINE ? `"${MACHINE}", not the one Bifrost runs on.` : 'the one Bifrost runs on.',
-      'list_tasks and find_task name the machine of a task that runs elsewhere.',
-    ].join('\n'),
+    instructions: [...(AGENT === 'claude' ? CLAUDE_MESSAGING : OTHER_MESSAGING)].join('\n'),
   },
 );
 

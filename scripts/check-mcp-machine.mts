@@ -28,12 +28,13 @@ fs.copyFileSync('src/claude-plugin/mcp/package.json', path.join(root, 'package.j
 fs.symlinkSync(installed, path.join(root, 'node_modules'));
 
 /** A server on the named machine whose home holds these port files, spoken to over stdio. */
-function serve(machine: string, ports: Record<string, string | number>) {
+function serve(machine: string, ports: Record<string, string | number>, extra: NodeJS.ProcessEnv = {}) {
   const home = fs.mkdtempSync(path.join(root, 'home-'));
   fs.mkdirSync(path.join(home, '.bifrost'));
   for (const [file, port] of Object.entries(ports)) fs.writeFileSync(path.join(home, '.bifrost', file), `${port}\n`);
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, BIFROST_MACHINE: machine };
-  for (const key of ['BIFROST_API_PORT', 'BIFROST_TASK_ID', 'BIFROST_CONTEXT']) delete env[key];
+  for (const key of ['BIFROST_API_PORT', 'BIFROST_TASK_ID', 'BIFROST_CONTEXT', 'BIFROST_AGENT']) delete env[key];
+  Object.assign(env, extra);
   const server = spawn('node', [path.join(root, 'server.mjs')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
   let out = '';
   let next = 1;
@@ -56,7 +57,10 @@ function serve(machine: string, ports: Record<string, string | number>) {
     protocolVersion: '2025-06-18',
     capabilities: {},
     clientInfo: { name: 'check', version: '0' },
-  }).then(() => send({ jsonrpc: '2.0', method: 'notifications/initialized' }));
+  }).then((result) => {
+    send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+    return result as { instructions?: string };
+  });
   return { ready, request, close: () => server.kill() };
 }
 
@@ -81,6 +85,24 @@ try {
     own.includes('"perf"') && own.includes("'ide'") && own.includes("'local'") && !reached.includes("'ide'"),
     JSON.stringify({ own, reached }),
   );
+
+  {
+    const copilot = serve('', { 'api-port': '7623' }, { BIFROST_AGENT: 'copilot' });
+    const claude = serve('', { 'api-port': '7623' });
+    try {
+      const [other, own] = await Promise.all([copilot.ready, claude.ready]);
+      check(
+        'a session of an agent without SendMessage is told to reach other tasks with send_prompt',
+        !!other.instructions?.includes('use send_prompt') &&
+          !other.instructions.includes('use the built-in SendMessage') &&
+          !!own.instructions?.includes('use the built-in SendMessage'),
+        JSON.stringify({ other: other.instructions, own: own.instructions?.slice(0, 80) }),
+      );
+    } finally {
+      copilot.close();
+      claude.close();
+    }
+  }
 
   // A machine without its own instance, whose API is the IDE's.
   const bodies: Array<Record<string, unknown>> = [];
