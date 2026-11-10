@@ -67,10 +67,9 @@ export function startLines(agent: AgentKind): string[] {
 
 /** Where a session's machine keeps what an agent other than Claude is pointed at. */
 export interface AgentPlaces {
-  home: string;
   /** Bifrost's plugin there. */
   pluginDir: string;
-  /** Claude's config dir there, which holds the user's rules and skills. */
+  /** Claude's config dir there, which holds the user's skills. */
   claudeDir: string;
 }
 
@@ -100,8 +99,8 @@ const MCP_VARS = [
 
 /**
  * What a Copilot or Codex session starts with besides the environment every
- * session gets. Each is given Bifrost's hooks, MCP server and skills, and the
- * user's rules and skills, on its command line, so nothing is written into its own config.
+ * session gets. Each is given Bifrost's hooks and MCP server on its command
+ * line, so nothing is written into its own config. Copilot also gets the user's skills.
  */
 export function agentLaunch(
   agent: Exclude<AgentKind, 'claude'>,
@@ -115,8 +114,6 @@ export function agentLaunch(
       env: {
         BIFROST_AGENT: agent,
         COPILOT_SKILLS_DIRS: `${places.claudeDir}/skills`,
-        // A machine's synced rules sit in ~/.bifrost/claude, which its own CLAUDE.md imports.
-        COPILOT_CUSTOM_INSTRUCTIONS_DIRS: `${places.claudeDir},${places.home}/.bifrost/claude`,
         // Also trusts the folder, which otherwise takes a question at every new worktree.
         ...(skip ? { COPILOT_ALLOW_ALL: 'true' } : {}),
       },

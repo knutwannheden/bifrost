@@ -614,7 +614,6 @@ function startLocalSession(task: Task, prompt?: string): void {
     agent === 'claude'
       ? claude
       : agentLaunch(agent, config.permissionMode, {
-          home,
           pluginDir: process.env.BIFROST_PLUGIN_DIR ?? PLUGIN_DEPLOY_DIR,
           claudeDir: claudeConfigDir(),
         });
@@ -728,7 +727,6 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
   if (agent !== 'claude') {
     if (!info.pluginDir) throw new Error(`Bifrost's plugin is not on ${task.machine}, which ${agent} sessions need`);
     const other = agentLaunch(agent, config.permissionMode, {
-      home: info.home,
       pluginDir: info.pluginDir,
       claudeDir: claudeConfigDirAt(info.home) ?? `${info.home}/.claude`,
     });

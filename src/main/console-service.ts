@@ -55,7 +55,6 @@ function spawn(sessionId?: string): void {
           env: {},
         }
       : agentLaunch(agent, 'skip-permissions', {
-          home: os.homedir(),
           pluginDir: process.env.BIFROST_PLUGIN_DIR ?? PLUGIN_DEPLOY_DIR,
           claudeDir: claudeConfigDir(),
         });
