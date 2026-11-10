@@ -156,13 +156,13 @@ try {
   }
 
   {
-    await post('/preferences', { permissionMode: 'auto-mode', managePermissions: true });
+    await post('/preferences', { permissionMode: 'auto-mode', managePermissions: true, agent: 'codex' });
     const loaded = await post('/call', { channel: IPC.LOAD_CONFIG, args: [] });
     const config = loaded.status === 200 ? ((await loaded.json()) as { result: BifrostConfig }).result : undefined;
     check(
       'an instance takes the preferences it is sent',
-      config?.permissionMode === 'auto-mode' && config.managePermissions === true,
-      show({ status: loaded.status, permissionMode: config?.permissionMode }),
+      config?.permissionMode === 'auto-mode' && config.managePermissions === true && config.agent === 'codex',
+      show({ status: loaded.status, permissionMode: config?.permissionMode, agent: config?.agent }),
     );
   }
 

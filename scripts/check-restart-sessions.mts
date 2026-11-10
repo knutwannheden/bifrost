@@ -31,6 +31,25 @@ const screen = (input: string) =>
 }
 
 {
+  // Codex marks its earlier prompts with a faint › and its placeholder faint too.
+  const codex = (composer: string) =>
+    [
+      '\x1b[1;2m› \x1b[0mReply with ok.',
+      '• ok',
+      '  Worked for 2s',
+      `\x1b[1m›\x1b[0m ${composer}`,
+      '  GPT-6-Luna default · ~/repo',
+    ].join('\n');
+  const placeholder = promptDraft(codex('\x1b[2mAsk Codex to do anything\x1b[0m'));
+  const typed = promptDraft(codex('hello draft'));
+  check(
+    "a draft at Codex's › prompt is its typed text, not its placeholder or an earlier prompt",
+    placeholder === '' && typed === 'hello draft',
+    show({ placeholder, typed }),
+  );
+}
+
+{
   const task = (id: string) => ({ id, name: id }) as Task;
   const state = (s: Partial<SessionState>): SessionState => ({ live: true, busy: false, draft: '', ...s });
   const plan = planRestart([

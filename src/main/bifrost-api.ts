@@ -327,6 +327,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         'prompts',
         'remoteControlAtStartup',
         'claudeConfigDir',
+        'agent',
       ];
       for (const key of keys) {
         if (key in body) config[key] = body[key];

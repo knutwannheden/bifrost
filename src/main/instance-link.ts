@@ -1,7 +1,7 @@
-import type { Task } from '../shared/types.ts';
+import type { Machine, Task } from '../shared/types.ts';
 import { claudeConfigRelative } from './claude-paths.ts';
 import { loadConfig } from './config.ts';
-import { connectPeer, IDE, peerTasks, postToPeer, refreshPeer, registerPeer } from './peers.ts';
+import { connectPeer, IDE, peerPort, peerTasks, postToPeer, refreshPeer, registerPeer } from './peers.ts';
 import { getRemoteHost, localClaudeValue, remoteClonePath } from './remote-host.ts';
 import { machinesInUse } from './restore-plan.ts';
 import { forgetTasks, getTasks } from './task-service.ts';
@@ -22,13 +22,20 @@ export function linkInstances(): void {
     registerPeer(machine.name, async () => {
       const host = getRemoteHost(machine.name);
       const port = await host.ensureInstance();
-      await sendPreferences(port);
+      await sendPreferences(port, machine);
       // The machine's view of this instance is its own concern, so a failure there leaves this link up.
       await post(port, '/link-back', { name: IDE, port: (await host.connect()).apiPort }).catch((err) =>
         console.warn(`[instances] ${machine.name} did not link back: ${(err as Error).message}`),
       );
       return port;
     });
+    // A link that is up was sent the settings as they were when it opened.
+    const up = peerPort(machine.name);
+    if (up !== null) {
+      sendPreferences(up, machine).catch((err) =>
+        console.warn(`[instances] ${machine.name} kept its old settings: ${(err as Error).message}`),
+      );
+    }
     const held = getTasks().filter((t) => t.machine === machine.name);
     if (held.length > 0) {
       handOver(machine.name, held).catch((err) =>
@@ -80,9 +87,10 @@ async function handOverNow(machine: string, handed: Task[]): Promise<void> {
   await refreshPeer(machine);
 }
 
-function sendPreferences(port: number): Promise<void> {
+function sendPreferences(port: number, machine: Machine): Promise<void> {
   const config = loadConfig();
   return post(port, '/preferences', {
+    agent: machine.agent ?? config.agent ?? 'claude',
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
     managePermissions: config.managePermissions,

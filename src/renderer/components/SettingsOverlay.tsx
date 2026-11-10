@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { PROMPT_DEFS } from '../../shared/default-prompts';
-import type { BifrostConfig, Machine, Macro } from '../../shared/types';
+import type { AgentKind, BifrostConfig, Machine, Macro } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
@@ -26,6 +26,12 @@ interface SettingDef {
 }
 
 const CATEGORIES = ['Appearance', 'Agent', 'General', 'Machines', 'Macros', 'Slack'] as const;
+
+const AGENT_OPTIONS: Array<{ label: string; value: AgentKind }> = [
+  { label: 'Claude', value: 'claude' },
+  { label: 'Codex', value: 'codex' },
+  { label: 'Copilot', value: 'copilot' },
+];
 
 /** Categories drawn by an editor of their own rather than from buildSettings. */
 const EDITOR_CATEGORIES: readonly string[] = ['Machines', 'Macros'];
@@ -163,6 +169,20 @@ function buildSettings(): SettingDef[] {
         'When enabled, background tasks that stop or need input trigger a system bell sound and a toast popup. Disable if you prefer to check task status manually.',
       render: (config, update) => (
         <ToggleSwitch checked={config.notifications !== false} onChange={(v) => update({ notifications: v })} />
+      ),
+    },
+    {
+      key: 'agent',
+      category: 'Agent',
+      label: 'Agent',
+      tooltip:
+        'The coding agent sessions on this machine start with, the console included. A running session moves to it on Restart sessions, and a task that switches agent hands its conversation over as text. A machine under Machines can run another.',
+      render: (config, update) => (
+        <PillToggle
+          options={AGENT_OPTIONS}
+          value={config.agent ?? 'claude'}
+          onChange={(v) => update({ agent: v as AgentKind })}
+        />
       ),
     },
     {
@@ -714,6 +734,23 @@ function MachineEditor({
                   updateConfig({ machines: machines.map((x, i) => (i === idx ? { ...x, sync: on } : x)) })
                 }
               />
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-secondary" onClick={(e) => e.stopPropagation()}>
+              <FormSelect
+                value={m.agent ?? ''}
+                onChange={(e) => {
+                  const agent = (e.target.value || undefined) as AgentKind | undefined;
+                  updateConfig({ machines: machines.map((x, i) => (i === idx ? { ...x, agent } : x)) });
+                }}
+                className="px-1 py-0.5 text-xs"
+              >
+                <option value="">Agent as here</option>
+                {AGENT_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </FormSelect>
             </span>
             <span className="flex items-center gap-1.5 text-xs text-secondary" onClick={(e) => e.stopPropagation()}>
               Run Bifrost there

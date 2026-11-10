@@ -90,6 +90,11 @@ export function registerPeer(name: string, connect: () => Promise<number>): void
   });
 }
 
+/** The loopback port of a peer whose link is up, else null. */
+export function peerPort(name: string): number | null {
+  return peers.get(name)?.port ?? null;
+}
+
 export function peerTasks(): Task[] {
   const here = loadConfig().repos;
   return [...peers.values()].flatMap((peer) =>
