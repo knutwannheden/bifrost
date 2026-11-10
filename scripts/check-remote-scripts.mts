@@ -108,7 +108,7 @@ function setUpFirst(configDir: string | undefined, prompt?: string): void {
     taskId,
     worktreePath: worktree,
     sessionId,
-    claudeArgs: ['--name', awkwardName, '--no-chrome'],
+    args: ['--name', awkwardName, '--no-chrome'],
     env: { BIFROST_TASK_ID: taskId, BIFROST_SESSION_NAME: awkwardName },
     prompt,
   });
@@ -329,7 +329,7 @@ const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'ut
   fs.mkdirSync(path.dirname(workJson), { recursive: true });
   fs.writeFileSync(workJson, JSON.stringify({ projects: {} }));
   process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), '.claude-work');
-  const script = sessionSetupScript({ home, taskId: id, worktreePath: worktree, sessionId, claudeArgs: [], env: {} });
+  const script = sessionSetupScript({ home, taskId: id, worktreePath: worktree, sessionId, args: [], env: {} });
   delete process.env.CLAUDE_CONFIG_DIR;
   runRemote(home, script);
   runSession(id, {});
@@ -345,7 +345,7 @@ const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'ut
 
 {
   const id = '6f9c1a52-0000-4000-8000-0000000000c2';
-  runRemote(home, sessionSetupScript({ home, taskId: id, worktreePath: worktree, sessionId, claudeArgs: [], env: {} }));
+  runRemote(home, sessionSetupScript({ home, taskId: id, worktreePath: worktree, sessionId, args: [], env: {} }));
   runSession(id, { CLAUDE_CONFIG_DIR: '/stale' });
   check(
     'without one, a session runs with it unset, whatever its environment held',

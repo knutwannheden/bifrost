@@ -591,7 +591,7 @@ function startLocalSession(task: Task, prompt?: string): void {
     taskId: task.id,
     worktreePath: task.worktreePath,
     sessionId,
-    claudeArgs: [...claudeArgs(launch, machine.settings), ...machine.args],
+    args: [...claudeArgs(launch, machine.settings), ...machine.args],
     env: { ...claudeEnv(launch), ...machine.env },
     prompt,
   });
@@ -692,7 +692,7 @@ async function writeRemoteSession(task: Task, host: RemoteHost, info: RemoteInfo
       taskId: task.id,
       worktreePath: task.worktreePath,
       sessionId: task.sessionId,
-      claudeArgs: [
+      args: [
         ...claudeArgs(
           launch,
           remoteSessionSettings(config.permissionMode, localClaudeValue('remoteControlAtStartup') === true),

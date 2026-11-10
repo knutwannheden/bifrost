@@ -55,6 +55,8 @@ export interface Repo {
 }
 
 /** A machine tasks can run on besides this one, reached over SSH. */
+export type AgentKind = 'claude' | 'codex' | 'copilot';
+
 export interface Machine {
   /** What a prompt calls it, e.g. "gpu-box". */
   name: string;
@@ -64,6 +66,8 @@ export interface Machine {
   sync?: boolean;
   /** Whether that machine's own Bifrost instance owns the tasks there. */
   instance?: boolean;
+  /** The agent its sessions run, when it differs from the one this machine runs. */
+  agent?: AgentKind;
 }
 
 export interface Task {
@@ -79,7 +83,10 @@ export interface Task {
   /** The worktree's own branch; undefined when it could not be recovered. */
   branch?: string;
   worktreePath: string;
+  /** The id that resumes the task's conversation, in its agent's own terms. */
   sessionId?: string;
+  /** The agent the conversation belongs to. Absent means Claude. */
+  agent?: AgentKind;
   status: TaskStatus;
   hasUnread: boolean;
   createdAt: number;
@@ -188,6 +195,8 @@ export interface BifrostConfig {
   remoteControlAtStartup?: boolean;
   /** On a machine's instance, the IDE's CLAUDE_CONFIG_DIR relative to home, as it last sent it. */
   claudeConfigDir?: string | null;
+  /** The agent sessions here run. Absent means Claude. */
+  agent?: AgentKind;
 }
 
 export interface CreateTaskParams {

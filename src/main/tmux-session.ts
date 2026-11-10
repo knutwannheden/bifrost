@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { AgentKind } from '../shared/types.ts';
+import { startLines } from './agents.ts';
 import { claudeConfigDirAt, claudeConfigRelative } from './claude-paths.ts';
 import { trustDirectory } from './claude-trust.ts';
 
@@ -37,9 +39,11 @@ export interface SessionSpec {
   home: string;
   taskId: string;
   worktreePath: string;
-  /** The Claude session to resume, and to start under while it has no transcript. */
+  /** Absent means Claude. */
+  agent?: AgentKind;
+  /** The conversation to resume, and the id to start under while it has none. Codex, which picks its own, gets ''. */
   sessionId: string;
-  claudeArgs: string[];
+  args: string[];
   env: Record<string, string>;
   /** Sent as the first message of a session that has no transcript yet. */
   prompt?: string;
@@ -78,19 +82,8 @@ export function sessionFiles(spec: SessionSpec): Record<string, string> {
     // A session that outlives Bifrost keeps this name while its task may be renamed.
     `printf '%s\\n' "$BIFROST_SESSION_NAME" > "$d/started-name"`,
     'sid=$(cat "$d/session-id")',
-    `set -- ${spec.claudeArgs.map(shQuote).join(' ')}`,
-    // Claude files the transcript under a directory named for the cwd, so it is found by session id alone.
-    `if ls "\${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/projects/*/"$sid".jsonl >/dev/null 2>&1; then`,
-    '  rm -f "$d/prompt"',
-    '  exec claude "$@" --resume "$sid"',
-    'fi',
-    // The prompt is moved aside as it is sent, so a later start under a new session id does not send it again.
-    'if [ -f "$d/prompt" ]; then',
-    '  mv "$d/prompt" "$d/prompt.sent"',
-    '  cat "$d/prompt.sent" | claude "$@" --session-id "$sid"',
-    '  exit',
-    'fi',
-    'exec claude "$@" --session-id "$sid"',
+    `set -- ${spec.args.map(shQuote).join(' ')}`,
+    ...startLines(spec.agent ?? 'claude'),
   ].join('\n');
   return {
     'session-id': spec.sessionId,

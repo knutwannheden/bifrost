@@ -96,7 +96,7 @@ function setUp(taskId: string, name = taskId) {
     taskId,
     worktreePath: worktree,
     sessionId: `0b8e2f34-0000-4000-8000-${taskId.padStart(12, '0').slice(-12)}`,
-    claudeArgs: [],
+    args: [],
     env: { BIFROST_SESSION_NAME: name },
   });
 }

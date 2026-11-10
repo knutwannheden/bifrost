@@ -42,7 +42,7 @@ function spawn(sessionId: string = randomUUID()): void {
     taskId: CONSOLE_SESSION_ID,
     worktreePath: CONSOLE_DIR,
     sessionId,
-    claudeArgs: [
+    args: [
       '--name',
       CONSOLE_NAME,
       '--dangerously-skip-permissions',
