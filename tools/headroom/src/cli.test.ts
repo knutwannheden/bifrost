@@ -1,7 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 const CLI = join(import.meta.dirname, 'cli.ts');
@@ -269,6 +270,40 @@ describe('cli', () => {
     expect(r.code).toBe(7);
     expect(run(['status']).out).toMatch(/^nothing claimed/);
   });
+
+  test('run keeps its command and exit code while the board stays locked past the wait, and the claim still ends', async () => {
+    const started = join(dir, 'started');
+    const running = spawn(
+      process.execPath,
+      [
+        CLI,
+        'run',
+        'cpu',
+        '--shared',
+        '--why',
+        'tests',
+        '--as',
+        'suite',
+        '--',
+        'sh',
+        '-c',
+        `touch ${started}; sleep 0.5; exit 7`,
+      ],
+      { env: { ...env, HEADROOM_BUSY_MS: '50' } },
+    );
+    const exited = new Promise<number | null>((r) => running.on('exit', r));
+    while (!existsSync(started)) await new Promise((r) => setTimeout(r, 20));
+
+    const lock = new DatabaseSync(env.HEADROOM_DB!);
+    lock.exec('PRAGMA busy_timeout = 2000');
+    lock.exec('BEGIN IMMEDIATE');
+    await new Promise((r) => setTimeout(r, 1500));
+    lock.exec('COMMIT');
+    lock.close();
+
+    expect(await exited).toBe(7);
+    expect(run(['status']).out).toMatch(/^nothing claimed/);
+  }, 10_000);
 
   test('run that gives up waiting withdraws its claim, since the command never ran', () => {
     run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench']);

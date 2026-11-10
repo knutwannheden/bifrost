@@ -66,7 +66,8 @@ function dbFile(): string {
 
 function openBoard(): Board {
   mkdirSync(dirname(dbFile()), { recursive: true });
-  return Board.open(dbFile());
+  const busy = process.env.HEADROOM_BUSY_MS;
+  return Board.open(dbFile(), { busyMs: busy ? Number(busy) : undefined });
 }
 
 function pollMs(): number {
@@ -146,26 +147,30 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
   let stoppedForYield = false;
   let yieldSeen = false;
   let graceTimer: NodeJS.Timeout | undefined;
-  const tick = setInterval(() => {
-    const c = board.get(id);
-    if (!c || c.releasedAt !== null) return;
-    if (c.yieldRequestedBy !== null && !yieldSeen) {
-      yieldSeen = true;
-      const seizer = board.get(c.yieldRequestedBy);
-      const who = `${seizer?.holder ?? 'another session'}${seizer ? `: ${seizer.why}` : ''}`;
-      writeFileSync(marker, `${who}\n`);
-      const action =
-        graceMs === null ? 'warning only' : graceMs === 0 ? 'stopping now' : `stopping in ${graceMs / 1000}s`;
-      console.error(`headroom: YIELD REQUESTED by ${who} — ${action}: ${cmd.join(' ')}`);
-      if (graceMs !== null) {
-        graceTimer = setTimeout(() => {
-          stoppedForYield = true;
-          stop();
-        }, graceMs);
-      }
-    }
-    board.renew(id, c.ttlMs);
-  }, pollMs());
+  const tick = setInterval(
+    () =>
+      aside(`renewing #${id}`, () => {
+        const c = board.get(id);
+        if (!c || c.releasedAt !== null) return;
+        if (c.yieldRequestedBy !== null && !yieldSeen) {
+          yieldSeen = true;
+          const seizer = board.get(c.yieldRequestedBy);
+          const who = `${seizer?.holder ?? 'another session'}${seizer ? `: ${seizer.why}` : ''}`;
+          writeFileSync(marker, `${who}\n`);
+          const action =
+            graceMs === null ? 'warning only' : graceMs === 0 ? 'stopping now' : `stopping in ${graceMs / 1000}s`;
+          console.error(`headroom: YIELD REQUESTED by ${who} — ${action}: ${cmd.join(' ')}`);
+          if (graceMs !== null) {
+            graceTimer = setTimeout(() => {
+              stoppedForYield = true;
+              stop();
+            }, graceMs);
+          }
+        }
+        board.renew(id, c.ttlMs);
+      }),
+    pollMs(),
+  );
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
 
@@ -179,8 +184,22 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
   clearInterval(tick);
   if (graceTimer) clearTimeout(graceTimer);
   rmSync(marker, { force: true });
-  if (board.get(id)?.releasedAt === null) board.attach(id, owner);
+  aside(`handing #${id} back`, () => {
+    if (board.get(id)?.releasedAt === null) board.attach(id, owner);
+  });
   return stoppedForYield ? 3 : code;
+}
+
+/**
+ * Makes a board call whose failure must not cost the command its run or its exit code.
+ * A claim it leaves behind is dropped once its process ends or it expires.
+ */
+function aside(what: string, call: () => void): void {
+  try {
+    call();
+  } catch (e) {
+    console.error(`headroom: ${what} failed, the command is unaffected: ${(e as Error).message}`);
+  }
 }
 
 async function runUnderClaim(
@@ -211,8 +230,10 @@ async function runUnderClaim(
   try {
     return await holdWhile(board, claim.id, cmd, graceMs);
   } finally {
-    board.release(claim.id);
-    console.error(`headroom: released #${claim.id}`);
+    aside(`releasing #${claim.id}`, () => {
+      board.release(claim.id);
+      console.error(`headroom: released #${claim.id}`);
+    });
   }
 }
 

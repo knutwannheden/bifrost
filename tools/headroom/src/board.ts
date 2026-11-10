@@ -56,6 +56,8 @@ export interface BoardOptions {
   alive?: (pid: number) => boolean;
   /** How long an offer is held open for the session at the front of the queue. */
   offerGraceMs?: number;
+  /** How long a call waits for another process's lock on the board's file. */
+  busyMs?: number;
 }
 
 /** Long enough for a session polling in `wait` to pick its turn up, short enough that an idle one does not strand the resource. */
@@ -189,8 +191,8 @@ export class Board {
 
   static open(file: string, options: BoardOptions = {}): Board {
     const db = new DatabaseSync(file);
+    db.exec(`PRAGMA busy_timeout = ${options.busyMs ?? 5000}`);
     db.exec('PRAGMA journal_mode = WAL');
-    db.exec('PRAGMA busy_timeout = 5000');
     return new Board(db, options);
   }
 
