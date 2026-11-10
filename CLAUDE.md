@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Bifrost
 
-Bifrost is a keyboard-centric Electron app for orchestrating parallel Claude Code agent sessions. Each task gets its own git worktree and a Claude Code session in tmux, streamed live to xterm.js.
+Bifrost is a keyboard-centric Electron app for orchestrating parallel coding agent sessions. Each task gets its own git worktree and a session of Claude Code, Copilot CLI or Codex in tmux, streamed live to xterm.js.
 
 ## Commands
 
@@ -79,11 +79,27 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 
 ### Sessions in tmux
 
-Every Claude session, the console included, runs in a tmux session named after it on Bifrost's own tmux server (`tmux -L bifrost`). It starts from `~/.bifrost/sessions/<id>/run.sh`, which resumes the transcript under the task's session id when there is one. Bifrost reads each session as a tmux control-mode client, so a tab gets the program's own bytes, links and colours included.
+Every agent session, the console included, runs in a tmux session named after it on Bifrost's own tmux server (`tmux -L bifrost`). It starts from `~/.bifrost/sessions/<id>/run.sh`, which resumes the transcript under the task's session id when there is one. Bifrost reads each session as a tmux control-mode client, so a tab gets the program's own bytes, links and colours included.
 
 Quitting Bifrost only detaches, so its sessions run on, and opening a tab or waking a task joins them again. A client that joins replays the pane's scrollback, its screen and the terminal modes tmux reports. Dev terminals are plain PTYs and end with Bifrost.
 
-"Restart sessions" in the command palette restarts the Claude session of each running task that has one, here and on other machines, one after another. Then it restarts each console the console overlay has a tab for, which carries its conversation on. It leaves a session that is mid-turn alone. It first warns about text typed at a prompt, which a restart loses, and reads that from the pane, where Claude draws its own suggested prompt faint.
+"Restart sessions" in the command palette restarts the session of each running task that has one, here and on other machines, one after another. Then it restarts each console the console overlay has a tab for, which carries its conversation on. It leaves a session that is mid-turn alone. It first warns about text typed at a prompt, which a restart loses, and reads that from the pane, where Claude and Codex draw a suggestion or placeholder faint.
+
+### Agents
+
+Sessions run Claude Code unless Settings → Agent picks Copilot or Codex. A machine under Machines can run its own agent, which the IDE sends to that machine's instance with the other preferences. A session starts with its machine's agent, so a running one moves to a new choice on Restart sessions. `agents.ts` holds each agent's command line. Each machine needs the agent installed and logged in there.
+
+Copilot and Codex get Bifrost's hooks and MCP server on their command line, so Bifrost writes nothing into `~/.copilot` or `~/.codex`. Copilot loads the plugin with `--plugin-dir`, and its skills include the user's. Codex takes the hooks and server as `-c` overrides and skips hook trust, which also makes it run as its own process, so hooks see the session's environment. Neither reads the user's global `CLAUDE.md`. Codex reads a repo's `CLAUDE.md` in place of an `AGENTS.md`. Bifrost chooses the session id up front for Claude and Copilot. Codex picks its own, and its first SessionStart hook reports it.
+
+A task records the agent its conversation belongs to. When its session starts under another agent, `conversation-handover.ts` writes the prompts and replies to `~/.bifrost/sessions/<id>/conversation.md`, and the new session's first prompt points at that file. A task on a machine without its own instance is pointed at the old transcript there instead.
+
+Some things stay Claude-only:
+- the features that read Claude's transcripts: the token chart, the transcript half of the change feed, session metrics, and "Move to" carrying the conversation
+- managed permissions
+- Remote Control
+- Bifrost's own `claude -p` calls
+
+Copilot and Codex have no SendMessage, so the MCP server tells their sessions to use `send_prompt`.
 
 ### Tasks on other machines
 
