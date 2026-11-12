@@ -241,7 +241,7 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
 
   [IPC.GET_TASK_PRS]: () => {
     refreshTaskBranches();
-    return getTaskPrs(getTasks(), loadConfig().repos);
+    return getTaskPrs([...getTasks(), ...peerTasks()], loadConfig().repos);
   },
 
   [IPC.CREATE_DEV_TERMINAL]: (taskId: string) => {

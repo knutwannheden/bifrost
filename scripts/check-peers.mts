@@ -43,6 +43,18 @@ const stubs = path.join(root, 'stubs');
 const tmp = path.join(root, 'tmp');
 for (const dir of [homeA, homeB, stubs, tmp, path.join(homeB, '.bifrost')]) fs.mkdirSync(dir, { recursive: true });
 fs.writeFileSync(path.join(stubs, 'claude'), '#!/bin/sh\nprintf "stub\\n"\nexec cat\n', { mode: 0o755 });
+// Every repo has one open PR, from the branch `feature`.
+fs.writeFileSync(
+  path.join(stubs, 'gh'),
+  `#!/bin/sh
+case "$*" in
+  --version) echo "gh version 2.0.0" ;;
+  "pr list"*"--state all"*) echo '[{"number":7,"state":"OPEN","isDraft":false,"headRefName":"feature","url":"https://github.com/org/p/pull/7"}]' ;;
+  *) exit 1 ;;
+esac
+`,
+  { mode: 0o755 },
+);
 // B holds an approval open until it is answered, so a routed answer can be seen to arrive.
 fs.writeFileSync(path.join(homeB, '.bifrost', 'config.json'), JSON.stringify({ managePermissions: true }));
 const socket = path.join(root, `tmux-${process.getuid?.()}`, 'bifrost');
@@ -92,6 +104,7 @@ delete env.CLAUDE_CONFIG_DIR;
 delete env.TMUX;
 
 let b: ChildProcess | undefined;
+let c: ChildProcess | undefined;
 let portB = '';
 const postB = (route: string, body: unknown) =>
   fetch(`http://127.0.0.1:${portB}${route}`, {
@@ -263,6 +276,33 @@ try {
   }
 
   {
+    // C stands in for the IDE, which an instance on a machine links back to.
+    const homeC = path.join(root, 'c');
+    const portFileC = path.join(homeC, '.bifrost', 'api-port');
+    fs.mkdirSync(path.dirname(portFileC), { recursive: true });
+    c = spawn('node', ['.vite/headless/headless.js'], { env: { ...env, HOME: homeC }, stdio: 'ignore' });
+    if (!(await until(() => fs.existsSync(portFileC), 15_000))) throw new Error('C did not come up');
+    const portC = Number(fs.readFileSync(portFileC, 'utf8').trim());
+    const repoP = (id: string): Repo => ({ id, name: 'p', path: tmp, defaultBranch: 'main', githubPath: 'org/p' });
+    const tc: Task = { ...t1, id: 'tc', repoId: 'pc', branch: 'feature' };
+    await fetch(`http://127.0.0.1:${portC}/import-tasks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tasks: [tc], repos: [repoP('pc')] }),
+    });
+    await postB('/import-tasks', { tasks: [], repos: [repoP('pb')] });
+    await postB('/link-back', { name: 'c', port: portC });
+    let prs: Record<string, { number: number }> = {};
+    for (const end = Date.now() + 10_000; !prs.tc && Date.now() < end; await sleep(200)) {
+      const answer = (await (await postB('/call', { channel: IPC.GET_TASK_PRS, args: [] })).json()) as {
+        result?: typeof prs;
+      };
+      prs = answer.result ?? {};
+    }
+    check("a peer's task shows the PR its branch has", prs.tc?.number === 7, show(prs));
+  }
+
+  {
     const beat = await until(() => beats > 0, 20_000);
     raw.abort();
     check(
@@ -315,6 +355,7 @@ try {
   raw.abort();
   closePeers();
   if (b && b.exitCode === null) b.kill('SIGKILL');
+  if (c && c.exitCode === null) c.kill('SIGKILL');
   try {
     execFileSync('tmux', ['-S', socket, 'kill-server'], { stdio: 'ignore' });
   } catch {
