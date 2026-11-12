@@ -283,23 +283,42 @@ try {
     c = spawn('node', ['.vite/headless/headless.js'], { env: { ...env, HOME: homeC }, stdio: 'ignore' });
     if (!(await until(() => fs.existsSync(portFileC), 15_000))) throw new Error('C did not come up');
     const portC = Number(fs.readFileSync(portFileC, 'utf8').trim());
+    const postC = (route: string, body: unknown) =>
+      fetch(`http://127.0.0.1:${portC}${route}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const prsOnB = async (id: string, ms: number) => {
+      let prs: Record<string, { number: number }> = {};
+      for (const end = Date.now() + ms; !prs[id] && Date.now() < end; await sleep(200)) {
+        const answer = (await (await postB('/call', { channel: IPC.GET_TASK_PRS, args: [] })).json()) as {
+          result?: typeof prs;
+        };
+        prs = answer.result ?? {};
+      }
+      return prs;
+    };
     const repoP = (id: string): Repo => ({ id, name: 'p', path: tmp, defaultBranch: 'main', githubPath: 'org/p' });
     const tc: Task = { ...t1, id: 'tc', repoId: 'pc', branch: 'feature' };
-    await fetch(`http://127.0.0.1:${portC}/import-tasks`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tasks: [tc], repos: [repoP('pc')] }),
-    });
+    // The worktree has moved on from the branch C recorded for the task.
+    const moved = path.join(root, 'moved');
+    execFileSync('git', ['init', '-q', '-b', 'feature', moved]);
+    const tm: Task = { ...t1, id: 'tm', repoId: 'pc', branch: 'old', worktreePath: moved };
+    await postC('/import-tasks', { tasks: [tc, tm], repos: [repoP('pc')] });
     await postB('/import-tasks', { tasks: [], repos: [repoP('pb')] });
     await postB('/link-back', { name: 'c', port: portC });
-    let prs: Record<string, { number: number }> = {};
-    for (const end = Date.now() + 10_000; !prs.tc && Date.now() < end; await sleep(200)) {
-      const answer = (await (await postB('/call', { channel: IPC.GET_TASK_PRS, args: [] })).json()) as {
-        result?: typeof prs;
-      };
-      prs = answer.result ?? {};
-    }
+
+    const prs = await prsOnB('tc', 10_000);
     check("a peer's task shows the PR its branch has", prs.tc?.number === 7, show(prs));
+
+    // C has no window asking for PRs, so the branch moves only when C's own refresh comes round.
+    const afterMove = await prsOnB('tm', 40_000);
+    check(
+      "a peer's task whose worktree moved to another branch shows that branch's PR",
+      afterMove.tm?.number === 7,
+      show(afterMove),
+    );
   }
 
   {

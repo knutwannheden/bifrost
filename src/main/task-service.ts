@@ -134,16 +134,18 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
  * PR and its curated outcome are found by branch.
  */
 export function refreshTaskBranches(): void {
-  let moved = false;
+  const moved: Task[] = [];
   for (const [i, task] of tasks.entries()) {
     if (task.archivedAt || task.machine) continue;
     const branch = headBranch(task.worktreePath);
     if (branch && branch !== task.branch) {
       tasks[i] = { ...task, branch };
-      moved = true;
+      moved.push(tasks[i]);
     }
   }
-  if (moved) saveTasks(tasks);
+  if (moved.length === 0) return;
+  saveTasks(tasks);
+  for (const task of moved) emit(IPC_STREAM.TASK_UPDATED, task);
 }
 
 /**

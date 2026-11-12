@@ -9,7 +9,11 @@ import { closeDatabase, openDatabase } from './db.ts';
 import { closePeers } from './peers.ts';
 import { closeRemoteHosts } from './remote-host.ts';
 import { detachAllSessions } from './session-manager.ts';
-import { restoreTasks } from './task-service.ts';
+import { refreshTaskBranches, restoreTasks } from './task-service.ts';
+
+/** How often an instance re-reads its tasks' branches, with or without a window asking for their PRs. */
+const BRANCH_REFRESH_MS = 30_000;
+let branchRefresh: ReturnType<typeof setInterval> | null = null;
 
 /**
  * Starts the services a Bifrost instance runs, and answers the port its API
@@ -25,11 +29,14 @@ export async function startInstance(): Promise<number | null> {
   initCurator();
   initConsole();
   initApi();
+  branchRefresh = setInterval(refreshTaskBranches, BRANCH_REFRESH_MS);
   return port;
 }
 
 /** Stops them again. The sessions in tmux run on. */
 export async function stopInstance(): Promise<void> {
+  if (branchRefresh) clearInterval(branchRefresh);
+  branchRefresh = null;
   stopAllWatching();
   detachAllSessions();
   closeRemoteHosts();
