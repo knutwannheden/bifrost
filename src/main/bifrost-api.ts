@@ -184,6 +184,15 @@ function awaitUser(task: Task): void {
  * into subdirectories. The deepest worktree containing the path owns it, since
  * a repo worked on in place contains the worktrees of every other task in it.
  */
+/** The notification types that mean the agent waits on the user. A notification without one is taken to. */
+const WAITING_NOTIFICATIONS = new Set([
+  'permission_prompt',
+  'idle_prompt',
+  'elicitation_dialog',
+  'agent_idle',
+  'agent_needs_input',
+]);
+
 function hookTask(body: Record<string, unknown>): Task | undefined {
   const taskId = body.bifrost_task_id as string | undefined;
   if (taskId) {
@@ -728,6 +737,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
 
+      // Copilot also notifies when a shell or background agent finishes, which says nothing about the turn.
+      const noticeType = body.notification_type as string | undefined;
+      if (hookEventName === 'Notification' && noticeType && !WAITING_NOTIFICATIONS.has(noticeType)) {
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
       // The console has no worktree and no task to attribute an event to, so it
       // is answered here, and its turn is kept under its session id. Stop ends a
       // turn and Notification means it has been waiting. Either way it wants the
@@ -772,6 +788,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (hookEventName === 'SessionEnd') {
         forgetTask(task.id);
         markIdle(task.id);
+        emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
+        jsonResponse(res, { ok: true });
+        return;
+      }
+
+      // Interrupt — Codex's user stopped the turn, so it is over with nothing to tell them.
+      if (hookEventName === 'Interrupt') {
+        forgetTask(task.id);
+        markIdle(task.id);
+        turnBoundary(task.id);
         emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
         jsonResponse(res, { ok: true });
         return;
@@ -1115,8 +1141,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       //   2. source=resume  with the actual resumed session ID
       // Skip the wrapper event so it never overwrites the stored sessionId.
       // Codex reports its own id this way, at the first turn of each session it starts.
+      // A fork is a session of its own, started from a copy of this one's conversation.
       const source = body.source as string;
-      if (task.sessionId && source === 'startup' && (task.agent ?? 'claude') === 'claude') {
+      if (source === 'fork' || (task.sessionId && source === 'startup' && (task.agent ?? 'claude') === 'claude')) {
         jsonResponse(res, { ok: true });
         return;
       }

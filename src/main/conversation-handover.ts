@@ -95,6 +95,12 @@ function turns(agent: AgentKind, file: string): Turn[] {
   return out;
 }
 
+/** The agent's last reply in the conversation it kept under sessionId, when this machine holds that conversation. */
+export function lastReply(agent: AgentKind, sessionId: string): string | undefined {
+  const file = transcriptFile(agent, sessionId);
+  return file ? [...turns(agent, file)].reverse().find((t) => !t.user)?.text : undefined;
+}
+
 /**
  * Writes the conversation an agent kept under sessionId as text in the task's
  * session directory, and returns the prompt that points the next agent at it.

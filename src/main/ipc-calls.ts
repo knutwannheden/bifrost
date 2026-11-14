@@ -6,20 +6,13 @@ const execFile = promisify(execFileCb);
 
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
 import { promptDraft } from '../shared/prompt-draft';
-import type {
-  ActivityEntry,
-  AddRepoParams,
-  CreateTaskParams,
-  PermissionDecision,
-  Repo,
-  SessionState,
-} from '../shared/types';
+import type { AddRepoParams, CreateTaskParams, PermissionDecision, Repo, SessionState } from '../shared/types';
 import { getFileDiffOnDemand } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
 import { loadChangeFeed, setActiveFeedTask } from './change-feed-service';
 import { listClaudeAccounts } from './claude-paths';
 import { scanClaudeSessions } from './claude-session-scanner';
-import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
+import { getTokenUsageData } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
 import {
   CONSOLE_SESSION_ID,
@@ -41,7 +34,7 @@ import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { connectPeer, peerOf, peerTasks, postToPeer, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
-import { handleScrapeResponse, isIdle, sendPrompt } from './prompt-sender';
+import { getLastAssistantMessage, handleScrapeResponse, isIdle, sendPrompt } from './prompt-sender';
 import { captureScript, getRemoteHost, LOGIN_SESSION } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
@@ -494,15 +487,7 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
     }
   },
 
-  [IPC.GET_LAST_ASSISTANT_MESSAGE]: (taskId: string) => {
-    const task = getTask(taskId);
-    const entries = getRecentClaudeEntries(taskId, task.worktreePath);
-    const isAgentOutput = (e: ActivityEntry) =>
-      e.claudeEventKind === 'assistant_text' ||
-      (e.claudeEventKind === 'tool_use' && e.claudeToolName === 'AskUserQuestion');
-    const last = [...entries].reverse().find(isAgentOutput);
-    return last?.claudeText ?? null;
-  },
+  [IPC.GET_LAST_ASSISTANT_MESSAGE]: (taskId: string) => getLastAssistantMessage(taskId),
 
   // gh CLI availability
   [IPC.CHECK_GH_AVAILABLE]: async () => {

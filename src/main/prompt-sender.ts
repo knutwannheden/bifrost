@@ -1,6 +1,7 @@
 import { IPC_STREAM } from '../shared/ipc-channels';
 import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
+import { lastReply } from './conversation-handover';
 import { emit } from './event-sink';
 import { hasSession, waitForSessionReady, writeToSession } from './session-manager';
 import { getTask, isPendingRestore, restoreTaskSession } from './task-service';
@@ -146,8 +147,10 @@ async function doSendPrompt(text: string, taskId: string): Promise<SendPromptRes
   return { ok: true };
 }
 
-function getLastAssistantMessage(taskId: string): string | null {
+export function getLastAssistantMessage(taskId: string): string | null {
   const task = getTask(taskId);
+  const agent = task.agent ?? 'claude';
+  if (agent !== 'claude') return (task.sessionId && lastReply(agent, task.sessionId)) || null;
   const entries = getRecentClaudeEntries(taskId, task.worktreePath);
   const isAgentOutput = (e: ActivityEntry) =>
     e.claudeEventKind === 'assistant_text' ||

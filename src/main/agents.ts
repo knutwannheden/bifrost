@@ -29,7 +29,8 @@ const LAUNCHERS: Record<AgentKind, Launcher> = {
   copilot: {
     transcript: '[ -d "${COPILOT_HOME:-$HOME/.copilot}/session-state/$sid" ]',
     resume: 'exec copilot "$@" --session-id "$sid"',
-    prompted: 'exec copilot "$@" --session-id "$sid" -i "$(cat "$d/prompt.sent")"',
+    // Attached with =, so a prompt starting with - is not read as an option.
+    prompted: 'exec copilot "$@" --session-id "$sid" --interactive="$(cat "$d/prompt.sent")"',
     start: 'exec copilot "$@" --session-id "$sid"',
   },
   // Codex picks the id itself, and Bifrost learns it from the first turn's SessionStart hook.
@@ -85,6 +86,7 @@ const CODEX_HOOKS: Record<string, string> = {
   SessionEnd: 'bifrost-notify.sh',
   // Codex has no Notification event, and this is the moment it waits for the user.
   PermissionRequest: 'bifrost-notify.sh',
+  Interrupt: 'bifrost-notify.sh',
 };
 
 /** The variables Codex passes on to an MCP server, which otherwise gets only a minimal environment. */

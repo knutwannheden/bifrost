@@ -60,7 +60,7 @@ const setUp = (agent: 'copilot' | 'codex', sessionId: string, withPrompt = true)
 setUp('copilot', sid);
 check(
   'Copilot starts under the session id Bifrost chose, with the prompt intact and none of it run',
-  show(start('copilot')) === show(['--flag', 'value with spaces', '--session-id', sid, '-i', prompt]) &&
+  show(start('copilot')) === show(['--flag', 'value with spaces', '--session-id', sid, `--interactive=${prompt}`]) &&
     !fs.existsSync(path.join(home, 'injected')),
 );
 check(

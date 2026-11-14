@@ -20,7 +20,9 @@ delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.COPILOT_HOME;
 delete process.env.CODEX_HOME;
 
-const { handOverConversation, remoteHandOver, switchAgent } = await import('../src/main/conversation-handover.ts');
+const { handOverConversation, lastReply, remoteHandOver, switchAgent } = await import(
+  '../src/main/conversation-handover.ts'
+);
 
 const lines = (...records: unknown[]) => `${records.map((r) => JSON.stringify(r)).join('\n')}\n`;
 const write = (file: string, content: string) => {
@@ -107,6 +109,11 @@ check(
   (handOverConversation('t3', 'codex', 'x1'),
   read(path.join(home, '.bifrost', 'sessions', 't3', 'conversation.md'))) ===
     '## User\n\nRename the flag.\n\n## Codex\n\nRenamed.\n',
+);
+check(
+  "a Copilot or Codex conversation's last reply is the agent's last message, for send_prompt to return",
+  lastReply('copilot', 'p1') === 'They pass.' && lastReply('codex', 'x1') === 'Renamed.',
+  JSON.stringify([lastReply('copilot', 'p1'), lastReply('codex', 'x1')]),
 );
 check(
   'a conversation whose transcript is gone hands nothing over',
