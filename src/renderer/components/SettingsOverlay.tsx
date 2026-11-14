@@ -1,9 +1,10 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PROMPT_DEFS } from '../../shared/default-prompts';
-import type { AgentKind, BifrostConfig, Machine, Macro } from '../../shared/types';
+import type { AgentKind, BifrostConfig, ClaudeAccount, Machine, Macro } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
+import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
 import { modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import FormInput from './FormInput';
@@ -35,6 +36,33 @@ const AGENT_OPTIONS: Array<{ label: string; value: AgentKind }> = [
 
 /** Categories drawn by an editor of their own rather than from buildSettings. */
 const EDITOR_CATEGORIES: readonly string[] = ['Machines', 'Macros'];
+
+/** Lists the accounts on mount and after a switch, since which one is current is the main process's to say. */
+function ClaudeAccountSelect() {
+  const { state, dispatch } = useApp();
+  const [accounts, setAccounts] = useState<ClaudeAccount[]>([]);
+  const reload = () => window.bifrost.listClaudeAccounts().then(setAccounts);
+  useEffect(() => {
+    void reload();
+  }, []);
+  const current = accounts.find((a) => a.current);
+  return (
+    <FormSelect
+      value={current?.dir ?? ''}
+      onChange={(e) => {
+        const chosen = accounts.find((a) => (a.dir ?? '') === e.target.value);
+        if (chosen && state.config) void switchClaudeAccount(chosen, state.config, state.tasks, dispatch).then(reload);
+      }}
+      className="px-2 py-1"
+    >
+      {accounts.map((a) => (
+        <option key={a.dir ?? ''} value={a.dir ?? ''}>
+          {accountLabel(a)}
+        </option>
+      ))}
+    </FormSelect>
+  );
+}
 
 function buildSettings(): SettingDef[] {
   return [
@@ -184,6 +212,14 @@ function buildSettings(): SettingDef[] {
           onChange={(v) => update({ agent: v as AgentKind })}
         />
       ),
+    },
+    {
+      key: 'claudeAccount',
+      category: 'Agent',
+      label: 'Claude Account',
+      tooltip:
+        'The Claude config dir sessions start with, here and on other machines: ~/.claude, or a ~/.claude-* dir logged in to another account. A running session moves to it on Restart sessions.',
+      render: () => <ClaudeAccountSelect />,
     },
     {
       key: 'permissionMode',

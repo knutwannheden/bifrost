@@ -31,11 +31,11 @@ const PLUGIN_NAME = 'bifrost';
 const PLUGIN_ID = `${PLUGIN_NAME}@${MARKETPLACE_NAME}`;
 const MARKETPLACE_DIR = path.join(os.homedir(), '.bifrost', 'marketplace');
 export const PLUGIN_DEPLOY_DIR = path.join(MARKETPLACE_DIR, PLUGIN_NAME);
-const PLUGINS_FILE = path.join(claudeConfigDir(), 'plugins', 'installed_plugins.json');
-const KNOWN_MARKETPLACES_FILE = path.join(claudeConfigDir(), 'plugins', 'known_marketplaces.json');
-const SETTINGS_FILE = path.join(claudeConfigDir(), 'settings.json');
+const pluginsFile = () => path.join(claudeConfigDir(), 'plugins', 'installed_plugins.json');
+const knownMarketplacesFile = () => path.join(claudeConfigDir(), 'plugins', 'known_marketplaces.json');
+const settingsFile = () => path.join(claudeConfigDir(), 'settings.json');
 const MCP_CONFIG_PATH = path.join(os.homedir(), '.mcp.json');
-const OLD_COMMANDS_DIR = path.join(claudeConfigDir(), 'commands', 'bifrost');
+const oldCommandsDir = () => path.join(claudeConfigDir(), 'commands', 'bifrost');
 const OLD_MCP_DIR = path.join(os.homedir(), '.bifrost', 'mcp');
 const OLD_PLUGIN_DIR = path.join(os.homedir(), '.bifrost', 'plugin');
 const OLD_PLUGIN_ID = 'bifrost@local';
@@ -62,8 +62,8 @@ export function readPluginVersion(pluginDir: string): string | null {
  */
 export function ensureHooks(): void {
   try {
-    if (!fs.existsSync(PLUGINS_FILE)) return;
-    const raw = JSON.parse(fs.readFileSync(PLUGINS_FILE, 'utf-8')) as PluginsFile;
+    if (!fs.existsSync(pluginsFile())) return;
+    const raw = JSON.parse(fs.readFileSync(pluginsFile(), 'utf-8')) as PluginsFile;
     const entries = raw.plugins?.[PLUGIN_ID] as Array<Record<string, unknown>> | undefined;
     if (!entries?.[0]?.installPath) return;
 
@@ -84,14 +84,14 @@ export function checkIntegration(): IntegrationStatus {
   try {
     // Check both registration and enablement
     let registered = false;
-    if (fs.existsSync(PLUGINS_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(PLUGINS_FILE, 'utf-8')) as PluginsFile;
+    if (fs.existsSync(pluginsFile())) {
+      const raw = JSON.parse(fs.readFileSync(pluginsFile(), 'utf-8')) as PluginsFile;
       registered = !!raw.plugins?.[PLUGIN_ID];
     }
 
     let enabled = false;
-    if (fs.existsSync(SETTINGS_FILE)) {
-      const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+    if (fs.existsSync(settingsFile())) {
+      const settings = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'));
       enabled = !!(settings.enabledPlugins as Record<string, boolean>)?.[PLUGIN_ID];
     }
 
@@ -165,10 +165,10 @@ export async function installIntegration(): Promise<void> {
 
 function registerMarketplace(): void {
   let marketplaces: KnownMarketplaces = {};
-  const pluginsDir = path.dirname(KNOWN_MARKETPLACES_FILE);
+  const pluginsDir = path.dirname(knownMarketplacesFile());
   try {
-    if (fs.existsSync(KNOWN_MARKETPLACES_FILE)) {
-      marketplaces = JSON.parse(fs.readFileSync(KNOWN_MARKETPLACES_FILE, 'utf-8'));
+    if (fs.existsSync(knownMarketplacesFile())) {
+      marketplaces = JSON.parse(fs.readFileSync(knownMarketplacesFile(), 'utf-8'));
     }
   } catch {
     marketplaces = {};
@@ -185,14 +185,14 @@ function registerMarketplace(): void {
   };
 
   if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-  atomicWriteFileSync(KNOWN_MARKETPLACES_FILE, `${JSON.stringify(marketplaces, null, 2)}\n`);
+  atomicWriteFileSync(knownMarketplacesFile(), `${JSON.stringify(marketplaces, null, 2)}\n`);
 }
 
 function registerPlugin(pluginVersion: string): void {
   let pluginsData: PluginsFile = { version: 2, plugins: {} };
   try {
-    if (fs.existsSync(PLUGINS_FILE)) {
-      pluginsData = JSON.parse(fs.readFileSync(PLUGINS_FILE, 'utf-8')) as PluginsFile;
+    if (fs.existsSync(pluginsFile())) {
+      pluginsData = JSON.parse(fs.readFileSync(pluginsFile(), 'utf-8')) as PluginsFile;
       if (!pluginsData.plugins) pluginsData.plugins = {};
     }
   } catch {
@@ -217,16 +217,16 @@ function registerPlugin(pluginVersion: string): void {
     ];
   }
 
-  const pluginsDir = path.dirname(PLUGINS_FILE);
+  const pluginsDir = path.dirname(pluginsFile());
   if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true });
-  atomicWriteFileSync(PLUGINS_FILE, `${JSON.stringify(pluginsData, null, 2)}\n`);
+  atomicWriteFileSync(pluginsFile(), `${JSON.stringify(pluginsData, null, 2)}\n`);
 }
 
 function enablePlugin(): void {
   try {
     let settings: Record<string, unknown> = {};
-    if (fs.existsSync(SETTINGS_FILE)) {
-      settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
+    if (fs.existsSync(settingsFile())) {
+      settings = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'));
     }
     if (!settings.enabledPlugins || typeof settings.enabledPlugins !== 'object') {
       settings.enabledPlugins = {};
@@ -235,7 +235,7 @@ function enablePlugin(): void {
     enabled[PLUGIN_ID] = true;
     // Remove old plugin ID if present
     delete enabled[OLD_PLUGIN_ID];
-    atomicWriteFileSync(SETTINGS_FILE, `${JSON.stringify(settings, null, 2)}\n`);
+    atomicWriteFileSync(settingsFile(), `${JSON.stringify(settings, null, 2)}\n`);
   } catch {
     // Best-effort — settings may be read-only
   }
@@ -266,8 +266,8 @@ function cleanupOldIntegration(): void {
 
   // Remove old slash commands directory
   try {
-    if (fs.existsSync(OLD_COMMANDS_DIR)) {
-      fs.rmSync(OLD_COMMANDS_DIR, { recursive: true });
+    if (fs.existsSync(oldCommandsDir())) {
+      fs.rmSync(oldCommandsDir(), { recursive: true });
     }
   } catch {
     // Best-effort
@@ -293,11 +293,11 @@ function cleanupOldIntegration(): void {
 
   // Remove old plugin registration
   try {
-    if (fs.existsSync(PLUGINS_FILE)) {
-      const pluginsData = JSON.parse(fs.readFileSync(PLUGINS_FILE, 'utf-8')) as PluginsFile;
+    if (fs.existsSync(pluginsFile())) {
+      const pluginsData = JSON.parse(fs.readFileSync(pluginsFile(), 'utf-8')) as PluginsFile;
       if (pluginsData.plugins?.[OLD_PLUGIN_ID]) {
         delete pluginsData.plugins[OLD_PLUGIN_ID];
-        atomicWriteFileSync(PLUGINS_FILE, `${JSON.stringify(pluginsData, null, 2)}\n`);
+        atomicWriteFileSync(pluginsFile(), `${JSON.stringify(pluginsData, null, 2)}\n`);
       }
     }
   } catch {

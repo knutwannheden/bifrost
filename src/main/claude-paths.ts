@@ -1,6 +1,30 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { ClaudeAccount } from '../shared/types.ts';
+
+/** ~/.claude, and each ~/.claude-* dir that holds a login. Claude keeps the default dir's login beside it in home. */
+export function listClaudeAccounts(): ClaudeAccount[] {
+  const home = os.homedir();
+  const current = claudeConfigRelative();
+  const emailIn = (file: string): string | undefined => {
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8')).oauthAccount?.emailAddress;
+    } catch {
+      return undefined;
+    }
+  };
+  const others = fs
+    .readdirSync(home)
+    .filter((name) => name.startsWith('.claude-') && fs.statSync(path.join(home, name)).isDirectory())
+    .sort()
+    .map((dir) => ({ dir, email: emailIn(path.join(home, dir, '.claude.json')) }))
+    .filter((a) => a.email);
+  return [{ dir: null, email: emailIn(path.join(home, '.claude.json')) }, ...others].map((a) => ({
+    ...a,
+    current: a.dir === current,
+  }));
+}
 
 /** Claude Code's own directory, which is ~/.claude unless CLAUDE_CONFIG_DIR moves it. */
 export function claudeConfigDir(): string {

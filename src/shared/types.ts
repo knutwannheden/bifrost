@@ -193,7 +193,10 @@ export interface BifrostConfig {
   dotfiles?: string;
   /** This machine's Claude remoteControlAtStartup, which the IDE copies to an instance on another machine. */
   remoteControlAtStartup?: boolean;
-  /** On a machine's instance, the IDE's CLAUDE_CONFIG_DIR relative to home, as it last sent it. */
+  /**
+   * The Claude account sessions run with, as a config dir relative to home, null for Claude's default.
+   * Absent keeps the dir Bifrost was launched with. A machine's instance gets the IDE's.
+   */
   claudeConfigDir?: string | null;
   /** The agent sessions here run. Absent means Claude. */
   agent?: AgentKind;
@@ -428,6 +431,14 @@ export interface DiffStats {
   additions: number;
   deletions: number;
   filesChanged: number;
+}
+
+/** A Claude config dir in home that holds a login, which sessions can run with. */
+export interface ClaudeAccount {
+  /** Relative to home, or null for Claude's default. */
+  dir: string | null;
+  email?: string;
+  current: boolean;
 }
 
 export interface RecentRepo {

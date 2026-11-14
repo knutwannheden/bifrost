@@ -120,6 +120,7 @@ const api: BifrostAPI = {
 
   // Integration
   checkIntegration: () => ipcRenderer.invoke(IPC.CHECK_INTEGRATION),
+  listClaudeAccounts: () => ipcRenderer.invoke(IPC.LIST_CLAUDE_ACCOUNTS),
   installIntegration: () => ipcRenderer.invoke(IPC.INSTALL_INTEGRATION),
   checkPrerequisites: () => ipcRenderer.invoke(IPC.CHECK_PREREQUISITES),
 

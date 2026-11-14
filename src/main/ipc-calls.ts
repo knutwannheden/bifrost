@@ -17,6 +17,7 @@ import type {
 import { getFileDiffOnDemand } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
 import { loadChangeFeed, setActiveFeedTask } from './change-feed-service';
+import { listClaudeAccounts } from './claude-paths';
 import { scanClaudeSessions } from './claude-session-scanner';
 import { getRecentClaudeEntries, getTokenUsageData } from './claude-watcher';
 import { loadConfig, saveConfig } from './config';
@@ -462,6 +463,7 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
 
   // Integration
   [IPC.CHECK_INTEGRATION]: () => checkIntegration(),
+  [IPC.LIST_CLAUDE_ACCOUNTS]: () => listClaudeAccounts(),
 
   [IPC.INSTALL_INTEGRATION]: () => installIntegration(),
 

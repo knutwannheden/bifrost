@@ -1,16 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { RecentRepo } from '../shared/types';
-import { claudeConfigDir } from './claude-paths';
-import { getGitHubPath } from './repo-manager';
+import { claudeConfigDir } from './claude-paths.ts';
+import { getGitHubPath } from './repo-manager.ts';
 
-const HISTORY_PATH = path.join(claudeConfigDir(), 'history.jsonl');
+const historyPath = () => path.join(claudeConfigDir(), 'history.jsonl');
 const MAX_RESULTS = 5;
 
 export async function scanRecentRepos(excludePaths: Set<string>): Promise<RecentRepo[]> {
-  if (!fs.existsSync(HISTORY_PATH)) return [];
+  if (!fs.existsSync(historyPath())) return [];
 
-  const content = fs.readFileSync(HISTORY_PATH, 'utf-8');
+  const content = fs.readFileSync(historyPath(), 'utf-8');
   const lines = content.split('\n');
 
   // Build map of project path -> most recent timestamp

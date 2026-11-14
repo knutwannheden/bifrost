@@ -8,6 +8,7 @@ const execFile = promisify(execFileCb);
 
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
 import type { BifrostConfig, CaptureContextParams } from '../shared/types';
+import { applyClaudeConfigDir } from './claude-paths';
 import { loadConfig, mergeRendererConfig, saveConfig } from './config';
 import { CONSOLE_SESSION_ID } from './console-service';
 import { store as storeContext } from './context-store';
@@ -37,7 +38,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     else ipcMain.handle(channel, (_event, ...args) => routeCall(channel, args, call));
   }
   ipcMain.handle(IPC.SAVE_CONFIG, (_event, config: BifrostConfig) => {
-    saveConfig(mergeRendererConfig(config, loadConfig()));
+    const current = loadConfig();
+    const merged = mergeRendererConfig(config, current);
+    saveConfig(merged);
+    // Applied before linkInstances, which sends it to the instances on other machines.
+    if (merged.claudeConfigDir !== current.claudeConfigDir) applyClaudeConfigDir(merged.claudeConfigDir);
     restartPolling(mainWindow);
     // Turning "Run Bifrost there" on is when a machine's tasks move to its instance.
     linkInstances();

@@ -8,10 +8,12 @@ import {
   RUN_ACTION_EVENT,
   serializeBinding,
 } from '../../shared/keymap';
+import type { ClaudeAccount } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useKeymap } from '../context/KeymapContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { requestArchive } from '../utils/archive';
+import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
 import { altSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import CloseButton from './CloseButton';
@@ -19,6 +21,9 @@ import Highlight from './Highlight';
 import Kbd from './Kbd';
 import OverlayFooter from './OverlayFooter';
 import SectionHeader from './SectionHeader';
+
+/** Prefixes the palette entries that switch the Claude account, which have no binding to record. */
+const ACCOUNT_ACTION = 'claude-account:';
 
 interface ActionItem {
   actionId: string;
@@ -38,15 +43,29 @@ export default function KeyboardShortcutsPanel() {
   const [recordingActionId, setRecordingActionId] = useState<string | null>(null);
   const [recordedStrokes, setRecordedStrokes] = useState<KeyStroke[]>([]);
   const [conflict, setConflict] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<ClaudeAccount[]>([]);
+
+  useEffect(() => {
+    void window.bifrost.listClaudeAccounts().then(setAccounts);
+  }, []);
 
   const allActions = useMemo<ActionItem[]>(() => {
-    return Object.values(ACTION_REGISTRY).map((def) => ({
+    const registered = Object.values(ACTION_REGISTRY).map((def) => ({
       actionId: def.id,
       label: def.label,
       category: ACTION_CATEGORIES.find((c) => c.id === def.category)?.label ?? def.category,
       binding: getDisplayString(def.id),
     }));
-  }, [getDisplayString]);
+    const switches = accounts
+      .filter((a) => !a.current)
+      .map((a) => ({
+        actionId: `${ACCOUNT_ACTION}${a.dir ?? ''}`,
+        label: `Switch Claude account to ${accountLabel(a)}`,
+        category: 'App',
+        binding: '',
+      }));
+    return [...registered, ...switches];
+  }, [getDisplayString, accounts]);
 
   const filtered = useMemo(() => {
     if (!query) return allActions;
@@ -96,6 +115,13 @@ export default function KeyboardShortcutsPanel() {
 
   const executeItem = (item: ActionItem) => {
     if (recordingActionId) return;
+
+    if (item.actionId.startsWith(ACCOUNT_ACTION)) {
+      close();
+      const account = accounts.find((a) => `${ACCOUNT_ACTION}${a.dir ?? ''}` === item.actionId);
+      if (account && state.config) void switchClaudeAccount(account, state.config, state.tasks, dispatch);
+      return;
+    }
 
     if (item.actionId === 'task.archive') {
       close();
@@ -264,14 +290,16 @@ export default function KeyboardShortcutsPanel() {
           e.preventDefault();
           const itemIdx = executableIndices[selectedIndex];
           const entry = itemIdx != null ? items[itemIdx] : null;
-          if (entry?.type === 'action') startRecording(entry.item.actionId);
+          if (entry?.type === 'action' && !entry.item.actionId.startsWith(ACCOUNT_ACTION))
+            startRecording(entry.item.actionId);
         }
         // Alt+U to unassign
         if (e.altKey && e.code === 'KeyU') {
           e.preventDefault();
           const itemIdx = executableIndices[selectedIndex];
           const entry = itemIdx != null ? items[itemIdx] : null;
-          if (entry?.type === 'action') saveBinding(entry.item.actionId, null);
+          if (entry?.type === 'action' && !entry.item.actionId.startsWith(ACCOUNT_ACTION))
+            saveBinding(entry.item.actionId, null);
         }
         break;
       }

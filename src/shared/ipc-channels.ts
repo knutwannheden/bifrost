@@ -3,6 +3,7 @@ import type {
   AddRepoParams,
   BifrostConfig,
   CaptureContextParams,
+  ClaudeAccount,
   ClaudeSession,
   CreateTaskParams,
   CuratorState,
@@ -113,6 +114,7 @@ export const IPC = {
 
   // Integration
   CHECK_INTEGRATION: 'integration:check',
+  LIST_CLAUDE_ACCOUNTS: 'integration:claude-accounts',
   INSTALL_INTEGRATION: 'integration:install',
   CHECK_PREREQUISITES: 'integration:prerequisites',
 
@@ -314,6 +316,7 @@ export interface BifrostAPI {
 
   // Integration
   checkIntegration(): Promise<{ installed: boolean; updateAvailable: boolean }>;
+  listClaudeAccounts(): Promise<ClaudeAccount[]>;
   installIntegration(): Promise<void>;
   checkPrerequisites(): Promise<import('../shared/types').PrerequisiteStatus>;
 

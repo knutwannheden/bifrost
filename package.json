@@ -50,6 +50,7 @@
     "check:instance-reach": "node scripts/check-instance-reach.mts",
     "check:mcp-machine": "node scripts/check-mcp-machine.mts",
     "check:peers": "node scripts/check-peers.mts",
+    "check:claude-account": "node scripts/check-claude-account.mts",
     "check:console-tabs": "node scripts/check-console-tabs.mts",
     "check:ide-launcher": "node scripts/check-ide-launcher.mts",
     "check:task-sync": "node scripts/check-task-sync.mts",
