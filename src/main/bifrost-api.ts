@@ -468,6 +468,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         prompt,
         createdByTaskId,
         machine: asked,
+        launch,
       } = body as {
         repoId?: string;
         repoPath?: string;
@@ -478,6 +479,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         prompt?: string;
         createdByTaskId?: string;
         machine?: string;
+        launch?: Task['launch'];
       };
       if (!repoId && !repoPath && !worktreePath) {
         errorResponse(res, 'either repoId, repoPath or worktreePath is required');
@@ -489,7 +491,18 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       );
       const here = process.env.BIFROST_MACHINE;
       const machine = asked === 'local' || asked === here || (!here && asked === IDE) ? undefined : asked;
-      const params = { repoId, repoPath, worktreePath, name, branch, branchName, prompt, createdByTaskId, machine };
+      const params = {
+        repoId,
+        repoPath,
+        worktreePath,
+        name,
+        branch,
+        branchName,
+        prompt,
+        createdByTaskId,
+        machine,
+        launch,
+      };
       // Only the IDE knows the machines, so a machine's instance has it create a task for anywhere else.
       // It waits for the answer, so a failure is reported here, to whoever asked.
       if (here && machine) {

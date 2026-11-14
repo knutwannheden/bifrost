@@ -375,6 +375,7 @@ async function createMultiRepoTask(params: CreateTaskParams): Promise<Task> {
     createdAt: Date.now(),
     ...(params.prompt ? { summary: params.prompt } : {}),
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
+    ...(params.launch ? { launch: params.launch } : {}),
   };
   startLocalSession(
     task,
@@ -541,6 +542,7 @@ export async function createTaskCore(params: CreateTaskParams, target?: TaskTarg
     ...(inPlace && { inPlace: true }),
     ...(params.prompt ? { summary: params.prompt } : {}),
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
+    ...(params.launch ? { launch: params.launch } : {}),
   };
   startLocalSession(
     task,
@@ -583,6 +585,10 @@ function agentOn(machine?: string): AgentKind {
   return (machine && config.machines?.find((m) => m.name === machine)?.agent) || config.agent || 'claude';
 }
 
+function agentFor(task: Task): AgentKind {
+  return task.launch?.agent ?? agentOn(task.machine);
+}
+
 /** switchAgent, applied to the task and its record in the list. */
 function adoptAgent(
   task: Task,
@@ -605,7 +611,7 @@ function startLocalSession(task: Task, prompt?: string): void {
   const config = loadConfig();
   const carried = adoptAgent(
     task,
-    agentOn(),
+    agentFor(task),
     (was, id) => handOverConversation(task.id, was, id),
     runningLocalSessions().has(task.id),
   );
@@ -615,6 +621,8 @@ function startLocalSession(task: Task, prompt?: string): void {
     name: task.name,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
+    model: task.launch?.model,
+    effort: task.launch?.effort,
   };
   const machine = machineSession(config.permissionMode, config.remoteControlAtStartup === true);
   const claude = {
@@ -625,10 +633,12 @@ function startLocalSession(task: Task, prompt?: string): void {
   const other =
     agent === 'claude'
       ? claude
-      : agentLaunch(agent, config.permissionMode, {
-          pluginDir: process.env.BIFROST_PLUGIN_DIR ?? PLUGIN_DEPLOY_DIR,
-          claudeDir: claudeConfigDir(),
-        });
+      : agentLaunch(
+          agent,
+          config.permissionMode,
+          { pluginDir: process.env.BIFROST_PLUGIN_DIR ?? PLUGIN_DEPLOY_DIR, claudeDir: claudeConfigDir() },
+          task.launch,
+        );
   writeLocalSession({
     home,
     taskId: task.id,
@@ -703,6 +713,7 @@ async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: s
     createdAt: Date.now(),
     ...(params.prompt ? { summary: params.prompt } : {}),
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
+    ...(params.launch ? { launch: params.launch } : {}),
   };
   const prompt = params.prompt
     ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId, machine)
@@ -726,7 +737,7 @@ async function writeRemoteSession(
   info: RemoteInfo,
   prompt?: string,
 ): Promise<Partial<Task>> {
-  const agent = agentOn(task.machine);
+  const agent = agentFor(task);
   if (agent !== 'claude' && !info.pluginDir) {
     throw new Error(`Bifrost's plugin is not on ${task.machine}, which ${agent} sessions need`);
   }
@@ -738,6 +749,8 @@ async function writeRemoteSession(
     name: task.name,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
+    model: task.launch?.model,
+    effort: task.launch?.effort,
   };
   // The port is left to the file each connection rewrites, which follows Bifrost to a new port while tmux lives on.
   const env = { ...claudeEnv(launch), BIFROST_MACHINE: task.machine ?? '' };
@@ -749,10 +762,12 @@ async function writeRemoteSession(
     ...(info.pluginDir ? ['--plugin-dir', info.pluginDir] : []),
   ];
   if (agent !== 'claude' && info.pluginDir) {
-    const other = agentLaunch(agent, config.permissionMode, {
-      pluginDir: info.pluginDir,
-      claudeDir: claudeConfigDirAt(info.home) ?? `${info.home}/.claude`,
-    });
+    const other = agentLaunch(
+      agent,
+      config.permissionMode,
+      { pluginDir: info.pluginDir, claudeDir: claudeConfigDirAt(info.home) ?? `${info.home}/.claude` },
+      task.launch,
+    );
     args = other.args;
     Object.assign(env, other.env);
   }

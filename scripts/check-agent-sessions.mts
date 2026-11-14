@@ -117,6 +117,27 @@ check(
   );
 }
 
+{
+  const { modelFlags } = await import('../src/main/agents.ts');
+  const flags = {
+    claude: modelFlags('claude', { model: 'm', effort: 'high' }),
+    codex: modelFlags('codex', { model: 'm', effort: 'high' }),
+    copilot: modelFlags('copilot', { model: 'm', effort: 'high' }),
+    none: modelFlags('codex', {}),
+  };
+  check(
+    'each agent is given the model and effort in its own flags, and none when neither is chosen',
+    show(flags) ===
+      show({
+        claude: ['--model', 'm', '--effort', 'high'],
+        codex: ['-m', 'm', '-c', 'model_reasoning_effort="high"'],
+        copilot: ['--model', 'm', '--reasoning-effort', 'high'],
+        none: [],
+      }),
+    show(flags),
+  );
+}
+
 fs.rmSync(root, { recursive: true, force: true });
 if (failed) {
   console.log(`\n${failed} failed`);

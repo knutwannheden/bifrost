@@ -87,7 +87,7 @@ Quitting Bifrost only detaches, so its sessions run on, and opening a tab or wak
 
 ### Agents
 
-Sessions run Claude Code unless Settings → Agent picks Copilot or Codex. A machine under Machines can run its own agent, which the IDE sends to that machine's instance with the other preferences. A session starts with its machine's agent, so a running one moves to a new choice on Restart sessions. `agents.ts` holds each agent's command line. Each machine needs the agent installed and logged in there.
+Sessions run Claude Code unless Settings → Agent picks Copilot or Codex. A machine under Machines can run its own agent, which the IDE sends to that machine's instance with the other preferences. A session starts with its machine's agent, so a running one moves to a new choice on Restart sessions. A task made with `create_task` keeps its agent through such a change: the one the call names, or else that of the session that made it. The call can also name the model and effort, which are otherwise the agent's own defaults. `agents.ts` holds each agent's command line. Each machine needs the agent installed and logged in there.
 
 Copilot and Codex get Bifrost's hooks and MCP server on their command line, so Bifrost writes nothing into `~/.copilot` or `~/.codex`. Copilot loads the plugin with `--plugin-dir`, and its skills include the user's. Codex takes the hooks and server as `-c` overrides and skips hook trust, which also makes it run as its own process, so hooks see the session's environment. Neither reads the user's global `CLAUDE.md`. Codex reads a repo's `CLAUDE.md` in place of an `AGENTS.md`. Bifrost chooses the session id up front for Claude and Copilot. Codex picks its own, and its first SessionStart hook reports it.
 

@@ -130,6 +130,26 @@ try {
       bodies.at(-1)?.machine === 'recipes',
       JSON.stringify(bodies),
     );
+
+    const codex = serve('recipes', { 'api-port': (api.address() as AddressInfo).port }, { BIFROST_AGENT: 'codex' });
+    try {
+      await codex.ready;
+      await codex.request('tools/call', { name: 'create_task', arguments: { repo: '/r', prompt: 'x' } });
+      const inherited = bodies.at(-1)?.launch;
+      await codex.request('tools/call', {
+        name: 'create_task',
+        arguments: { repo: '/r', prompt: 'x', agent: 'claude', model: 'opus', effort: 'high' },
+      });
+      const named = bodies.at(-1)?.launch;
+      check(
+        "create_task gives the new task its creator's agent, or the agent, model and effort it names",
+        JSON.stringify(inherited) === JSON.stringify({ agent: 'codex' }) &&
+          JSON.stringify(named) === JSON.stringify({ agent: 'claude', model: 'opus', effort: 'high' }),
+        JSON.stringify({ inherited, named }),
+      );
+    } finally {
+      codex.close();
+    }
   } finally {
     server.close();
     api.close();

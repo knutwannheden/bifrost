@@ -66,6 +66,19 @@ export function startLines(agent: AgentKind): string[] {
   ];
 }
 
+/** The flags that start an agent on the model and with the effort chosen for its task. */
+export function modelFlags(agent: AgentKind, chosen: { model?: string; effort?: string }): string[] {
+  const { model, effort } = chosen;
+  if (agent === 'codex') {
+    return [
+      ...(model ? ['-m', model] : []),
+      ...(effort ? ['-c', `model_reasoning_effort=${JSON.stringify(effort)}`] : []),
+    ];
+  }
+  const effortFlag = agent === 'copilot' ? '--reasoning-effort' : '--effort';
+  return [...(model ? ['--model', model] : []), ...(effort ? [effortFlag, effort] : [])];
+}
+
 /** Where a session's machine keeps what an agent other than Claude is pointed at. */
 export interface AgentPlaces {
   /** Bifrost's plugin there. */
@@ -108,11 +121,18 @@ export function agentLaunch(
   agent: Exclude<AgentKind, 'claude'>,
   permissionMode: string | undefined,
   places: AgentPlaces,
+  chosen: { model?: string; effort?: string } = {},
 ): { args: string[]; env: Record<string, string> } {
   const skip = permissionMode === 'skip-permissions';
   if (agent === 'copilot') {
     return {
-      args: ['--plugin-dir', places.pluginDir, '--no-auto-update', ...(skip ? ['--allow-all'] : [])],
+      args: [
+        '--plugin-dir',
+        places.pluginDir,
+        '--no-auto-update',
+        ...(skip ? ['--allow-all'] : []),
+        ...modelFlags(agent, chosen),
+      ],
       env: {
         BIFROST_AGENT: agent,
         COPILOT_SKILLS_DIRS: `${places.claudeDir}/skills`,
@@ -140,6 +160,7 @@ export function agentLaunch(
       ...['-c', 'project_doc_fallback_filenames=["CLAUDE.md"]'],
       ...(skip ? ['--dangerously-bypass-approvals-and-sandbox'] : []),
       ...(permissionMode === 'sandbox' ? ['--sandbox', 'workspace-write'] : []),
+      ...modelFlags(agent, chosen),
     ],
     env: { BIFROST_AGENT: agent },
   };

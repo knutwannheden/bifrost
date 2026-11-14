@@ -308,7 +308,7 @@ server.registerTool(
   {
     title: 'Create Task',
     description:
-      'Create a new Bifrost task. Spawns a Claude Code session in a git worktree, fresh or one that already exists. The new task runs in the background. Works from any Claude Code session — specify repo by path if not running inside a Bifrost task. Called from inside a task, the new one is told who created it and how to reach them, so it can report back with the built-in SendMessage tool; to follow up on it yourself, find it in ListAgents and use SendMessage rather than waiting here.',
+      'Create a new Bifrost task. Spawns a coding agent session in a git worktree, fresh or one that already exists. The new task runs in the background. Works from any Claude Code session — specify repo by path if not running inside a Bifrost task. Called from inside a task, the new one is told who created it and how to reach them, so it can report back with the built-in SendMessage tool; to follow up on it yourself, find it in ListAgents and use SendMessage rather than waiting here.',
     inputSchema: {
       name: z
         .string()
@@ -339,11 +339,29 @@ server.registerTool(
       prompt: z
         .string()
         .describe(
-          "The prompt for the new task's Claude session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. Unless you pass 'worktree', it starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out. Write it from what you already have: researching it with file reads and commands spends your context to fill one that is empty anyway. Hand over what you would have looked up, and mark what you did not check as unverified.",
+          "The prompt for the new task's session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. Unless you pass 'worktree', it starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out. Write it from what you already have: researching it with file reads and commands spends your context to fill one that is empty anyway. Hand over what you would have looked up, and mark what you did not check as unverified.",
+        ),
+      agent: z
+        .enum(['claude', 'codex', 'copilot'])
+        .optional()
+        .describe(
+          "The coding agent the new task runs. Omitted, it runs the agent this session runs. The task keeps it when its machine's agent changes.",
+        ),
+      model: z
+        .string()
+        .optional()
+        .describe(
+          "The model for the new task's agent, as that agent's own --model flag names it. Omitted, the agent's default.",
+        ),
+      effort: z
+        .string()
+        .optional()
+        .describe(
+          "The reasoning effort for the new task's agent, as that agent names its levels. Omitted, the agent's default.",
         ),
     },
   },
-  async ({ name, repo, worktree, machine: asked, prompt }) => {
+  async ({ name, repo, worktree, machine: asked, prompt, agent, model, effort }) => {
     // The API this server reaches may be the IDE's, which cannot tell where "local" is.
     const machine = asked === 'local' ? MACHINE || undefined : asked;
     let repoId;
@@ -392,6 +410,7 @@ server.registerTool(
       machine,
       createdByTaskId: TASK_ID || undefined,
       callerContext: process.env.BIFROST_CONTEXT,
+      launch: { agent: agent ?? AGENT, model, effort },
       async: true,
     });
     const taskName = name || 'new task';

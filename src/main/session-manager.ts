@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
+import { modelFlags } from './agents.ts';
 import { emit } from './event-sink.ts';
 import type { RemoteHost } from './remote-host.ts';
 import { createMirror, disposeMirror, mirrorOutput, resizeMirror, snapshotMirror } from './session-mirror.ts';
@@ -561,6 +562,8 @@ export interface ClaudeLaunchOptions {
   permissionMode?: string;
   agentTeams?: boolean;
   context?: string;
+  model?: string;
+  effort?: string;
 }
 
 /** Claude's arguments for a task session, short of which session to resume. */
@@ -569,6 +572,7 @@ export function claudeArgs(options?: ClaudeLaunchOptions, settings: Record<strin
   // that are driven by an agent rather than watched in a tab.
   const a: string[] = ['--no-chrome'];
   if (options?.name) a.push('--name', options.name);
+  a.push(...modelFlags('claude', { model: options?.model, effort: options?.effort }));
   const merged = { ...settings };
   if (options?.permissionMode === 'auto-mode') a.push('--enable-auto-mode');
   else if (options?.permissionMode === 'sandbox') merged.sandbox = { enabled: true };

@@ -87,6 +87,8 @@ export interface Task {
   sessionId?: string;
   /** The agent the conversation belongs to. Absent means Claude. */
   agent?: AgentKind;
+  /** What create_task chose for the task to run with, ahead of its machine's agent and the agent's own defaults. */
+  launch?: { agent?: AgentKind; model?: string; effort?: string };
   status: TaskStatus;
   hasUnread: boolean;
   createdAt: number;
@@ -226,6 +228,7 @@ export interface CreateTaskParams {
   multiRepoIds?: string[];
   /** The configured machine to run the task on instead of this one */
   machine?: string;
+  launch?: Task['launch'];
 }
 
 export interface PrInfo {
