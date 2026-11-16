@@ -59,7 +59,7 @@ export default function KeyboardShortcutsPanel() {
       actionId: def.id,
       label: def.label,
       category: ACTION_CATEGORIES.find((c) => c.id === def.category)?.label ?? def.category,
-      binding: getDisplayString(def.id),
+      binding: getDisplayString(def.id) ?? '',
     }));
     const switches = accounts
       .filter((a) => !a.current)
