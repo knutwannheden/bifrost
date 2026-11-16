@@ -285,7 +285,7 @@ export function strokeMatches(binding: KeyStroke, pressed: KeyStroke): boolean {
 }
 
 function keyLabel(key: string): string {
-  return ARROW_SYMBOLS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
+  return ARROW_SYMBOLS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 /** How a stroke reads to the user on this platform: ⌘⇧W on macOS, Ctrl+Alt+Shift+W elsewhere. */

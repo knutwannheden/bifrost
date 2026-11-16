@@ -586,13 +586,8 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
         if (now - lastPress >= DOUBLE_PRESS_MS) {
           doublePressTimers.current.set(actionId, now);
           const binding = keymapRef.current.find((b) => b.actionId === actionId);
-          if (binding) {
-            const display = formatStrokeDisplay(binding.strokes[0]);
-            dispatch({
-              type: 'SHOW_TOAST',
-              message: `Press ${display} again to ${actionDef.label.toLowerCase()}`,
-            });
-          }
+          const again = binding ? `Press ${formatStrokeDisplay(binding.strokes[0])} again` : 'Run it again';
+          dispatch({ type: 'SHOW_TOAST', message: `${again} to ${actionDef.label.toLowerCase()}` });
           return;
         }
         doublePressTimers.current.set(actionId, 0);
@@ -603,18 +598,17 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
   );
 
   useEffect(() => {
-    const run = (e: Event) => executeAction((e as CustomEvent<string>).detail);
+    const run = (e: Event) => handleActionWithDoubleConfirm((e as CustomEvent<string>).detail);
     window.addEventListener(RUN_ACTION_EVENT, run);
     return () => window.removeEventListener(RUN_ACTION_EVENT, run);
-  }, [executeAction]);
+  }, [handleActionWithDoubleConfirm]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // A modifier going down on its way to the next stroke is no stroke of its own.
       if (MODIFIER_KEYS.has(e.key)) return;
       const pressed = pressedStroke(e);
-      if (!pressed) return;
-      if (!pressed.mod) {
+      if (!pressed?.mod) {
         // If we're in chord-pending state and user presses a non-mod key, check second stroke
         const chord = chordStateRef.current;
         if (chord) {
@@ -622,7 +616,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           chordStateRef.current = null;
 
           for (const binding of chord.firstStroke) {
-            if (binding.strokes.length >= 2 && strokeMatches(binding.strokes[1], pressed)) {
+            if (pressed && binding.strokes.length >= 2 && strokeMatches(binding.strokes[1], pressed)) {
               e.preventDefault();
               handleActionWithDoubleConfirm(binding.actionId);
               return;
@@ -631,6 +625,8 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           dispatch({ type: 'SHOW_TOAST', message: 'Chord cancelled' });
           return;
         }
+        // Off macOS plain Ctrl belongs to the terminal.
+        if (!pressed) return;
         // Fall through for bare key bindings (e.g. F2)
       } else {
         // Cancel any pending chord on a new mod key press

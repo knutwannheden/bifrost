@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
+import { RUN_ACTION_EVENT } from '../../shared/keymap';
 import { isAnyOverlayOpen, useApp } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
 import { useResolvedDark } from '../hooks/useTheme';
@@ -86,8 +87,16 @@ export default function TerminalPane({
         setShowSearch(true);
       }
     };
+    // The command palette runs Find through the action event.
+    const run = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === 'action.find' && focused && active) setShowSearch(true);
+    };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener(RUN_ACTION_EVENT, run);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener(RUN_ACTION_EVENT, run);
+    };
   }, [focused, active, anyOverlay]);
 
   const handleSearchClose = useCallback(() => {

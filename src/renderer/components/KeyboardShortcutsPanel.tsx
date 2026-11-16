@@ -13,7 +13,7 @@ import { useKeymap } from '../context/KeymapContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { requestArchive } from '../utils/archive';
 import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
-import { altSymbol, pressedStroke } from '../utils/platform';
+import { altSymbol, pressedStroke, shortcutLabel } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import CloseButton from './CloseButton';
 import Highlight from './Highlight';
@@ -349,7 +349,7 @@ export default function KeyboardShortcutsPanel() {
                     {isRecording ? (
                       <span className="text-xs text-accent animate-pulse">
                         {recordedStrokes.length > 0
-                          ? `${serializeBinding(recordedStrokes)} … Enter to confirm`
+                          ? `${shortcutLabel(serializeBinding(recordedStrokes))} … Enter to confirm`
                           : 'Press shortcut…'}
                       </span>
                     ) : item.item.binding ? (

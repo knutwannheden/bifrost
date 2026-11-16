@@ -1,6 +1,7 @@
 import {
   type ChordEvent,
   type KeyStroke,
+  parseBinding,
   parseStroke,
   strokeLabel,
   strokeMatches,
@@ -20,9 +21,11 @@ export function isShortcut(e: ChordEvent, shortcut: string): boolean {
   return !!pressed && strokeMatches(parseStroke(shortcut), pressed);
 }
 
-/** A shortcut written as in the keymap (`Cmd+Shift+C`), as this platform's user reads it. */
+/** A shortcut written as in the keymap (`Cmd+Shift+C`, `Cmd+K Cmd+J`), as this platform's user reads it. */
 export function shortcutLabel(shortcut: string): string {
-  return strokeLabel(parseStroke(shortcut), isMac);
+  return parseBinding(shortcut)
+    .map((s) => strokeLabel(s, isMac))
+    .join(' ');
 }
 
 /** Platform-appropriate modifier symbol for display */

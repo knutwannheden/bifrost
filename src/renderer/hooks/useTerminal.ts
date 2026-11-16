@@ -298,20 +298,21 @@ export function useTerminal(
         if (e.type === 'keydown' && e.key.toLowerCase() === 'a') terminal.selectAll();
         return false;
       }
-      // Off macOS a Ctrl+Shift chord belongs to the app, as a Cmd chord does on
-      // macOS. Plain Ctrl+C and Ctrl+V go to the session there, so the terminal's
-      // copy, paste and select-all take Ctrl+Shift, as in GNOME Terminal.
+      // Off macOS a Ctrl+Shift chord on a letter belongs to the app, as a Cmd
+      // chord does on macOS, and copies on C as in GNOME Terminal. Chromium
+      // pastes on Ctrl+Shift+V. On a digit or symbol the chord spells a control
+      // character, such as Ctrl+_ for undo, so only a bound one is held back below.
       if (!isMac && e.ctrlKey && e.shiftKey && !e.metaKey) {
-        const key = pressedStroke(e)?.key;
-        if (!e.altKey && (key === 'c' || key === 'v' || key === 'a')) {
+        const key = pressedStroke(e)?.key ?? '';
+        if (!e.altKey && (key === 'c' || key === 'a')) {
           e.preventDefault();
           if (e.type === 'keydown') {
             if (key === 'c') copySelection();
-            else if (key === 'v') pasteClipboard();
             else terminal.selectAll();
           }
+          return false;
         }
-        return false;
+        if (e.altKey || /^[a-z]$/.test(key)) return false;
       }
       // Option+Left/Right: word navigation (ESC b / ESC f)
       // Option+/: hippie-expand (dabbrev-expand)
@@ -454,24 +455,10 @@ export function useTerminal(
     // Claude's TUI always accepts bracketed paste at the prompt, so frame the
     // paste here rather than relying on xterm's tracked mode, which requires
     // it to have parsed Claude's enable sequence off the output stream.
-    // Mirror xterm's prepareTextForTerminal (\n→\r); replace embedded ESC
-    // with the visible ␛ symbol so it can't prematurely close the
-    // bracketed-paste span.
-    const framePaste = (text: string) => `\x1b[200~${text.replace(/\r?\n/g, '\r').split('\x1b').join('␛')}\x1b[201~`;
     const copySelection = () => {
       const text = terminal.hasSelection() ? trimmedSelection() : '';
       if (text) navigator.clipboard.writeText(text).catch(() => {});
     };
-    const pasteClipboard = () =>
-      window.bifrost
-        .readClipboard()
-        .then((text) => {
-          if (!text) {
-            if (paneType === 'claude') pasteImage(false);
-          } else if (paneType === 'claude') sendInput(framePaste(text));
-          else terminal.paste(text);
-        })
-        .catch(() => {});
     const onPaste = (e: ClipboardEvent) => {
       if (paneType !== 'claude') return;
       const text = e.clipboardData?.getData('text/plain');
@@ -484,7 +471,12 @@ export function useTerminal(
       }
       e.preventDefault();
       e.stopPropagation();
-      sendInput(framePaste(text));
+      // Mirror xterm's prepareTextForTerminal (\n→\r); replace embedded ESC
+      // with the visible ␛ symbol so it can't prematurely close the
+      // bracketed-paste span.
+      const sanitized = text.replace(/\r?\n/g, '\r').split('\x1b').join('␛');
+      const framed = `\x1b[200~${sanitized}\x1b[201~`;
+      sendInput(framed);
     };
     containerRef.current?.addEventListener('paste', onPaste, { capture: true });
 

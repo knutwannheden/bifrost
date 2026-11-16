@@ -304,7 +304,7 @@ app.on('ready', async () => {
     startPolling(mainWindow);
   }
 
-  globalShortcut.register('CommandOrControl+Shift+B', () => {
+  globalShortcut.register(strokeAccelerator(parseStroke('Cmd+Shift+B'), process.platform === 'darwin'), () => {
     if (mainWindow) {
       mainWindow.show();
       mainWindow.focus();
