@@ -8,12 +8,13 @@ let mainWindow: BrowserWindow | null = null;
 
 export function initNotificationService(window: BrowserWindow): void {
   mainWindow = window;
+  if (process.platform !== 'darwin') window.on('focus', () => window.flashFrame(false));
   subscribe((channel, args) => {
     if (channel === BELL) handleBellNotification(args[0] as string);
   });
 }
 
-/** Sound, OS banner and dock bounce for a task that wants attention. */
+/** Sound, OS banner, and a dock bounce or flashing window for a task that wants attention. */
 function handleBellNotification(taskName: string): void {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   if (loadConfig().notifications === false) return;
@@ -39,5 +40,6 @@ function handleBellNotification(taskName: string): void {
   }
 
   new Notification({ title: taskName, body: 'Waiting for input' }).show();
-  app.dock?.bounce('informational');
+  if (process.platform === 'darwin') app.dock?.bounce('informational');
+  else mainWindow.flashFrame(true);
 }

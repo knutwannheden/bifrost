@@ -31,7 +31,7 @@ import { performArchive, requestArchive } from './utils/archive';
 import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-links';
 import { formatBytes } from './utils/format-bytes';
 import { nextActiveTaskId } from './utils/next-active-task';
-import { modSymbol } from './utils/platform';
+import { isMac, modSymbol } from './utils/platform';
 import { scrapePartialPrompt } from './utils/scrape-prompt';
 import { slackToPlainText } from './utils/slack-markup';
 
@@ -513,13 +513,15 @@ export default function App() {
     <KeymapProvider config={state.config}>
       <KeymapEngineHost state={state} dispatch={dispatch} />
       <div className="flex flex-col h-screen bg-app text-primary">
-        {/* Title bar drag area */}
-        <div
-          className="h-8 bg-surface border-b border-border-default flex items-center justify-center"
-          style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}
-        >
-          <span className="text-xs font-semibold tracking-wide text-faint">BIFROST</span>
-        </div>
+        {/* The window's title bar on macOS, where it is hidden and the traffic lights sit over this */}
+        {isMac && (
+          <div
+            className="h-8 bg-surface border-b border-border-default flex items-center justify-center"
+            style={{ WebkitAppRegion: 'drag', paddingLeft: 78 } as React.CSSProperties}
+          >
+            <span className="text-xs font-semibold tracking-wide text-faint">BIFROST</span>
+          </div>
+        )}
 
         {/* Main area: content + right icon bar */}
         <div className="flex flex-1 min-h-0">

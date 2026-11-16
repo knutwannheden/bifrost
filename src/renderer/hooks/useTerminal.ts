@@ -145,7 +145,7 @@ export function useTerminal(
       scrollback: 10_000,
       fontWeight: options?.fontWeight ?? 300,
       fontSize: options?.fontSize ?? 14,
-      fontFamily: `"${options?.fontFamily ?? 'MesloLGS NF'}", Menlo, Monaco, "Courier New", monospace`,
+      fontFamily: `"${options?.fontFamily ?? 'MesloLGS NF'}", Menlo, Monaco, "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace`,
       linkHandler: {
         activate: (_event, uri) => {
           window.bifrost.openUrl(uri);

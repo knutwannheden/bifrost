@@ -100,6 +100,25 @@ npm start
 npm run make
 ```
 
+## Linux and WSL2
+
+Bifrost runs on a Linux desktop, and on Windows inside WSL2, whose WSLg shows its window. Besides git and tmux, it needs `jq` and `python3` for Restart Bifrost.
+
+Ubuntu 23.10 and later restrict the user namespaces Electron's sandbox relies on, so `npm start` from a checkout refuses to start, with an error about the SUID sandbox helper. Give the checkout's helper to root:
+
+```bash
+sudo chown root node_modules/electron/dist/chrome-sandbox
+sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+```
+
+The installed deb sets the helper up itself. `npm run make` builds both the deb and the rpm, so it needs `dpkg`, `fakeroot` and `rpmbuild`. On a machine without `rpmbuild`, build the deb alone:
+
+```bash
+npm run make -- --targets deb
+```
+
+A maker named by its package, such as `@electron-forge/maker-deb`, is built without the settings in `forge.config.ts`, and fails.
+
 ## Tech Stack
 
 Electron 40, React 19, TypeScript, Vite, Tailwind CSS, xterm.js, node-pty, Shiki

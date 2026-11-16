@@ -14,7 +14,7 @@ Bifrost is a keyboard-centric Electron app for orchestrating parallel coding age
 - `npm run check:mirror` — verify a joining terminal replays a session's screen exactly once
 - `npm test` — vitest suite for `tools/postmortem`
 - `npm run package` — build packaged app
-- `npm run make` — build distributable installers
+- `npm run make` — build distributable installers; `npm run make -- --targets deb` builds the deb alone, on a machine without rpmbuild. The README's Linux section covers the sandbox helper `npm start` needs on Ubuntu.
 
 `tools/postmortem` has a vitest suite (`npm test`). The Electron app itself has no test framework;
 `scripts/` holds standalone checks for invariants worth pinning, and `restart-bifrost.sh`.
