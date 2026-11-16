@@ -120,7 +120,14 @@ try {
 
   {
     fs.mkdirSync(repo);
-    execFileSync('sh', ['-c', 'git init -q && git commit -q --allow-empty -m init'], { cwd: repo });
+    execFileSync('git', ['init', '-q'], { cwd: repo });
+    execFileSync(
+      'git',
+      ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'init'],
+      {
+        cwd: repo,
+      },
+    );
     const create = async (machine: string, repoPath: string, extra: object = {}) => {
       const body = { machine, repoPath, name: `made-${machine}`, prompt: 'x', ...extra };
       const res = await post(perf.port, '/create-task', body);
