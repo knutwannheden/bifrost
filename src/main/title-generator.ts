@@ -4,16 +4,6 @@ import { type ConversationSource, EXCERPT_FORMAT, readTranscriptExcerpt } from '
 const TITLE_TIMEOUT_MS = 60_000;
 const MODEL = 'claude-sonnet-5';
 
-// Head holds the original intent and tail the current state, so they stay balanced.
-// A tail-weighted excerpt drifts the title onto the step in progress.
-const MAX_HEAD_CHARS = 6_000;
-const MAX_TAIL_CHARS = 6_000;
-
-function capExcerpt(input: string): string {
-  if (input.length <= MAX_HEAD_CHARS + MAX_TAIL_CHARS) return input;
-  return `${input.slice(0, MAX_HEAD_CHARS)}\n…\n${input.slice(-MAX_TAIL_CHARS)}`;
-}
-
 /** The CLI validates against this, so the prompt carries only editorial rules. */
 const OUTPUT_SCHEMA = {
   type: 'object',
@@ -76,7 +66,7 @@ export async function generateTaskTitle(source: ConversationSource): Promise<Gen
   if (!input) return null;
   const out = await runOneShot<Partial<GeneratedTaskTitle>>({
     prompt: PROMPT,
-    input: `Conversation:\n${capExcerpt(input)}`,
+    input: `Conversation:\n${input}`,
     claudeModel: MODEL,
     effort: 'low',
     schema: OUTPUT_SCHEMA,

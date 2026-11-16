@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Task } from '../shared/types.ts';
 import { transcriptDir } from './claude-paths';
-import { conversationExcerpt, transcriptFile } from './conversation-handover.ts';
+import { anyTranscript, conversationExcerpt, transcriptFile } from './conversation-handover.ts';
 import { oneShotAgent, runOneShot } from './oneshot';
 
 /**
@@ -66,16 +66,21 @@ export function countJsonlLines(worktreePath: string, sessionId?: string): numbe
 }
 
 /** The fields of a task that locate its conversation. */
-export type ConversationSource = Pick<Task, 'agent' | 'sessionId' | 'worktreePath'>;
+export type ConversationSource = Pick<Task, 'agent' | 'sessionId' | 'sessionHistory' | 'worktreePath'>;
 
-/** First and last turns of a task's conversation in its own agent's transcript, or null when there is none. */
+/**
+ * First and last turns of a task's conversation, read from its own agent's
+ * transcript after those of the sessions it had before, or null when there is none.
+ */
 export function readTranscriptExcerpt(source: ConversationSource): string | null {
   const agent = source.agent ?? 'claude';
   const file =
     agent === 'claude'
       ? resolveJsonlPath(source.worktreePath, source.sessionId)
       : source.sessionId && transcriptFile(agent, source.sessionId);
-  return (file && conversationExcerpt(agent, file)) || null;
+  const transcripts = (source.sessionHistory ?? []).flatMap((id) => anyTranscript(id) ?? []);
+  if (file) transcripts.push({ agent, file });
+  return conversationExcerpt(transcripts) ?? null;
 }
 
 export const EXCERPT_FORMAT = `The input is an excerpt of the conversation between the operator and a coding agent. Each

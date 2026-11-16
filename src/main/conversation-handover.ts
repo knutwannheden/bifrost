@@ -60,8 +60,13 @@ function turnOf(agent: AgentKind, record: Record<string, any>): Turn | null {
   if (agent === 'claude') {
     if (record.isMeta || (record.type !== 'user' && record.type !== 'assistant')) return null;
     const text = texts(record.message?.content);
-    // Slash commands and their output come back as user records in tags.
-    if (record.type === 'user' && text.startsWith('<')) return null;
+    // Slash commands and their output come back as user records in tags. A
+    // command's arguments can be the whole request, so they stay with its name.
+    if (record.type === 'user' && text.startsWith('<')) {
+      const name = /<command-name>([\s\S]*?)<\/command-name>/.exec(text)?.[1].trim();
+      const args = /<command-args>([\s\S]*?)<\/command-args>/.exec(text)?.[1].trim();
+      return name && args ? { user: true, text: `${name} ${args}` } : null;
+    }
     return { user: record.type === 'user', text };
   }
   if (agent === 'copilot') {
@@ -97,33 +102,55 @@ function turns(agent: AgentKind, file: string): Turn[] {
 
 const section = (agent: AgentKind, turn: Turn) => `## ${turn.user ? 'User' : NAMES[agent]}\n\n${turn.text}\n`;
 
+/** A transcript of one of a task's sessions, with the agent that kept it. */
+export interface Transcript {
+  agent: AgentKind;
+  file: string;
+}
+
+/** The transcript of a session whose agent is not recorded, as for an id in a task's session history. */
+export function anyTranscript(sessionId: string): Transcript | undefined {
+  for (const agent of Object.keys(NAMES) as AgentKind[]) {
+    const file = transcriptFile(agent, sessionId);
+    if (file) return { agent, file };
+  }
+  return undefined;
+}
+
 /** The opening turns hold what the task is about, and the closing ones where it has got to. */
 const EXCERPT_HEAD = 4;
 const EXCERPT_TAIL = 6;
-/** A turn can carry a whole pasted log, and input size is what a title or summary costs. */
-const EXCERPT_TURN_CHARS = 2_000;
+/**
+ * A turn can carry a whole pasted log, and input size is what a title or
+ * summary costs. A head turn keeps its start, and a tail turn its end, where
+ * the agent reports what it did.
+ */
+const EXCERPT_TURN_CHARS = 1_200;
 
 /**
- * The first and last turns of the conversation in an agent's transcript, as
- * text for Bifrost's own calls to read, or undefined when it holds none.
+ * The first and last turns of a task's conversation across the transcripts of
+ * its sessions, oldest first, as text for Bifrost's own calls to read, or
+ * undefined when they hold none.
  */
-export function conversationExcerpt(agent: AgentKind, file: string): string | undefined {
-  let all: Turn[];
-  try {
-    all = turns(agent, file);
-  } catch {
-    return undefined;
-  }
-  if (all.length === 0) return undefined;
-  const cap = (t: Turn): Turn =>
-    t.text.length > EXCERPT_TURN_CHARS ? { ...t, text: `${t.text.slice(0, EXCERPT_TURN_CHARS)}…` } : t;
+export function conversationExcerpt(transcripts: Transcript[]): string | undefined {
+  const all = transcripts.flatMap(({ agent, file }) => {
+    try {
+      return turns(agent, file).map((turn) => ({ agent, turn }));
+    } catch {
+      return [];
+    }
+  });
+  const shown = (agent: AgentKind, turn: Turn, index: number) => {
+    const { text } = turn;
+    if (text.length <= EXCERPT_TURN_CHARS) return section(agent, turn);
+    const cut = index < EXCERPT_HEAD ? `${text.slice(0, EXCERPT_TURN_CHARS)}…` : `…${text.slice(-EXCERPT_TURN_CHARS)}`;
+    return section(agent, { ...turn, text: cut });
+  };
   const omitted = all.length - EXCERPT_HEAD - EXCERPT_TAIL;
-  if (omitted <= 0) return all.map((t) => section(agent, cap(t))).join('\n');
-  return [
-    ...all.slice(0, EXCERPT_HEAD).map((t) => section(agent, cap(t))),
-    `[${omitted} turns left out]\n`,
-    ...all.slice(-EXCERPT_TAIL).map((t) => section(agent, cap(t))),
-  ].join('\n');
+  const kept = omitted > 0 ? [...all.slice(0, EXCERPT_HEAD), ...all.slice(-EXCERPT_TAIL)] : all;
+  const sections = kept.map(({ agent, turn }, i) => shown(agent, turn, i));
+  if (omitted > 0) sections.splice(EXCERPT_HEAD, 0, `[${omitted} turns left out]\n`);
+  return sections.length > 0 ? sections.join('\n') : undefined;
 }
 
 /** The agent's last reply in the conversation it kept under sessionId, when this machine holds that conversation. */

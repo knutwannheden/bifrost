@@ -1132,17 +1132,21 @@ function saveSummary(taskId: string, summary: string): void {
 
 /**
  * Summarizes a Copilot or Codex task as its turn ends. Claude's are summarized
- * as its transcript grows, which the Claude watcher sees.
+ * as its transcript grows, which the Claude watcher sees. A task on another
+ * machine has its transcript there. Reading the transcript waits for the hook
+ * that ended the turn to be answered.
  */
 export function summarizeAfterTurn(task: Task): void {
-  if (!task.agent || task.agent === 'claude') return;
-  summarizeTask(task)
-    .then((summary) => {
-      if (summary) saveSummary(task.id, summary);
-    })
-    .catch(() => {
-      /* a task without a summary is the same task */
-    });
+  if (!task.agent || task.agent === 'claude' || task.machine) return;
+  setImmediate(() => {
+    summarizeTask(task)
+      .then((summary) => {
+        if (summary) saveSummary(task.id, summary);
+      })
+      .catch(() => {
+        /* a task without a summary is the same task */
+      });
+  });
 }
 
 export function reorderTasks(taskIds: string[]): void {

@@ -20,8 +20,15 @@ delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.COPILOT_HOME;
 delete process.env.CODEX_HOME;
 
-const { conversationExcerpt, handOverConversation, lastReply, remoteHandOver, switchAgent, transcriptFile } =
-  await import('../src/main/conversation-handover.ts');
+const {
+  anyTranscript,
+  conversationExcerpt,
+  handOverConversation,
+  lastReply,
+  remoteHandOver,
+  switchAgent,
+  transcriptFile,
+} = await import('../src/main/conversation-handover.ts');
 
 const lines = (...records: unknown[]) => `${records.map((r) => JSON.stringify(r)).join('\n')}\n`;
 const write = (file: string, content: string) => {
@@ -153,34 +160,70 @@ check(
 
 {
   const many = path.join(home, '.copilot', 'session-state', 'p4', 'events.jsonl');
+  const ys = 'y'.repeat(5000);
   write(
     many,
     lines(
       ...Array.from({ length: 30 }, (_, i) => ({
         type: i % 2 ? 'assistant.message' : 'user.message',
-        data: { content: `turn ${i}${i === 29 ? ` ${'y'.repeat(5000)}` : ''}` },
+        data: { content: i === 3 ? `turn 3 ${ys}` : i === 29 ? `${ys} turn 29 done` : `turn ${i}` },
       })),
     ),
   );
-  const excerpt = conversationExcerpt('copilot', many) ?? '';
-  const kept = [...excerpt.matchAll(/^turn (\d+)/gm)].map((m) => Number(m[1]));
+  const excerpt = conversationExcerpt([{ agent: 'copilot', file: many }]) ?? '';
+  const kept = [...excerpt.matchAll(/turn (\d+)/g)].map((m) => Number(m[1]));
   check(
     "a title or summary reads the first four and last six turns of the agent's own transcript",
     JSON.stringify(kept) === JSON.stringify([0, 1, 2, 3, 24, 25, 26, 27, 28, 29]) &&
       excerpt.startsWith('## User\n\nturn 0') &&
-      excerpt.includes('## Copilot\n\nturn 29'),
+      excerpt.includes('[20 turns left out]'),
     JSON.stringify(kept),
   );
-  check('a turn too long for the excerpt is cut', excerpt.length < 5000, `${excerpt.length}`);
+  check(
+    'a long turn is cut to its start in the head and to its end in the tail',
+    excerpt.length < 4000 && excerpt.includes('## Copilot\n\nturn 3 yyy') && excerpt.includes('yyy turn 29 done\n'),
+    `${excerpt.length}`,
+  );
+
+  const codex = transcriptFile('codex', 'x1') ?? '';
   check(
     'a conversation shorter than the excerpt is kept whole, each turn once',
-    conversationExcerpt('codex', transcriptFile('codex', 'x1') ?? '') ===
-      '## User\n\nRename the flag.\n\n## Codex\n\nRenamed.\n',
-    JSON.stringify(conversationExcerpt('codex', transcriptFile('codex', 'x1') ?? '')),
+    conversationExcerpt([{ agent: 'codex', file: codex }]) === '## User\n\nRename the flag.\n\n## Codex\n\nRenamed.\n',
+    JSON.stringify(conversationExcerpt([{ agent: 'codex', file: codex }])),
+  );
+
+  const switched = conversationExcerpt([anyTranscript('x1'), anyTranscript('p1')].filter((t) => t !== undefined)) ?? '';
+  check(
+    'a task that switched agents reads its earlier sessions first, each turn under the agent that kept it',
+    switched ===
+      '## User\n\nRename the flag.\n\n## Codex\n\nRenamed.\n\n## User\n\nRun the tests.\n\n## Copilot\n\nThey pass.\n',
+    JSON.stringify(switched),
   );
   check(
     'a transcript that is gone gives no excerpt',
-    conversationExcerpt('codex', path.join(home, 'missing.jsonl')) === undefined,
+    conversationExcerpt([{ agent: 'codex', file: path.join(home, 'missing.jsonl') }]) === undefined,
+  );
+
+  const slash = path.join(home, '.claude', 'projects', '-some-dir', 'c5.jsonl');
+  write(
+    slash,
+    lines(
+      {
+        type: 'user',
+        message: {
+          content:
+            '<command-name>/feature-dev</command-name>\n<command-message>feature-dev</command-message>\n<command-args>add a cache</command-args>',
+        },
+      },
+      { type: 'user', isMeta: true, message: { content: 'the skill body' } },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'On it.' }] } },
+    ),
+  );
+  check(
+    'a prompt given as a slash command keeps the command and its arguments',
+    conversationExcerpt([{ agent: 'claude', file: slash }]) ===
+      '## User\n\n/feature-dev add a cache\n\n## Claude\n\nOn it.\n',
+    JSON.stringify(conversationExcerpt([{ agent: 'claude', file: slash }])),
   );
 }
 
