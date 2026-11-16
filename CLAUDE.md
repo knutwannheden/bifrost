@@ -100,6 +100,7 @@ Some things stay Claude-only:
 - managed permissions
 - Remote Control
 - Bifrost's own `claude -p` calls
+- following a session into another worktree, which only Claude's `EnterWorktree` and `ExitWorktree` report. Copilot and Codex file their sessions by id, so a restart resumes them in any directory.
 
 Copilot and Codex have no SendMessage, so the MCP server tells their sessions to use `send_prompt`.
 
