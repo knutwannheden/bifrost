@@ -1,23 +1,17 @@
 import { runOneShot } from './oneshot';
-import { readTranscriptExcerpt } from './task-summarizer';
+import { type ConversationSource, EXCERPT_FORMAT, readTranscriptExcerpt } from './task-summarizer';
 
 const TITLE_TIMEOUT_MS = 60_000;
 const MODEL = 'claude-sonnet-5';
 
-// A transcript line can carry an entire tool result, and input size is what the
-// call costs. Head holds the original intent and tail the current state, so they
-// stay balanced: a tail-weighted excerpt drifts the title onto the step in progress.
-const MAX_LINE_CHARS = 2_000;
+// Head holds the original intent and tail the current state, so they stay balanced.
+// A tail-weighted excerpt drifts the title onto the step in progress.
 const MAX_HEAD_CHARS = 6_000;
 const MAX_TAIL_CHARS = 6_000;
 
 function capExcerpt(input: string): string {
-  const capped = input
-    .split('\n')
-    .map((line) => (line.length > MAX_LINE_CHARS ? `${line.slice(0, MAX_LINE_CHARS)}…` : line))
-    .join('\n');
-  if (capped.length <= MAX_HEAD_CHARS + MAX_TAIL_CHARS) return capped;
-  return `${capped.slice(0, MAX_HEAD_CHARS)}\n…\n${capped.slice(-MAX_TAIL_CHARS)}`;
+  if (input.length <= MAX_HEAD_CHARS + MAX_TAIL_CHARS) return input;
+  return `${input.slice(0, MAX_HEAD_CHARS)}\n…\n${input.slice(-MAX_TAIL_CHARS)}`;
 }
 
 /** The CLI validates against this, so the prompt carries only editorial rules. */
@@ -32,14 +26,13 @@ const OUTPUT_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const PROMPT = `You are naming a Claude Code session so its owner can recognize it weeks later.
+const PROMPT = `You are naming a coding agent's session so its owner can recognize it weeks later.
 
-The input is a sequence of JSONL lines from the session transcript: "user" lines are the operator's
-messages, "assistant" lines are Claude's replies, and the excerpt covers the first and last exchanges.
+${EXCERPT_FORMAT}
 
 Identify the durable subject: what system or problem the session is really about, and what the operator
 ultimately wants changed. Read the user messages first — the original subject stays the subject until the
-user clearly changes it. Use assistant messages only to resolve vague references and unnamed code.
+user clearly changes it. Use the agent's replies only to resolve vague references and unnamed code.
 
 Editorial rules:
 - Title the subject and outcome, not the current step. A session moving through research, planning,
@@ -78,15 +71,12 @@ function parseResult(out: Partial<GeneratedTaskTitle> | null): GeneratedTaskTitl
  * Derive a title, searchable description, and branch name from a task's
  * transcript. Returns null when there is no transcript or the CLI fails.
  */
-export async function generateTaskTitle(
-  worktreePath: string,
-  options?: { sessionId?: string },
-): Promise<GeneratedTaskTitle | null> {
-  const input = readTranscriptExcerpt(worktreePath, options?.sessionId);
+export async function generateTaskTitle(source: ConversationSource): Promise<GeneratedTaskTitle | null> {
+  const input = readTranscriptExcerpt(source);
   if (!input) return null;
   const out = await runOneShot<Partial<GeneratedTaskTitle>>({
     prompt: PROMPT,
-    input: `Session transcript:\n${capExcerpt(input)}`,
+    input: `Conversation:\n${capExcerpt(input)}`,
     claudeModel: MODEL,
     effort: 'low',
     schema: OUTPUT_SCHEMA,

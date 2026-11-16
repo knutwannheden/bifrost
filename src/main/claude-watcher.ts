@@ -343,7 +343,7 @@ export function startClaudeWatching(
         const { onSummary } = callbacks ?? {};
         if (onSummary && (w.lastSummaryAt === 0 || w.lineCount - w.lastSummaryAt >= 10)) {
           w.lastSummaryAt = w.lineCount;
-          summarizeTask(worktreePath, { sessionId: w.sessionId })
+          summarizeTask({ worktreePath, sessionId: w.sessionId })
             .then((summary) => {
               if (summary) onSummary(taskId, summary);
             })

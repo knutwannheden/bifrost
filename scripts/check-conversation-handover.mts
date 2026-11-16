@@ -20,9 +20,8 @@ delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.COPILOT_HOME;
 delete process.env.CODEX_HOME;
 
-const { handOverConversation, lastReply, remoteHandOver, switchAgent } = await import(
-  '../src/main/conversation-handover.ts'
-);
+const { conversationExcerpt, handOverConversation, lastReply, remoteHandOver, switchAgent, transcriptFile } =
+  await import('../src/main/conversation-handover.ts');
 
 const lines = (...records: unknown[]) => `${records.map((r) => JSON.stringify(r)).join('\n')}\n`;
 const write = (file: string, content: string) => {
@@ -149,6 +148,39 @@ check(
     'a single turn too long to keep whole keeps its end',
     one.length < 100 * 1000 && one.endsWith('end\n'),
     `${one.length}`,
+  );
+}
+
+{
+  const many = path.join(home, '.copilot', 'session-state', 'p4', 'events.jsonl');
+  write(
+    many,
+    lines(
+      ...Array.from({ length: 30 }, (_, i) => ({
+        type: i % 2 ? 'assistant.message' : 'user.message',
+        data: { content: `turn ${i}${i === 29 ? ` ${'y'.repeat(5000)}` : ''}` },
+      })),
+    ),
+  );
+  const excerpt = conversationExcerpt('copilot', many) ?? '';
+  const kept = [...excerpt.matchAll(/^turn (\d+)/gm)].map((m) => Number(m[1]));
+  check(
+    "a title or summary reads the first four and last six turns of the agent's own transcript",
+    JSON.stringify(kept) === JSON.stringify([0, 1, 2, 3, 24, 25, 26, 27, 28, 29]) &&
+      excerpt.startsWith('## User\n\nturn 0') &&
+      excerpt.includes('## Copilot\n\nturn 29'),
+    JSON.stringify(kept),
+  );
+  check('a turn too long for the excerpt is cut', excerpt.length < 5000, `${excerpt.length}`);
+  check(
+    'a conversation shorter than the excerpt is kept whole, each turn once',
+    conversationExcerpt('codex', transcriptFile('codex', 'x1') ?? '') ===
+      '## User\n\nRename the flag.\n\n## Codex\n\nRenamed.\n',
+    JSON.stringify(conversationExcerpt('codex', transcriptFile('codex', 'x1') ?? '')),
+  );
+  check(
+    'a transcript that is gone gives no excerpt',
+    conversationExcerpt('codex', path.join(home, 'missing.jsonl')) === undefined,
   );
 }
 

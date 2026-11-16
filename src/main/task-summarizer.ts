@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { Task } from '../shared/types.ts';
 import { transcriptDir } from './claude-paths';
+import { conversationExcerpt, transcriptFile } from './conversation-handover.ts';
 import { oneShotAgent, runOneShot } from './oneshot';
 
 /**
@@ -49,37 +51,6 @@ function resolveJsonlPath(worktreePath: string, sessionId?: string): string | nu
 }
 
 /**
- * Read a JSONL file, keep only user/assistant messages, and return
- * first 4 + last 6 (deduped if <= 10 total).
- */
-function readHeadTail(filePath: string): string {
-  let content: string;
-  try {
-    content = fs.readFileSync(filePath, 'utf-8');
-  } catch {
-    return '';
-  }
-
-  const lines = content.split('\n').filter((l) => {
-    if (!l.trim()) return false;
-    try {
-      const type = JSON.parse(l).type;
-      return type === 'user' || type === 'assistant';
-    } catch {
-      return false;
-    }
-  });
-
-  if (lines.length <= 10) {
-    return lines.join('\n');
-  }
-
-  const head = lines.slice(0, 4);
-  const tail = lines.slice(-6);
-  return [...head, ...tail].join('\n');
-}
-
-/**
  * Count the number of lines in the JSONL file for a worktree.
  */
 export function countJsonlLines(worktreePath: string, sessionId?: string): number {
@@ -94,12 +65,23 @@ export function countJsonlLines(worktreePath: string, sessionId?: string): numbe
   }
 }
 
-/** First and last exchanges of a task's Claude transcript, or null when there is none. */
-export function readTranscriptExcerpt(worktreePath: string, sessionId?: string): string | null {
-  const jsonlPath = resolveJsonlPath(worktreePath, sessionId);
-  if (!jsonlPath) return null;
-  return readHeadTail(jsonlPath) || null;
+/** The fields of a task that locate its conversation. */
+export type ConversationSource = Pick<Task, 'agent' | 'sessionId' | 'worktreePath'>;
+
+/** First and last turns of a task's conversation in its own agent's transcript, or null when there is none. */
+export function readTranscriptExcerpt(source: ConversationSource): string | null {
+  const agent = source.agent ?? 'claude';
+  const file =
+    agent === 'claude'
+      ? resolveJsonlPath(source.worktreePath, source.sessionId)
+      : source.sessionId && transcriptFile(agent, source.sessionId);
+  return (file && conversationExcerpt(agent, file)) || null;
 }
+
+export const EXCERPT_FORMAT = `The input is an excerpt of the conversation between the operator and a coding agent. Each
+"## User" section is one of the operator's messages, and each other section, headed with the agent's
+name, is one of its replies, with tool calls and their output left out. The excerpt holds the first and
+last turns, and a bracketed line says how many turns between them are left out.`;
 
 /** Summaries run on every turn of every task, so they go to the cheapest model. */
 const SUMMARY_MODEL = 'claude-haiku-4-5-20251001';
@@ -114,10 +96,9 @@ const SUMMARY_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const SUMMARY_PROMPT = `You are summarizing a Claude Code session for someone scanning a list of them.
+const SUMMARY_PROMPT = `You are summarizing a coding agent's session for someone scanning a list of them.
 
-The input is a sequence of JSONL lines from the session transcript: "user" lines are the operator's
-messages, "assistant" lines are Claude's replies, and the excerpt covers the first and last exchanges.
+${EXCERPT_FORMAT}
 
 Say what the session is doing now, in one sentence a reader can tell apart from a dozen neighbours.
 Name the concrete system, file, or symbol at issue. Do not claim the work is finished, do not restate
@@ -129,18 +110,17 @@ the task's title, and write no preamble, quotes, or trailing punctuation.`;
  * queued per task: a turn ending in every task at once would otherwise put a
  * process per task on the machine.
  */
-export function summarizeTask(worktreePath: string, options?: { sessionId?: string }): Promise<string | null> {
-  const taskId = options?.sessionId ?? worktreePath;
+export function summarizeTask(source: ConversationSource): Promise<string | null> {
+  const taskId = source.sessionId ?? source.worktreePath;
   return new Promise<string | null>((resolve) => {
-    summarizeQueue.set(taskId, { taskId, worktreePath, sessionId: options?.sessionId, resolve });
+    summarizeQueue.set(taskId, { taskId, source, resolve });
     processQueue();
   });
 }
 
 interface SummarizeRequest {
   taskId: string;
-  worktreePath: string;
-  sessionId?: string;
+  source: ConversationSource;
   resolve: (result: string | null) => void;
 }
 
@@ -155,7 +135,7 @@ async function processQueue(): Promise<void> {
 
   summarizeRunning = true;
   try {
-    next.resolve(await runSummarize(next.worktreePath, next.sessionId));
+    next.resolve(await runSummarize(next.source));
   } catch {
     next.resolve(null);
   } finally {
@@ -164,13 +144,13 @@ async function processQueue(): Promise<void> {
   }
 }
 
-async function runSummarize(worktreePath: string, sessionId?: string): Promise<string | null> {
+async function runSummarize(source: ConversationSource): Promise<string | null> {
   if (oneShotAgent() === 'off') return null;
-  const input = readTranscriptExcerpt(worktreePath, sessionId);
+  const input = readTranscriptExcerpt(source);
   if (!input) return null;
   const out = await runOneShot<{ summary?: string }>({
     prompt: SUMMARY_PROMPT,
-    input: `Session transcript:\n${input}`,
+    input: `Conversation:\n${input}`,
     claudeModel: SUMMARY_MODEL,
     effort: 'low',
     schema: SUMMARY_SCHEMA,

@@ -95,6 +95,37 @@ function turns(agent: AgentKind, file: string): Turn[] {
   return out;
 }
 
+const section = (agent: AgentKind, turn: Turn) => `## ${turn.user ? 'User' : NAMES[agent]}\n\n${turn.text}\n`;
+
+/** The opening turns hold what the task is about, and the closing ones where it has got to. */
+const EXCERPT_HEAD = 4;
+const EXCERPT_TAIL = 6;
+/** A turn can carry a whole pasted log, and input size is what a title or summary costs. */
+const EXCERPT_TURN_CHARS = 2_000;
+
+/**
+ * The first and last turns of the conversation in an agent's transcript, as
+ * text for Bifrost's own calls to read, or undefined when it holds none.
+ */
+export function conversationExcerpt(agent: AgentKind, file: string): string | undefined {
+  let all: Turn[];
+  try {
+    all = turns(agent, file);
+  } catch {
+    return undefined;
+  }
+  if (all.length === 0) return undefined;
+  const cap = (t: Turn): Turn =>
+    t.text.length > EXCERPT_TURN_CHARS ? { ...t, text: `${t.text.slice(0, EXCERPT_TURN_CHARS)}…` } : t;
+  const omitted = all.length - EXCERPT_HEAD - EXCERPT_TAIL;
+  if (omitted <= 0) return all.map((t) => section(agent, cap(t))).join('\n');
+  return [
+    ...all.slice(0, EXCERPT_HEAD).map((t) => section(agent, cap(t))),
+    `[${omitted} turns left out]\n`,
+    ...all.slice(-EXCERPT_TAIL).map((t) => section(agent, cap(t))),
+  ].join('\n');
+}
+
 /** The agent's last reply in the conversation it kept under sessionId, when this machine holds that conversation. */
 export function lastReply(agent: AgentKind, sessionId: string): string | undefined {
   const file = transcriptFile(agent, sessionId);
@@ -109,7 +140,7 @@ export function lastReply(agent: AgentKind, sessionId: string): string | undefin
 export function handOverConversation(taskId: string, agent: AgentKind, sessionId: string): string | undefined {
   const source = transcriptFile(agent, sessionId);
   if (!source) return undefined;
-  const sections = turns(agent, source).map((t) => `## ${t.user ? 'User' : NAMES[agent]}\n\n${t.text}\n`);
+  const sections = turns(agent, source).map((t) => section(agent, t));
   let size = 0;
   let from = sections.length;
   while (from > 0 && size + sections[from - 1].length <= KEEP_CHARS) size += sections[--from].length;

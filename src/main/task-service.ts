@@ -52,6 +52,7 @@ import {
   runningLocalSessions,
 } from './session-manager.ts';
 import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store.ts';
+import { summarizeTask } from './task-summarizer.ts';
 import { packTask, unpackScript } from './task-transfer.ts';
 import { generateTaskTitle } from './title-generator.ts';
 import { writeLocalSession } from './tmux-session.ts';
@@ -1039,16 +1040,7 @@ export function restoreTasks(): void {
 
   setWorktreePathResolver((taskId) => getTask(taskId).worktreePath);
 
-  _claudeCallbacks = {
-    onSummary: (taskId: string, summary: string) => {
-      try {
-        updateTask(taskId, { summary });
-        emit(IPC_STREAM.TASK_SUMMARY, taskId, summary);
-      } catch {
-        /* task may have been deleted */
-      }
-    },
-  };
+  _claudeCallbacks = { onSummary: saveSummary };
 
   const plan = planRestore(
     tasksToRestore,
@@ -1129,6 +1121,30 @@ async function handOverOrKeep(machine: string, task: Task): Promise<void> {
   );
 }
 
+function saveSummary(taskId: string, summary: string): void {
+  try {
+    updateTask(taskId, { summary });
+    emit(IPC_STREAM.TASK_SUMMARY, taskId, summary);
+  } catch {
+    /* task may have been deleted */
+  }
+}
+
+/**
+ * Summarizes a Copilot or Codex task as its turn ends. Claude's are summarized
+ * as its transcript grows, which the Claude watcher sees.
+ */
+export function summarizeAfterTurn(task: Task): void {
+  if (!task.agent || task.agent === 'claude') return;
+  summarizeTask(task)
+    .then((summary) => {
+      if (summary) saveSummary(task.id, summary);
+    })
+    .catch(() => {
+      /* a task without a summary is the same task */
+    });
+}
+
 export function reorderTasks(taskIds: string[]): void {
   const idSet = new Set(taskIds);
   const reordered = taskIds.map((id) => tasks.find((t) => t.id === id)!).filter(Boolean);
@@ -1141,7 +1157,7 @@ export async function regenerateTaskTitleCore(
   taskId: string,
 ): Promise<{ task: Task; renamedBranch: string | null } | null> {
   const task = getTask(taskId);
-  const generated = await generateTaskTitle(task.worktreePath, { sessionId: task.sessionId });
+  const generated = await generateTaskTitle(task);
   if (!generated) return null;
 
   const renamedBranch = await renameWorktreeBranch(task, generated.branch);

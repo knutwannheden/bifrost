@@ -56,6 +56,7 @@ import {
   resolveTaskTarget,
   restoreTaskSession,
   stopTaskSession,
+  summarizeAfterTurn,
   type TaskTarget,
   transferTaskCore,
   updateTask,
@@ -224,6 +225,7 @@ function finishTurn(task: Task): void {
   markIdle(task.id);
   // A turn that just ended is the likeliest moment for a PR to exist.
   markPrIndexStale(task.repoId);
+  summarizeAfterTurn(task);
   emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
   ringBell(task.id, task.name);
 }
