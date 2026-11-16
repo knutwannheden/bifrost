@@ -91,6 +91,7 @@ function sendPreferences(port: number, machine: Machine): Promise<void> {
   const config = loadConfig();
   return post(port, '/preferences', {
     agent: machine.agent ?? config.agent ?? 'claude',
+    oneshotAgent: config.oneshotAgent ?? null,
     permissionMode: config.permissionMode,
     agentTeams: config.agentTeams,
     managePermissions: config.managePermissions,

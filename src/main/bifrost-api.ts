@@ -18,7 +18,6 @@ import {
   turnEnded,
 } from './activity-state';
 import { getActivityLog, stopWatching } from './activity-watcher';
-import { relayMessage } from './claude-oneshot';
 import { applyClaudeConfigDir, claudeProjectDir } from './claude-paths';
 import { loadConfig, saveConfig } from './config';
 import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
@@ -26,6 +25,7 @@ import { getDiff } from './diff-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
+import { relayMessage } from './oneshot';
 import { connectPeer, disconnectPeer, forwardTaskRoute, IDE, peerTasks, postToPeer, registerPeer } from './peers';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
@@ -338,6 +338,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         'remoteControlAtStartup',
         'claudeConfigDir',
         'agent',
+        'oneshotAgent',
       ];
       for (const key of keys) {
         if (key in body) config[key] = body[key];

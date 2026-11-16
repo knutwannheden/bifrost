@@ -214,6 +214,30 @@ function buildSettings(): SettingDef[] {
       ),
     },
     {
+      key: 'oneshotAgent',
+      category: 'Agent',
+      label: 'Titles, summaries and walkthroughs',
+      tooltip:
+        'The agent Bifrost runs headless for task titles, summaries and walkthroughs, so it needs to be installed only where it is chosen. Off keeps task names as they were given, and leaves out summaries and walkthroughs. Messages relayed to a Claude session still go through Claude.',
+      render: (config, update) => (
+        <FormSelect
+          value={config.oneshotAgent ?? ''}
+          onChange={(e) => update({ oneshotAgent: (e.target.value || undefined) as BifrostConfig['oneshotAgent'] })}
+          className="px-2 py-1"
+        >
+          <option value="">
+            Same as sessions ({AGENT_OPTIONS.find((o) => o.value === (config.agent ?? 'claude'))?.label})
+          </option>
+          {AGENT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+          <option value="off">Off</option>
+        </FormSelect>
+      ),
+    },
+    {
       key: 'claudeAccount',
       category: 'Agent',
       label: 'Claude Account',

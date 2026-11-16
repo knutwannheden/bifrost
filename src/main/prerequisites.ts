@@ -10,8 +10,8 @@ const AGENT_CLIS: Record<AgentKind, { purpose: string; url: string }> = {
   codex: { purpose: 'OpenAI Codex CLI', url: 'https://github.com/openai/codex' },
 };
 
-/** The programs Bifrost runs here, and which of them sessions of this agent need. */
-export async function checkPrograms(agent: AgentKind): Promise<Prerequisite[]> {
+/** The programs Bifrost runs here, and which of them sessions of this agent and its own calls need. */
+export async function checkPrograms(agent: AgentKind, oneshot: AgentKind | 'off'): Promise<Prerequisite[]> {
   const listed: Array<Omit<Prerequisite, 'found'>> = [
     { name: 'git', required: true, purpose: 'version control', url: 'https://git-scm.com/downloads' },
     {
@@ -23,14 +23,14 @@ export async function checkPrograms(agent: AgentKind): Promise<Prerequisite[]> {
     { name: 'python3', required: true, purpose: "used by Bifrost's hooks", url: 'https://www.python.org/downloads/' },
     { name: 'curl', required: true, purpose: "used by Bifrost's hooks", url: 'https://curl.se/download.html' },
     { name: agent, required: true, ...AGENT_CLIS[agent] },
-    ...(agent === 'claude'
+    ...(oneshot === 'off' || oneshot === agent
       ? []
       : [
           {
-            name: 'claude',
+            name: oneshot,
             required: false,
-            purpose: "Claude Code CLI, for Bifrost's titles, summaries and walkthroughs",
-            url: AGENT_CLIS.claude.url,
+            purpose: `${AGENT_CLIS[oneshot].purpose}, for Bifrost's titles, summaries and walkthroughs`,
+            url: AGENT_CLIS[oneshot].url,
           },
         ]),
     { name: 'gh', required: false, purpose: 'GitHub CLI, for PR-based task creation', url: 'https://cli.github.com' },

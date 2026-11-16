@@ -37,16 +37,23 @@ fs.writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\nexit 0\n', { mode: 0o755 }
 process.env.PATH = bin;
 
 try {
-  const programs = await checkPrograms('codex');
+  const programs = await checkPrograms('codex', 'claude');
   const of = (name: string) => programs.find((p) => p.name === name);
   const required = programs.filter((p) => p.required).map((p) => p.name);
   check(
-    'with Codex as the agent, git, tmux, python3, curl and codex are required, a missing tmux shows, and claude is optional',
+    "with Codex as the agent and Claude for Bifrost's own calls, git, tmux, python3, curl and codex are required, a missing tmux shows, and claude is optional",
     show(required.sort()) === show(['codex', 'curl', 'git', 'python3', 'tmux']) &&
       of('tmux')?.found === false &&
       of('codex')?.found === true &&
       of('claude')?.required === false,
     show(programs),
+  );
+
+  const alone = await checkPrograms('codex', 'codex');
+  check(
+    "with Codex for both, no other agent's CLI is listed",
+    !alone.some((p) => p.name === 'claude' || p.name === 'copilot'),
+    show(alone),
   );
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

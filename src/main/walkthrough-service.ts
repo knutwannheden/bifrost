@@ -5,8 +5,8 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { parseDiff } from '../shared/diff-parser';
 import { GENERATED_SCHEMA, type GeneratedWalkthrough, numberDiff, type Walkthrough } from '../shared/walkthrough';
-import { runOneShot } from './claude-oneshot';
 import { getRangeDiff, resolveDiffBase } from './diff-service';
+import { oneShotAgent, runOneShot } from './oneshot';
 import { anchorGenerated, currentHead } from './walkthrough-anchor';
 
 const execFile = promisify(execFileCb);
@@ -60,6 +60,8 @@ export interface GenerateRequest {
 }
 
 export async function generateWalkthrough({ worktreePath, baseRef, focus }: GenerateRequest): Promise<Walkthrough> {
+  const agent = oneShotAgent();
+  if (agent === 'off') throw new Error('Walkthroughs are off in Settings → Agent');
   const base = await resolveDiffBase(worktreePath, baseRef);
   if (!base) throw new Error(`No merge base with ${baseRef}`);
   const head = await currentHead(worktreePath);
@@ -87,7 +89,7 @@ export async function generateWalkthrough({ worktreePath, baseRef, focus }: Gene
   const generated = await runOneShot<GeneratedWalkthrough>({
     prompt: PROMPT,
     input,
-    model: MODEL,
+    claudeModel: MODEL,
     schema: GENERATED_SCHEMA,
     timeoutMs: TIMEOUT_MS,
     label: 'walkthrough',
@@ -96,7 +98,7 @@ export async function generateWalkthrough({ worktreePath, baseRef, focus }: Gene
 
   return anchorGenerated(worktreePath, base, head, generated, {
     focus,
-    model: MODEL,
+    model: agent === 'claude' ? MODEL : agent,
     headRef: headRef.trim() === 'HEAD' ? null : headRef.trim(),
   });
 }

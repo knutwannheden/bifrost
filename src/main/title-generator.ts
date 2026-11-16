@@ -1,4 +1,4 @@
-import { runOneShot } from './claude-oneshot';
+import { runOneShot } from './oneshot';
 import { readTranscriptExcerpt } from './task-summarizer';
 
 const TITLE_TIMEOUT_MS = 60_000;
@@ -87,7 +87,8 @@ export async function generateTaskTitle(
   const out = await runOneShot<Partial<GeneratedTaskTitle>>({
     prompt: PROMPT,
     input: `Session transcript:\n${capExcerpt(input)}`,
-    model: MODEL,
+    claudeModel: MODEL,
+    effort: 'low',
     schema: OUTPUT_SCHEMA,
     timeoutMs: TITLE_TIMEOUT_MS,
     label: 'title-generator',

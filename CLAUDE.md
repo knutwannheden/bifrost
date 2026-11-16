@@ -91,7 +91,7 @@ Quitting Bifrost only detaches, so its sessions run on, and opening a tab or wak
 
 Sessions run Claude Code unless Settings → Agent picks Copilot or Codex. A machine under Machines can run its own agent, which the IDE sends to that machine's instance with the other preferences. A session starts with its machine's agent, so a running one moves to a new choice on Restart sessions. A task made with `create_task` keeps its agent through such a change: the one the call names, or else that of the session that made it. The call can also name the model and effort, which are otherwise the agent's own defaults. `agents.ts` holds each agent's command line. Each machine needs the agent installed and logged in there.
 
-The welcome screen lists the programs Bifrost needs here: git, tmux, python3 and curl, which the hooks use, and the agent sessions run. With Copilot or Codex as that agent, claude is optional, since only Bifrost's own `claude -p` calls use it. Connecting to a machine checks for the same programs there, its own agent among them, and asks for a Claude login only where that agent is Claude. A tab whose session cannot start because tmux is not on PATH says so.
+The welcome screen lists the programs Bifrost needs here: git, tmux, python3 and curl, which the hooks use, and the agent sessions run. It lists the agent that runs Bifrost's own calls as optional when that is another one. Connecting to a machine checks for the same programs there, its own agent among them, and asks for a Claude login only where that agent is Claude. A tab whose session cannot start because tmux is not on PATH says so.
 
 Copilot and Codex get Bifrost's hooks and MCP server on their command line, so Bifrost writes nothing into `~/.copilot` or `~/.codex`. Copilot loads the plugin with `--plugin-dir`, and its skills include the user's. Codex takes the hooks and server as `-c` overrides and skips hook trust, which also makes it run as its own process, so hooks see the session's environment. Neither reads the user's global `CLAUDE.md`. Codex reads a repo's `CLAUDE.md` in place of an `AGENTS.md`. Bifrost chooses the session id up front for Claude and Copilot. Codex picks its own, and its first SessionStart hook reports it.
 
@@ -101,10 +101,11 @@ Some things stay Claude-only:
 - the features that read Claude's transcripts: the token chart, the transcript half of the change feed, session metrics, and "Move to" carrying the conversation
 - managed permissions
 - Remote Control
-- Bifrost's own `claude -p` calls
 - following a session into another worktree, which only Claude's `EnterWorktree` and `ExitWorktree` report. Copilot and Codex file their sessions by id, so a restart resumes them in any directory.
 
 Copilot and Codex have no SendMessage, so the MCP server tells their sessions to use `send_prompt`.
+
+Bifrost's own headless calls, for task titles, summaries and walkthroughs, run the agent Settings → Agent picks for them, which is the sessions' agent unless one is chosen, or none when it is Off (`oneshot.ts`). Codex enforces the reply's schema with `--output-schema`. Copilot has no such option, so the schema goes into its prompt and Bifrost checks the reply. Copilot and Codex run their own default model, at low effort for titles and summaries. The relay that delivers a message to a Claude session always runs Claude, since it sends with SendMessage.
 
 ### Tasks on other machines
 

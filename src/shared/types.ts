@@ -202,6 +202,8 @@ export interface BifrostConfig {
   claudeConfigDir?: string | null;
   /** The agent sessions here run. Absent means Claude. */
   agent?: AgentKind;
+  /** The agent that runs Bifrost's titles, summaries and walkthroughs. Absent follows `agent`, as does null, which the IDE sends to clear an instance's. */
+  oneshotAgent?: AgentKind | 'off' | null;
 }
 
 export interface CreateTaskParams {

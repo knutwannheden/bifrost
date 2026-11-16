@@ -31,6 +31,7 @@ import { scanRecentRepos } from './history-scanner';
 import { checkIntegration, installIntegration } from './integration-installer';
 import { lastChangedFile } from './last-changed-file.ts';
 import { createNote, deleteNote, listNotes, updateNote } from './note-store';
+import { oneShotAgent } from './oneshot';
 import { connectPeer, peerOf, peerTasks, postToPeer, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
@@ -462,7 +463,7 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
   [IPC.INSTALL_INTEGRATION]: () => installIntegration(),
 
   [IPC.CHECK_PREREQUISITES]: async () => ({
-    programs: await checkPrograms(loadConfig().agent ?? 'claude'),
+    programs: await checkPrograms(loadConfig().agent ?? 'claude', oneShotAgent()),
     plugin: checkIntegration(),
   }),
 

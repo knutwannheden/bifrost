@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { runOneShot } from './claude-oneshot';
 import { transcriptDir } from './claude-paths';
+import { runOneShot } from './oneshot';
 
 /**
  * Get the JSONL file path for a specific session ID.
@@ -170,7 +170,8 @@ async function runSummarize(worktreePath: string, sessionId?: string): Promise<s
   const out = await runOneShot<{ summary?: string }>({
     prompt: SUMMARY_PROMPT,
     input: `Session transcript:\n${input}`,
-    model: SUMMARY_MODEL,
+    claudeModel: SUMMARY_MODEL,
+    effort: 'low',
     schema: SUMMARY_SCHEMA,
     timeoutMs: SUMMARY_TIMEOUT_MS,
     label: 'task-summarizer',
