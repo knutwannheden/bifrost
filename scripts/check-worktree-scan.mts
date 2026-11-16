@@ -7,7 +7,6 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { initChangeFeed, loadChangeFeed, pollChangeFeed, setActiveFeedTask } from '../src/main/change-feed-service.ts';
 import { subscribe } from '../src/main/event-sink.ts';
 import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 import type { FeedChange, FeedItem } from '../src/shared/types.ts';
@@ -20,6 +19,12 @@ function check(name: string, ok: boolean, detail = '') {
 }
 
 const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-scan-'));
+// The feed journals each task's cards under the home directory it finds when loaded.
+const home = fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-scan-home-'));
+process.env.HOME = home;
+const { initChangeFeed, loadChangeFeed, pollChangeFeed, setActiveFeedTask } = await import(
+  '../src/main/change-feed-service.ts'
+);
 const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
 git('init', '-q', '.');
 git('config', 'user.email', 'check@example.com');
@@ -111,4 +116,5 @@ check(
 );
 
 fs.rmSync(repo, { recursive: true, force: true });
+fs.rmSync(home, { recursive: true, force: true });
 process.exit(failed === 0 ? 0 : 1);
