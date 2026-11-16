@@ -52,6 +52,7 @@
     "check:peers": "node scripts/check-peers.mts",
     "check:agent-hooks": "node scripts/check-agent-hooks.mts",
     "check:task-launch": "node scripts/check-task-launch.mts",
+    "check:worktree-follow": "node scripts/check-worktree-follow.mts",
     "check:claude-account": "node scripts/check-claude-account.mts",
     "check:console-tabs": "node scripts/check-console-tabs.mts",
     "check:ide-launcher": "node scripts/check-ide-launcher.mts",

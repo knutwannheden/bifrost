@@ -202,23 +202,17 @@ export async function createWorktreeFromPr(
   return { worktreePath, branch: localBranch };
 }
 
-export async function restoreWorktree(repoPath: string, taskName: string, branch?: string): Promise<string> {
-  const worktreePath = resolveWorktreePath(repoPath, taskName);
-
-  await fs.promises.mkdir(path.join(repoPath, '.worktrees'), { recursive: true });
-
-  const ref = branch ?? slugify(taskName);
+export async function restoreWorktree(repoPath: string, worktreePath: string, ref: string): Promise<void> {
+  await fs.promises.mkdir(path.dirname(worktreePath), { recursive: true });
   try {
     await execFile('git', ['worktree', 'add', worktreePath, ref], { cwd: repoPath, timeout: 30000 });
   } catch (err) {
     throw new Error(
-      `Cannot restore worktree for "${taskName}": could not create a worktree for ref "${ref}". ` +
+      `Cannot restore worktree ${worktreePath}: could not create a worktree for ref "${ref}". ` +
         `The branch may not exist, or may already be checked out in another worktree.`,
       { cause: err },
     );
   }
-
-  return worktreePath;
 }
 
 /**

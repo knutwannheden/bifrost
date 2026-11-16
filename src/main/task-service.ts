@@ -148,6 +148,19 @@ export function refreshTaskBranches(): void {
   for (const task of moved) emit(IPC_STREAM.TASK_UPDATED, task);
 }
 
+/** Point a task at the worktree its session moved into. */
+export function followWorktree(taskId: string, worktreePath: string, reportedBranch?: string): void {
+  const task = getTask(taskId);
+  if (task.worktreePath === worktreePath) return;
+  // Archiving a multi-repo task deletes the directory it records.
+  if (loadConfig().repos.some((r: Repo) => r.id === task.repoId && r.multiTaskId)) return;
+  const branch = (task.machine ? reportedBranch : headBranch(worktreePath)) ?? task.branch;
+  const updated = updateTask(taskId, { worktreePath, branch });
+  forgetChangeFeed(taskId);
+  if (!task.machine && _claudeCallbacks) startWatching(taskId, worktreePath, _claudeCallbacks, task.sessionId);
+  emit(IPC_STREAM.TASK_UPDATED, updated);
+}
+
 /**
  * Rename the worktree's branch, returning the new name or null when left alone.
  * HEAD is the source of truth for which branch that is, since it's observed
@@ -970,7 +983,7 @@ export async function reopenTaskCore(taskId: string): Promise<Task> {
   }
   if (task.machine) return reopenRemoteTask(task);
 
-  let worktreePath = task.worktreePath;
+  const worktreePath = task.worktreePath;
   let branch = task.branch;
 
   // Restore worktree from branch if it was removed during archive
@@ -981,7 +994,8 @@ export async function reopenTaskCore(taskId: string): Promise<Task> {
     const config = loadConfig();
     const repo = config.repos.find((r: Repo) => r.id === task.repoId);
     if (!repo) throw new Error(`Repo not found: ${task.repoId}`);
-    worktreePath = await restoreWorktree(repo.path, task.name, task.branch);
+    // The transcript is filed under the worktree's path, so the conversation resumes only there.
+    await restoreWorktree(repo.path, worktreePath, task.branch ?? slugify(task.name));
   }
 
   // Re-detect current branch for in-place tasks (user may have switched)

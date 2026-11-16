@@ -81,6 +81,8 @@ To add a new IPC channel: add the channel string to `IPC` or `IPC_STREAM`, add t
 
 Every agent session, the console included, runs in a tmux session named after it on Bifrost's own tmux server (`tmux -L bifrost`). It starts from `~/.bifrost/sessions/<id>/run.sh`, which resumes the transcript under the task's session id when there is one. Bifrost reads each session as a tmux control-mode client, so a tab gets the program's own bytes, links and colours included.
 
+A session that enters another worktree with Claude's `EnterWorktree`, or leaves one with `ExitWorktree`, takes its task along. Claude files the transcript under the session's new directory, so the task records that worktree and its branch, and reopening rebuilds the worktree at that path. A subagent's switch leaves the task where it is, and the worktree left behind stays on disk.
+
 Quitting Bifrost only detaches, so its sessions run on, and opening a tab or waking a task joins them again. A client that joins replays the pane's scrollback, its screen and the terminal modes tmux reports. Dev terminals are plain PTYs and end with Bifrost.
 
 "Restart sessions" in the command palette restarts the session of each running task that has one, here and on other machines, one after another. Then it restarts each console the console overlay has a tab for, which carries its conversation on. It leaves a session that is mid-turn alone. It first warns about text typed at a prompt, which a restart loses, and reads that from the pane, where Claude and Codex draw a suggestion or placeholder faint.

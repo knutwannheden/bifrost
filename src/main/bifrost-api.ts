@@ -19,7 +19,7 @@ import {
 } from './activity-state';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { relayMessage } from './claude-oneshot';
-import { applyClaudeConfigDir } from './claude-paths';
+import { applyClaudeConfigDir, claudeProjectDir } from './claude-paths';
 import { loadConfig, saveConfig } from './config';
 import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
@@ -44,6 +44,7 @@ import {
 import {
   archiveTaskCore,
   createTaskCore,
+  followWorktree,
   getRemoteDiff,
   getTask,
   getTasks,
@@ -783,6 +784,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (hookEventName === 'PostToolUse' || hookEventName === 'SubagentStart') {
         if (hookEventName === 'SubagentStart') {
           subagentStarted(task.id);
+        }
+        // Claude moves the transcript when the session itself enters or leaves
+        // a worktree, and a subagent's switch leaves it with the parent's.
+        const tool = body.tool_name as string | undefined;
+        const transcript = (body.transcript_path as string | undefined) ?? '';
+        if (
+          (tool === 'EnterWorktree' || tool === 'ExitWorktree') &&
+          path.basename(path.dirname(transcript)) === claudeProjectDir(cwd)
+        ) {
+          const reported = tool === 'EnterWorktree' ? (body.tool_response as { worktreeBranch?: string }) : undefined;
+          followWorktree(task.id, cwd, reported?.worktreeBranch);
         }
         markActive(task.id);
         emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, true);
