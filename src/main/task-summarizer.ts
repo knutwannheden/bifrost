@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { transcriptDir } from './claude-paths';
-import { runOneShot } from './oneshot';
+import { oneShotAgent, runOneShot } from './oneshot';
 
 /**
  * Get the JSONL file path for a specific session ID.
@@ -165,6 +165,7 @@ async function processQueue(): Promise<void> {
 }
 
 async function runSummarize(worktreePath: string, sessionId?: string): Promise<string | null> {
+  if (oneShotAgent() === 'off') return null;
   const input = readTranscriptExcerpt(worktreePath, sessionId);
   if (!input) return null;
   const out = await runOneShot<{ summary?: string }>({

@@ -86,14 +86,17 @@ export async function generateWalkthrough({ worktreePath, baseRef, focus }: Gene
     `Commits, oldest first:\n${log.trim()}`,
     `Diff:\n${numbered}`,
   ].join('\n\n');
-  const generated = await runOneShot<GeneratedWalkthrough>({
-    prompt: PROMPT,
-    input,
-    claudeModel: MODEL,
-    schema: GENERATED_SCHEMA,
-    timeoutMs: TIMEOUT_MS,
-    label: 'walkthrough',
-  });
+  const generated = await runOneShot<GeneratedWalkthrough>(
+    {
+      prompt: PROMPT,
+      input,
+      claudeModel: MODEL,
+      schema: GENERATED_SCHEMA,
+      timeoutMs: TIMEOUT_MS,
+      label: 'walkthrough',
+    },
+    agent,
+  );
   if (!generated) throw new Error('The generator gave no answer; see the main process log');
 
   return anchorGenerated(worktreePath, base, head, generated, {

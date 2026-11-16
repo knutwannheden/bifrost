@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -62,8 +63,7 @@ interface CliRun {
  * tools, MCP servers or settings where the CLI allows it is what keeps this a
  * transform rather than a session, and keeps its cost to the text it is given.
  */
-export async function runOneShot<T>(options: OneShotOptions): Promise<T | null> {
-  const agent = oneShotAgent();
+export async function runOneShot<T>(options: OneShotOptions, agent = oneShotAgent()): Promise<T | null> {
   if (agent === 'off') return null;
   if (agent === 'codex') return runCodex<T>(options);
   if (agent === 'copilot') return runCopilot<T>(options);
@@ -82,14 +82,17 @@ async function runClaude<T>(options: OneShotOptions): Promise<T | null> {
   }
 }
 
-/** Codex enforces the schema itself, and writes the final reply to a file of its own. */
+/**
+ * Codex enforces the schema itself, and writes the final reply to a file of its
+ * own. Its user config is left out for the MCP servers it would start.
+ */
 async function runCodex<T>(options: OneShotOptions): Promise<T | null> {
   const dir = fs.mkdtempSync(path.join(oneShotDir(), 'codex-'));
   try {
     const schemaFile = path.join(dir, 'schema.json');
     const replyFile = path.join(dir, 'reply.json');
     fs.writeFileSync(schemaFile, JSON.stringify(options.schema));
-    const args = ['exec', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only'];
+    const args = ['exec', '--ephemeral', '--ignore-user-config', '--skip-git-repo-check', '--sandbox', 'read-only'];
     args.push('--output-schema', schemaFile, '-o', replyFile, ...modelFlags('codex', { effort: options.effort }), '-');
     const run = await runCli('codex', args, `${options.prompt}\n\n${options.input}`, options.timeoutMs, options.label);
     if (!run.ok) return null;
@@ -104,9 +107,12 @@ async function runCodex<T>(options: OneShotOptions): Promise<T | null> {
 /**
  * Copilot has no schema option, so the schema goes into the prompt and the
  * reply is checked here. With -p it ignores stdin, so the whole prompt is piped.
+ * It keeps every run as a session, which would crowd its resume list, so the
+ * run gets an id of its own and its session is removed after.
  */
 async function runCopilot<T>(options: OneShotOptions): Promise<T | null> {
-  const args = ['--silent', '--no-color', '--no-auto-update', '--available-tools', ''];
+  const id = randomUUID();
+  const args = ['--silent', '--no-color', '--no-auto-update', '--session-id', id, '--available-tools', ''];
   args.push('--no-custom-instructions', '--disable-builtin-mcps', ...modelFlags('copilot', { effort: options.effort }));
   const input = [
     options.prompt,
@@ -114,6 +120,8 @@ async function runCopilot<T>(options: OneShotOptions): Promise<T | null> {
     options.input,
   ].join('\n\n');
   const run = await runCli('copilot', args, input, options.timeoutMs, options.label);
+  const home = process.env.COPILOT_HOME || path.join(os.homedir(), '.copilot');
+  fs.rmSync(path.join(home, 'session-state', id), { recursive: true, force: true });
   if (!run.ok) return null;
   const reply = jsonReply<T>(run.stdout, options.schema);
   if (!reply) console.warn(`[${options.label}] copilot gave no JSON matching the schema: ${run.stdout.slice(0, 500)}`);
@@ -121,22 +129,43 @@ async function runCopilot<T>(options: OneShotOptions): Promise<T | null> {
 }
 
 /**
- * The JSON object in a reply that holds the schema's top-level required keys, or
- * null. A model asked for bare JSON may still fence it or add a sentence.
+ * The JSON object in a reply that has every key the schema requires, at any
+ * depth, or null. A model asked for bare JSON may still fence it or add a sentence.
  */
 export function jsonReply<T>(text: string, schema: unknown): T | null {
+  const fenced = /```(?:json)?\s*\n([\s\S]*?)\n\s*```/.exec(text)?.[1];
   const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start < 0 || end < start) return null;
-  let value: unknown;
-  try {
-    value = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return null;
+  const candidates = [fenced, start < 0 ? undefined : text.slice(start, text.lastIndexOf('}') + 1)];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const value: unknown = JSON.parse(candidate);
+      if (hasRequired(value, schema as Schema)) return value as T;
+    } catch {
+      /* the next candidate */
+    }
   }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const required = (schema as { required?: string[] }).required ?? [];
-  return required.every((key) => key in value) ? (value as T) : null;
+  return null;
+}
+
+interface Schema {
+  required?: string[];
+  properties?: Record<string, Schema>;
+  items?: Schema;
+  anyOf?: Schema[];
+}
+
+/** The callers read the required keys without checking them, so a missing one has to stop the reply here. */
+function hasRequired(value: unknown, schema: Schema): boolean {
+  if (schema.anyOf) return schema.anyOf.some((s) => hasRequired(value, s));
+  if (Array.isArray(value)) {
+    const items = schema.items;
+    return items ? value.every((v) => hasRequired(v, items)) : !schema.required;
+  }
+  if (typeof value !== 'object' || value === null) return !schema.required;
+  const record = value as Record<string, unknown>;
+  if (!(schema.required ?? []).every((key) => key in record)) return false;
+  return Object.entries(schema.properties ?? {}).every(([key, s]) => !(key in record) || hasRequired(record[key], s));
 }
 
 /** Keeps a Claude run from loading the user's settings, MCP servers or browser, and from asking. */

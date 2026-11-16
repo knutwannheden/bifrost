@@ -284,7 +284,11 @@ export default function TaskSidebar() {
                       try {
                         const result = await window.bifrost.regenerateTaskTitle(task.id);
                         if (!result) {
-                          dispatch({ type: 'SHOW_TOAST', message: 'No transcript to generate a title from' });
+                          const message =
+                            config?.oneshotAgent === 'off'
+                              ? 'Titles are off in Settings → Agent'
+                              : 'No transcript to generate a title from';
+                          dispatch({ type: 'SHOW_TOAST', message });
                           return;
                         }
                         dispatch({ type: 'UPDATE_TASK', task: result.task });
