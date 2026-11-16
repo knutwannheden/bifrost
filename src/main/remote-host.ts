@@ -6,7 +6,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
-import type { Machine } from '../shared/types.ts';
+import type { AgentKind, Machine } from '../shared/types.ts';
 import { claudeConfigDir, claudeConfigRelative } from './claude-paths.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
@@ -265,7 +265,7 @@ const PLUGIN_VERSION_PY = `import json; print(json.load(open('${REMOTE_PLUGIN_DI
  * MCP server read the API port from .bifrost/api-port, so writing the forwarded
  * port there connects them to this Bifrost. Onboarding is marked done, with this
  * machine's theme, since its first screen would hold a session's prompt back.
- * Prints HOME, MISSING, LOGGED_IN and PLUGIN_VERSION.
+ * Prints HOME, MISSING, AGENTS, LOGGED_IN and PLUGIN_VERSION.
  */
 export function prepareScript(opts: { apiPort: number; theme?: string; instance?: boolean }): string {
   const onboarding = { hasCompletedOnboarding: true, ...(opts.theme ? { theme: opts.theme } : {}) };
@@ -281,8 +281,11 @@ export function prepareScript(opts: { apiPort: number; theme?: string; instance?
     `python3 -c ${shQuote(ONBOARDING_PY)} ${shQuote(JSON.stringify(onboarding))} "$version" || true`,
     `printf 'HOME=%s\\n' "$HOME"`,
     'missing=',
-    'for c in claude git tmux python3 curl; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done',
+    'for c in git tmux python3 curl; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done',
     `printf 'MISSING=%s\\n' "\${missing# }"`,
+    'agents=',
+    'for a in claude copilot codex; do command -v "$a" >/dev/null 2>&1 && agents="$agents $a"; done',
+    `printf 'AGENTS=%s\\n' "\${agents# }"`,
     `printf 'RSYNC=%s\\n' "$(command -v rsync >/dev/null 2>&1 && echo yes)"`,
     LOGIN_CHECK,
     `printf 'PLUGIN_VERSION=%s\\n' "$(python3 -c ${shQuote(PLUGIN_VERSION_PY)} 2>/dev/null || true)"`,
@@ -460,6 +463,8 @@ export function localClaudeValue(key: string): unknown {
 export interface RemoteInfo {
   home: string;
   missing: string[];
+  /** The agents installed there. */
+  agents: AgentKind[];
   loggedIn: boolean;
   /** Where the Bifrost plugin sits there, or null when this machine has none to copy. */
   pluginDir: string | null;
@@ -575,8 +580,10 @@ export class RemoteHost {
   async connectReady(): Promise<RemoteInfo> {
     const info = await this.connect();
     const name = this.machine.name;
-    if (info.missing.length) throw new Error(`${name} is missing ${info.missing.join(', ')}`);
-    if (!info.loggedIn) {
+    const agent = this.machine.agent ?? loadConfig().agent ?? 'claude';
+    const missing = info.agents.includes(agent) ? info.missing : [...info.missing, agent];
+    if (missing.length) throw new Error(`${name} is missing ${missing.join(', ')}`);
+    if (agent === 'claude' && !info.loggedIn) {
       const relative = claudeConfigRelative();
       emit(IPC_STREAM.MACHINE_LOGIN_NEEDED, name, relative ? `~/${relative}` : '~/.claude');
       const claude = relative ? `CLAUDE_CONFIG_DIR=~/${relative} claude` : 'claude';
@@ -727,6 +734,7 @@ export class RemoteHost {
     this.info = {
       home: out.HOME,
       missing: out.MISSING ? out.MISSING.split(' ') : [],
+      agents: out.AGENTS ? (out.AGENTS.split(' ') as AgentKind[]) : [],
       loggedIn: out.LOGGED_IN === 'yes',
       pluginDir,
       apiPort: forwarded,

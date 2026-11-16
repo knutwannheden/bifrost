@@ -540,11 +540,19 @@ export interface SlackConfig {
 
 // Prerequisites check
 
+/** A program Bifrost runs, as the welcome screen lists it. */
+export interface Prerequisite {
+  name: string;
+  found: boolean;
+  required: boolean;
+  /** What it is, shown as a link to where to get it. */
+  purpose: string;
+  url: string;
+}
+
 export interface PrerequisiteStatus {
-  git: boolean;
-  claude: boolean;
+  programs: Prerequisite[];
   plugin: { installed: boolean; updateAvailable: boolean };
-  gh: boolean;
 }
 
 // Session metrics (postmortem analysis)

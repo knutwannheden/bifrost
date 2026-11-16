@@ -148,6 +148,20 @@ try {
   }
 
   {
+    setUp('notmux');
+    const kept = process.env.PATH;
+    process.env.PATH = stubs;
+    attachLocalSession('notmux', { taskId: 'notmux' });
+    process.env.PATH = kept;
+    const ended = await until(() => exitsOf('notmux') > 0);
+    check(
+      'a tab whose session cannot start for want of tmux says so',
+      ended && dataOf('notmux').join('').includes('tmux was not found'),
+      show(dataOf('notmux')),
+    );
+  }
+
+  {
     setUp('rejoin');
     attachLocalSession('rejoin', { taskId: 'rejoin' });
     await attachSession('rejoin', 80, 10);

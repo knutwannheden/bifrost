@@ -411,9 +411,16 @@ const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'ut
   const stop = subscribe((channel, args) => {
     if (channel === IPC_STREAM.MACHINE_LOGIN_NEEDED) heard.push(args);
   });
-  const box = new RemoteHost({ name: 'box', host: 'box' });
+  const box = new RemoteHost({ name: 'box', host: 'box', agent: 'claude' });
   // The connection is made, and Claude there has no login.
-  (box as unknown as { info: object }).info = { home, missing: [], loggedIn: false, pluginDir: null, apiPort: 1 };
+  (box as unknown as { info: object }).info = {
+    home,
+    missing: [],
+    agents: ['claude'],
+    loggedIn: false,
+    pluginDir: null,
+    apiPort: 1,
+  };
   const refused = await box.connectReady().then(
     () => '',
     (err: Error) => err.message,
@@ -426,6 +433,24 @@ const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'ut
   );
 }
 
+{
+  const connected = async (agents: string[]) => {
+    const box = new RemoteHost({ name: 'cbox', host: 'cbox', agent: 'codex' });
+    (box as unknown as { info: object }).info = { home, missing: [], agents, loggedIn: false, pluginDir: null };
+    return box.connectReady().then(
+      () => 'ready',
+      (err: Error) => err.message,
+    );
+  };
+  const withCodex = await connected(['codex']);
+  const without = await connected(['claude']);
+  check(
+    'a machine is checked for the agent it runs, and for a Claude login only when that is Claude',
+    withCodex === 'ready' && without === 'cbox is missing codex',
+    show({ withCodex, without }),
+  );
+}
+
 const home3 = path.join(root, 'home3');
 fs.mkdirSync(home3);
 const claudeJson = path.join(home3, '.claude.json');
@@ -433,11 +458,16 @@ fs.writeFileSync(
   claudeJson,
   JSON.stringify({ numStartups: 3, theme: 'light', projects: { '/elsewhere': { lastCost: 1 } } }),
 );
-const prepared = parseScriptOutput(runRemote(home3, prepareScript({ apiPort: 43669, theme: 'dark-daltonized' })));
+const agentStubs = path.join(root, 'agent-stubs');
+fs.mkdirSync(agentStubs);
+fs.writeFileSync(path.join(agentStubs, 'codex'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+const prepared = parseScriptOutput(
+  runRemote(home3, prepareScript({ apiPort: 43669, theme: 'dark-daltonized' }), agentStubs),
+);
 {
   const config = JSON.parse(fs.readFileSync(claudeJson, 'utf-8'));
   check(
-    'preparing a machine points its hooks at the forwarded port, completes onboarding keeping what is set, and says it has rsync',
+    'preparing a machine points its hooks at the forwarded port, completes onboarding keeping what is set, and says it has rsync and which agents',
     fs.readFileSync(path.join(home3, '.bifrost', 'api-port'), 'utf-8').trim() === '43669' &&
       config.hasCompletedOnboarding === true &&
       typeof config.lastOnboardingVersion === 'string' &&
@@ -445,7 +475,8 @@ const prepared = parseScriptOutput(runRemote(home3, prepareScript({ apiPort: 436
       config.numStartups === 3 &&
       config.projects['/elsewhere'].lastCost === 1 &&
       prepared.HOME === home3 &&
-      prepared.RSYNC === 'yes',
+      prepared.RSYNC === 'yes' &&
+      (prepared.AGENTS ?? '').split(' ').includes('codex'),
     show({ prepared, config }),
   );
 }

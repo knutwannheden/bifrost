@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import type { PrerequisiteStatus, Task } from '../../shared/types';
+import type { Prerequisite, PrerequisiteStatus, Task } from '../../shared/types';
 import type { PaneTarget } from '../context/AppContext';
 import { defaultPaneState, isAnyOverlayOpen, useApp } from '../context/AppContext';
 import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
@@ -352,49 +352,26 @@ function PrerequisiteChecklist({
   installing: string | null;
   onInstallPlugin: () => void;
 }) {
-  const allRequiredOk = prereqs.git && prereqs.claude && prereqs.plugin.installed;
-  const allOptionalOk = prereqs.gh;
+  const required = prereqs.programs.filter((p) => p.required);
+  const missingOptional = prereqs.programs.filter((p) => !p.required && !p.found);
+  const pluginReady = prereqs.plugin.installed && !prereqs.plugin.updateAvailable;
+  const requiredReady = pluginReady && required.every((p) => p.found);
 
-  // Hide checklist entirely when everything is installed and no updates available
-  if (allRequiredOk && !prereqs.plugin.updateAvailable && allOptionalOk) return null;
+  if (requiredReady && missingOptional.length === 0) return null;
 
   return (
     <div className="space-y-3">
-      {/* Required */}
-      {(!prereqs.git || !prereqs.claude || !prereqs.plugin.installed || prereqs.plugin.updateAvailable) && (
+      {!requiredReady && (
         <div>
           <SectionHeader className="mb-1.5">Required</SectionHeader>
           <div className="space-y-1">
+            {required.map((program) => (
+              <ProgramRow key={program.name} program={program} />
+            ))}
             <div className="flex items-center gap-2 text-xs">
-              <CheckIcon ok={prereqs.git} />
-              <span className={prereqs.git ? 'text-secondary' : 'text-primary'}>
-                git {!prereqs.git && <span className="text-muted">— version control</span>}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <CheckIcon ok={prereqs.claude} />
-              <span className={prereqs.claude ? 'text-secondary' : 'text-primary'}>
-                claude{' '}
-                {!prereqs.claude && (
-                  <span className="text-muted">
-                    —{' '}
-                    <ExternalLink href="https://docs.anthropic.com/en/docs/claude-code/overview">
-                      Claude Code CLI
-                    </ExternalLink>
-                  </span>
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <CheckIcon ok={prereqs.plugin.installed && !prereqs.plugin.updateAvailable} />
-              <span
-                className={
-                  prereqs.plugin.installed && !prereqs.plugin.updateAvailable ? 'text-secondary' : 'text-primary'
-                }
-              >
-                Bifrost plugin
-              </span>
-              {(!prereqs.plugin.installed || prereqs.plugin.updateAvailable) && (
+              <CheckIcon ok={pluginReady} />
+              <span className={pluginReady ? 'text-secondary' : 'text-primary'}>Bifrost plugin</span>
+              {!pluginReady && (
                 <InstallButton
                   label={prereqs.plugin.updateAvailable ? 'Update' : 'Install'}
                   spinning={installing === 'plugin'}
@@ -406,25 +383,32 @@ function PrerequisiteChecklist({
         </div>
       )}
 
-      {/* Optional */}
-      {!prereqs.gh && (
+      {missingOptional.length > 0 && (
         <div>
           <SectionHeader className="mb-1.5">Optional</SectionHeader>
           <div className="space-y-1">
-            {!prereqs.gh && (
-              <div className="flex items-center gap-2 text-xs">
-                <CheckIcon ok={false} />
-                <span className="text-primary">
-                  gh{' '}
-                  <span className="text-muted">
-                    — <ExternalLink href="https://cli.github.com">GitHub CLI</ExternalLink> for PR-based task creation
-                  </span>
-                </span>
-              </div>
-            )}
+            {missingOptional.map((program) => (
+              <ProgramRow key={program.name} program={program} />
+            ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ProgramRow({ program }: { program: Prerequisite }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <CheckIcon ok={program.found} />
+      <span className={program.found ? 'text-secondary' : 'text-primary'}>
+        {program.name}{' '}
+        {!program.found && (
+          <span className="text-muted">
+            — <ExternalLink href={program.url}>{program.purpose}</ExternalLink>
+          </span>
+        )}
+      </span>
     </div>
   );
 }

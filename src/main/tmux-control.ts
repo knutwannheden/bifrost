@@ -45,7 +45,7 @@ export class TmuxControl {
   private live = false;
   private readonly screenListeners: Array<(screen: { replay: string; joined: boolean }) => void> = [];
   private readonly outputListeners: Array<(data: string) => void> = [];
-  private readonly exitListeners: Array<(code: number | null) => void> = [];
+  private readonly exitListeners: Array<(code: number | null, error?: NodeJS.ErrnoException) => void> = [];
   private exited = false;
 
   private constructor(child: ChildProcessWithoutNullStreams, cols: number, rows: number) {
@@ -84,16 +84,16 @@ export class TmuxControl {
     });
     // An unawaited replay is no error of its own, since the exit is reported.
     this.screen.catch(() => {});
-    const ended = (code: number | null) => {
+    const ended = (code: number | null, error?: NodeJS.ErrnoException) => {
       if (this.exited) return;
       this.exited = true;
       rejectScreen(new Error(`tmux exited with ${code} before its screen was read`));
       for (const p of this.pending.splice(0)) p.done(['tmux exited'], true);
-      for (const listener of this.exitListeners) listener(code);
+      for (const listener of this.exitListeners) listener(code, error);
     };
-    child.on('exit', ended);
+    child.on('exit', (code) => ended(code));
     // A command that cannot be spawned reports an error and no exit.
-    child.on('error', () => ended(null));
+    child.on('error', (err) => ended(null, err));
   }
 
   /** Spawns `command args`, which attach a tmux client in control mode, sized cols by rows. */
@@ -118,7 +118,8 @@ export class TmuxControl {
     this.outputListeners.push(listener);
   }
 
-  onExit(listener: (code: number | null) => void): void {
+  /** Reports the client's exit, with the error when it could not be spawned at all. */
+  onExit(listener: (code: number | null, error?: NodeJS.ErrnoException) => void): void {
     this.exitListeners.push(listener);
   }
 

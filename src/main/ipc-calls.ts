@@ -34,6 +34,7 @@ import { createNote, deleteNote, listNotes, updateNote } from './note-store';
 import { connectPeer, peerOf, peerTasks, postToPeer, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
+import { checkPrograms } from './prerequisites';
 import { getLastAssistantMessage, handleScrapeResponse, isIdle, sendPrompt } from './prompt-sender';
 import { captureScript, getRemoteHost, LOGIN_SESSION } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
@@ -460,21 +461,10 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
 
   [IPC.INSTALL_INTEGRATION]: () => installIntegration(),
 
-  [IPC.CHECK_PREREQUISITES]: async () => {
-    const [gitOk, claudeOk, ghOk] = await Promise.all([
-      execFile('git', ['--version'], { timeout: 5000 })
-        .then(() => true)
-        .catch(() => false),
-      execFile('claude', ['--version'], { timeout: 5000 })
-        .then(() => true)
-        .catch(() => false),
-      execFile('gh', ['--version'], { timeout: 5000, killSignal: 'SIGKILL' })
-        .then(() => true)
-        .catch(() => false),
-    ]);
-    const plugin = checkIntegration();
-    return { git: gitOk, claude: claudeOk, plugin, gh: ghOk };
-  },
+  [IPC.CHECK_PREREQUISITES]: async () => ({
+    programs: await checkPrograms(loadConfig().agent ?? 'claude'),
+    plugin: checkIntegration(),
+  }),
 
   [IPC.SET_ACTIVE_TASK_ID]: (taskId: string | null) => {
     if (taskId && isPendingRestore(taskId)) {

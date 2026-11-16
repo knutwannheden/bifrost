@@ -510,8 +510,11 @@ function attachTmux(
   control.onOutput((data) => {
     if (current()) output(data, true);
   });
-  control.onExit((code) => {
-    if (current() && !options.onExit?.(code)) ended(sessionId, code === 0 ? 0 : (code ?? 1));
+  control.onExit((code, error) => {
+    if (!current()) return;
+    if (error?.code === 'ENOENT')
+      output(`\r\n${error.path} was not found on PATH, so this session cannot start.\r\n`, true);
+    if (!options.onExit?.(code)) ended(sessionId, code === 0 ? 0 : (code ?? 1));
   });
 }
 
