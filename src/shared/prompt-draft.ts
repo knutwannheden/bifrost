@@ -8,7 +8,14 @@ export function promptDraft(screen: string): string {
   const lines = screen.split('\n');
   for (let i = lines.length - 1; i > 0; i--) {
     const at = lines[i].indexOf('❯');
-    if (at >= 0 && lines[i - 1].includes('───')) return unfaint(lines[i].slice(at + 1)).trim();
+    if (at < 0 || !lines[i - 1].includes('───')) continue;
+    // A draft of several lines continues below, down to the rule that closes the box.
+    const close = lines.findIndex((line, j) => j > i && line.includes('───'));
+    const rest = close < 0 ? [] : lines.slice(i + 1, close);
+    return [lines[i].slice(at + 1), ...rest]
+      .map((line) => unfaint(line).trim())
+      .join('\n')
+      .trim();
   }
   for (let i = lines.length - 1; i >= 0; i--) {
     const text = unescaped(lines[i]);

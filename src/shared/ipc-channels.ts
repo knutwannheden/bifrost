@@ -161,7 +161,6 @@ export const IPC = {
 
   // Prompt sender
   SEND_PROMPT: 'prompt:send',
-  SCRAPE_PROMPT_RESPONSE: 'prompt:scrape-response',
 
   // Curator
   CURATOR_GET_STATE: 'curator:get-state',
@@ -194,7 +193,7 @@ export const IPC_STREAM = {
   SLACK_REACTION: 'slack:reaction',
   CLAUDE_ACTIVE: 'claude:active',
   TASK_TURN_BOUNDARY: 'task:turn-boundary',
-  SCRAPE_PROMPT_REQUEST: 'prompt:scrape-request',
+  TERMINAL_LOCK: 'terminal:lock',
   TERMINAL_UNLOCK: 'terminal:unlock',
   CURATOR_UPDATE: 'curator:update',
   DISK_RECLAIM_READY: 'disk-reclaim:ready',
@@ -397,8 +396,7 @@ export interface BifrostAPI {
     text: string,
     mode?: 'direct' | 'queue' | 'only-when-idle',
   ): Promise<{ ok: boolean; error?: string; queued?: boolean }>;
-  onScrapePromptRequest(callback: (taskId: string, requestId: string) => void): () => void;
-  scrapePromptResponse(requestId: string, text: string): Promise<void>;
+  onTerminalLock(callback: (taskId: string) => void): () => void;
   onTerminalUnlock(callback: (taskId: string) => void): () => void;
 
   // Curator

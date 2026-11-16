@@ -1,9 +1,11 @@
 import { IPC_STREAM } from '../shared/ipc-channels';
+import { promptDraft } from '../shared/prompt-draft';
 import type { ActivityEntry } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { lastReply } from './conversation-handover';
 import { emit } from './event-sink';
-import { hasSession, waitForSessionReady, writeToSession } from './session-manager';
+import { captureScript, getRemoteHost } from './remote-host';
+import { captureLocalSession, hasSession, waitForSessionReady, writeToSession } from './session-manager';
 import { getTask, isPendingRestore, restoreTaskSession } from './task-service';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
@@ -20,13 +22,20 @@ export interface SendPromptResult {
   response?: string;
 }
 
+// An agent's input takes a burst of characters for a paste, and an Enter
+// arriving with it for part of the paste. So a prompt is typed in pieces, and
+// Enter waits for the input to settle.
+const PIECE_CHARS = 128;
+const PIECE_GAP_MS = 15;
+const ENTER_DELAY_MS = 500;
+/** How long a submit has to show before Enter is pressed again, and how often. */
+const SUBMIT_WAIT_MS = 3000;
+const ENTER_RETRIES = 2;
+
 // Per-task state
 const activeSet = new Set<string>();
 const promptQueues = new Map<string, QueuedPrompt[]>();
 const turnWaiters = new Map<string, Array<() => void>>();
-
-const scrapeResponseResolvers = new Map<string, (text: string) => void>();
-let scrapeIdCounter = 0;
 
 /** Called by bifrost-api when UserPromptSubmit hook fires for a task. */
 export function markActive(taskId: string): void {
@@ -53,15 +62,6 @@ export function markIdle(taskId: string): void {
   }
 }
 
-/** Handle scrape response from renderer. */
-export function handleScrapeResponse(requestId: string, text: string): void {
-  const resolver = scrapeResponseResolvers.get(requestId);
-  if (resolver) {
-    scrapeResponseResolvers.delete(requestId);
-    resolver(text);
-  }
-}
-
 /** Tasks with a turn in flight, which quitting is about to cut off. */
 export function workingTaskIds(): string[] {
   return [...activeSet];
@@ -71,23 +71,35 @@ export function isIdle(taskId: string): boolean {
   return !activeSet.has(taskId);
 }
 
-async function scrapePartialPrompt(taskId: string): Promise<string> {
-  const requestId = `scrape-${++scrapeIdCounter}`;
-  return new Promise<string>((resolve) => {
-    // Timeout after 2s — if renderer doesn't respond, assume empty and unlock
-    const timer = setTimeout(() => {
-      scrapeResponseResolvers.delete(requestId);
-      emit(IPC_STREAM.TERMINAL_UNLOCK, taskId);
-      resolve('');
-    }, 2000);
+/** The session's screen with its escape codes, here or on the task's machine, or null when it cannot be read. */
+export async function captureTaskScreen(taskId: string): Promise<string | null> {
+  const { machine } = getTask(taskId);
+  return machine
+    ? getRemoteHost(machine)
+        .exec(captureScript(taskId))
+        .catch(() => null)
+    : captureLocalSession(taskId);
+}
 
-    scrapeResponseResolvers.set(requestId, (text) => {
-      clearTimeout(timer);
-      resolve(text);
-    });
+async function typeText(taskId: string, text: string): Promise<void> {
+  const chars = [...text];
+  for (let i = 0; i < chars.length; i += PIECE_CHARS) {
+    writeToSession(taskId, chars.slice(i, i + PIECE_CHARS).join(''));
+    await sleep(PIECE_GAP_MS);
+  }
+}
 
-    emit(IPC_STREAM.SCRAPE_PROMPT_REQUEST, taskId, requestId);
-  });
+/**
+ * Whether the prompt left the input: the agent's hook started a turn, or its
+ * input shows nothing typed. A session already mid-turn starts no new one.
+ */
+async function submitted(taskId: string, wasIdle: boolean): Promise<boolean> {
+  for (const end = Date.now() + SUBMIT_WAIT_MS; Date.now() < end; await sleep(200)) {
+    if (wasIdle && !isIdle(taskId)) return true;
+    const screen = await captureTaskScreen(taskId);
+    if (screen !== null && promptDraft(screen) === '') return true;
+  }
+  return false;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -95,20 +107,26 @@ function sleep(ms: number): Promise<void> {
 }
 
 async function doInterruptAndSend(text: string, taskId: string): Promise<SendPromptResult> {
-  // Send Escape to stop current generation, then wait for prompt area
+  // Escape stops the turn, and the input comes back a moment later.
   writeToSession(taskId, '\x1b');
   await sleep(200);
-  // Send text and submit separately so Claude's TUI doesn't treat the
-  // chunk as a paste (which would insert \r as a literal newline).
-  writeToSession(taskId, text);
-  await sleep(10);
-  writeToSession(taskId, '\r');
-  return { ok: true };
+  return doSendPrompt(text, taskId);
 }
 
 async function doSendPrompt(text: string, taskId: string): Promise<SendPromptResult> {
-  // Scrape any partial prompt the user typed (also locks terminal input)
-  const savedText = await scrapePartialPrompt(taskId);
+  // Keys typed in the tab meanwhile would land inside the prompt.
+  emit(IPC_STREAM.TERMINAL_LOCK, taskId);
+  try {
+    return await typePrompt(text, taskId);
+  } finally {
+    emit(IPC_STREAM.TERMINAL_UNLOCK, taskId);
+  }
+}
+
+async function typePrompt(text: string, taskId: string): Promise<SendPromptResult> {
+  const wasIdle = isIdle(taskId);
+  const screen = await captureTaskScreen(taskId);
+  const savedText = screen === null ? '' : promptDraft(screen);
 
   // Clear any existing input regardless of cursor position.
   // Option+Backspace (\x1b\x7f) erases one word backward per press.
@@ -129,22 +147,18 @@ async function doSendPrompt(text: string, taskId: string): Promise<SendPromptRes
     }
   }
 
-  // Send text and submit separately so Claude's TUI doesn't treat the
-  // chunk as a paste (which would insert \r as a literal newline).
-  writeToSession(taskId, text);
-  await sleep(10);
-  writeToSession(taskId, '\r');
-
-  // Restore saved text immediately — characters written to the PTY
-  // will be buffered in stdin and appear when the prompt area returns.
-  if (savedText) {
-    writeToSession(taskId, savedText.replace(/\n/g, '\r'));
+  await typeText(taskId, text);
+  let sent = false;
+  for (let attempt = 0; attempt <= ENTER_RETRIES && !sent; attempt++) {
+    if (attempt === 0) await sleep(ENTER_DELAY_MS);
+    writeToSession(taskId, '\r');
+    sent = await submitted(taskId, wasIdle);
   }
 
-  // Unlock terminal input in the renderer
-  emit(IPC_STREAM.TERMINAL_UNLOCK, taskId);
+  // Typed after the submit is seen, so the draft is not sent along with the prompt.
+  if (savedText) await typeText(taskId, savedText);
 
-  return { ok: true };
+  return sent ? { ok: true } : { ok: false, error: 'The prompt was typed but not submitted' };
 }
 
 export function getLastAssistantMessage(taskId: string): string | null {
@@ -222,8 +236,8 @@ export async function sendPrompt(
       if (isIdle(taskId)) {
         sendResult = await doSendPrompt(text, taskId);
       } else {
-        // Queue for later — resolves when the queued prompt is actually sent
-        sendResult = await new Promise<SendPromptResult>((resolve) => {
+        // Resolves when the turn ends and the prompt is typed.
+        const typed = new Promise<SendPromptResult>((resolve) => {
           let queue = promptQueues.get(taskId);
           if (!queue) {
             queue = [];
@@ -231,6 +245,9 @@ export async function sendPrompt(
           }
           queue.push({ text, resolve });
         });
+        // A turn can outlast the caller's patience, so only a caller waiting for the reply waits for it.
+        if (!waitForTurn) return { ok: true, queued: true };
+        sendResult = await typed;
       }
       break;
 

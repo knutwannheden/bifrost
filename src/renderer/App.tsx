@@ -32,7 +32,6 @@ import { parseIssueUrl, parsePrUrl, parseSlackUrl } from './utils/clipboard-link
 import { formatBytes } from './utils/format-bytes';
 import { nextActiveTaskId } from './utils/next-active-task';
 import { isMac, modSymbol } from './utils/platform';
-import { scrapePartialPrompt } from './utils/scrape-prompt';
 import { slackToPlainText } from './utils/slack-markup';
 
 declare global {
@@ -96,19 +95,11 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
-  // Handle scrape-prompt requests from main process (prompt-sender).
-  // Lock terminal input during the send to prevent user keystrokes from interfering.
   useEffect(() => {
-    const unsubScrape = window.bifrost.onScrapePromptRequest((taskId, requestId) => {
-      lockTerminalInput(taskId);
-      const text = scrapePartialPrompt(taskId);
-      window.bifrost.scrapePromptResponse(requestId, text);
-    });
-    const unsubUnlock = window.bifrost.onTerminalUnlock((taskId) => {
-      unlockTerminalInput(taskId);
-    });
+    const unsubLock = window.bifrost.onTerminalLock(lockTerminalInput);
+    const unsubUnlock = window.bifrost.onTerminalUnlock(unlockTerminalInput);
     return () => {
-      unsubScrape();
+      unsubLock();
       unsubUnlock();
     };
   }, []);

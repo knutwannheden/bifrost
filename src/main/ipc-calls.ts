@@ -36,8 +36,8 @@ import { connectPeer, peerOf, peerTasks, postToPeer, routeCall } from './peers';
 import { cancelTaskRequests, resolveRequest } from './permission-manager';
 import { getTaskPrs } from './pr-index';
 import { checkPrograms } from './prerequisites';
-import { getLastAssistantMessage, handleScrapeResponse, isIdle, sendPrompt } from './prompt-sender';
-import { captureScript, getRemoteHost, LOGIN_SESSION } from './remote-host';
+import { captureTaskScreen, getLastAssistantMessage, isIdle, sendPrompt } from './prompt-sender';
+import { getRemoteHost, LOGIN_SESSION } from './remote-host';
 import { addRepo, getRemotes, getRepoBranches, removeRepo } from './repo-manager';
 import {
   attachSession,
@@ -160,15 +160,8 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
     await destroyTask(taskId);
   },
 
-  [IPC.SESSION_STATE]: async (taskId: string): Promise<SessionState> => {
-    const { machine } = getTask(taskId);
-    const screen = machine
-      ? await getRemoteHost(machine)
-          .exec(captureScript(taskId))
-          .catch(() => null)
-      : await captureLocalSession(taskId);
-    return sessionState(taskId, screen);
-  },
+  [IPC.SESSION_STATE]: async (taskId: string): Promise<SessionState> =>
+    sessionState(taskId, await captureTaskScreen(taskId)),
 
   [IPC.STOP_TASK]: (taskId: string) => {
     const task = getTask(taskId);
@@ -653,9 +646,5 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
   // Prompt sender
   [IPC.SEND_PROMPT]: (taskId: string, text: string, mode?: 'direct' | 'queue' | 'only-when-idle') => {
     return sendPrompt(taskId, text, mode || 'direct');
-  },
-
-  [IPC.SCRAPE_PROMPT_RESPONSE]: (requestId: string, text: string) => {
-    handleScrapeResponse(requestId, text);
   },
 };

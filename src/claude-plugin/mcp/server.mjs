@@ -639,9 +639,10 @@ server.registerTool(
         isError: true,
       };
     }
-    return {
-      content: [{ type: 'text', text: `Prompt sent to task ${targetId} (mode: ${mode || 'queue'}).` }],
-    };
+    const sent = result.queued
+      ? `Prompt queued for task ${targetId}. It is typed when the task's current turn ends.`
+      : `Prompt sent to task ${targetId} (mode: ${mode || 'queue'}).`;
+    return { content: [{ type: 'text', text: sent }] };
   },
 );
 

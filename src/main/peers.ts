@@ -38,10 +38,7 @@ export const PER_TASK: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
 ]);
 
 /** The calls whose first argument is the id of a request a session raised. */
-export const BY_REQUEST: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
-  IPC.RESOLVE_PERMISSION,
-  IPC.SCRAPE_PROMPT_RESPONSE,
-]);
+export const BY_REQUEST: ReadonlySet<IpcChannel> = new Set<IpcChannel>([IPC.RESOLVE_PERMISSION]);
 
 /** Calls after which the task is gone from its owner. */
 const REMOVES: ReadonlySet<IpcChannel> = new Set<IpcChannel>([IPC.CLOSE_TASK, IPC.DELETE_TASK]);
@@ -267,8 +264,6 @@ function relay(peer: Peer, event: { channel: EventChannel; args: unknown[] }): v
     return;
   } else if (channel === IPC_STREAM.PERMISSION_PROMPT) {
     peer.requests.add((args[0] as { requestId: string }).requestId);
-  } else if (channel === IPC_STREAM.SCRAPE_PROMPT_REQUEST) {
-    peer.requests.add(args[1] as string);
   } else if (channel === IPC_STREAM.CONSOLE_NOTIFICATION) {
     args = [args[0], args[1], peer.name];
   } else if (channel === BELL) {
