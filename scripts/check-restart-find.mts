@@ -17,10 +17,13 @@ function check(name: string, ok: boolean, detail = '') {
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-restart-find-')));
 const home = path.join(root, 'home');
 const repo = path.join(root, 'repo');
+const other = path.join(root, 'other');
 const bin = path.join(root, 'bin');
 fs.mkdirSync(path.join(home, '.bifrost', 'restart'), { recursive: true });
 fs.mkdirSync(repo);
 fs.writeFileSync(path.join(repo, 'package.json'), '{\n  "name": "bifrost"\n}\n');
+fs.mkdirSync(other);
+fs.writeFileSync(path.join(other, 'package.json'), '{\n  "name": "other"\n}\n');
 fs.mkdirSync(bin);
 for (const tool of [
   'awk',
@@ -35,6 +38,7 @@ for (const tool of [
   'tr',
   'wc',
   'jq',
+  'curl',
   'python3',
 ]) {
   const found = execFileSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf-8' }).trim();
@@ -54,12 +58,13 @@ function runSeeing(psLines: string[]): string {
 
 try {
   const found = [
-    `  101 ${repo}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .`,
-    `  102 ${repo}/node_modules/electron/dist/electron .`,
+    `  101 100 ${repo}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .`,
+    `  102 100 ${repo}/node_modules/electron/dist/electron .`,
   ].map((line) =>
-    runSeeing([`  103 ${repo}/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox`, line]).includes(
-      `Bifrost runs from ${repo}\n`,
-    ),
+    runSeeing([
+      `  103 102 ${repo}/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox`,
+      line,
+    ]).includes(`Bifrost runs from ${repo}\n`),
   );
   check(
     'the Electron of a Bifrost in development mode is found on macOS and on Linux',
@@ -67,7 +72,27 @@ try {
     String(found),
   );
 
-  const zygoteOnly = runSeeing([`  103 ${repo}/node_modules/electron/dist/electron --type=zygote`]);
+  const amongOthers = runSeeing([
+    `  201 200 ${other}/node_modules/electron/dist/electron .`,
+    `  102 100 ${repo}/node_modules/electron/dist/electron .`,
+  ]);
+  check(
+    'the Electron of another app in development mode is passed over',
+    amongOthers.includes(`Bifrost runs from ${repo}\n`),
+    amongOthers,
+  );
+
+  const parent = runSeeing([
+    `  100 99 /opt/node/bin/node /data/link/node_modules/@electron-forge/cli/dist/electron-forge-start.js`,
+    `  102 100 ${repo}/node_modules/electron/dist/electron .`,
+  ]);
+  check(
+    "forge is the parent of Bifrost's Electron, under whatever path",
+    parent.includes('node /opt/node/bin/node'),
+    parent,
+  );
+
+  const zygoteOnly = runSeeing([`  103 102 ${repo}/node_modules/electron/dist/electron --type=zygote`]);
   check('a Chromium helper process is not taken for Bifrost', zygoteOnly.includes('no Bifrost running'), zygoteOnly);
 
   fs.rmSync(path.join(bin, 'jq'));

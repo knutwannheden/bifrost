@@ -78,7 +78,7 @@ const task = (id: string, worktreePath: string, machine?: string) =>
   const record = path.join(bin, 'args');
   fs.writeFileSync(path.join(bin, 'zeditor'), `#!/bin/sh\necho "$@" > ${record}\n`, { mode: 0o755 });
   const savedPath = process.env.PATH;
-  process.env.PATH = `${bin}:/usr/bin:/bin`;
+  process.env.PATH = bin;
   let outcome: string;
   try {
     await openInIde('/w/t', 'zed', 'x.ts', 3);

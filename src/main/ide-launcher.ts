@@ -48,7 +48,9 @@ function runEditor(command: string, args: string[]): Promise<void> {
     execFile(command, args, (error) => {
       if (!error) resolve();
       else if (command === 'zed' && (error as NodeJS.ErrnoException).code === 'ENOENT')
-        runEditor('zeditor', args).then(resolve, () => reject(error));
+        runEditor('zeditor', args).then(resolve, (zeditorError: NodeJS.ErrnoException) =>
+          reject(zeditorError.code === 'ENOENT' ? error : zeditorError),
+        );
       else reject(error);
     });
   });

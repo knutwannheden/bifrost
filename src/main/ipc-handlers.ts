@@ -88,7 +88,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, dirPath: string) => {
-    if (!(await openTerminal(loadConfig().terminal ?? 'auto', dirPath))) shell.showItemInFolder(dirPath);
+    if (!(await openTerminal(loadConfig().terminal, dirPath))) shell.showItemInFolder(dirPath);
   });
 
   // IDE

@@ -27,6 +27,13 @@ end tell`;
   }
 }
 
+const LINUX = {
+  'gnome-terminal': (dir: string) => ({ command: 'gnome-terminal', args: [`--working-directory=${dir}`] }),
+  konsole: (dir: string) => ({ command: 'konsole', args: ['--workdir', dir] }),
+  kitty: (dir: string) => ({ command: 'kitty', args: ['--directory', dir] }),
+  Ghostty: (dir: string) => ({ command: 'ghostty', args: [`--working-directory=${dir}`] }),
+} satisfies Partial<Record<Terminal, (dir: string) => Command>>;
+
 /**
  * The commands that open a terminal in the directory, to try in order until one exists.
  * A command without a flag for the directory gets it as its working directory.
@@ -38,25 +45,16 @@ export function terminalCommands(
   terminalEnv: string | undefined,
 ): Command[] {
   if (platform === 'darwin') return [{ command: 'osascript', args: ['-e', appleScript(terminal, dir)] }];
-  switch (terminal) {
-    case 'gnome-terminal':
-      return [{ command: 'gnome-terminal', args: [`--working-directory=${dir}`] }];
-    case 'konsole':
-      return [{ command: 'konsole', args: ['--workdir', dir] }];
-    case 'kitty':
-      return [{ command: 'kitty', args: ['--directory', dir] }];
-    case 'Ghostty':
-      return [{ command: 'ghostty', args: [`--working-directory=${dir}`] }];
-    default:
-      // Auto, and the macOS choices, the default 'Terminal' among them.
-      return [
-        ...(terminalEnv ? [{ command: terminalEnv, args: [] }] : []),
-        { command: 'x-terminal-emulator', args: [] },
-        { command: 'gnome-terminal', args: [`--working-directory=${dir}`] },
-        { command: 'konsole', args: ['--workdir', dir] },
-        { command: 'xterm', args: [] },
-      ];
-  }
+  const chosen = LINUX[terminal as keyof typeof LINUX]?.(dir);
+  // Auto and the macOS choices, the default 'Terminal' among them, try only these. A chosen terminal that is missing goes on to them.
+  const fallback = [
+    ...(terminalEnv ? [{ command: terminalEnv, args: [] }] : []),
+    { command: 'x-terminal-emulator', args: [] },
+    LINUX['gnome-terminal'](dir),
+    LINUX.konsole(dir),
+    { command: 'xterm', args: [] },
+  ];
+  return chosen ? [chosen, ...fallback.filter((c) => c.command !== chosen.command)] : fallback;
 }
 
 /** Whether the command started. A terminal runs until its window closes, so this does not wait for it. */

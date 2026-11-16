@@ -21,7 +21,7 @@ esac
 
 if [ "$MODE" = launch ]; then
   # Checked before detaching, since the detached run can only log what it lacks.
-  for tool in jq python3; do
+  for tool in jq python3 curl; do
     command -v "$tool" >/dev/null || { echo "restart-bifrost.sh needs $tool; install it and try again" >&2; exit 1; }
   done
   export RESTART_TS=$(date +%Y%m%d-%H%M%S)
@@ -70,21 +70,32 @@ unset NO_COLOR AI_AGENT GIT_EDITOR COREPACK_ENABLE_AUTO_PIN
 unset COPILOT_ALLOW_ALL COPILOT_SKILLS_DIRS COPILOT_CLI COPILOT_AGENT_SESSION_ID
 
 # pgrep -f cannot read other processes' arguments on macOS, so ps is matched instead.
-processes() { ps -eo pid=,args= | sed 's/^ *//'; }
+processes() { ps -eo pid=,ppid=,args= | sed 's/^ *//'; }
 # Electron's binary, on macOS and on Linux. Bifrost's runs with "." alone, which Chromium's helper processes do not.
 ELECTRON_BIN='/node_modules/electron/dist/(Electron[.]app/Contents/MacOS/Electron|electron)$'
-electron_pid() { processes | awk -v repo="$REPO" -v bin="$ELECTRON_BIN" 'index($2, repo "/node_modules/") == 1 && $2 ~ bin && $3 == "." && NF == 3 { print $1 }' | head -1; }
-forge_pid() { processes | awk -v start="$REPO/node_modules/@electron-forge/cli/dist/electron-forge-start.js" '$3 == start { print $1 }' | head -1; }
+# Each Electron run in development mode, as its pid, its parent's pid and its checkout.
+electrons() { processes | awk -v bin="$ELECTRON_BIN" '$3 ~ bin && $4 == "." && NF == 4 { sub(/\/node_modules\/.*/, "", $3); print $1, $2, $3 }'; }
+electron_pid() { electrons | awk -v repo="$REPO" '$3 == repo { print $1 }' | head -1; }
+# Forge started Electron, so it is Electron's parent, whatever path it was started under. Prints its pid and its node.
+forge() {
+  local parent
+  parent=$(electrons | awk -v repo="$REPO" '$3 == repo { print $2 }' | head -1)
+  processes | awk -v pid="$parent" '$1 == pid && $4 ~ /\/@electron-forge\/cli\/dist\/electron-forge-start[.]js$/ { print $1, $3 }'
+}
+forge_pid() { forge | awk '{ print $1 }'; }
 
 # The running Bifrost says which checkout to start again, and which node to start it with.
-REPO=$(processes | awk -v bin="$ELECTRON_BIN" '$2 ~ bin && $3 == "." && NF == 3 { sub(/\/node_modules\/.*/, "", $2); print $2 }' | head -1)
-if [ -z "$REPO" ] || ! grep -q '"name": "bifrost"' "$REPO/package.json" 2>/dev/null; then
+REPO=
+while read -r _ _ checkout; do
+  grep -q '"name": "bifrost"' "$checkout/package.json" 2>/dev/null && { REPO=$checkout; break; }
+done < <(electrons)
+if [ -z "$REPO" ]; then
   log "no Bifrost running in development mode; nothing restarted"
   exit 1
 fi
-NODE_BIN=$(processes | awk -v start="$REPO/node_modules/@electron-forge/cli/dist/electron-forge-start.js" '$3 == start { print $2 }' | head -1)
-[ -n "$NODE_BIN" ] && export PATH=$(dirname "$NODE_BIN"):$PATH
 log "Bifrost runs from $REPO"
+NODE_BIN=$(forge | awk '{ print $2 }')
+[ -n "$NODE_BIN" ] && { export PATH=$(dirname "$NODE_BIN"):$PATH; log "its forge runs on node $NODE_BIN"; }
 
 api() {
   local port

@@ -14,17 +14,17 @@ const show = (value: unknown) => JSON.stringify(value);
 const dir = "/home/u/it's here";
 
 {
-  const chosen = (['gnome-terminal', 'konsole', 'kitty', 'Ghostty'] as const).map((t) =>
-    terminalCommands('linux', t, dir, undefined),
+  const chosen = (['gnome-terminal', 'konsole', 'kitty', 'Ghostty'] as const).map(
+    (t) => terminalCommands('linux', t, dir, undefined)[0],
   );
   check(
     'on Linux, the chosen terminal opens with its own flag for the directory',
     show(chosen) ===
       show([
-        [{ command: 'gnome-terminal', args: [`--working-directory=${dir}`] }],
-        [{ command: 'konsole', args: ['--workdir', dir] }],
-        [{ command: 'kitty', args: ['--directory', dir] }],
-        [{ command: 'ghostty', args: [`--working-directory=${dir}`] }],
+        { command: 'gnome-terminal', args: [`--working-directory=${dir}`] },
+        { command: 'konsole', args: ['--workdir', dir] },
+        { command: 'kitty', args: ['--directory', dir] },
+        { command: 'ghostty', args: [`--working-directory=${dir}`] },
       ]),
     show(chosen),
   );
@@ -33,11 +33,13 @@ const dir = "/home/u/it's here";
 {
   const auto = terminalCommands('linux', 'auto', dir, 'alacritty').map((c) => c.command);
   const macChoice = terminalCommands('linux', 'iTerm', dir, undefined).map((c) => c.command);
+  const missingKitty = terminalCommands('linux', 'kitty', dir, undefined).map((c) => c.command);
   check(
-    "on Linux, Auto, or a macOS terminal, tries $TERMINAL, then the distribution's default, then the common ones",
+    "on Linux, Auto, a macOS terminal, or a chosen one that is missing, goes on to $TERMINAL, the distribution's default, then the common ones",
     show(auto) === show(['alacritty', 'x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']) &&
-      show(macChoice) === show(['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']),
-    show({ auto, macChoice }),
+      show(macChoice) === show(['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']) &&
+      show(missingKitty) === show(['kitty', 'x-terminal-emulator', 'gnome-terminal', 'konsole', 'xterm']),
+    show({ auto, macChoice, missingKitty }),
   );
 }
 
