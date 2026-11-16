@@ -1,6 +1,6 @@
 /**
  * A restart starts Bifrost with the config dir the running one recorded, not
- * the one the calling task was started under. The script runs against a
+ * the one the calling task was started under, and runs on in the background. The script runs against a
  * temporary home with a ps that lists no Bifrost, so it stops before touching
  * one. Run with `npm run check:restart-config-dir`.
  */
@@ -54,6 +54,24 @@ try {
     "a restart starts Bifrost with the config dir the running one recorded, not the calling task's",
     none === 'default' && work === '/Users/ann/.claude-work' && older === '/stale',
     JSON.stringify({ none, work, older }),
+  );
+
+  // python3 and curl that fail, ahead of any real ones.
+  for (const name of ['python3', 'curl'])
+    fs.writeFileSync(path.join(stubs, name), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const launched = execFileSync('bash', ['scripts/restart-bifrost.sh'], {
+    env: { ...process.env, HOME: home, PATH: `${stubs}:${process.env.PATH}` },
+  }).toString();
+  const logFile = /log: (.*)$/m.exec(launched)?.[1] ?? '';
+  let log = '';
+  for (const end = Date.now() + 10_000; !log.includes('nothing restarted') && Date.now() < end; ) {
+    await new Promise((r) => setTimeout(r, 100));
+    log = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf-8') : '';
+  }
+  check(
+    'a restart runs on in the background without python3 or curl',
+    log.includes('nothing restarted'),
+    launched + log,
   );
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

@@ -37,8 +37,8 @@ if [ "$MODE" = launch ]; then
   mkdir -p "$DIR"
   # A copy runs, so the restart outlives a checkout that changes or goes away meanwhile.
   cp "$0" "$DIR/$RESTART_TS.sh"
-  python3 -c 'import os, sys; os.setsid(); os.execvp("bash", ["bash", sys.argv[1], "--run"])' "$DIR/$RESTART_TS.sh" \
-    < /dev/null > /dev/null 2>&1 &
+  node -e 'require("child_process").spawn("bash", [process.argv[1], "--run"], { detached: true, stdio: "ignore" }).unref()' \
+    "$DIR/$RESTART_TS.sh" < /dev/null > /dev/null 2>&1
   echo "restarting Bifrost in the background; log: $DIR/$RESTART_TS.log"
   exit 0
 fi
@@ -100,7 +100,14 @@ NODE_BIN=$(forge | awk '{ print $2 }')
 api() {
   local port
   port=$(cat "$HOME/.bifrost/api-port" 2>/dev/null) || return 1
-  curl -s --max-time 30 -X POST -H 'Content-Type: application/json' -d "$2" "http://127.0.0.1:$port$1"
+  node -e '
+    const [port, route, body] = process.argv.slice(1);
+    fetch(`http://127.0.0.1:${port}${route}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+      signal: AbortSignal.timeout(30000),
+    }).then((r) => r.text()).then((text) => process.stdout.write(text), () => process.exit(1));' "$port" "$1" "$2"
 }
 healthy() { api /list-tasks '{"status":"running","limit":1}' | grep -q '"tasks"'; }
 wait_healthy() { for _ in $(seq 1 60); do sleep 3; healthy && return 0; done; return 1; }

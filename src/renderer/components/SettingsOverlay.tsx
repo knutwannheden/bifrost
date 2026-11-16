@@ -912,7 +912,7 @@ function MachineEditor({
       </div>
       <p className="mt-2 text-xs text-muted">
         A task runs on one of these when its prompt names it. Any host ssh reaches without a password works, with Claude
-        logged in there and git, tmux, python3 and curl installed.
+        logged in there and git, tmux and node installed.
       </p>
     </div>
   );

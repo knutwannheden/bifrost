@@ -72,7 +72,7 @@ export function sessionSetupScript(spec: SessionSpec): string {
   return [
     'set -e',
     configDirScript(),
-    `python3 -c ${shQuote(TRUST_PY)} ${shQuote(spec.worktreePath)} ${shQuote(JSON.stringify(TRUSTED_ENTRY))} || true`,
+    `node -e ${shQuote(TRUST_JS)} ${shQuote(spec.worktreePath)} ${shQuote(JSON.stringify(TRUSTED_ENTRY))} || true`,
     `d=${shQuote(dir)}`,
     'mkdir -p "$d"',
     ...Object.entries(sessionFiles(spec)).map(([name, content]) => `printf '%s\\n' ${shQuote(content)} > "$d/${name}"`),
@@ -208,57 +208,51 @@ export function diffScript(worktreePath: string, baseRef?: string): string {
   ].join('\n');
 }
 
-/** A python3 program that edits Claude Code's config, leaving one it cannot read alone. */
+/** A `node -e` program that edits Claude Code's config, leaving one it cannot read alone. */
 function editClaudeJson(body: string[]): string {
   return [
-    'import json, os, sys',
-    "path = os.path.join(os.environ.get('CLAUDE_CONFIG_DIR') or os.path.expanduser('~'), '.claude.json')",
-    'try:',
-    '    with open(path) as f:',
-    '        config = json.load(f)',
-    'except Exception:',
-    '    sys.exit(0)',
+    "const fs = require('fs'), os = require('os'), path = require('path');",
+    "const file = path.join(process.env.CLAUDE_CONFIG_DIR || os.homedir(), '.claude.json');",
+    'let config;',
+    'try {',
+    "  config = JSON.parse(fs.readFileSync(file, 'utf8'));",
+    '} catch {',
+    '  process.exit(0);',
+    '}',
     ...body,
-    "tmp = '%s.bifrost-%d' % (path, os.getpid())",
-    "with open(tmp, 'w') as f:",
-    '    json.dump(config, f, indent=2)',
-    'os.replace(tmp, path)',
+    "const tmp = file + '.bifrost-' + process.pid;",
+    'fs.writeFileSync(tmp, JSON.stringify(config, null, 2));',
+    'fs.renameSync(tmp, file);',
   ].join('\n');
 }
 
 // Claude rewrites its config often, so each edit writes only when something is missing.
 // The key is resolved as trustRoot in claude-trust.ts resolves it.
-const TRUST_PY = editClaudeJson([
-  'import subprocess',
-  'd = os.path.realpath(sys.argv[1])',
-  'def git(arg):',
-  "    return subprocess.run(['git', '-C', d, 'rev-parse', arg], capture_output=True, text=True, check=True).stdout.strip()",
-  'try:',
-  "    common = os.path.join(d, git('--git-common-dir'))",
-  "    root = os.path.dirname(common) if os.path.basename(common) == '.git' else git('--show-toplevel')",
-  'except Exception:',
-  '    root = d',
-  'root = os.path.realpath(root)',
-  "projects = config.setdefault('projects', {})",
-  "if (projects.get(root) or {}).get('hasTrustDialogAccepted') is True:",
-  '    sys.exit(0)',
-  'entry = json.loads(sys.argv[2])',
-  'entry.update(projects.get(root) or {})',
-  "entry['hasTrustDialogAccepted'] = True",
-  'projects[root] = entry',
+const TRUST_JS = editClaudeJson([
+  "const { execFileSync } = require('child_process');",
+  'const d = fs.realpathSync(process.argv[1]);',
+  "const git = (arg) => execFileSync('git', ['-C', d, 'rev-parse', arg], { encoding: 'utf8', stdio: 'pipe' }).trim();",
+  'let root;',
+  'try {',
+  "  const common = path.resolve(d, git('--git-common-dir'));",
+  "  root = path.basename(common) === '.git' ? path.dirname(common) : git('--show-toplevel');",
+  '} catch {',
+  '  root = d;',
+  '}',
+  'root = fs.realpathSync(root);',
+  'const projects = (config.projects ??= {});',
+  'if (projects[root]?.hasTrustDialogAccepted === true) process.exit(0);',
+  'projects[root] = { ...JSON.parse(process.argv[2]), ...projects[root], hasTrustDialogAccepted: true };',
 ]);
 
-const ONBOARDING_PY = editClaudeJson([
-  'seed = json.loads(sys.argv[1])',
-  'if sys.argv[2]:',
-  "    seed['lastOnboardingVersion'] = sys.argv[2]",
-  'if all(key in config for key in seed):',
-  '    sys.exit(0)',
-  'for key, value in seed.items():',
-  '    config.setdefault(key, value)',
+const ONBOARDING_JS = editClaudeJson([
+  'const seed = JSON.parse(process.argv[1]);',
+  'if (process.argv[2]) seed.lastOnboardingVersion = process.argv[2];',
+  'if (Object.keys(seed).every((key) => key in config)) process.exit(0);',
+  'for (const [key, value] of Object.entries(seed)) if (!(key in config)) config[key] = value;',
 ]);
 
-const PLUGIN_VERSION_PY = `import json; print(json.load(open('${REMOTE_PLUGIN_DIR}/.claude-plugin/plugin.json'))['version'])`;
+const PLUGIN_VERSION_JS = `console.log(JSON.parse(require('fs').readFileSync('${REMOTE_PLUGIN_DIR}/.claude-plugin/plugin.json', 'utf8')).version)`;
 
 /**
  * Readies a machine for task sessions and reports what it lacks. The hooks and
@@ -278,17 +272,17 @@ export function prepareScript(opts: { apiPort: number; theme?: string; instance?
     `printf '%s\\n' ${opts.apiPort} > ${REMOTE_DIR}/${opts.instance ? 'ide-port' : 'api-port'}`,
     `printf '%s' ${shQuote(tmuxConf())} > ${REMOTE_DIR}/tmux.conf`,
     `version=$(claude --version 2>/dev/null | cut -d' ' -f1)`,
-    `python3 -c ${shQuote(ONBOARDING_PY)} ${shQuote(JSON.stringify(onboarding))} "$version" || true`,
+    `node -e ${shQuote(ONBOARDING_JS)} ${shQuote(JSON.stringify(onboarding))} "$version" || true`,
     `printf 'HOME=%s\\n' "$HOME"`,
     'missing=',
-    'for c in git tmux python3 curl; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done',
+    'for c in git tmux node; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done',
     `printf 'MISSING=%s\\n' "\${missing# }"`,
     'agents=',
     'for a in claude copilot codex; do command -v "$a" >/dev/null 2>&1 && agents="$agents $a"; done',
     `printf 'AGENTS=%s\\n' "\${agents# }"`,
     `printf 'RSYNC=%s\\n' "$(command -v rsync >/dev/null 2>&1 && echo yes)"`,
     LOGIN_CHECK,
-    `printf 'PLUGIN_VERSION=%s\\n' "$(python3 -c ${shQuote(PLUGIN_VERSION_PY)} 2>/dev/null || true)"`,
+    `printf 'PLUGIN_VERSION=%s\\n' "$(node -e ${shQuote(PLUGIN_VERSION_JS)} 2>/dev/null || true)"`,
   ].join('\n');
 }
 

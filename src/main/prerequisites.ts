@@ -20,8 +20,12 @@ export async function checkPrograms(agent: AgentKind, oneshot: AgentKind | 'off'
       purpose: 'runs every session',
       url: 'https://github.com/tmux/tmux/wiki/Installing',
     },
-    { name: 'python3', required: true, purpose: "used by Bifrost's hooks", url: 'https://www.python.org/downloads/' },
-    { name: 'curl', required: true, purpose: "used by Bifrost's hooks", url: 'https://curl.se/download.html' },
+    {
+      name: 'node',
+      required: true,
+      purpose: "runs Bifrost's hooks and MCP server",
+      url: 'https://nodejs.org/en/download',
+    },
     { name: agent, required: true, ...AGENT_CLIS[agent] },
     ...(oneshot === 'off' || oneshot === agent
       ? []

@@ -1,4 +1,7 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AgentKind } from '../shared/types.ts';
+import { PLUGIN_DEPLOY_DIR } from './integration-installer.ts';
 import { shQuote } from './tmux-session.ts';
 
 /**
@@ -87,20 +90,39 @@ export interface AgentPlaces {
   claudeDir: string;
 }
 
-/** Bifrost's hook scripts by the event Codex raises, which it names as Claude does. */
+/** The mode of Bifrost's hook script for each event Codex raises, which it names as Claude does. */
 const CODEX_HOOKS: Record<string, string> = {
-  SessionStart: 'bifrost-session-start.sh',
-  UserPromptSubmit: 'bifrost-prompt-submit.sh',
-  Stop: 'bifrost-notify.sh',
-  PostToolUse: 'bifrost-notify.sh',
-  SubagentStart: 'bifrost-notify.sh',
-  SubagentStop: 'bifrost-notify.sh',
-  PreCompact: 'bifrost-notify.sh',
-  SessionEnd: 'bifrost-notify.sh',
+  SessionStart: 'session-start',
+  UserPromptSubmit: 'prompt-submit',
+  Stop: 'notify',
+  PostToolUse: 'notify',
+  SubagentStart: 'notify',
+  SubagentStop: 'notify',
+  PreCompact: 'notify',
+  SessionEnd: 'notify',
   // Codex has no Notification event, and this is the moment it waits for the user.
-  PermissionRequest: 'bifrost-notify.sh',
-  Interrupt: 'bifrost-notify.sh',
+  PermissionRequest: 'notify',
+  Interrupt: 'notify',
 };
+
+/** The shell script for each mode in a deployed plugin that has no bifrost-hook.mjs. */
+const SHELL_HOOKS: Record<string, string> = {
+  'session-start': 'bifrost-session-start.sh',
+  'prompt-submit': 'bifrost-prompt-submit.sh',
+  notify: 'bifrost-notify.sh',
+};
+
+/**
+ * The command Codex runs for a hook. Every plugin directory a session gets is a
+ * copy of the one deployed here. That one keeps the shell scripts until the user
+ * accepts the integration update.
+ */
+function codexHookCommand(pluginDir: string, mode: string): string {
+  const deployed = process.env.BIFROST_PLUGIN_DIR ?? PLUGIN_DEPLOY_DIR;
+  return fs.existsSync(path.join(deployed, 'hooks', 'bifrost-hook.mjs'))
+    ? `node ${shQuote(`${pluginDir}/hooks/bifrost-hook.mjs`)} ${mode}`
+    : shQuote(`${pluginDir}/hooks/${SHELL_HOOKS[mode]}`);
+}
 
 /** The variables Codex passes on to an MCP server, which otherwise gets only a minimal environment. */
 const MCP_VARS = [
@@ -142,9 +164,9 @@ export function agentLaunch(
     };
   }
   const toml = (value: string) => JSON.stringify(value);
-  const hooks = Object.entries(CODEX_HOOKS).flatMap(([event, script]) => [
+  const hooks = Object.entries(CODEX_HOOKS).flatMap(([event, mode]) => [
     '-c',
-    `hooks.${event}=[{hooks=[{type="command",command=${toml(shQuote(`${places.pluginDir}/hooks/${script}`))}}]}]`,
+    `hooks.${event}=[{hooks=[{type="command",command=${toml(codexHookCommand(places.pluginDir, mode))}}]}]`,
   ]);
   return {
     args: [

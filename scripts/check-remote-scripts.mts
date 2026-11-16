@@ -34,6 +34,27 @@ const show = (value: unknown) => JSON.stringify(value);
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-remote-')));
 
+// A machine needs neither python3 nor curl, so the scripts run with everything on PATH but those.
+{
+  const bin = path.join(root, 'bin');
+  fs.mkdirSync(bin);
+  const seen = new Set<string>();
+  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    let names: string[];
+    try {
+      names = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      if (/^(python3[.\d]*|curl)$/.test(name) || seen.has(name)) continue;
+      seen.add(name);
+      fs.symlinkSync(path.join(dir, name), path.join(bin, name));
+    }
+  }
+  process.env.PATH = bin;
+}
+
 /** Run a script the way the remote does: `sh -s` in HOME, script on stdin. */
 function runRemote(home: string, script: string, extraPath?: string): string {
   return execFileSync('sh', ['-s'], {
@@ -461,13 +482,16 @@ fs.writeFileSync(
 const agentStubs = path.join(root, 'agent-stubs');
 fs.mkdirSync(agentStubs);
 fs.writeFileSync(path.join(agentStubs, 'codex'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+const pluginManifest = path.join(home3, '.bifrost', 'claude-plugin', '.claude-plugin', 'plugin.json');
+fs.mkdirSync(path.dirname(pluginManifest), { recursive: true });
+fs.writeFileSync(pluginManifest, JSON.stringify({ name: 'bifrost', version: '9.8.7' }));
 const prepared = parseScriptOutput(
   runRemote(home3, prepareScript({ apiPort: 43669, theme: 'dark-daltonized' }), agentStubs),
 );
 {
   const config = JSON.parse(fs.readFileSync(claudeJson, 'utf-8'));
   check(
-    'preparing a machine points its hooks at the forwarded port, completes onboarding keeping what is set, and says it has rsync and which agents',
+    'preparing a machine points its hooks at the forwarded port, completes onboarding keeping what is set, and says it has rsync, which agents, its plugin version, and that it lacks nothing',
     fs.readFileSync(path.join(home3, '.bifrost', 'api-port'), 'utf-8').trim() === '43669' &&
       config.hasCompletedOnboarding === true &&
       typeof config.lastOnboardingVersion === 'string' &&
@@ -476,6 +500,8 @@ const prepared = parseScriptOutput(
       config.projects['/elsewhere'].lastCost === 1 &&
       prepared.HOME === home3 &&
       prepared.RSYNC === 'yes' &&
+      prepared.MISSING === '' &&
+      prepared.PLUGIN_VERSION === '9.8.7' &&
       (prepared.AGENTS ?? '').split(' ').includes('codex'),
     show({ prepared, config }),
   );

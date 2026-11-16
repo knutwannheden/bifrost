@@ -41,8 +41,8 @@ try {
   const of = (name: string) => programs.find((p) => p.name === name);
   const required = programs.filter((p) => p.required).map((p) => p.name);
   check(
-    "with Codex as the agent and Claude for Bifrost's own calls, git, tmux, python3, curl and codex are required, a missing tmux shows, and claude is optional",
-    show(required.sort()) === show(['codex', 'curl', 'git', 'python3', 'tmux']) &&
+    "with Codex as the agent and Claude for Bifrost's own calls, git, tmux, node and codex are required, a missing tmux shows, and claude is optional",
+    show(required.sort()) === show(['codex', 'git', 'node', 'tmux']) &&
       of('tmux')?.found === false &&
       of('codex')?.found === true &&
       of('claude')?.required === false,

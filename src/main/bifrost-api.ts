@@ -90,7 +90,7 @@ const SILENT_MS = 45_000;
 
 /**
  * A missed hook leaves a task pulsing green with nothing to correct it — a turn
- * ended while Bifrost was restarting, a curl timed out, a session was killed.
+ * ended while Bifrost was restarting, a hook's post timed out, a session was killed.
  * The session's own output settles the question independently of any of that. A task holding
  * subagents open is exempt: Bifrost has its own record of that work, so silence
  * does not settle anything.

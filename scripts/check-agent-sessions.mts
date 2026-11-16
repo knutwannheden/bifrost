@@ -138,6 +138,37 @@ check(
   );
 }
 
+{
+  const { agentLaunch } = await import('../src/main/agents.ts');
+  // Stand-ins for the plugin's hooks, in a directory whose name needs quoting.
+  const plugin = path.join(root, "plug in's");
+  const hooks = path.join(plugin, 'hooks');
+  fs.mkdirSync(hooks, { recursive: true });
+  const ran = path.join(record, 'hook');
+  const node = path.join(hooks, 'bifrost-hook.mjs');
+  fs.writeFileSync(node, `import fs from 'node:fs'; fs.writeFileSync(${show(ran)}, 'node ' + process.argv[2]);`);
+  fs.writeFileSync(path.join(hooks, 'bifrost-notify.sh'), `#!/bin/sh\nprintf 'sh' > '${ran}'\n`, { mode: 0o755 });
+  process.env.BIFROST_PLUGIN_DIR = plugin;
+  /** Runs the command Codex is given for its Stop hook, and says which script it ran. */
+  const stopHook = () => {
+    const { args } = agentLaunch('codex', undefined, { pluginDir: plugin, claudeDir: home });
+    const stop = args.find((a) => a.startsWith('hooks.Stop=')) ?? '';
+    const command = JSON.parse(stop.slice(stop.indexOf('command=') + 8, stop.lastIndexOf('}]}]'))) as string;
+    fs.rmSync(ran, { force: true });
+    execFileSync('sh', ['-c', command], { stdio: 'pipe' });
+    return fs.readFileSync(ran, 'utf-8');
+  };
+  const withNode = stopHook();
+  fs.rmSync(node);
+  const before = stopHook();
+  delete process.env.BIFROST_PLUGIN_DIR;
+  check(
+    "Codex runs the plugin's Node hook script, and the shell scripts of a deployed plugin from before it",
+    withNode === 'node notify' && before === 'sh',
+    show({ withNode, before }),
+  );
+}
+
 fs.rmSync(root, { recursive: true, force: true });
 if (failed) {
   console.log(`\n${failed} failed`);

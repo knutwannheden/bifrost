@@ -11,7 +11,7 @@ const outstanding = new Map<string, number[]>();
 const heldTurns = new Set<string>();
 
 /**
- * SubagentStop arrives over a fire-and-forget curl from an async hook, so one
+ * SubagentStop arrives over a fire-and-forget post from an async hook, so one
  * can go missing and leave a task working for as long as it stays open. This
  * bounds that to a single session.
  */

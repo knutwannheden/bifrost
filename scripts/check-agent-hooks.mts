@@ -1,7 +1,8 @@
 /**
  * The hooks Claude, Codex and Copilot raise move a task between working and
  * idle as the agent does. Runs a headless instance under a temporary home and
- * posts hooks to it as the plugin's scripts do. Run with `npm run check:agent-hooks`.
+ * posts hooks to it, directly and through the plugin's hook script. Run with
+ * `npm run check:agent-hooks`.
  */
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -27,6 +28,7 @@ for (const dir of [path.join(home, '.bifrost'), tmp]) fs.mkdirSync(dir, { recurs
 const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, TMPDIR: tmp, TMUX_TMPDIR: root };
 delete env.CLAUDE_CONFIG_DIR;
 delete env.TMUX;
+delete env.BIFROST_API_PORT;
 
 const portFile = path.join(home, '.bifrost', 'api-port');
 const instance: ChildProcess = spawn('node', ['.vite/headless/headless.js'], { env, stdio: 'ignore' });
@@ -40,6 +42,12 @@ const post = async (route: string, body: unknown) =>
 const call = async (channel: string, ...args: unknown[]) => (await post('/call', { channel, args })).result;
 const hook = (event: string, extra: Record<string, unknown> = {}) =>
   post('/hook', { hook_event_name: event, bifrost_task_id: 't1', bifrost_context: 'code', cwd: tmp, ...extra });
+/** Runs the plugin's hook script as an agent would, from the session's environment, and returns what it prints. */
+const runHook = (mode: string, input: Record<string, unknown>) =>
+  execFileSync('node', ['src/claude-plugin/hooks/bifrost-hook.mjs', mode], {
+    env: { ...env, BIFROST_TASK_ID: 't1', BIFROST_CONTEXT: 'code' },
+    input: JSON.stringify({ cwd: tmp, ...input }),
+  }).toString();
 const busy = async () => ((await call(IPC.SESSION_STATE, 't1')) as SessionState).busy;
 
 try {
@@ -90,6 +98,25 @@ try {
     const tasks = (await call(IPC.LIST_TASKS)) as Task[];
     const sessionId = tasks.find((t) => t.id === 't1')?.sessionId;
     check("a fork's session start leaves the task's session as it was", sessionId === 's1', show({ sessionId }));
+  }
+  {
+    const prompted = runHook('prompt-submit', { hook_event_name: 'UserPromptSubmit' });
+    const afterPrompt = await busy();
+    const stopped = runHook('notify', { hook_event_name: 'Stop' });
+    const afterStop = await busy();
+    runHook('session-start', { hook_event_name: 'SessionStart', source: 'resume', session_id: 's2' });
+    const sessionId = ((await call(IPC.LIST_TASKS)) as Task[]).find((t) => t.id === 't1')?.sessionId;
+    const permission = runHook('permission', { hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: {} });
+    check(
+      "the hook script reaches the task through the session's environment and the port file, and prints only an answer for the agent",
+      afterPrompt === true &&
+        afterStop === false &&
+        sessionId === 's2' &&
+        prompted === '' &&
+        stopped === '' &&
+        permission.trim() === '{}',
+      show({ afterPrompt, afterStop, sessionId, prompted, stopped, permission }),
+    );
   }
 } finally {
   instance.kill('SIGTERM');
