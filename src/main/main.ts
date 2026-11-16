@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { app, BrowserWindow, globalShortcut, Menu, nativeImage, screen, shell } from 'electron';
+import { app, type BaseWindow, BrowserWindow, globalShortcut, Menu, nativeImage, screen, shell } from 'electron';
 import started from 'electron-squirrel-startup';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { parseStroke, resolveKeymap, strokeAccelerator } from '../shared/keymap';
@@ -21,8 +21,9 @@ app.name = 'Bifrost';
 
 let mainWindow: BrowserWindow | null = null;
 
-function setZoom(win: BrowserWindow | null | undefined, level: number): void {
-  if (!win) return;
+function setZoom(win: BaseWindow | undefined, zoom: (current: number) => number): void {
+  if (!(win instanceof BrowserWindow)) return;
+  const level = zoom(win.webContents.getZoomLevel());
   win.webContents.setZoomLevel(level);
   win.webContents.send('zoom-changed', Math.round(100 * 1.2 ** level));
   const config = loadConfig();
@@ -247,17 +248,17 @@ function buildMenu() {
         {
           label: 'Zoom In',
           accelerator: accel('Cmd+Shift+='),
-          click: (_mi, win) => setZoom(win, (win?.webContents.getZoomLevel() ?? 0) + 0.5),
+          click: (_mi, win) => setZoom(win, (level) => level + 0.5),
         },
         {
           label: 'Zoom Out',
           accelerator: accel('Cmd+Shift+-'),
-          click: (_mi, win) => setZoom(win, (win?.webContents.getZoomLevel() ?? 0) - 0.5),
+          click: (_mi, win) => setZoom(win, (level) => level - 0.5),
         },
         {
           label: 'Reset Zoom',
           accelerator: accel('Cmd+0'),
-          click: (_mi, win) => setZoom(win, 0),
+          click: (_mi, win) => setZoom(win, () => 0),
         },
         { type: 'separator' },
         { role: 'toggleDevTools' },

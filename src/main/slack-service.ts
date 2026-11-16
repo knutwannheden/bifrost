@@ -79,11 +79,12 @@ async function getTeamDomain(token: string): Promise<string> {
   if (cachedTeamDomain) return cachedTeamDomain;
   const result = await slackGet('auth.test', token);
   if (!result.ok) throw new Error(`auth.test failed: ${result.error}`);
-  cachedTeamDomain = result.url
+  const domain: string = result.url
     .replace(/^https?:\/\//, '')
     .replace(/\/$/, '')
     .split('.')[0];
-  return cachedTeamDomain;
+  cachedTeamDomain = domain;
+  return domain;
 }
 
 // --- Reaction polling ---
@@ -291,7 +292,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
       else resolve();
     }
 
-    async function handleRedirect(url: string): Promise<void> {
+    const handleRedirect = async (url: string): Promise<void> => {
       if (!url.startsWith(redirectUri)) return;
 
       const parsed = new URL(url);
@@ -323,7 +324,7 @@ export function startOAuth(mainWindow: BrowserWindow): Promise<void> {
         console.error('[slack] OAuth token exchange error:', err);
         finish(err as Error);
       }
-    }
+    };
 
     // Intercept the redirect to localhost before the browser tries to load it
     authWindow.webContents.on('will-redirect', (_event, url) => {

@@ -374,7 +374,7 @@ const TokenUsageChart = forwardRef<
         )}
       </div>
 
-      {detailPoint ? (
+      {detailPoint && selectedIndex !== null ? (
         <DetailPanel
           point={detailPoint}
           points={points}

@@ -1,7 +1,11 @@
 import type { CostTier, MetricFlag, SessionBucket, SessionMetrics, Severity, ToolEvent } from './types.js';
 
+type NumericMetric = {
+  [K in keyof SessionMetrics]: SessionMetrics[K] extends number ? K : never;
+}[keyof SessionMetrics];
+
 interface ThresholdDef {
-  metric: keyof SessionMetrics;
+  metric: NumericMetric;
   warn: number;
   critical: number;
   recommendation: string;
