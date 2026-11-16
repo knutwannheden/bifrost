@@ -43,10 +43,10 @@ const call = async (channel: string, ...args: unknown[]) => (await post('/call',
 const hook = (event: string, extra: Record<string, unknown> = {}) =>
   post('/hook', { hook_event_name: event, bifrost_task_id: 't1', bifrost_context: 'code', cwd: tmp, ...extra });
 /** Runs the plugin's hook script as an agent would, from the session's environment, and returns what it prints. */
-const runHook = (mode: string, input: Record<string, unknown>) =>
+const runHook = (mode: string, input: unknown, extraEnv: NodeJS.ProcessEnv = {}) =>
   execFileSync('node', ['src/claude-plugin/hooks/bifrost-hook.mjs', mode], {
-    env: { ...env, BIFROST_TASK_ID: 't1', BIFROST_CONTEXT: 'code' },
-    input: JSON.stringify({ cwd: tmp, ...input }),
+    env: { ...env, BIFROST_TASK_ID: 't1', BIFROST_CONTEXT: 'code', ...extraEnv },
+    input: JSON.stringify(input && typeof input === 'object' ? { cwd: tmp, ...input } : input),
   }).toString();
 const busy = async () => ((await call(IPC.SESSION_STATE, 't1')) as SessionState).busy;
 
@@ -116,6 +116,29 @@ try {
         stopped === '' &&
         permission.trim() === '{}',
       show({ afterPrompt, afterStop, sessionId, prompted, stopped, permission }),
+    );
+  }
+  {
+    // An answer the user gives in Bifrost arrives well after the request, from a server of its own.
+    const late = spawn(process.execPath, [
+      '-e',
+      `require('node:http').createServer((q, r) => { q.resume(); q.on('end', () => setTimeout(() => r.end('{"hookSpecificOutput":{}}'), 300)); }).listen(0, '127.0.0.1', function () { console.log(this.address().port); });`,
+    ]);
+    const latePort = await new Promise<string>((resolve) => late.stdout.once('data', (d) => resolve(String(d).trim())));
+    let answered = '';
+    let notObject = '';
+    try {
+      answered = runHook('permission', { tool_name: 'Read' }, { BIFROST_API_PORT: latePort });
+      notObject = runHook('notify', null, { BIFROST_API_PORT: latePort });
+    } catch (err) {
+      notObject = String(err);
+    } finally {
+      late.kill();
+    }
+    check(
+      'the hook script waits for an answer that comes late, and passes over input that is not an object',
+      answered.trim() === '{"hookSpecificOutput":{}}' && notObject === '',
+      show({ answered, notObject }),
     );
   }
 } finally {

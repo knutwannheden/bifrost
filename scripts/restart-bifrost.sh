@@ -178,8 +178,7 @@ Bifrost is an Electron app that the user runs in development mode with \`npm sta
 
 What happened is in the restart log $LOG, and the app's own output is in $NPM_LOG.${RESTART_REVERT:+ The restart was to load commits $RESTART_REVERT. If the log says it reverted them, they are already out of the working tree.}
 
-Healthy means ~/.bifrost/api-port names a port where this prints JSON with a "tasks" key:
-  curl -s -X POST -H 'Content-Type: application/json' -d '{"status":"running","limit":1}' http://127.0.0.1:\$(cat ~/.bifrost/api-port)/list-tasks
+Healthy means ~/.bifrost/api-port names a port where a POST of {"status":"running","limit":1} to /list-tasks, on 127.0.0.1, answers JSON with a "tasks" key.
 
 Only one Bifrost may run. Before starting one, check ps for $REPO/node_modules/electron and for electron-forge. Start it detached, so it outlives you, and give it a minute to answer:
   cd $REPO && nohup npm start >> $NPM_LOG 2>&1 < /dev/null &

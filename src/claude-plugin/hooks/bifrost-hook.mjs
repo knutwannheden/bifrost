@@ -3,7 +3,9 @@
 //
 // The permission hook runs before every tool call, and node:http takes longer to load than the
 // rest of this script runs. So it speaks HTTP over a plain socket. Bifrost's server answers an
-// HTTP/1.0 request with one unchunked body and closes the connection.
+// HTTP/1.0 request with one unchunked body and closes the connection. It drops a connection
+// the client half-closes, which would lose an answer held open for the user, so the request
+// leaves its side open.
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -40,6 +42,7 @@ try {
 } catch {
   process.exit(0);
 }
+if (input === null || typeof input !== 'object') process.exit(0);
 if (mode.enrich) {
   input.bifrost_context = process.env.BIFROST_CONTEXT || 'code';
   if (process.env.BIFROST_TASK_ID) input.bifrost_task_id = process.env.BIFROST_TASK_ID;
@@ -62,4 +65,4 @@ socket.on('end', () => {
 socket.write(
   `POST ${mode.route} HTTP/1.0\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: ${body.length}\r\n\r\n`,
 );
-socket.end(body);
+socket.write(body);

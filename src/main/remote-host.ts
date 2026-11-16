@@ -230,7 +230,9 @@ function editClaudeJson(body: string[]): string {
 // The key is resolved as trustRoot in claude-trust.ts resolves it.
 const TRUST_JS = editClaudeJson([
   "const { execFileSync } = require('child_process');",
-  'const d = fs.realpathSync(process.argv[1]);',
+  '// A path that does not resolve is trusted as given.',
+  'const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };',
+  'const d = real(process.argv[1]);',
   "const git = (arg) => execFileSync('git', ['-C', d, 'rev-parse', arg], { encoding: 'utf8', stdio: 'pipe' }).trim();",
   'let root;',
   'try {',
@@ -239,7 +241,7 @@ const TRUST_JS = editClaudeJson([
   '} catch {',
   '  root = d;',
   '}',
-  'root = fs.realpathSync(root);',
+  'root = real(root);',
   'const projects = (config.projects ??= {});',
   'if (projects[root]?.hasTrustDialogAccepted === true) process.exit(0);',
   'projects[root] = { ...JSON.parse(process.argv[2]), ...projects[root], hasTrustDialogAccepted: true };',
