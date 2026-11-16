@@ -14,7 +14,7 @@ import { useKeymap } from '../context/KeymapContext';
 import { requestArchive } from '../utils/archive';
 import { consoleTabs, stepConsole } from '../utils/console-tabs';
 import { focusTaskTerminal } from '../utils/focus-terminal';
-import { changeFeedHasFocus, ownsKeystrokes } from '../utils/keyboard-target';
+import { changeFeedHasFocus, ownsKeystrokes, terminalKeyFor } from '../utils/keyboard-target';
 import { nextActiveTaskId } from '../utils/next-active-task';
 import { isMac, pressedStroke } from '../utils/platform';
 import { restartBifrost } from '../utils/restart-bifrost';
@@ -416,9 +416,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
             }
 
             const ps = s.paneStates[activeTask.id] ?? defaultPaneState;
-            const targetSessionId =
-              ps.focusedPane === 'dev' && ps.devSessionId ? ps.devSessionId : activeTask.sessionId;
-            const terminal = terminalRegistry.get(targetSessionId);
+            const terminal = terminalRegistry.get(terminalKeyFor(activeTask.id, ps));
             const selection = terminal?.getSelection()?.trim();
             if (selection) {
               const extracted = extractFilePath(selection);
@@ -525,9 +523,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
               }
             } else {
               const ps = s.paneStates[activeTask.id] ?? defaultPaneState;
-              const targetSessionId =
-                ps.focusedPane === 'dev' && ps.devSessionId ? ps.devSessionId : activeTask.sessionId;
-              const cap = getTerminalCapture(targetSessionId);
+              const cap = getTerminalCapture(terminalKeyFor(activeTask.id, ps));
               if (!cap) return;
 
               if (cap.transcriptText) {
