@@ -25,22 +25,7 @@ fs.writeFileSync(path.join(repo, 'package.json'), '{\n  "name": "bifrost"\n}\n')
 fs.mkdirSync(other);
 fs.writeFileSync(path.join(other, 'package.json'), '{\n  "name": "other"\n}\n');
 fs.mkdirSync(bin);
-for (const tool of [
-  'awk',
-  'sed',
-  'head',
-  'grep',
-  'cat',
-  'date',
-  'mkdir',
-  'dirname',
-  'cp',
-  'tr',
-  'wc',
-  'jq',
-  'curl',
-  'python3',
-]) {
+for (const tool of ['awk', 'sed', 'head', 'grep', 'cat', 'date', 'mkdir', 'dirname', 'cp', 'tr', 'wc', 'jq', 'node']) {
   const found = execFileSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf-8' }).trim();
   fs.symlinkSync(found, path.join(bin, tool));
 }

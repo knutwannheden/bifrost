@@ -102,7 +102,7 @@ npm run make
 
 ## Linux and WSL2
 
-Bifrost runs on a Linux desktop, and on Windows inside WSL2, whose WSLg shows its window. Besides git and tmux, it needs `curl`, `jq` and `python3` for Restart Bifrost.
+Bifrost runs on a Linux desktop, and on Windows inside WSL2, whose WSLg shows its window. Besides git, tmux and node, it needs `jq` for Restart Bifrost.
 
 Ubuntu 23.10 and later restrict the user namespaces Electron's sandbox relies on, so `npm start` from a checkout refuses to start, with an error about the SUID sandbox helper. Give the checkout's helper to root:
 

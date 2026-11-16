@@ -21,7 +21,7 @@ esac
 
 if [ "$MODE" = launch ]; then
   # Checked before detaching, since the detached run can only log what it lacks.
-  for tool in jq python3 curl; do
+  for tool in jq node; do
     command -v "$tool" >/dev/null || { echo "restart-bifrost.sh needs $tool; install it and try again" >&2; exit 1; }
   done
   export RESTART_TS=$(date +%Y%m%d-%H%M%S)
