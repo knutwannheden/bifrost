@@ -1,4 +1,4 @@
-import { execFile as execFileCb, spawn } from 'node:child_process';
+import { execFile as execFileCb } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -22,6 +22,7 @@ import { getRemoteHost, storePasteHere } from './remote-host';
 import { devTerminalCount } from './session-manager';
 import { disconnectSlack, restartPolling, startOAuth } from './slack-service';
 import { getTasks } from './task-service';
+import { openTerminal } from './terminal-launcher';
 
 const allTasks = () => [...getTasks(), ...peerTasks()];
 const hostOf = (filePath: string) => remoteHost(filePath, allTasks(), loadConfig().machines ?? []);
@@ -72,45 +73,22 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     return shell.openExternal(url);
   });
 
-  // The script asks this process to quit, so it runs detached from it.
-  ipcMain.handle(IPC.RESTART_APP, (_event, force: boolean) => {
+  // The script detaches the restart itself, which asks this process to quit, and returns at once.
+  ipcMain.handle(IPC.RESTART_APP, async (_event, force: boolean) => {
     const devTerminals = devTerminalCount();
     if (devTerminals > 0 && !force) return { restarting: false, devTerminals };
     const script = path.join(process.cwd(), 'scripts', 'restart-bifrost.sh');
-    spawn('bash', [script], { cwd: process.cwd(), detached: true, stdio: 'ignore' }).unref();
-    return { restarting: true, devTerminals };
+    try {
+      await execFile('bash', [script], { cwd: process.cwd() });
+      return { restarting: true, devTerminals };
+    } catch (err) {
+      const stderr = (err as { stderr?: string }).stderr?.trim();
+      return { restarting: false, devTerminals, error: stderr || (err as Error).message };
+    }
   });
 
   ipcMain.handle(IPC.OPEN_IN_TERMINAL, async (_event, dirPath: string) => {
-    const config = loadConfig();
-    const terminal = config.terminal ?? 'Terminal';
-    const escaped = dirPath.replace(/'/g, "'\\''");
-    let script: string;
-    switch (terminal) {
-      case 'iTerm':
-        script = `tell application "iTerm"
-  activate
-  create window with default profile command "/bin/zsh"
-  tell current session of current window
-    write text "cd '${escaped}'"
-  end tell
-end tell`;
-        break;
-      case 'Ghostty':
-        script = `do shell script "open -a Ghostty '${escaped}'"`;
-        break;
-      case 'Warp':
-        script = `do shell script "open -a Warp '${escaped}'"`;
-        break;
-      default:
-        script = `tell application "Terminal"
-  activate
-  do script "cd '${escaped}'"
-end tell`;
-    }
-    await execFile('osascript', ['-e', script]).catch(() => {
-      shell.showItemInFolder(dirPath);
-    });
+    if (!(await openTerminal(loadConfig().terminal ?? 'auto', dirPath))) shell.showItemInFolder(dirPath);
   });
 
   // IDE

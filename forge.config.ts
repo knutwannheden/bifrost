@@ -87,8 +87,9 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ['darwin']),
-    new MakerRpm({}),
-    new MakerDeb({}),
+    // The installers look for a binary named after the package, bifrost, unless told the executable's name.
+    new MakerRpm({ options: { bin: 'Bifrost', icon: './assets/icon.png' } }),
+    new MakerDeb({ options: { bin: 'Bifrost', icon: './assets/icon.png' } }),
   ],
   plugins: [
     new VitePlugin({

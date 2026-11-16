@@ -37,13 +37,19 @@ export function openFileInIde(filePath: string, line?: number, worktreePath?: st
     args.push(line ? '--goto' : '', line ? `${filePath}:${line}` : filePath);
   }
 
+  return runEditor(command, args.filter(Boolean)).catch((error: Error) => {
+    throw new Error(`Failed to open ${filePath} in ${command}: ${error.message}`);
+  });
+}
+
+/** Runs the editor's command, falling back to zeditor, the name some Linux distributions give Zed's. */
+function runEditor(command: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile(command, args.filter(Boolean), (error) => {
-      if (error) {
-        reject(new Error(`Failed to open ${filePath} in ${command}: ${error.message}`));
-        return;
-      }
-      resolve();
+    execFile(command, args, (error) => {
+      if (!error) resolve();
+      else if (command === 'zed' && (error as NodeJS.ErrnoException).code === 'ENOENT')
+        runEditor('zeditor', args).then(resolve, () => reject(error));
+      else reject(error);
     });
   });
 }
@@ -88,14 +94,8 @@ export function openInIde(
   line?: number,
   host?: string,
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const { command, args } = ideCommand(ide ?? loadConfig().ide, worktreePath, filePath, line, host);
-    execFile(command, args, (error) => {
-      if (error) {
-        reject(new Error(`Failed to open ${worktreePath} in ${command}: ${error.message}`));
-        return;
-      }
-      resolve();
-    });
+  const { command, args } = ideCommand(ide ?? loadConfig().ide, worktreePath, filePath, line, host);
+  return runEditor(command, args).catch((error: Error) => {
+    throw new Error(`Failed to open ${worktreePath} in ${command}: ${error.message}`);
   });
 }

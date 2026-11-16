@@ -20,6 +20,10 @@ case "${1:-}" in
 esac
 
 if [ "$MODE" = launch ]; then
+  # Checked before detaching, since the detached run can only log what it lacks.
+  for tool in jq python3; do
+    command -v "$tool" >/dev/null || { echo "restart-bifrost.sh needs $tool; install it and try again" >&2; exit 1; }
+  done
   export RESTART_TS=$(date +%Y%m%d-%H%M%S)
   export RESTART_CALLER=${BIFROST_TASK_ID:-} RESTART_REVERT= RESTART_PROMPT= RESTART_WHILE_STOPPED=
   while [ $# -gt 0 ]; do
@@ -66,12 +70,14 @@ unset NO_COLOR AI_AGENT GIT_EDITOR COREPACK_ENABLE_AUTO_PIN
 unset COPILOT_ALLOW_ALL COPILOT_SKILLS_DIRS COPILOT_CLI COPILOT_AGENT_SESSION_ID
 
 # pgrep -f cannot read other processes' arguments on macOS, so ps is matched instead.
-processes() { ps -axo pid=,command= | sed 's/^ *//'; }
-electron_pid() { processes | awk -v repo="$REPO" '$2 == repo "/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron" && $3 == "." && NF == 3 { print $1 }' | head -1; }
+processes() { ps -eo pid=,args= | sed 's/^ *//'; }
+# Electron's binary, on macOS and on Linux. Bifrost's runs with "." alone, which Chromium's helper processes do not.
+ELECTRON_BIN='/node_modules/electron/dist/(Electron[.]app/Contents/MacOS/Electron|electron)$'
+electron_pid() { processes | awk -v repo="$REPO" -v bin="$ELECTRON_BIN" 'index($2, repo "/node_modules/") == 1 && $2 ~ bin && $3 == "." && NF == 3 { print $1 }' | head -1; }
 forge_pid() { processes | awk -v start="$REPO/node_modules/@electron-forge/cli/dist/electron-forge-start.js" '$3 == start { print $1 }' | head -1; }
 
 # The running Bifrost says which checkout to start again, and which node to start it with.
-REPO=$(processes | awk '$2 ~ /\/node_modules\/electron\/dist\/Electron\.app\/Contents\/MacOS\/Electron$/ && $3 == "." && NF == 3 { sub(/\/node_modules\/.*/, "", $2); print $2 }' | head -1)
+REPO=$(processes | awk -v bin="$ELECTRON_BIN" '$2 ~ bin && $3 == "." && NF == 3 { sub(/\/node_modules\/.*/, "", $2); print $2 }' | head -1)
 if [ -z "$REPO" ] || ! grep -q '"name": "bifrost"' "$REPO/package.json" 2>/dev/null; then
   log "no Bifrost running in development mode; nothing restarted"
   exit 1

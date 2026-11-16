@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
 import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
-import { modSymbol } from '../utils/platform';
+import { isMac, modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import FormInput from './FormInput';
 import FormSelect from './FormSelect';
@@ -16,6 +16,22 @@ import OverlayHeader from './OverlayHeader';
 import PillToggle from './PillToggle';
 import PrimaryButton from './PrimaryButton';
 import SectionHeader from './SectionHeader';
+
+/** The terminals this platform offers; a choice from the other one shows as the first. */
+const TERMINALS: { value: BifrostConfig['terminal']; label: string }[] = isMac
+  ? [
+      { value: 'Terminal', label: 'Terminal' },
+      { value: 'iTerm', label: 'iTerm' },
+      { value: 'Ghostty', label: 'Ghostty' },
+      { value: 'Warp', label: 'Warp' },
+    ]
+  : [
+      { value: 'auto', label: 'Auto' },
+      { value: 'gnome-terminal', label: 'GNOME Terminal' },
+      { value: 'konsole', label: 'Konsole' },
+      { value: 'kitty', label: 'kitty' },
+      { value: 'Ghostty', label: 'Ghostty' },
+    ];
 
 interface SettingDef {
   key: string;
@@ -331,16 +347,11 @@ function buildSettings(): SettingDef[] {
       category: 'General',
       label: 'Terminal',
       tooltip:
-        'Which terminal to open when clicking the worktree path in the status bar. Opens a new window at the task\u2019s worktree directory.',
+        'Which terminal to open when clicking the worktree path in the status bar. Opens a new window at the task\u2019s worktree directory. On Linux, Auto tries $TERMINAL, x-terminal-emulator, GNOME Terminal, Konsole and xterm.',
       render: (config, update) => (
         <PillToggle
-          options={[
-            { value: 'Terminal' as const, label: 'Terminal' },
-            { value: 'iTerm' as const, label: 'iTerm' },
-            { value: 'Ghostty' as const, label: 'Ghostty' },
-            { value: 'Warp' as const, label: 'Warp' },
-          ]}
-          value={config.terminal}
+          options={TERMINALS}
+          value={TERMINALS.some((t) => t.value === config.terminal) ? config.terminal : TERMINALS[0].value}
           onChange={(v) => update({ terminal: v })}
           size="md"
         />

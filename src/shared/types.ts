@@ -138,7 +138,7 @@ export interface Macro {
 export interface BifrostConfig {
   repos: Repo[];
   ide: 'code' | 'idea' | 'zed';
-  terminal: 'Terminal' | 'iTerm' | 'Ghostty' | 'Warp';
+  terminal: 'Terminal' | 'iTerm' | 'Ghostty' | 'Warp' | 'auto' | 'gnome-terminal' | 'konsole' | 'kitty';
   fontSize: number;
   fontFamily: string;
   fontWeight: number;

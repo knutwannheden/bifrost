@@ -3,7 +3,10 @@
  * or on the machine the task runs on. Run with `npm run check:ide-launcher`.
  */
 
-import { ideCommand, remoteHost } from '../src/main/ide-launcher.ts';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { ideCommand, openInIde, remoteHost } from '../src/main/ide-launcher.ts';
 import type { Machine, Task } from '../src/shared/types.ts';
 
 let failed = 0;
@@ -68,6 +71,25 @@ const task = (id: string, worktreePath: string, machine?: string) =>
     refused.every((m) => m.includes('Zed')),
     show(refused),
   );
+}
+
+{
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-zeditor-'));
+  const record = path.join(bin, 'args');
+  fs.writeFileSync(path.join(bin, 'zeditor'), `#!/bin/sh\necho "$@" > ${record}\n`, { mode: 0o755 });
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${bin}:/usr/bin:/bin`;
+  let outcome: string;
+  try {
+    await openInIde('/w/t', 'zed', 'x.ts', 3);
+    outcome = fs.readFileSync(record, 'utf-8').trim();
+  } catch (err) {
+    outcome = (err as Error).message;
+  } finally {
+    process.env.PATH = savedPath;
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+  check('without a zed command, Zed opens through zeditor', outcome === '/w/t /w/t/x.ts:3', outcome);
 }
 
 if (failed > 0) {
