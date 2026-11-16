@@ -4,7 +4,6 @@ import {
   ACTION_REGISTRY,
   isCustomized,
   type KeyStroke,
-  parseBinding,
   RUN_ACTION_EVENT,
   serializeBinding,
 } from '../../shared/keymap';
@@ -14,7 +13,7 @@ import { useKeymap } from '../context/KeymapContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { requestArchive } from '../utils/archive';
 import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
-import { altSymbol } from '../utils/platform';
+import { altSymbol, pressedStroke } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import CloseButton from './CloseButton';
 import Highlight from './Highlight';
@@ -133,28 +132,8 @@ export default function KeyboardShortcutsPanel() {
       return;
     }
 
-    const binding = item.binding;
     close();
-    if (!binding) {
-      requestAnimationFrame(() => window.dispatchEvent(new CustomEvent(RUN_ACTION_EVENT, { detail: item.actionId })));
-      return;
-    }
-    const strokes = parseBinding(binding);
-    if (strokes.length === 0) return;
-    const first = strokes[0];
-    requestAnimationFrame(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: first.key,
-          code: first.key === '/' ? 'Slash' : first.key.length === 1 ? `Key${first.key.toUpperCase()}` : first.key,
-          metaKey: !!first.mod,
-          ctrlKey: false,
-          shiftKey: !!first.shift,
-          altKey: !!first.alt,
-          bubbles: true,
-        }),
-      );
-    });
+    requestAnimationFrame(() => window.dispatchEvent(new CustomEvent(RUN_ACTION_EVENT, { detail: item.actionId })));
   };
 
   const startRecording = (actionId: string) => {
@@ -225,12 +204,8 @@ export default function KeyboardShortcutsPanel() {
 
       if (['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) return;
 
-      const stroke: KeyStroke = {
-        mod: e.metaKey || e.ctrlKey,
-        shift: e.shiftKey,
-        alt: e.altKey,
-        key: e.key.toLowerCase(),
-      };
+      const stroke = pressedStroke(e);
+      if (!stroke) return;
 
       const newStrokes = [...recordedStrokes, stroke];
       const serialized = serializeBinding(newStrokes);

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { app, BrowserWindow, globalShortcut, Menu, nativeImage, screen, shell } from 'electron';
 import started from 'electron-squirrel-startup';
 import { IPC_STREAM } from '../shared/ipc-channels';
-import { resolveKeymap, serializeBinding } from '../shared/keymap';
+import { parseStroke, resolveKeymap, strokeAccelerator } from '../shared/keymap';
 import type { BifrostConfig } from '../shared/types';
 import { loadConfig, saveConfig } from './config';
 import { subscribe } from './event-sink';
@@ -119,10 +119,6 @@ const createWindow = () => {
 let lastQuitAttempt = 0;
 const DOUBLE_TAP_MS = 500;
 
-function toElectronAccelerator(serialized: string): string {
-  return serialized.replace(/Cmd/g, 'CommandOrControl');
-}
-
 function buildMenu() {
   const sendAction = (action: string) => {
     mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, action);
@@ -130,12 +126,31 @@ function buildMenu() {
 
   const config = loadConfig();
   const keymap = resolveKeymap(config.keybindings);
+  const isMac = process.platform === 'darwin';
+  // Shortcuts are written as on macOS. strokeOfEvent says what Cmd is elsewhere.
+  const accel = (shortcut: string) => strokeAccelerator(parseStroke(shortcut), isMac);
   const accelFor = (actionId: string): string | undefined => {
     const binding = keymap.find((b) => b.actionId === actionId);
-    return binding ? toElectronAccelerator(serializeBinding(binding.strokes)) : undefined;
+    // A chord of several strokes has no accelerator to show.
+    return binding?.strokes.length === 1 ? strokeAccelerator(binding.strokes[0], isMac) : undefined;
   };
-
-  const isMac = process.platform === 'darwin';
+  const quitItem: Electron.MenuItemConstructorOptions = {
+    label: 'Quit Bifrost',
+    accelerator: accel('Cmd+Q'),
+    click: () => {
+      const now = Date.now();
+      if (now - lastQuitAttempt < DOUBLE_TAP_MS) {
+        app.quit();
+      } else {
+        lastQuitAttempt = now;
+        mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, 'quit-confirm');
+      }
+    },
+  };
+  // Off macOS the Edit and Window roles would claim Ctrl+C, Ctrl+V, Ctrl+W and
+  // the like from terminal programs. Text fields handle the editing keys
+  // themselves, and terminals copy and paste on Ctrl+Shift+C and V.
+  const roleAccelerators = isMac ? {} : { registerAccelerator: false };
   const template: Electron.MenuItemConstructorOptions[] = [
     // App menu (macOS only)
     ...(isMac
@@ -149,19 +164,7 @@ function buildMenu() {
               { role: 'hideOthers' as const },
               { role: 'unhide' as const },
               { type: 'separator' as const },
-              {
-                label: 'Quit Bifrost',
-                accelerator: 'CommandOrControl+Q',
-                click: () => {
-                  const now = Date.now();
-                  if (now - lastQuitAttempt < DOUBLE_TAP_MS) {
-                    app.quit();
-                  } else {
-                    lastQuitAttempt = now;
-                    mainWindow?.webContents.send(IPC_STREAM.MENU_ACTION, 'quit-confirm');
-                  }
-                },
-              },
+              quitItem,
             ],
           },
         ]
@@ -188,19 +191,20 @@ function buildMenu() {
           registerAccelerator: false,
           click: () => sendAction('archive-task'),
         },
+        ...(isMac ? [] : [{ type: 'separator' as const }, quitItem]),
       ],
     },
     // Edit
     {
       label: 'Edit',
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { role: 'undo', ...roleAccelerators },
+        { role: 'redo', ...roleAccelerators },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
+        { role: 'cut', ...roleAccelerators },
+        { role: 'copy', ...roleAccelerators },
+        { role: 'paste', ...roleAccelerators },
+        { role: 'selectAll', ...roleAccelerators },
       ],
     },
     // View
@@ -242,17 +246,17 @@ function buildMenu() {
         { type: 'separator' },
         {
           label: 'Zoom In',
-          accelerator: 'CommandOrControl+Shift+=',
+          accelerator: accel('Cmd+Shift+='),
           click: (_mi, win) => setZoom(win, (win?.webContents.getZoomLevel() ?? 0) + 0.5),
         },
         {
           label: 'Zoom Out',
-          accelerator: 'CommandOrControl+Shift+-',
+          accelerator: accel('Cmd+Shift+-'),
           click: (_mi, win) => setZoom(win, (win?.webContents.getZoomLevel() ?? 0) - 0.5),
         },
         {
           label: 'Reset Zoom',
-          accelerator: 'CommandOrControl+0',
+          accelerator: accel('Cmd+0'),
           click: (_mi, win) => setZoom(win, 0),
         },
         { type: 'separator' },
@@ -263,9 +267,9 @@ function buildMenu() {
     {
       label: 'Window',
       submenu: [
-        { role: 'minimize' },
+        { role: 'minimize', ...roleAccelerators },
         { role: 'zoom' },
-        ...(isMac ? [{ type: 'separator' as const }, { role: 'front' as const }] : [{ role: 'close' as const }]),
+        ...(isMac ? [{ type: 'separator' as const }, { role: 'front' as const }] : []),
       ],
     },
   ];

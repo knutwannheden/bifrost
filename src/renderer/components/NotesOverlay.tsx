@@ -3,7 +3,7 @@ import type { Note } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { formatTime } from '../utils/format-time';
-import { altSymbol, deleteSymbol, isModKey, modSymbol } from '../utils/platform';
+import { altSymbol, deleteSymbol, isShortcut, modSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import CloseButton from './CloseButton';
 import OverlayFooter from './OverlayFooter';
@@ -210,7 +210,7 @@ export default function NotesOverlay() {
       return;
     }
     // Cmd+Delete to delete selected note
-    if (e.key === 'Backspace' && isModKey(e)) {
+    if (isShortcut(e, 'Cmd+Backspace')) {
       e.preventDefault();
       deleteSelectedNote();
       return;
@@ -238,7 +238,7 @@ export default function NotesOverlay() {
       return;
     }
     // Cmd+Delete to delete
-    if (e.key === 'Backspace' && isModKey(e)) {
+    if (isShortcut(e, 'Cmd+Backspace')) {
       e.preventDefault();
       deleteSelectedNote();
       return;

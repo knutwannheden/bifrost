@@ -11,7 +11,7 @@ import { useSessionMetrics } from '../hooks/useSessionMetrics';
 import { type TabDef, useTabMnemonics } from '../hooks/useTabMnemonics';
 import { useTokenUsage } from '../hooks/useTokenUsage';
 import { formatRelative } from '../utils/format-time';
-import { isModKey } from '../utils/platform';
+import { isShortcut } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import CloseButton from './CloseButton';
 import { LazyFileSection } from './DiffFileView';
@@ -699,7 +699,7 @@ export default function DiffOverlay() {
     if (isWalkthrough && walkthroughRef.current?.handleKeyDown(e)) return;
 
     // Mod+O: open the focused entry's file in the IDE
-    if (isModKey(e) && !e.shiftKey && e.key.toLowerCase() === 'o') {
+    if (isShortcut(e, 'Cmd+O')) {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
       if (activeTask) {
         let filePath: string | undefined;
@@ -717,7 +717,7 @@ export default function DiffOverlay() {
     }
 
     // Mod+Shift+C: capture context for the focused entry
-    if (isModKey(e) && e.shiftKey && e.key.toLowerCase() === 'c') {
+    if (isShortcut(e, 'Cmd+Shift+C')) {
       const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
       if (!activeTask) return;
 

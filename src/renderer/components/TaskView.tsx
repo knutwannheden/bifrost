@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Prerequisite, PrerequisiteStatus, Task } from '../../shared/types';
 import type { PaneTarget } from '../context/AppContext';
 import { defaultPaneState, isAnyOverlayOpen, useApp } from '../context/AppContext';
-import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
+import { altSymbol, modSymbol, shortcutLabel } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import InterruptedBanner from './InterruptedBanner';
 import Kbd from './Kbd';
@@ -30,7 +30,7 @@ const tips = [
   `Use ${modSymbol}K to open the command palette for quick access to all actions. Press ${altSymbol}R to assign a custom keybinding.`,
   `Press ${modSymbol}, to open settings and customize font size, IDE, and more.`,
   `Press ${modSymbol}/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.`,
-  `Press ${modSymbol}${shiftSymbol}C to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.`,
+  `Press ${shortcutLabel('Cmd+Shift+C')} to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.`,
   'When a permission prompt appears, press Tab to focus it \u2014 then use A/D to allow/deny, Esc to deny once.',
   `Press ${modSymbol}- to jump back to your previous tab \u2014 like cd - for tasks.`,
   `Press ${modSymbol}= to jump to the last tab that had a notification.`,

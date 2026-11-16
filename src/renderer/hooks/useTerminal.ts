@@ -11,7 +11,7 @@ import { resolveTerminalTheme } from '../terminal-themes';
 import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
 import { keepsClickFromProgram } from '../utils/link-click';
 import { decodeOsc52 } from '../utils/osc52';
-import { isMac, isModKey } from '../utils/platform';
+import { isMac, pressedStroke } from '../utils/platform';
 import { createLeadingCoalescer, type LeadingCoalescer } from '../utils/resize-scheduler';
 
 // Global registry so keyboard shortcuts can access terminal instances
@@ -286,6 +286,8 @@ export function useTerminal(
         }
       }
       if (paneType === 'claude' && e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'v') {
+        // Off macOS Chromium also pastes on Ctrl+V. Text pastes with Ctrl+Shift+V there.
+        e.preventDefault();
         if (e.type === 'keydown') pasteImage(true);
         return false;
       }
@@ -294,6 +296,21 @@ export function useTerminal(
       // keeps the Kitty protocol from encoding the chord as a super-modified key.
       if (isMac && e.metaKey && !e.ctrlKey && !e.altKey) {
         if (e.type === 'keydown' && e.key.toLowerCase() === 'a') terminal.selectAll();
+        return false;
+      }
+      // Off macOS a Ctrl+Shift chord belongs to the app, as a Cmd chord does on
+      // macOS. Plain Ctrl+C and Ctrl+V go to the session there, so the terminal's
+      // copy, paste and select-all take Ctrl+Shift, as in GNOME Terminal.
+      if (!isMac && e.ctrlKey && e.shiftKey && !e.metaKey) {
+        const key = pressedStroke(e)?.key;
+        if (!e.altKey && (key === 'c' || key === 'v' || key === 'a')) {
+          e.preventDefault();
+          if (e.type === 'keydown') {
+            if (key === 'c') copySelection();
+            else if (key === 'v') pasteClipboard();
+            else terminal.selectAll();
+          }
+        }
         return false;
       }
       // Option+Left/Right: word navigation (ESC b / ESC f)
@@ -315,17 +332,12 @@ export function useTerminal(
           return false;
         }
       }
-      if (isModKey(e) && !e.shiftKey) {
-        const key = e.key.toLowerCase();
-        // On Linux, let readline shortcuts (Ctrl+A/D/R/H/K/L) pass through
-        // to the dev terminal instead of intercepting them for app shortcuts.
-        // Users can Ctrl+/ to switch to the Claude pane for those shortcuts.
-        if (!isMac && paneType === 'dev' && 'adrhkl'.includes(key)) return true;
-        if (interceptedKeysRef.current.modKeys.has(key)) return false;
-      }
-      if (isModKey(e) && e.shiftKey) {
-        const key = e.key.toLowerCase();
-        if (interceptedKeysRef.current.shiftModKeys.has(key)) return false;
+      const pressed = pressedStroke(e);
+      if (pressed?.mod) {
+        const intercepted = pressed.shift
+          ? interceptedKeysRef.current.shiftModKeys
+          : interceptedKeysRef.current.modKeys;
+        if (intercepted.has(pressed.key)) return false;
       }
       // Bare keys (no modifiers) like F2
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
@@ -423,14 +435,16 @@ export function useTerminal(
     // retain padding to the full terminal width — which destination editors
     // wrap as visible blank lines. Capture phase + stopPropagation keeps
     // xterm's bubble-phase handler from overwriting our cleaned data.
-    const onCopy = (e: ClipboardEvent) => {
-      if (!terminal.hasSelection()) return;
-      const sel = terminal.getSelection();
-      if (!sel) return;
-      const cleaned = sel
+    const trimmedSelection = () =>
+      terminal
+        .getSelection()
         .split('\n')
         .map((line) => line.replace(/[ \t]+$/, ''))
         .join('\n');
+    const onCopy = (e: ClipboardEvent) => {
+      if (!terminal.hasSelection()) return;
+      const cleaned = trimmedSelection();
+      if (!cleaned) return;
       e.clipboardData?.setData('text/plain', cleaned);
       e.preventDefault();
       e.stopPropagation();
@@ -440,6 +454,24 @@ export function useTerminal(
     // Claude's TUI always accepts bracketed paste at the prompt, so frame the
     // paste here rather than relying on xterm's tracked mode, which requires
     // it to have parsed Claude's enable sequence off the output stream.
+    // Mirror xterm's prepareTextForTerminal (\n→\r); replace embedded ESC
+    // with the visible ␛ symbol so it can't prematurely close the
+    // bracketed-paste span.
+    const framePaste = (text: string) => `\x1b[200~${text.replace(/\r?\n/g, '\r').split('\x1b').join('␛')}\x1b[201~`;
+    const copySelection = () => {
+      const text = terminal.hasSelection() ? trimmedSelection() : '';
+      if (text) navigator.clipboard.writeText(text).catch(() => {});
+    };
+    const pasteClipboard = () =>
+      window.bifrost
+        .readClipboard()
+        .then((text) => {
+          if (!text) {
+            if (paneType === 'claude') pasteImage(false);
+          } else if (paneType === 'claude') sendInput(framePaste(text));
+          else terminal.paste(text);
+        })
+        .catch(() => {});
     const onPaste = (e: ClipboardEvent) => {
       if (paneType !== 'claude') return;
       const text = e.clipboardData?.getData('text/plain');
@@ -452,12 +484,7 @@ export function useTerminal(
       }
       e.preventDefault();
       e.stopPropagation();
-      // Mirror xterm's prepareTextForTerminal (\n→\r); replace embedded ESC
-      // with the visible ␛ symbol so it can't prematurely close the
-      // bracketed-paste span.
-      const sanitized = text.replace(/\r?\n/g, '\r').split('\x1b').join('␛');
-      const framed = `\x1b[200~${sanitized}\x1b[201~`;
-      sendInput(framed);
+      sendInput(framePaste(text));
     };
     containerRef.current?.addEventListener('paste', onPaste, { capture: true });
 

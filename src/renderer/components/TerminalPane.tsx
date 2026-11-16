@@ -3,7 +3,7 @@ import '@xterm/xterm/css/xterm.css';
 import { isAnyOverlayOpen, useApp } from '../context/AppContext';
 import { useTerminal } from '../hooks/useTerminal';
 import { useResolvedDark } from '../hooks/useTheme';
-import { isModKey } from '../utils/platform';
+import { isShortcut } from '../utils/platform';
 import TerminalSearchBar from './TerminalSearchBar';
 
 interface TerminalPaneProps {
@@ -81,7 +81,7 @@ export default function TerminalPane({
   // Listen for Cmd+F to open search bar
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (isModKey(e) && !e.shiftKey && e.key.toLowerCase() === 'f' && focused && active && !anyOverlay) {
+      if (isShortcut(e, 'Cmd+F') && focused && active && !anyOverlay) {
         e.preventDefault();
         setShowSearch(true);
       }

@@ -3,7 +3,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react
 import { parseDiff } from '../../shared/diff-parser';
 import type { Anchor, AnchorStatus, Comment, Step, StepKind, Walkthrough } from '../../shared/walkthrough';
 import { useWalkthrough } from '../hooks/useWalkthrough';
-import { isModKey } from '../utils/platform';
+import { altSymbol, isShortcut, shortcutLabel } from '../utils/platform';
 import { layOut, type Shown } from '../utils/walkthrough-layout';
 import { type DiffAnnotations, LazyFileSection } from './DiffFileView';
 import FormInput from './FormInput';
@@ -12,7 +12,7 @@ import SectionHeader from './SectionHeader';
 import SimpleMarkdown from './SimpleMarkdown';
 import Spinner from './Spinner';
 
-export const WALKTHROUGH_HINTS = '↑↓ step · ←→ chapter · ⌥R regenerate · ⌥H current head · ⌘O open · Esc close';
+export const WALKTHROUGH_HINTS = `↑↓ step · ←→ chapter · ${altSymbol}R regenerate · ${altSymbol}H current head · ${shortcutLabel('Cmd+O')} open · Esc close`;
 
 const KIND: Record<StepKind, { label: string; dot: string; border: string; text: string }> = {
   narration: { label: 'Narration', dot: 'bg-accent', border: 'border-accent', text: 'text-accent-hover' },
@@ -258,7 +258,7 @@ export default function WalkthroughContent({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent): boolean => {
-    if (isModKey(e) && !e.shiftKey && e.key.toLowerCase() === 'o') {
+    if (isShortcut(e, 'Cmd+O')) {
       e.preventDefault();
       openInIde();
       return true;

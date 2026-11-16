@@ -1,15 +1,15 @@
 import React from 'react';
-import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
+import { isMac } from '../utils/platform';
 
 type KbdSize = 'sm' | 'xs';
 
-/** Map semantic modifier prefixes to platform-specific symbols */
+/** Map the keymap's modifier names to what this platform's user presses */
 function formatKeys(text: string): string {
+  if (!isMac) return text.replace(/Cmd\+Shift\+/g, 'Ctrl+Alt+Shift+').replace(/Cmd\+/g, 'Ctrl+Shift+');
   return text
-    .replace(/Cmd\+/g, modSymbol)
-    .replace(/Ctrl\+/g, modSymbol)
-    .replace(/Alt\+/g, altSymbol)
-    .replace(/Shift\+/g, shiftSymbol);
+    .replace(/(Cmd|Ctrl)\+/g, '⌘')
+    .replace(/Alt\+/g, '⌥')
+    .replace(/Shift\+/g, '⇧');
 }
 
 function formatChildren(children: React.ReactNode): React.ReactNode {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { consoleTabs } from '../utils/console-tabs';
-import { altSymbol, modSymbol, shiftSymbol } from '../utils/platform';
+import { altSymbol, shortcutLabel } from '../utils/platform';
 import CloseButton from './CloseButton';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
@@ -114,8 +114,7 @@ export default function ConsoleOverlay() {
           <span className="text-xs text-faint">
             {consoles.length > 1 && (
               <>
-                {modSymbol}
-                {shiftSymbol}[ ] switch console &middot;{' '}
+                {shortcutLabel('Cmd+Shift+[')} {shortcutLabel('Cmd+Shift+]')} switch console &middot;{' '}
               </>
             )}
             {altSymbol}R start over &middot; Esc close &middot; addressable as &ldquo;bifrost&rdquo;

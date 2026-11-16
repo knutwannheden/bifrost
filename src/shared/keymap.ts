@@ -115,7 +115,7 @@ export function serializeBinding(strokes: KeyStroke[]): string {
   return strokes.map(serializeStroke).join(' ');
 }
 
-function parseStroke(s: string): KeyStroke {
+export function parseStroke(s: string): KeyStroke {
   const parts = s.split('+');
   const last = parts[parts.length - 1];
   const key = ARROW_KEYS[last] ?? last.toLowerCase();
@@ -225,20 +225,86 @@ export function getInterceptedKeys(keymap: KeyBinding[]): InterceptedKeys {
   return { modKeys, shiftModKeys, bareKeys };
 }
 
-export function strokeMatchesEvent(
-  stroke: KeyStroke,
-  e: { key: string; code?: string; shiftKey: boolean; altKey: boolean },
-  /** Whether the platform modifier key (Cmd on Mac, Ctrl on Linux/Win) is held */
-  mod: boolean,
-): boolean {
-  if (!!stroke.mod !== mod) return false;
-  const key = e.key.toLowerCase();
-  if (stroke.key === '[' || stroke.key === ']') {
-    const code = e.code ?? '';
-    const expectedCode = stroke.key === '[' ? 'BracketLeft' : 'BracketRight';
-    return code === expectedCode && !!stroke.shift === e.shiftKey && !!stroke.alt === e.altKey;
+export interface ChordEvent {
+  key: string;
+  code?: string;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  shiftKey: boolean;
+  altKey: boolean;
+}
+
+// Physical keys whose character Shift changes on a US layout. Off macOS Shift
+// is part of the modifier, so these keys are read from e.code instead.
+const CODE_KEYS: Record<string, string> = {
+  Minus: '-',
+  Equal: '=',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Backquote: '`',
+};
+
+function keyOf(e: ChordEvent, byCode: boolean): string {
+  const code = e.code ?? '';
+  if (code === 'BracketLeft' || code === 'BracketRight') return CODE_KEYS[code];
+  if (byCode) {
+    if (CODE_KEYS[code]) return CODE_KEYS[code];
+    if (/^Digit\d$/.test(code)) return code.slice(5);
+    // Ctrl+Alt can compose another character on some layouts (AltGr on Windows).
+    if (/^Key[A-Z]$/.test(code) && !/^[a-z]$/i.test(e.key)) return code.slice(3).toLowerCase();
   }
-  return key === stroke.key && !!stroke.shift === e.shiftKey && !!stroke.alt === e.altKey;
+  return e.key.toLowerCase();
+}
+
+/**
+ * The stroke a key event spells in the keymap, or null when the chord belongs to
+ * the terminal. A stroke's `mod` is Cmd on macOS. Elsewhere it is Ctrl+Shift, and
+ * a stroke with both `mod` and `shift` is Ctrl+Alt+Shift, so that plain Ctrl
+ * reaches terminal programs as it does in GNOME Terminal or VS Code.
+ */
+export function strokeOfEvent(e: ChordEvent, mac: boolean): KeyStroke | null {
+  if (mac) return { mod: e.metaKey, shift: e.shiftKey, alt: e.altKey, key: keyOf(e, false) };
+  if (!e.ctrlKey) return { mod: false, shift: e.shiftKey, alt: e.altKey, key: keyOf(e, false) };
+  if (!e.shiftKey) return null;
+  return { mod: true, shift: e.altKey, alt: false, key: keyOf(e, true) };
+}
+
+export function strokeMatches(binding: KeyStroke, pressed: KeyStroke): boolean {
+  return (
+    !!binding.mod === pressed.mod &&
+    !!binding.shift === !!pressed.shift &&
+    !!binding.alt === !!pressed.alt &&
+    binding.key === pressed.key
+  );
+}
+
+function keyLabel(key: string): string {
+  return ARROW_SYMBOLS[key] ?? (key.length === 1 ? key.toUpperCase() : key);
+}
+
+/** How a stroke reads to the user on this platform: ⌘⇧W on macOS, Ctrl+Alt+Shift+W elsewhere. */
+export function strokeLabel(s: KeyStroke, mac: boolean): string {
+  if (mac) return `${s.mod ? '\u2318' : ''}${s.alt ? '\u2325' : ''}${s.shift ? '\u21E7' : ''}${keyLabel(s.key)}`;
+  return [...modifierNames(s), keyLabel(s.key)].join('+');
+}
+
+function modifierNames(s: KeyStroke): string[] {
+  if (s.mod) return s.shift ? ['Ctrl', 'Alt', 'Shift'] : ['Ctrl', 'Shift'];
+  return [...(s.alt ? ['Alt'] : []), ...(s.shift ? ['Shift'] : [])];
+}
+
+/** A stroke as an Electron menu accelerator. */
+export function strokeAccelerator(s: KeyStroke, mac: boolean): string {
+  const key =
+    s.key.length === 1 ? s.key.toUpperCase() : s.key.replace(/^arrow/, '').replace(/^./, (c) => c.toUpperCase());
+  if (mac) return serializeStroke({ ...s, key }).replace('Cmd', 'CommandOrControl');
+  return [...modifierNames(s), key].join('+');
 }
 
 export function getBindingDisplay(binding: KeyBinding): string {

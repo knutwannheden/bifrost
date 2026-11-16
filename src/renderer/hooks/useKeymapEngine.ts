@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { ACTION_REGISTRY, type KeyBinding, RUN_ACTION_EVENT, strokeMatchesEvent } from '../../shared/keymap';
+import {
+  ACTION_REGISTRY,
+  type KeyBinding,
+  type KeyStroke,
+  RUN_ACTION_EVENT,
+  strokeLabel,
+  strokeMatches,
+} from '../../shared/keymap';
 import type { CaptureContextParams } from '../../shared/types';
 import type { AppAction, AppState, PaneTarget } from '../context/AppContext';
 import { defaultPaneState, getActiveDiffState, isAnyOverlayOpen } from '../context/AppContext';
@@ -9,7 +16,7 @@ import { consoleTabs, stepConsole } from '../utils/console-tabs';
 import { focusTaskTerminal } from '../utils/focus-terminal';
 import { changeFeedHasFocus, ownsKeystrokes } from '../utils/keyboard-target';
 import { nextActiveTaskId } from '../utils/next-active-task';
-import { isMac, isModKey, modSymbol, shiftSymbol } from '../utils/platform';
+import { isMac, pressedStroke } from '../utils/platform';
 import { restartBifrost } from '../utils/restart-bifrost';
 import { restartSessions } from '../utils/restart-sessions';
 import { taskReference } from '../utils/task-reference';
@@ -130,12 +137,10 @@ interface ChordState {
   timeoutId: ReturnType<typeof setTimeout>;
 }
 
-function formatStrokeDisplay(stroke: { mod?: boolean; shift?: boolean; key: string }): string {
-  const parts: string[] = [];
-  if (stroke.mod) parts.push(modSymbol);
-  if (stroke.shift) parts.push(shiftSymbol);
-  parts.push(stroke.key.toUpperCase());
-  return parts.join('');
+const MODIFIER_KEYS = new Set(['Meta', 'Control', 'Shift', 'Alt']);
+
+function formatStrokeDisplay(stroke: KeyStroke): string {
+  return strokeLabel(stroke, isMac);
 }
 
 export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAction>) {
@@ -605,7 +610,11 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!isModKey(e)) {
+      // A modifier going down on its way to the next stroke is no stroke of its own.
+      if (MODIFIER_KEYS.has(e.key)) return;
+      const pressed = pressedStroke(e);
+      if (!pressed) return;
+      if (!pressed.mod) {
         // If we're in chord-pending state and user presses a non-mod key, check second stroke
         const chord = chordStateRef.current;
         if (chord) {
@@ -613,7 +622,7 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           chordStateRef.current = null;
 
           for (const binding of chord.firstStroke) {
-            if (binding.strokes.length >= 2 && strokeMatchesEvent(binding.strokes[1], e, isModKey(e))) {
+            if (binding.strokes.length >= 2 && strokeMatches(binding.strokes[1], pressed)) {
               e.preventDefault();
               handleActionWithDoubleConfirm(binding.actionId);
               return;
@@ -635,21 +644,9 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
       const target = e.target as HTMLElement;
       if (isAnyOverlayOpen(stateRef.current) && ownsKeystrokes(target)) return;
 
-      const key = e.key.toLowerCase();
-      const s = stateRef.current;
-
-      // On Linux, let readline shortcuts reach the focused dev terminal
-      if (!isMac && s.activeTaskId) {
-        const activePs = s.paneStates[s.activeTaskId] ?? defaultPaneState;
-        if (activePs.focusedPane === 'dev' && activePs.devSessionId && 'adrhkl'.includes(key)) {
-          return;
-        }
-      }
-
       // Find all bindings whose first stroke matches
       const currentKeymap = keymapRef.current;
-      const mod = isModKey(e);
-      const matchingBindings = currentKeymap.filter((b) => strokeMatchesEvent(b.strokes[0], e, mod));
+      const matchingBindings = currentKeymap.filter((b) => strokeMatches(b.strokes[0], pressed));
       if (matchingBindings.length === 0) return;
 
       e.preventDefault();
