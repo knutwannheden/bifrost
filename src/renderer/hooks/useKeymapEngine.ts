@@ -506,11 +506,10 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
             if (showDiff) {
               const domSelection = window.getSelection()?.toString()?.trim();
               if (domSelection) {
-                params = {
-                  type: diffMode as 'diff' | 'activity',
-                  content: domSelection,
-                  ...taskMeta,
-                };
+                params =
+                  diffMode === 'activity'
+                    ? { type: 'activity', content: domSelection, ...taskMeta }
+                    : { type: 'diff', content: domSelection, ...taskMeta };
               } else if (diffMode === 'git') {
                 const diff = await window.bifrost.getDiff(activeTask.id);
                 const content = diff.diff;
