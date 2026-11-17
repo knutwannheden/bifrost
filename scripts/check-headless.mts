@@ -216,6 +216,10 @@ try {
 
   {
     const ran = await until(consoleRuns, 10_000);
+    const startedName = path.join(home, '.bifrost', 'sessions', 'console', 'started-name');
+    await until(() => fs.existsSync(startedName), 10_000);
+    const consoleName = fs.existsSync(startedName) ? fs.readFileSync(startedName, 'utf-8').trim() : '';
+    check("a machine's console is named for that machine", consoleName === 'bifrost-perf', show(consoleName));
     // A subscriber still holding its stream must not keep the instance from stopping.
     const subscriber = await post('/events', {}, AbortSignal.timeout(30_000)).catch(() => undefined);
     child.kill('SIGTERM');

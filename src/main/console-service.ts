@@ -18,7 +18,9 @@ const CONSOLE_DIR = path.join(os.homedir(), '.bifrost', 'console');
 
 /** Stable across restarts: the renderer attaches to it, the phone addresses it. */
 export const CONSOLE_SESSION_ID = 'console';
-export const CONSOLE_NAME = 'bifrost';
+
+/** Named after its machine, so the consoles of several machines can be told apart by name. */
+const consoleName = (machine = process.env.BIFROST_MACHINE) => `bifrost-${machine || 'local'}`;
 
 /** A crashing console must not respawn in a tight loop. */
 const RESPAWN_DELAY_MS = 5_000;
@@ -41,13 +43,14 @@ function spawn(sessionId?: string): void {
 
   const config = loadConfig();
   const agent = config.agent ?? 'claude';
+  const name = consoleName();
   const machine = machineSession('skip-permissions', config.remoteControlAtStartup === true);
   const launch =
     agent === 'claude'
       ? {
           args: [
             '--name',
-            CONSOLE_NAME,
+            name,
             '--dangerously-skip-permissions',
             ...(Object.keys(machine.settings).length ? ['--settings', JSON.stringify(machine.settings)] : []),
             ...machine.args,
@@ -66,10 +69,10 @@ function spawn(sessionId?: string): void {
     agent,
     sessionId: sessionId ?? (agent === 'codex' ? '' : randomUUID()),
     args: launch.args,
-    env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: CONSOLE_NAME, ...machine.env, ...launch.env },
+    env: { BIFROST_CONTEXT: 'console', BIFROST_SESSION_NAME: name, ...machine.env, ...launch.env },
   });
   attachLocalSession(CONSOLE_SESSION_ID, {
-    name: CONSOLE_NAME,
+    name,
     onExit: () => {
       // Being reachable is the whole point, so an exit is temporary.
       if (respawnTimer) clearTimeout(respawnTimer);
@@ -123,7 +126,7 @@ export async function getMachineConsole(machine: string): Promise<string> {
   await connectPeer(machine);
   const id = `${CONSOLE_SESSION_ID}@${machine}`;
   if (!hasSession(id)) {
-    createRemoteSession(id, getRemoteHost(machine), { name: CONSOLE_NAME, tmuxName: CONSOLE_SESSION_ID });
+    createRemoteSession(id, getRemoteHost(machine), { name: consoleName(machine), tmuxName: CONSOLE_SESSION_ID });
   }
   return id;
 }

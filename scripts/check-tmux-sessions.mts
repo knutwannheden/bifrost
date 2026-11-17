@@ -54,6 +54,7 @@ process.env.TMUX_TMPDIR = root;
 process.env.PATH = `${stubs}:${process.env.PATH}`;
 delete process.env.CLAUDE_CONFIG_DIR;
 delete process.env.TMUX;
+delete process.env.BIFROST_MACHINE;
 
 // Prints a link, then a numbered line every 20 ms, echoes each line it reads, and ends on `q`.
 fs.writeFileSync(
@@ -315,6 +316,10 @@ try {
     await attachSession('console', 80, 10);
     await sleep(400);
     const before = lastNumber(dataOf('console').join(''));
+    const consoleName = fs
+      .readFileSync(path.join(home, '.bifrost', 'sessions', 'console', 'started-name'), 'utf-8')
+      .trim();
+    check('the console here is named for this machine', consoleName === 'bifrost-local', show(consoleName));
     detachAllSessions();
     const from = events.length;
     consoleService.initConsole();

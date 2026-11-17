@@ -20,7 +20,7 @@ import {
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { applyClaudeConfigDir, claudeProjectDir } from './claude-paths';
 import { loadConfig, saveConfig } from './config';
-import { CONSOLE_NAME, CONSOLE_SESSION_ID } from './console-service';
+import { CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
@@ -246,7 +246,7 @@ function reportCreateFailure(
     const creator = getTasks().find((t) => t.id === params.createdByTaskId);
     to = creator && !creator.machine ? getSessionName(creator.id) : undefined;
   } else if (fromConsole && hasSession(CONSOLE_SESSION_ID)) {
-    to = CONSOLE_NAME;
+    to = getSessionName(CONSOLE_SESSION_ID);
   }
   if (!to) return;
   const what = params.name ? `Task "${params.name}"` : 'The task you asked for';

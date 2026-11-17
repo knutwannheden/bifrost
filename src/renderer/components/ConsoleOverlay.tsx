@@ -117,7 +117,8 @@ export default function ConsoleOverlay() {
                 {shortcutLabel('Cmd+Shift+[')} {shortcutLabel('Cmd+Shift+]')} switch console &middot;{' '}
               </>
             )}
-            {altSymbol}R start over &middot; Esc close &middot; addressable as &ldquo;bifrost&rdquo;
+            {altSymbol}R start over &middot; Esc close &middot; addressable as &ldquo;{`bifrost-${machine || 'local'}`}
+            &rdquo;
           </span>
         </OverlayFooter>
       </div>
