@@ -100,6 +100,24 @@ function check(name: string, ok: boolean, detail = '') {
   );
 }
 
+{
+  const replayAfter = async (id: string, output: string) => {
+    createMirror(id, SPAWN_COLS, ROWS);
+    mirrorOutput(id, output);
+    const snapshot = await snapshotMirror(id, ATTACH_COLS, ROWS);
+    disposeMirror(id);
+    return snapshot?.replay ?? '';
+  };
+  const sgr = `${ESC}[?1006h`;
+  const asked = await replayAfter('sgr-on', `${ESC}[?1049h${ESC}[?1003;1006h`);
+  const dropped = await replayAfter('sgr-off', `${ESC}[?1049h${ESC}[?1003h${sgr}${ESC}[?1006l`);
+  check(
+    'a joining terminal reports the mouse in SGR only while the session asks for it',
+    asked.includes(sgr) && !dropped.includes(sgr),
+    `  asked=${asked.includes(sgr)} dropped=${dropped.includes(sgr)}`,
+  );
+}
+
 for (const [name, before, during, after] of cases) {
   const actual = await display(ATTACH_COLS, await joinedChunks(name, before, during, after));
   check(name, actual === expected, `--- got ---\n${actual}\n--- want ---\n${expected}`);

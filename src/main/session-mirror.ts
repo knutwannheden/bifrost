@@ -21,6 +21,11 @@ interface SessionMirror {
   abandonSnapshot: (() => void) | null;
   /** A resize that arrived while a snapshot's flush was queued. */
   pendingResize: { cols: number; rows: number } | null;
+  /**
+   * Whether the session asked for SGR mouse reports. The serializer restores mouse
+   * tracking without it, so a joining terminal would report in another encoding.
+   */
+  mouseSgr: boolean;
 }
 
 export interface MirrorSnapshot {
@@ -30,13 +35,28 @@ export interface MirrorSnapshot {
 
 const mirrors = new Map<string, SessionMirror>();
 const SCROLLBACK = 1000;
+const SGR_MOUSE = 1006;
 
 export function createMirror(sessionId: string, cols: number, rows: number): void {
   const term = new Terminal({ cols, rows, scrollback: SCROLLBACK, allowProposedApi: true });
   applyUnicodeWidths(term);
   const serializer = new SerializeAddon();
   term.loadAddon(serializer);
-  mirrors.set(sessionId, { term, serializer, held: null, abandonSnapshot: null, pendingResize: null });
+  const mirror: SessionMirror = {
+    term,
+    serializer,
+    held: null,
+    abandonSnapshot: null,
+    pendingResize: null,
+    mouseSgr: false,
+  };
+  const noteSgr = (on: boolean) => (params: (number | number[])[]) => {
+    if (params.includes(SGR_MOUSE)) mirror.mouseSgr = on;
+    return false;
+  };
+  term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, noteSgr(true));
+  term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, noteSgr(false));
+  mirrors.set(sessionId, mirror);
 }
 
 export function disposeMirror(sessionId: string): void {
@@ -102,7 +122,7 @@ export function snapshotMirror(sessionId: string, cols: number, rows: number): P
     mirror.term.write('', () => {
       mirror.abandonSnapshot = null;
       mirror.held = null;
-      const replay = mirror.serializer.serialize();
+      const replay = mirror.serializer.serialize() + (mirror.mouseSgr ? `\x1b[?${SGR_MOUSE}h` : '');
       const deferred = mirror.pendingResize;
       mirror.pendingResize = null;
       // Applied outside the callback for the same reason.
