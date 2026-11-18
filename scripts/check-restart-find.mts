@@ -1,9 +1,10 @@
 /**
- * The restart script finds Bifrost's Electron in ps on macOS and Linux. It runs
- * with a PATH of stubs whose headroom grants no claim, so it never stops a
- * Bifrost. Run with `npm run check:restart-find`.
+ * The restart script finds Bifrost's Electron in ps on macOS and Linux, and stops
+ * it at once. Its ps lists sleeping processes of the check's own as Bifrost, so
+ * the stop reaches only those. Its PATH of stubs has no npm, seq or sleep, so it
+ * starts nothing and its waits end at once. Run with `npm run check:restart-find`.
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { type ChildProcess, execFileSync, spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,9 +30,18 @@ for (const tool of ['awk', 'sed', 'head', 'grep', 'cat', 'date', 'mkdir', 'dirna
   const found = execFileSync('sh', ['-c', `command -v ${tool}`], { encoding: 'utf-8' }).trim();
   fs.symlinkSync(found, path.join(bin, tool));
 }
+// Grants no claim, as when another session holds the cpu.
 fs.writeFileSync(path.join(bin, 'headroom'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
 const bash = execFileSync('sh', ['-c', 'command -v bash'], { encoding: 'utf-8' }).trim();
 const script = path.resolve('scripts/restart-bifrost.sh');
+
+const standIns: ChildProcess[] = [];
+/** The pid of a process of the check's own, standing in for Bifrost's Electron or its forge. */
+function standIn(): number {
+  const child = spawn('sleep', ['60'], { stdio: 'ignore' });
+  standIns.push(child);
+  return child.pid as number;
+}
 
 /** The log of a run that sees these ps lines. */
 function runSeeing(psLines: string[]): string {
@@ -42,15 +52,13 @@ function runSeeing(psLines: string[]): string {
 }
 
 try {
-  const found = [
-    `  101 100 ${repo}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron .`,
-    `  102 100 ${repo}/node_modules/electron/dist/electron .`,
-  ].map((line) =>
-    runSeeing([
-      `  103 102 ${repo}/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox`,
-      line,
-    ]).includes(`Bifrost runs from ${repo}\n`),
-  );
+  const found = [`Electron.app/Contents/MacOS/Electron`, `electron`].map((binary) => {
+    const electron = standIn();
+    return runSeeing([
+      `  103 ${electron} ${repo}/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox`,
+      `  ${electron} 100 ${repo}/node_modules/electron/dist/${binary} .`,
+    ]).includes(`Bifrost runs from ${repo}\n`);
+  });
   check(
     'the Electron of a Bifrost in development mode is found on macOS and on Linux',
     found.every(Boolean),
@@ -59,7 +67,7 @@ try {
 
   const amongOthers = runSeeing([
     `  201 200 ${other}/node_modules/electron/dist/electron .`,
-    `  102 100 ${repo}/node_modules/electron/dist/electron .`,
+    `  ${standIn()} 100 ${repo}/node_modules/electron/dist/electron .`,
   ]);
   check(
     'the Electron of another app in development mode is passed over',
@@ -67,13 +75,19 @@ try {
     amongOthers,
   );
 
+  const [electron, forge] = [standIn(), standIn()];
   const parent = runSeeing([
-    `  100 99 /opt/node/bin/node /data/link/node_modules/@electron-forge/cli/dist/electron-forge-start.js`,
-    `  102 100 ${repo}/node_modules/electron/dist/electron .`,
+    `  ${forge} 99 /opt/node/bin/node /data/link/node_modules/@electron-forge/cli/dist/electron-forge-start.js`,
+    `  ${electron} ${forge} ${repo}/node_modules/electron/dist/electron .`,
   ]);
   check(
     "forge is the parent of Bifrost's Electron, under whatever path",
     parent.includes('node /opt/node/bin/node'),
+    parent,
+  );
+  check(
+    'a restart stops Bifrost without waiting for a cpu claim',
+    parent.includes(`SIGTERM Electron ${electron} (forge ${forge})`),
     parent,
   );
 
@@ -90,6 +104,7 @@ try {
     JSON.stringify({ status: launch.status, stderr: launch.stderr }),
   );
 } finally {
+  for (const child of standIns) child.kill();
   fs.rmSync(root, { recursive: true, force: true });
 }
 

@@ -3,9 +3,9 @@
 #
 #   scripts/restart-bifrost.sh [--revert FROM..TO] [--prompt TEXT] [--while-stopped COMMAND]
 #
-# It detaches and returns at once, printing its log. Once no claimed cpu work is
-# running, it restarts Bifrost from the same checkout, wakes the sessions that
-# were in use, and prompts the calling task with how it went.
+# It detaches and returns at once, printing its log. It restarts Bifrost from the
+# same checkout, wakes the sessions that were in use, and prompts the calling task
+# with how it went.
 set -u
 
 DIR=$HOME/.bifrost/restart
@@ -16,7 +16,6 @@ ACTIVE_WITHIN_MIN=60
 MODE=launch
 case "${1:-}" in
   --run) MODE=run ;;
-  --restart) MODE=restart ;;
 esac
 
 if [ "$MODE" = launch ]; then
@@ -197,25 +196,7 @@ EOF
   log "claude -p exited $?"
 }
 
-if [ "$MODE" = restart ]; then
-  restart
-  exit $?
-fi
-
-if command -v headroom >/dev/null; then
-  log "waiting for an exclusive cpu claim, so no claimed run is cut off"
-  # --force skips only the check for load nobody claimed, which a restart cannot cut off.
-  if id=$(headroom acquire cpu --exclusive --force --wait -q --as bifrost-restart \
-    --why "restarting Bifrost: dev terminals end, so no claimed run may be in flight"); then
-    headroom hold "$id" --grace never -- bash "$0" --restart
-    headroom release "$id" > /dev/null
-  else
-    log "no cpu claim; Bifrost was left as it was"
-    exit 1
-  fi
-else
-  restart
-fi
+restart
 
 healthy || failsafe
 healthy || { log "Bifrost is still down"; exit 1; }
