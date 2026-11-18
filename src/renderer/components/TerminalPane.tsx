@@ -38,7 +38,7 @@ export default function TerminalPane({
   onFocusRequest,
   onTitleChange,
 }: TerminalPaneProps) {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showSearch, setShowSearch] = useState(false);
   // Lazy init: don't create the terminal until this pane has been active at least once.
@@ -64,6 +64,8 @@ export default function TerminalPane({
     visible: active,
     paneType,
     renderer: terminalRenderer,
+    macros: state.config?.macros,
+    onNotice: (message) => dispatch({ type: 'SHOW_TOAST', message }),
   });
 
   // Focus the terminal when it becomes the focused pane and no overlays are showing.

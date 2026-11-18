@@ -22,9 +22,9 @@ export function resetHippieState(): void {
 
 /**
  * Extract the partial word immediately before the cursor.
- * Walks backwards from cursorX on the cursor line until whitespace or line start.
+ * Walks backwards from cursorX on the cursor line over the characters `wordChar` matches.
  */
-function getWordBeforeCursor(terminal: Terminal): string {
+export function getWordBeforeCursor(terminal: Terminal, wordChar = /\w/): string {
   const buffer = terminal.buffer.active;
   const lineIndex = buffer.baseY + buffer.cursorY;
   const line = buffer.getLine(lineIndex);
@@ -34,7 +34,7 @@ function getWordBeforeCursor(terminal: Terminal): string {
   let start = cursorX;
   while (start > 0) {
     const ch = line.getCell(start - 1)?.getChars() ?? '';
-    if (!ch || /\W/.test(ch)) break;
+    if (!ch || !wordChar.test(ch)) break;
     start--;
   }
 

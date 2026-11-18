@@ -13,6 +13,7 @@
     "build:headless": "vite build -c vite.headless.config.mts",
     "lint": "biome check src/ tools/ scripts/",
     "check:mirror": "node scripts/check-session-mirror.mts",
+    "check:macro-expand": "node scripts/check-macro-expand.mts",
     "check:terminal-io": "node scripts/check-terminal-io.mts",
     "check:sessions": "node scripts/check-session-scan.mts",
     "check:paging": "node scripts/check-paging.mts",

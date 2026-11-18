@@ -7,9 +7,11 @@ import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { DEFAULT_KEYMAP, getInterceptedKeys, type InterceptedKeys } from '../../shared/keymap';
 import { applyUnicodeWidths } from '../../shared/terminal-unicode';
+import type { Macro } from '../../shared/types';
 import { resolveTerminalTheme } from '../terminal-themes';
 import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
 import { keepsClickFromProgram } from '../utils/link-click';
+import { expandMacro, resetMacroCycle } from '../utils/macro-expand';
 import { decodeOsc52 } from '../utils/osc52';
 import { isMac, pressedStroke } from '../utils/platform';
 import { createLeadingCoalescer, type LeadingCoalescer } from '../utils/resize-scheduler';
@@ -77,6 +79,9 @@ interface TerminalOptions {
   paneType?: 'claude' | 'dev';
   /** 'dom' (default) or 'webgl'. See BifrostConfig.terminalRenderer. */
   renderer?: 'dom' | 'webgl';
+  macros?: Macro[];
+  /** Says why Option+Space expanded nothing. */
+  onNotice?: (message: string) => void;
 }
 
 export function useTerminal(
@@ -91,6 +96,10 @@ export function useTerminal(
   const [loading, setLoading] = useState(true);
   const onTitleChangeRef = useRef(onTitleChange);
   onTitleChangeRef.current = onTitleChange;
+  const macrosRef = useRef(options?.macros);
+  macrosRef.current = options?.macros;
+  const onNoticeRef = useRef(options?.onNotice);
+  onNoticeRef.current = options?.onNotice;
 
   // Track last cols/rows sent to PTY so we can skip no-op resizes that
   // would otherwise fire SIGWINCH and trigger a TUI redraw on every
@@ -316,6 +325,7 @@ export function useTerminal(
       }
       // Option+Left/Right: word navigation (ESC b / ESC f)
       // Option+/: hippie-expand (dabbrev-expand)
+      // Option+Space: the macros named by what is before the cursor, in turn
       if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           if (e.type === 'keydown') {
@@ -328,7 +338,17 @@ export function useTerminal(
           // Prevent macOS from generating the composed '÷' character
           e.preventDefault();
           if (e.type === 'keydown') {
+            resetMacroCycle();
             hippieExpand(terminal, sessionId!);
+          }
+          return false;
+        }
+        if (e.code === 'Space') {
+          // Keeps macOS from typing a no-break space
+          e.preventDefault();
+          if (e.type === 'keydown') {
+            resetHippieState();
+            expandMacro(terminal, sessionId!, macrosRef.current ?? [], (message) => onNoticeRef.current?.(message));
           }
           return false;
         }
@@ -373,6 +393,7 @@ export function useTerminal(
 
     terminal.onData((data) => {
       resetHippieState();
+      resetMacroCycle();
       sendInput(data);
     });
 

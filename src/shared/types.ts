@@ -131,7 +131,6 @@ export interface ClaudeSession {
 
 export interface Macro {
   name: string;
-  hotkey?: string; // e.g. "ctrl+shift+u"
   text: string;
 }
 

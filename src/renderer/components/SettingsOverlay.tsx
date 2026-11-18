@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PROMPT_DEFS } from '../../shared/default-prompts';
-import type { AgentKind, BifrostConfig, ClaudeAccount, Machine, Macro } from '../../shared/types';
+import type { AgentKind, BifrostConfig, ClaudeAccount, Machine } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
 import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
-import { isMac, modSymbol } from '../utils/platform';
+import { altSymbol, isMac, modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import FormInput from './FormInput';
 import FormSelect from './FormSelect';
@@ -602,30 +602,25 @@ function MacroEditor({
   const macros = config.macros ?? [];
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
-  const [editHotkey, setEditHotkey] = useState('');
   const [editText, setEditText] = useState('');
 
   const startEdit = (idx: number) => {
     const m = macros[idx];
     setEditIdx(idx);
     setEditName(m.name);
-    setEditHotkey(m.hotkey ?? '');
     setEditText(m.text);
   };
 
   const startAdd = () => {
     setEditIdx(macros.length);
     setEditName('');
-    setEditHotkey('');
     setEditText('');
   };
 
   const save = () => {
     if (!editName.trim() || !editText.trim()) return;
     const updated = [...macros];
-    const macro: Macro = { name: editName.trim(), text: editText.trim() };
-    if (editHotkey.trim()) macro.hotkey = editHotkey.trim();
-    updated[editIdx!] = macro;
+    updated[editIdx!] = { name: editName.trim(), text: editText.trim() };
     updateConfig({ macros: updated });
     setEditIdx(null);
   };
@@ -651,9 +646,6 @@ function MacroEditor({
             }`}
           >
             <span className="text-sm text-primary flex-1">{m.name}</span>
-            {m.hotkey && (
-              <span className="text-xs text-faint font-mono bg-surface-alt px-1.5 py-0.5 rounded-sm">{m.hotkey}</span>
-            )}
             <span className="text-xs text-muted truncate max-w-[200px]">{m.text}</span>
             <button
               onClick={(e) => {
@@ -669,21 +661,13 @@ function MacroEditor({
       </div>
       {editIdx !== null ? (
         <div className="mt-3 space-y-2">
-          <div className="flex gap-2">
-            <FormInput
-              autoFocus
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              placeholder="Name"
-              className="flex-1 px-2 py-1"
-            />
-            <FormInput
-              value={editHotkey}
-              onChange={(e) => setEditHotkey(e.target.value)}
-              placeholder="Hotkey (e.g. ctrl+shift+u)"
-              className="w-48 px-2 py-1 font-mono"
-            />
-          </div>
+          <FormInput
+            autoFocus
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder="Name"
+            className="w-full px-2 py-1"
+          />
           <FormInput
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
@@ -711,7 +695,9 @@ function MacroEditor({
         </button>
       )}
       <p className="mt-2 text-xs text-muted">
-        Macros send text to the active terminal session. Assign a hotkey to trigger from the keyboard.
+        Type a macro's name at a terminal's prompt, or the start of it, and press {altSymbol}Space to put the macro's
+        text in its place. Pressing it again goes through the other macros whose names start the same way, then back to
+        what you typed.
       </p>
     </div>
   );
