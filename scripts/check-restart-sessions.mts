@@ -1,9 +1,9 @@
 /**
- * Restarting sessions takes only those that run and are between turns, and
- * names the ones with text typed at Claude's prompt before it does. Run with
- * `npm run check:restart-sessions`.
+ * Restarting sessions takes those that run and are between turns, and names the
+ * ones with text typed at Claude's prompt before it does. One that is mid-turn
+ * restarts once its turn has ended. Run with `npm run check:restart-sessions`.
  */
-import { planRestart } from '../src/renderer/utils/restart-sessions.ts';
+import { planRestart, restartAll } from '../src/renderer/utils/restart-sessions.ts';
 import { promptDraft } from '../src/shared/prompt-draft.ts';
 import type { SessionState, Task } from '../src/shared/types.ts';
 
@@ -66,6 +66,72 @@ const screen = (input: string) =>
       show(ids(plan.drafted)) === show(['typed']) &&
       show(ids(plan.busy)) === show(['busy']),
     show({ restart: ids(plan.restart), drafted: ids(plan.drafted), busy: ids(plan.busy) }),
+  );
+}
+
+{
+  const state = (s: Partial<SessionState>): SessionState => ({ live: true, busy: false, draft: '', ...s });
+  /** A session whose state the check sets, counting how often it is asked and restarted. */
+  const fake = (key: string) => {
+    const session = {
+      key,
+      name: key,
+      now: state({ busy: true }),
+      checks: 0,
+      restarts: 0,
+      state: async () => {
+        session.checks++;
+        return session.now;
+      },
+      restart: async () => {
+        session.restarts++;
+      },
+    };
+    return session;
+  };
+  const EVERY_MS = 10;
+  const ignore = () => {};
+  const pause = () => new Promise((r) => setTimeout(r, EVERY_MS * 4));
+
+  const ending = fake('ending');
+  await restartAll([ending], ignore, false, EVERY_MS);
+  await pause();
+  const midTurn = ending.restarts;
+  ending.now = state({ draft: 'half a thought' });
+  await pause();
+  const typed = ending.restarts;
+  ending.now = state({});
+  await pause();
+  const ended = ending.restarts;
+  await pause();
+  check(
+    'a session mid-turn restarts once its turn has ended and nothing is typed at its prompt',
+    midTurn === 0 && typed === 0 && ended === 1 && ending.restarts === 1,
+    show({ midTurn, typed, ended, after: ending.restarts }),
+  );
+
+  const stopping = fake('stopping');
+  await restartAll([stopping], ignore, false, EVERY_MS);
+  stopping.now = state({ live: false });
+  await pause();
+  const checks = stopping.checks;
+  await pause();
+  check(
+    'a session that stops running while it waits is no longer asked',
+    stopping.restarts === 0 && stopping.checks === checks,
+    show({ restarts: stopping.restarts, checks: [checks, stopping.checks] }),
+  );
+
+  const twice = fake('twice');
+  await restartAll([twice], ignore, false, EVERY_MS);
+  twice.now = state({});
+  await restartAll([twice], ignore, false, EVERY_MS);
+  const byRun = twice.restarts;
+  await pause();
+  check(
+    'a later run leaves a session that waits to its wait, which restarts it once',
+    byRun === 0 && twice.restarts === 1,
+    show({ byRun, total: twice.restarts }),
   );
 }
 

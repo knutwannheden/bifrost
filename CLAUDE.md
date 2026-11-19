@@ -87,7 +87,7 @@ Quitting Bifrost only detaches, so its sessions run on, and opening a tab or wak
 
 A prompt sent to a session with `send_prompt` (`prompt-sender.ts`) is typed in pieces, and Enter follows after a pause. An agent's input takes a burst of text for a paste, and an Enter that arrives with it for part of the paste. Bifrost then waits for the submit to show, as the agent's hook or as an empty input, and presses Enter up to twice more before it reports the prompt unsent. Text typed at the prompt is read from the pane, faint suggestions left out, set aside first and typed back after. A prompt queued for a task mid-turn is answered at once, and typed when the turn ends.
 
-"Restart sessions" in the command palette restarts the session of each running task that has one, here and on other machines, one after another. Then it restarts each console the console overlay has a tab for, which carries its conversation on. It leaves a session that is mid-turn alone. It first warns about text typed at a prompt, which a restart loses, and reads that from the pane, where Claude and Codex draw a suggestion or placeholder faint.
+"Restart sessions" in the command palette restarts the session of each running task that has one, here and on other machines, one after another. Then it restarts each console the console overlay has a tab for, which carries its conversation on. A session that is mid-turn restarts once its turn has ended and nothing is typed at its prompt. It first warns about text typed at a prompt, which a restart loses, and reads that from the pane, where Claude and Codex draw a suggestion or placeholder faint.
 
 ### Agents
 
