@@ -262,6 +262,38 @@ function killTaskSessions(task: Task): void {
   killSession(`${task.id}-dev`);
 }
 
+/** Time for the answer to reach the agent through the plugin's tool server before closing stops its session. */
+const CLOSE_AFTER_ANSWER_MS = 1000;
+
+async function hasUncommittedChanges(task: Task): Promise<boolean> {
+  if (task.machine) return isRemoteWorktreeDirty(task);
+  if (task.isExternal || task.inPlace || !fs.existsSync(task.worktreePath)) return false;
+  try {
+    const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
+      cwd: task.worktreePath,
+      timeout: 5000,
+    });
+    return stdout.trim().length > 0;
+  } catch {
+    // git status failed — proceed with archive
+    return false;
+  }
+}
+
+async function closeTask(task: Task, archive: boolean): Promise<void> {
+  cancelTaskRequests(task.id);
+  killTaskSessions(task);
+  if (archive) {
+    stopWatching(task.id);
+    // The UI archives through this same call, so multi-repo cleanup and
+    // the detached-worktree guard hold for an agent's archive as well.
+    await archiveTaskCore(task.id);
+  } else {
+    updateTask(task.id, { status: 'stopped' });
+  }
+  emit(IPC_STREAM.TASK_CLOSED, task.id, archive);
+}
+
 /** The routes that act on one task, named by the request. */
 const FORWARDED_ROUTES = new Set([
   '/close-task',
@@ -582,53 +614,19 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       }
       try {
         const task = getTask(taskId);
-        cancelTaskRequests(taskId);
-        killTaskSessions(task);
-
-        if (archive) {
-          // Archive: stop + mark archived + remove worktree
-          stopWatching(taskId);
-
-          if (!force && task.machine && (await isRemoteWorktreeDirty(task))) {
-            errorResponse(
-              res,
-              'Worktree has uncommitted changes, and archiving deletes them. Close it instead (archive=false) to keep the worktree, or ask the user before passing force=true.',
-              409,
-            );
-            return;
-          }
-          // Check if worktree is dirty (unless forced or external/in-place)
-          if (!force && !task.machine && !task.isExternal && !task.inPlace && fs.existsSync(task.worktreePath)) {
-            try {
-              const { stdout } = await execFile('git', ['--no-optional-locks', 'status', '--porcelain'], {
-                cwd: task.worktreePath,
-                timeout: 5000,
-              });
-              if (stdout.trim().length > 0) {
-                errorResponse(
-                  res,
-                  'Worktree has uncommitted changes, and archiving deletes them. Close it instead (archive=false) to keep the worktree, or ask the user before passing force=true.',
-                  409,
-                );
-                return;
-              }
-            } catch {
-              // git status failed — proceed with archive
-            }
-          }
-
-          // The UI archives through this same call, so multi-repo cleanup and
-          // the detached-worktree guard hold for an agent's archive as well.
-          const updated = await archiveTaskCore(taskId);
-
-          emit(IPC_STREAM.TASK_CLOSED, taskId, true);
-          jsonResponse(res, updated);
-        } else {
-          // Close: stop sessions + set status to stopped, preserve worktree
-          const updated = updateTask(taskId, { status: 'stopped' });
-          emit(IPC_STREAM.TASK_CLOSED, taskId, false);
-          jsonResponse(res, updated);
+        if (archive && !force && (await hasUncommittedChanges(task))) {
+          errorResponse(
+            res,
+            'Worktree has uncommitted changes, and archiving deletes them. Close it instead (archive=false) to keep the worktree, or ask the user before passing force=true.',
+            409,
+          );
+          return;
         }
+        // The caller may be the task's own session, which closing stops, so it hears first.
+        jsonResponse(res, { ...task, status: archive ? 'archived' : 'stopped' });
+        setTimeout(() => {
+          closeTask(task, archive).catch((err) => console.error(`[api] could not close ${task.id}:`, err));
+        }, CLOSE_AFTER_ANSWER_MS);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
       }

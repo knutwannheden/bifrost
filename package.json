@@ -32,6 +32,7 @@
     "check:inline-diff": "node scripts/check-inline-diff.mts",
     "check:repo-match": "node scripts/check-repo-match.mts",
     "check:repo-label": "node scripts/check-repo-label.mts",
+    "check:close-task": "node scripts/check-close-task.mts",
     "check:branch-drift": "node scripts/check-branch-drift.mts",
     "check:pr-index": "node scripts/check-pr-index.mts",
     "check:last-changed-file": "node scripts/check-last-changed-file.mts",
