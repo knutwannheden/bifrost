@@ -1,10 +1,10 @@
 /**
- * ⌥Space puts, press by press, the text of each macro whose name starts with the
+ * ⌃Space puts, press by press, the text of each macro whose name starts with the
  * name that ends at the cursor, then that name again. Run with
  * `npm run check:macro-expand`.
  */
 import headless from '@xterm/headless';
-import { nextExpansion, resetMacroCycle } from '../src/renderer/utils/macro-expand.ts';
+import { isMacroKey, nextExpansion, resetMacroCycle } from '../src/renderer/utils/macro-expand.ts';
 import type { Macro } from '../src/shared/types.ts';
 
 const { Terminal } = headless;
@@ -97,6 +97,21 @@ async function presses(written: string, count: number) {
     'a cycle starts over after other input, and in another terminal',
     show(afterInput) === fresh && show(elsewhere) === fresh,
     show({ afterInput, elsewhere }),
+  );
+}
+
+{
+  const key = (mods: Partial<KeyboardEvent>) =>
+    isMacroKey({ code: 'Space', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+  const pressed = {
+    ctrl: key({ ctrlKey: true }),
+    ctrlShift: key({ ctrlKey: true, shiftKey: true }),
+    option: key({ altKey: true }),
+  };
+  check(
+    'Ctrl+Space asks for a macro, and Ctrl+Shift+Space and Option+Space do not',
+    show(pressed) === show({ ctrl: true, ctrlShift: false, option: false }),
+    show(pressed),
   );
 }
 

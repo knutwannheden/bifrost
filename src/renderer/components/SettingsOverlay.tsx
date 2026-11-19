@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { TERMINAL_THEME_NAMES } from '../terminal-themes';
 import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
-import { altSymbol, isMac, modSymbol } from '../utils/platform';
+import { ctrlSymbol, isMac, modSymbol } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import FormInput from './FormInput';
 import FormSelect from './FormSelect';
@@ -695,7 +695,7 @@ function MacroEditor({
         </button>
       )}
       <p className="mt-2 text-xs text-muted">
-        Type a macro's name at a terminal's prompt, or the start of it, and press {altSymbol}Space to put the macro's
+        Type a macro's name at a terminal's prompt, or the start of it, and press {ctrlSymbol}Space to put the macro's
         text in its place. Pressing it again goes through the other macros whose names start the same way, then back to
         what you typed.
       </p>

@@ -34,5 +34,8 @@ export const modSymbol = isMac ? '⌘' : 'Ctrl+Shift+';
 /** Platform-appropriate alt/option symbol for display */
 export const altSymbol = isMac ? '⌥' : 'Alt+';
 
+/** Platform-appropriate control symbol for display */
+export const ctrlSymbol = isMac ? '⌃' : 'Ctrl+';
+
 /** Platform-appropriate symbol for the Backspace key */
 export const deleteSymbol = isMac ? '⌫' : 'Backspace';

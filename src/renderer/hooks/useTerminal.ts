@@ -11,7 +11,7 @@ import type { Macro } from '../../shared/types';
 import { resolveTerminalTheme } from '../terminal-themes';
 import { hippieExpand, resetHippieState } from '../utils/hippie-expand';
 import { keepsClickFromProgram } from '../utils/link-click';
-import { expandMacro, resetMacroCycle } from '../utils/macro-expand';
+import { expandMacro, isMacroKey, resetMacroCycle } from '../utils/macro-expand';
 import { decodeOsc52 } from '../utils/osc52';
 import { isMac, pressedStroke } from '../utils/platform';
 import { createLeadingCoalescer, type LeadingCoalescer } from '../utils/resize-scheduler';
@@ -80,7 +80,7 @@ interface TerminalOptions {
   /** 'dom' (default) or 'webgl'. See BifrostConfig.terminalRenderer. */
   renderer?: 'dom' | 'webgl';
   macros?: Macro[];
-  /** Says why Option+Space expanded nothing. */
+  /** Says why Ctrl+Space expanded nothing. */
   onNotice?: (message: string) => void;
 }
 
@@ -323,9 +323,17 @@ export function useTerminal(
         }
         if (e.altKey || /^[a-z]$/.test(key)) return false;
       }
+      // Ctrl+Space: the macros named by what is before the cursor, in turn
+      if (isMacroKey(e)) {
+        e.preventDefault();
+        if (e.type === 'keydown') {
+          resetHippieState();
+          expandMacro(terminal, sessionId!, macrosRef.current ?? [], (message) => onNoticeRef.current?.(message));
+        }
+        return false;
+      }
       // Option+Left/Right: word navigation (ESC b / ESC f)
       // Option+/: hippie-expand (dabbrev-expand)
-      // Option+Space: the macros named by what is before the cursor, in turn
       if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           if (e.type === 'keydown') {
@@ -340,15 +348,6 @@ export function useTerminal(
           if (e.type === 'keydown') {
             resetMacroCycle();
             hippieExpand(terminal, sessionId!);
-          }
-          return false;
-        }
-        if (e.code === 'Space') {
-          // Keeps macOS from typing a no-break space
-          e.preventDefault();
-          if (e.type === 'keydown') {
-            resetHippieState();
-            expandMacro(terminal, sessionId!, macrosRef.current ?? [], (message) => onNoticeRef.current?.(message));
           }
           return false;
         }

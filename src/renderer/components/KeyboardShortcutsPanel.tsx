@@ -13,7 +13,7 @@ import { useKeymap } from '../context/KeymapContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { requestArchive } from '../utils/archive';
 import { accountLabel, switchClaudeAccount } from '../utils/claude-account';
-import { altSymbol, pressedStroke, shortcutLabel } from '../utils/platform';
+import { altSymbol, ctrlSymbol, pressedStroke, shortcutLabel } from '../utils/platform';
 import { matchesAllTerms } from '../utils/search';
 import CloseButton from './CloseButton';
 import Highlight from './Highlight';
@@ -23,6 +23,12 @@ import SectionHeader from './SectionHeader';
 
 /** Prefixes the palette entries that switch the Claude account, which have no binding to record. */
 const ACCOUNT_ACTION = 'claude-account:';
+
+/** The keys a terminal takes for itself, which the keymap cannot rebind. */
+const TERMINAL_KEYS = [
+  { label: 'Expand macro', binding: `${ctrlSymbol}Space` },
+  { label: 'Complete word from the screen', binding: `${altSymbol}/` },
+];
 
 interface ActionItem {
   actionId: string;
@@ -71,8 +77,17 @@ export default function KeyboardShortcutsPanel() {
     return allActions.filter((a) => matchesAllTerms(`${a.label} ${a.binding}`, query));
   }, [query, allActions]);
 
+  const terminalKeys = useMemo(
+    () => (query ? TERMINAL_KEYS.filter((k) => matchesAllTerms(`${k.label} ${k.binding}`, query)) : TERMINAL_KEYS),
+    [query],
+  );
+
   const { items, executableIndices } = useMemo(() => {
-    const items: ({ type: 'header'; label: string } | { type: 'action'; item: ActionItem })[] = [];
+    const items: (
+      | { type: 'header'; label: string }
+      | { type: 'action'; item: ActionItem }
+      | { type: 'fixed'; label: string; binding: string }
+    )[] = [];
     const executableIndices: number[] = [];
 
     if (query) {
@@ -91,9 +106,11 @@ export default function KeyboardShortcutsPanel() {
         }
       }
     }
+    if (terminalKeys.length > 0 && !query) items.push({ type: 'header', label: 'Terminal' });
+    for (const k of terminalKeys) items.push({ type: 'fixed', ...k });
 
     return { items, executableIndices };
-  }, [filtered, query]);
+  }, [filtered, query, terminalKeys]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -323,6 +340,19 @@ export default function KeyboardShortcutsPanel() {
                   <SectionHeader key={`group-${item.label}`} className={`px-2 pt-3 pb-1 ${i === 0 ? 'pt-1' : ''}`}>
                     {item.label}
                   </SectionHeader>
+                );
+              }
+              if (item.type === 'fixed') {
+                return (
+                  <div key={`fixed-${item.label}`} className="flex items-center justify-between px-2 py-1.5">
+                    <span className="text-sm text-secondary">
+                      <Highlight text={item.label} search={query} />
+                    </span>
+                    <Kbd size="sm">
+                      {/* Kbd reads a string as a keymap binding, which has no plain Ctrl. */}
+                      <span>{item.binding}</span>
+                    </Kbd>
+                  </div>
                 );
               }
               const navIdx = executableIndices.indexOf(i);

@@ -2,16 +2,20 @@ import type { Terminal } from '@xterm/xterm';
 import type { Macro } from '../../shared/types';
 import { getWordBeforeCursor } from './hippie-expand.ts';
 
-/** What ⌥Space puts in place in turn, in one terminal, and which of those is there now. */
+/** What ⌃Space puts in place in turn, in one terminal, and which of those is there now. */
 let cycle: { sessionId: string; texts: string[]; shown: number } | null = null;
 
-/** Called on any other input, so the next ⌥Space starts from what is typed. */
+export function isMacroKey(e: Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>): boolean {
+  return e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.code === 'Space';
+}
+
+/** Called on any other input, so the next ⌃Space starts from what is typed. */
 export function resetMacroCycle(): void {
   cycle = null;
 }
 
 /**
- * What the next ⌥Space puts in place of what is there. Presses cycle through the
+ * What the next ⌃Space puts in place of what is there. Presses cycle through the
  * macros whose names start with the name that ends at the cursor, a full name
  * first, then back to that name. Unknown when no macro's name starts with it.
  */
