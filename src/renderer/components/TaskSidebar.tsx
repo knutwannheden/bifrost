@@ -5,7 +5,7 @@ import { useKeymap } from '../context/KeymapContext';
 import { useFlipList } from '../hooks/useFlipList';
 import { terminalRegistry } from '../hooks/useTerminal';
 import { nextActiveTaskId } from '../utils/next-active-task';
-import { repoDisplayName, shortPath } from '../utils/paths';
+import { repoDisplayName, repoNameFromWorktree } from '../utils/paths';
 import { matchesTaskSearch } from '../utils/search';
 import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
 import CloseButton from './CloseButton';
@@ -68,7 +68,7 @@ export default function TaskSidebar() {
 
   const repoNameFor = (task: (typeof sorted)[number]) => {
     const repo = state.repos.find((r) => r.id === task.repoId);
-    return repo ? repoDisplayName(repo) : shortPath(task.worktreePath);
+    return repo ? repoDisplayName(repo) : repoNameFromWorktree(task.worktreePath);
   };
 
   const filtering = filter.trim().length > 0;
