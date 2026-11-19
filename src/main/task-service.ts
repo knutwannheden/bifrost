@@ -17,7 +17,7 @@ import { claudeConfigDir, claudeConfigDirAt, isSessionStale, transcriptDir } fro
 import { lastConversationAt } from './claude-watcher.ts';
 import { loadConfig, saveConfig } from './config.ts';
 import { handOverConversation, remoteHandOver, switchAgent, transcriptFile } from './conversation-handover.ts';
-import { resolveBaseRef } from './diff-service.ts';
+import { relatedBaseRef, resolveBaseRef } from './diff-service.ts';
 import { emit } from './event-sink.ts';
 import { handOver, isInstanceMachine } from './instance-link.ts';
 import { PLUGIN_DEPLOY_DIR } from './integration-installer.ts';
@@ -250,11 +250,7 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
   return archived;
 }
 
-/**
- * Resolve the effective base branch for diff comparison.
- * Tries repo.defaultBranch (preferring remote-tracking refs), then origin/HEAD,
- * then origin/main or origin/master as last resort. All local operations, no network.
- */
+/** Resolve the effective base branch for diff comparison. All local operations, no network. */
 export async function resolveBaseBranch(task: Task): Promise<string | undefined> {
   // Wrap with a timeout so we never block the UI indefinitely
   const result = await Promise.race([
@@ -265,46 +261,31 @@ export async function resolveBaseBranch(task: Task): Promise<string | undefined>
 }
 
 async function resolveBaseBranchInner(task: Task): Promise<string | undefined> {
-  // task.baseBranch is the ref the worktree was forked from — the actual fork point
-  if (task.baseBranch) {
-    const ref = await resolveBaseRef(task.worktreePath, task.baseBranch);
-    if (ref) return ref;
-  }
+  const repo = loadConfig().repos.find((r: Repo) => r.id === task.repoId);
+  const branches = [
+    task.baseBranch,
+    repo?.defaultBranch,
+    await originHead(task.worktreePath),
+    'origin/main',
+    'origin/master',
+  ];
+  const base = await relatedBaseRef(
+    task.worktreePath,
+    branches.filter((b): b is string => !!b),
+  );
+  return base ?? undefined;
+}
 
-  // Fallback: repo's configured default branch
-  const config = loadConfig();
-  const repo = config.repos.find((r: Repo) => r.id === task.repoId);
-  if (repo?.defaultBranch) {
-    const ref = await resolveBaseRef(task.worktreePath, repo.defaultBranch);
-    if (ref) return ref;
-  }
-
-  // Fallback: origin/HEAD
+async function originHead(worktreePath: string): Promise<string | undefined> {
   try {
     const { stdout } = await execFile('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], {
-      cwd: task.worktreePath,
+      cwd: worktreePath,
       timeout: 5000,
     });
-    const branch = stdout.trim().replace(/^refs\/remotes\/origin\//, '');
-    if (branch) return `origin/${branch}`;
+    return stdout.trim().replace(/^refs\/remotes\//, '') || undefined;
   } catch {
-    /* origin/HEAD not set */
+    return undefined;
   }
-
-  // Last resort: origin/main or origin/master
-  for (const candidate of ['main', 'master']) {
-    try {
-      await execFile('git', ['rev-parse', '--verify', `origin/${candidate}`], {
-        cwd: task.worktreePath,
-        timeout: 5000,
-      });
-      return `origin/${candidate}`;
-    } catch {
-      /* doesn't exist */
-    }
-  }
-
-  return undefined;
 }
 
 export async function destroyTask(taskId: string): Promise<void> {

@@ -32,6 +32,15 @@ export async function resolveBaseRef(worktreePath: string, baseBranch: string): 
   return null;
 }
 
+/** The first of these branches that the worktree's branch shares history with, so has a fork point to measure from. */
+export async function relatedBaseRef(worktreePath: string, branches: string[]): Promise<string | null> {
+  for (const branch of branches) {
+    const ref = await resolveBaseRef(worktreePath, branch);
+    if (ref && (await resolveDiffBase(worktreePath, ref))) return ref;
+  }
+  return null;
+}
+
 /**
  * The commit a branch's changes are measured from. Merging the base in leaves
  * the working tree holding the base's commits while HEAD still predates them,

@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { resolveBaseRef, resolveDiffBase } from '../src/main/diff-service.ts';
+import { relatedBaseRef, resolveBaseRef, resolveDiffBase } from '../src/main/diff-service.ts';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-diffbase-'));
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim();
@@ -66,6 +66,13 @@ check(
 check(
   'a base branch with no remote-tracking ref falls back to the local one',
   (await resolveBaseRef(root, 'feature')) === 'feature',
+);
+
+const emptyTree = git(root, 'hash-object', '-t', 'tree', '/dev/null');
+git(root, 'update-ref', 'refs/heads/unrelated', git(root, 'commit-tree', emptyTree, '-m', 'unrelated root'));
+check(
+  'a base the branch shares no history with is passed over for the next',
+  (await relatedBaseRef(root, ['unrelated', 'main'])) === 'origin/main',
 );
 
 fs.rmSync(root, { recursive: true, force: true });
