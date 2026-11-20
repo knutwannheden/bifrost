@@ -17,7 +17,7 @@ import {
   signature,
 } from './common.ts';
 import { hookOutput, waitingBehind } from './hook.ts';
-import { describeLoad, sampleForeignLoad } from './machine.ts';
+import { describeLoad, insideRevertingPatchwork, sampleForeignLoad } from './machine.ts';
 
 const USAGE = `headroom — advisory claims on shared resources, for agent sessions on one machine
 
@@ -55,7 +55,8 @@ a core, together burn more than HEADROOM_QUIET_CPU percent of a core (default 15
 claim is refused with their pids, so you can find out what they are. --force takes the claim anyway.
 
 Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request
-            · 4 refused because the machine is busy outside any claim · otherwise the command's own.
+            · 4 refused because the machine is busy outside any claim
+            · 5 run refused to queue inside patchwork --revert --then · otherwise the command's own.
 Scripts key on the exit code; the text is for people.
 A waiting claim lapses unless renewed; wait, hold and run renew it while they poll. wait has no cutoff
 unless --timeout is given. A grant is an offer for about a minute: run and hold start on it, renew starts
@@ -207,6 +208,7 @@ function aside(what: string, call: () => void): void {
 async function runUnderClaim(
   board: Board,
   input: ClaimInput,
+  args: string[],
   cmd: string[],
   graceMs: number | null,
   timeoutMs: number,
@@ -221,6 +223,11 @@ async function runUnderClaim(
     return 4;
   }
   if (claim.grantedAt === null) {
+    if (insideRevertingPatchwork()) {
+      board.release(claim.id);
+      console.error(nestedRefusal(claim, args, cmd));
+      return 5;
+    }
     console.error(queued(board, claim));
     const code = await waitFor(board, claim.id, timeoutMs, force);
     if (code !== 0) {
@@ -237,6 +244,23 @@ async function runUnderClaim(
       console.error(`headroom: released #${claim.id}`);
     });
   }
+}
+
+function shellQuote(word: string): string {
+  if (/^[\w@%+=:,./-]+$/.test(word)) return word;
+  if (!word.includes("'")) return `'${word}'`;
+  if (!/["$`\\!]/.test(word)) return `"${word}"`;
+  return `'${word.replaceAll("'", `'\\''`)}'`;
+}
+
+function nestedRefusal(claim: Claim, args: string[], cmd: string[]): string {
+  const then = cmd.map(shellQuote).join(' ');
+  const outside = ['headroom', ...args, '--', 'patchwork', '--revert', '--then', then].map(shellQuote).join(' ');
+  return [
+    `refused #${claim.id} — ${claim.resource} is not free, and this runs inside \`patchwork --revert --then\`, so waiting would leave its temporary edit on disk.`,
+    'Put headroom on the outside, and the patch is applied once the claim is granted. Move any NAME=value prefix inside --then:',
+    `  ${outside} <<'EOF'`,
+  ].join('\n');
 }
 
 function parseGrace(text: string): number | null {
@@ -344,6 +368,7 @@ async function main(argv: string[]): Promise<number> {
         return await runUnderClaim(
           board,
           await claimInput(),
+          argv.slice(0, dashes),
           cmd,
           parseGrace(values.grace),
           timeoutMs,

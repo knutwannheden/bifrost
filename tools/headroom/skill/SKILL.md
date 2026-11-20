@@ -38,7 +38,7 @@ Anything under about 30 seconds of CPU — a quick grep, a single test class —
 - `renew --expect 25m --why "round 3 of 5"` restates your estimate and reason on the board. That is how progress and revised estimates reach the sessions waiting on you, instead of them asking.
 - `--as` is the name other sessions message you by: what `ListAgents` shows as "This session is …". Sessions started by Bifrost have it set already. Any other session is listed under its working directory and session id unless it passes `--as`, and a claim listed that way cannot be messaged, so pass a name when you expect to be negotiated with.
 
-Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request · 4 refused because the machine is busy outside any claim · otherwise the command's own. A script keys on the exit code, never on the text, which is written for people. `acquire -q` prints only the claim id, for `$(...)`.
+Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request · 4 refused because the machine is busy outside any claim · 5 `run` refused to queue inside `patchwork --revert --then` and printed the command with headroom on the outside · otherwise the command's own. A script keys on the exit code, never on the text, which is written for people. `acquire -q` prints only the claim id, for `$(...)`.
 
 ## When the machine is busy outside the board
 

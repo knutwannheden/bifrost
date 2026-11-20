@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
@@ -31,6 +31,25 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 function run(args: string[], input?: string, extraEnv: NodeJS.ProcessEnv = {}) {
   const r = spawnSync(process.execPath, [CLI, ...args], { env: { ...env, ...extraEnv }, input, encoding: 'utf8' });
+  return { code: r.status, out: r.stdout + r.stderr };
+}
+
+/** Runs a command the way `patchwork --then` does, with `sh -c` under a process named patchwork. */
+function underPatchwork(flags: string[], then: string) {
+  const patchwork = join(dir, 'bin', 'patchwork');
+  const script = join(dir, 'patchwork.mjs');
+  if (!existsSync(patchwork)) {
+    mkdirSync(dirname(patchwork));
+    symlinkSync(process.execPath, patchwork);
+    writeFileSync(
+      script,
+      `import { spawnSync } from 'node:child_process';
+const then = process.argv[process.argv.indexOf('--then') + 1];
+process.exit(spawnSync('sh', ['-c', then], { stdio: 'inherit' }).status ?? 1);
+`,
+    );
+  }
+  const r = spawnSync(patchwork, [script, ...flags, '--then', then], { env, encoding: 'utf8' });
   return { code: r.status, out: r.stdout + r.stderr };
 }
 
@@ -407,5 +426,27 @@ describe('cli', () => {
     const parsed = JSON.parse(busy.out);
     expect(parsed.systemMessage).toContain('bench');
     expect(parsed.hookSpecificOutput.additionalContext).toContain('JMH run');
+  });
+
+  test('run inside patchwork --revert refuses to queue, and says how to put headroom outside', () => {
+    const headroom = `"${process.execPath}" "${CLI}" run cpu --shared --why tests -- echo '*Test'`;
+    const free = underPatchwork(['--revert'], headroom);
+    expect(free.code).toBe(0);
+    expect(free.out).toContain('*Test');
+
+    run(['acquire', 'cpu', '--exclusive', '--keep', '--why', 'JMH run', '--as', 'bench']);
+    const refused = underPatchwork(['--revert'], `GW_LOG=x ${headroom}`);
+    expect(refused.code).toBe(5);
+    expect(refused.out).toContain(
+      `headroom run cpu --shared --why tests -- patchwork --revert --then "echo '*Test'" <<'EOF'`,
+    );
+    expect(run(['status']).out).not.toContain('waiting');
+  });
+
+  test('run inside patchwork --then without --revert waits, since that edit is meant to stay', () => {
+    run(['acquire', 'cpu', '--exclusive', '--keep', '--why', 'JMH run', '--as', 'bench']);
+    const r = underPatchwork([], `"${process.execPath}" "${CLI}" run cpu --shared --why tests --timeout 1s -- true`);
+    // 5 when the suite itself runs under patchwork --revert, as a mutation check does, since any ancestor counts
+    expect(r.code).toBe(2);
   });
 });

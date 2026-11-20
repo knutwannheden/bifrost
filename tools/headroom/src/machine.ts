@@ -110,3 +110,21 @@ export function describeLoad(load: ForeignLoad): string {
   const top = load.top.map((p) => `${p.comm} ${p.percent}% (pid ${p.pid})`).join(', ');
   return `${load.percent}% busy outside any claim${top ? `: ${top}` : ''}`;
 }
+
+/** ps joins the arguments with spaces, so a `--revert` inside the --then string counts too. */
+export function insideRevertingPatchwork(): boolean {
+  const r = spawnSync('ps', ['-Aww', '-o', 'pid=,ppid=,args='], { encoding: 'utf8' });
+  if (r.error || r.status !== 0) return false;
+  const procs = new Map<number, { ppid: number; args: string[] }>();
+  for (const line of r.stdout.split('\n')) {
+    const [pid, ppid, ...args] = line.trim().split(/\s+/);
+    if (args.length > 0) procs.set(Number(pid), { ppid: Number(ppid), args });
+  }
+  for (let p = process.ppid, hops = 0; hops < 64; hops++) {
+    const proc = procs.get(p);
+    if (!proc) return false;
+    if (basename(proc.args[0]!) === 'patchwork' && proc.args.includes('--revert')) return true;
+    p = proc.ppid;
+  }
+  return false;
+}
