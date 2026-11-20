@@ -14,6 +14,8 @@ export interface Claim {
   why: string;
   priority: number;
   ttlMs: number;
+  /** How long the holder expects to hold the resource once it starts, from which waiters are told their turn. */
+  expectMs: number | null;
   createdAt: number;
   /** When the claim lapses unless renewed, counted from the grant once there is one. */
   expiresAt: number;
@@ -46,6 +48,7 @@ export interface ClaimInput {
   why: string;
   priority?: number;
   ttlMs: number;
+  expectMs?: number;
   holderLimit?: number;
   keep?: boolean;
 }
@@ -83,6 +86,42 @@ export interface Status {
   notices: Claim[];
 }
 
+/**
+ * How long until a waiting claim is granted, if each claim ahead of it takes as
+ * long as its holder expects. A claim ahead with no estimate, or a notice that
+ * stops new work, leaves the turn unknown, and is named as the reason.
+ */
+export function turnIn(status: Status, id: number, now: number): { ms: number } | { unknown: Claim } {
+  const claim = status.waiting.find((c) => c.id === id);
+  if (!claim) return { ms: 0 };
+  const notices = status.notices.filter((c) => c.resource === claim.resource);
+  const stopping = notices.find((c) => (c.holderLimit ?? 0) === 0);
+  if (stopping) return { unknown: stopping };
+  const limit = Math.min(...notices.map((c) => c.holderLimit ?? 0));
+
+  let running: { claim: Claim; end: number }[] = [];
+  for (const h of status.holding) {
+    if (h.resource !== claim.resource || idle(h)) continue;
+    if (h.expectMs === null) return { unknown: h };
+    running.push({ claim: h, end: (h.acceptedAt ?? now) + h.expectMs });
+  }
+  let at = now;
+  for (const w of status.waiting) {
+    if (w.resource !== claim.resource) continue;
+    // Shared claims run only beside shared ones, so a claim that does not fit
+    // waits for all that runs. A holder past its estimate is about to finish.
+    const holders = running.map((r) => r.claim);
+    if (!fits(w, holders, limit)) {
+      at = Math.max(at, ...running.map((r) => r.end));
+      running = [];
+    }
+    if (w.id === id) return { ms: at - now };
+    if (w.expectMs === null) return { unknown: w };
+    running.push({ claim: w, end: at + w.expectMs });
+  }
+  return { ms: at - now };
+}
+
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS claims (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +141,8 @@ const SCHEMA = `
     pid INTEGER,
     holder_limit INTEGER,
     renewing INTEGER NOT NULL DEFAULT 0,
-    keep INTEGER NOT NULL DEFAULT 0
+    keep INTEGER NOT NULL DEFAULT 0,
+    expect_ms INTEGER
   );
   CREATE INDEX IF NOT EXISTS claims_live ON claims(resource) WHERE released_at IS NULL;
 `;
@@ -116,6 +156,7 @@ interface Row {
   why: string;
   priority: number;
   ttl_ms: number;
+  expect_ms: number | null;
   created_at: number;
   expires_at: number;
   granted_at: number | null;
@@ -138,6 +179,7 @@ function toClaim(r: Row): Claim {
     why: r.why,
     priority: r.priority,
     ttlMs: r.ttl_ms,
+    expectMs: r.expect_ms,
     createdAt: r.created_at,
     expiresAt: r.expires_at,
     grantedAt: r.granted_at,
@@ -187,6 +229,7 @@ export class Board {
     if (!columns.some((c) => c.name === 'keep')) {
       db.exec('ALTER TABLE claims ADD COLUMN keep INTEGER NOT NULL DEFAULT 0');
     }
+    if (!columns.some((c) => c.name === 'expect_ms')) db.exec('ALTER TABLE claims ADD COLUMN expect_ms INTEGER');
   }
 
   static open(file: string, options: BoardOptions = {}): Board {
@@ -209,8 +252,8 @@ export class Board {
       const now = this.now();
       const { lastInsertRowid } = this.db
         .prepare(
-          `INSERT INTO claims (resource, mode, holder, session_id, pid, why, priority, ttl_ms, created_at, expires_at, holder_limit, keep)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO claims (resource, mode, holder, session_id, pid, why, priority, ttl_ms, expect_ms, created_at, expires_at, holder_limit, keep)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.resource,
@@ -221,6 +264,7 @@ export class Board {
           input.why,
           input.priority ?? 0,
           input.ttlMs,
+          input.expectMs ?? null,
           now,
           now + input.ttlMs,
           input.holderLimit ?? null,
@@ -283,13 +327,13 @@ export class Board {
     });
   }
 
-  /** Extends the claim from now, and restates its reason when given one, which is how progress reaches waiters. */
-  renew(id: number, ttlMs: number, why?: string): Claim {
+  /** Extends the claim from now, and restates its reason or estimate when given one, which is how progress reaches waiters. */
+  renew(id: number, ttlMs: number, why?: string, expectMs?: number): Claim {
     return this.transaction(() => {
       const claim = this.row(id);
       this.db
-        .prepare('UPDATE claims SET ttl_ms = ?, expires_at = ?, why = ? WHERE id = ?')
-        .run(ttlMs, this.now() + ttlMs, why ?? claim.why, id);
+        .prepare('UPDATE claims SET ttl_ms = ?, expires_at = ?, why = ?, expect_ms = ? WHERE id = ?')
+        .run(ttlMs, this.now() + ttlMs, why ?? claim.why, expectMs ?? claim.expectMs, id);
       // Renewing is a session saying it is still on this, which is all that
       // taking an offer takes when no wrapper is holding the claim.
       this.start(id);
@@ -317,6 +361,7 @@ export class Board {
         why: old.why,
         priority: front?.priority ?? old.priority,
         ttlMs: old.ttlMs,
+        expectMs: old.expectMs ?? undefined,
         holderLimit: old.holderLimit ?? undefined,
         keep: old.keep,
       });

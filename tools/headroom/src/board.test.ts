@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
-import { Board } from './board.ts';
+import { Board, turnIn } from './board.ts';
 
 const MIN = 60_000;
+const HOUR = 60 * MIN;
 const GRACE = MIN;
 
 /** A board on a fake clock and a fake process table, so expiry and crashes are values to set. */
@@ -15,8 +16,11 @@ function fresh() {
   return { board, tick: (ms: number) => (now += ms), kill: (pid: number) => dead.add(pid) };
 }
 
-const cpu = (mode: 'shared' | 'exclusive', holder: string, extra: Partial<{ priority: number; ttlMs: number }> = {}) =>
-  ({ resource: 'cpu', mode, holder, why: `${holder} work`, ttlMs: 10 * MIN, ...extra }) as const;
+const cpu = (
+  mode: 'shared' | 'exclusive',
+  holder: string,
+  extra: Partial<{ priority: number; ttlMs: number; expectMs: number }> = {},
+) => ({ resource: 'cpu', mode, holder, why: `${holder} work`, ttlMs: 10 * MIN, ...extra }) as const;
 
 describe('granting', () => {
   test('shared claims hold together, and a second resource is its own queue', () => {
@@ -233,6 +237,52 @@ describe('seize', () => {
 
     board.release(holder.id);
     expect(board.get(claim.id)?.grantedAt).not.toBeNull();
+  });
+});
+
+describe('estimates', () => {
+  test('a claim keeps the runtime its holder expects, and renew revises it', () => {
+    const { board } = fresh();
+    const bench = board.claim(cpu('exclusive', 'bench', { expectMs: 17 * MIN }));
+    expect(bench.expectMs).toBe(17 * MIN);
+    expect(board.renew(bench.id, 5 * MIN, undefined, 25 * MIN).expectMs).toBe(25 * MIN);
+    expect(board.renew(bench.id, 5 * MIN).expectMs).toBe(25 * MIN);
+  });
+
+  test("a waiting claim's turn comes once the claims ahead are expected to be done, shared ones together and an exclusive one alone", () => {
+    const { board, tick } = fresh();
+    const bench = board.claim(cpu('exclusive', 'bench', { expectMs: 17 * MIN, ttlMs: HOUR }));
+    board.attach(bench.id, 4242, true);
+    board.claim(cpu('shared', 'suite-a', { expectMs: 3 * MIN, ttlMs: HOUR }));
+    board.claim(cpu('shared', 'suite-b', { expectMs: 6 * MIN, ttlMs: HOUR }));
+    board.claim(cpu('exclusive', 'profile', { expectMs: 2 * MIN, ttlMs: HOUR }));
+    const me = board.claim(cpu('shared', 'me', { ttlMs: HOUR }));
+
+    // bench ends at 5m from now, the suites together at 11m, then profile alone at 13m.
+    expect(turnIn(board.status(), me.id, tick(12 * MIN))).toEqual({ ms: 13 * MIN });
+  });
+
+  test('a holder running past its estimate counts as about to finish', () => {
+    const { board, tick } = fresh();
+    const bench = board.claim(cpu('exclusive', 'bench', { expectMs: 10 * MIN, ttlMs: HOUR }));
+    board.attach(bench.id, 4242, true);
+    const me = board.claim(cpu('shared', 'me', { ttlMs: HOUR }));
+
+    expect(turnIn(board.status(), me.id, tick(15 * MIN))).toEqual({ ms: 0 });
+  });
+
+  test('a turn is unknown behind a claim with no estimate, and behind a notice that stops new work', () => {
+    const { board, tick } = fresh();
+    const bench = board.claim(cpu('exclusive', 'bench'));
+    const me = board.claim(cpu('shared', 'me'));
+    const behindBench = turnIn(board.status(), me.id, tick(0));
+    expect('unknown' in behindBench && behindBench.unknown.id).toBe(bench.id);
+
+    board.release(bench.id);
+    const notice = board.claim({ resource: 'cpu', mode: 'notice', holder: 'knut', why: 'on battery', ttlMs: HOUR });
+    const later = board.claim(cpu('shared', 'later'));
+    const behindNotice = turnIn(board.status(), later.id, tick(0));
+    expect('unknown' in behindNotice && behindNotice.unknown.id).toBe(notice.id);
   });
 });
 

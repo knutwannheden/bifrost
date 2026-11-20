@@ -52,6 +52,15 @@ describe('cli', () => {
     expect(third.out).toMatch(/2nd in line/);
   });
 
+  test('--expect tells a queued claim when its turn comes, and renew --expect revises that', () => {
+    run(['acquire', 'cpu', '--exclusive', '--keep', '--expect', '17m', '--why', 'JMH run', '--as', 'bench']);
+    const queued = run(['acquire', 'cpu', '--shared', '--why', 'tests', '--as', 'suite']);
+    expect(queued.out).toMatch(/1st in line, your turn in about 17m\./);
+
+    run(['renew', '1', '--expect', '25m']);
+    expect(run(['renew', '2']).out).toMatch(/your turn in about 25m\./);
+  });
+
   test('-q prints only the claim id, for shell composition, also once a wait for it ends', async () => {
     const r = run(['acquire', 'cpu', '--exclusive', '--why', 'JMH run', '--as', 'bench', '-q']);
     expect(r.code).toBe(0);

@@ -1,5 +1,5 @@
-import type { Claim, Status } from './board.ts';
-import { formatLeft, lifetime } from './common.ts';
+import { type Claim, type Status, turnIn } from './board.ts';
+import { describeTurn, formatLeft, lifetime } from './common.ts';
 
 export interface HookOutput {
   /** One line for the user's terminal. */
@@ -89,6 +89,10 @@ export function hookOutput(
     if (counted.length) parts.push(sharedCount(counted, 'session'));
     if (offered.length) parts.push(`offered to ${named(offered, me, false)}`);
     if (waiting.length) parts.push(`${waiting.length} waiting`);
+    const mine = me ? waiting.find((c) => c.sessionId === me) : undefined;
+    const turn = mine && turnIn(status, mine.id, now);
+    // The banner is a glance, so it carries a turn only when there is one to tell.
+    if (turn && 'ms' in turn) parts.push(`your ${describeTurn(turn)}`);
     banner.push(`${r}: ${parts.join('; ')}`);
 
     detail.push(`## ${r}`);
@@ -105,7 +109,10 @@ export function hookOutput(
         `- offered to ${who(c, me)}, ${c.mode}, not started yet — take it with \`headroom hold ${c.id}\` ` +
           `or lose it to whoever is ready: ${c.why}`,
       );
-    for (const c of waiting) detail.push(`- waiting: ${who(c, me)}, ${c.mode}, priority ${c.priority}: ${c.why}`);
+    for (const c of waiting)
+      detail.push(
+        `- waiting: ${who(c, me)}, ${c.mode}, priority ${c.priority}, ${describeTurn(turnIn(status, c.id, now))}: ${c.why}`,
+      );
   }
 
   const yields = me ? status.holding.filter((c) => c.sessionId === me && c.yieldRequestedBy !== null) : [];

@@ -1,19 +1,47 @@
 import { basename } from 'node:path';
-import { type Board, type Claim, idle } from './board.ts';
+import { type Board, type Claim, idle, turnIn } from './board.ts';
 import { describeLoad, sampleForeignLoad } from './machine.ts';
+
+function hoursAndMinutes(min: number): string {
+  return min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? `${min % 60}m` : ''}` : `${min}m`;
+}
 
 export function formatLeft(claim: Claim, now: number): string {
   const ms = claim.expiresAt - now;
   if (ms <= 0) return 'expiring';
-  const min = Math.ceil(ms / 60_000);
-  return min >= 60 ? `${Math.floor(min / 60)}h${min % 60 ? `${min % 60}m` : ''}` : `${min}m`;
+  return hoursAndMinutes(Math.ceil(ms / 60_000));
 }
 
-/** How long a claim stands: a countdown for a bare claim, and no deadline at all for one a command renews. */
+function formatSpan(ms: number): string {
+  const min = Math.round(ms / 60_000);
+  return min < 1 ? '<1m' : hoursAndMinutes(min);
+}
+
+/** How long a claim has held the resource, and how long it stands. One a command renews has no deadline. */
 export function lifetime(claim: Claim, now: number): string {
-  if (claim.renewing) return 'renewed while its command runs';
-  const left = `${formatLeft(claim, now)} left`;
-  return idle(claim) ? `${left}, idle so the next in line may run` : left;
+  const parts: string[] = [];
+  if (claim.acceptedAt !== null) {
+    const held = now - claim.acceptedAt;
+    if (claim.expectMs === null) parts.push(`${formatSpan(held)} in`);
+    else {
+      parts.push(`${formatSpan(held)} of ~${formatSpan(claim.expectMs)}`);
+      if (held > claim.expectMs) parts.push('over its estimate');
+    }
+  }
+  if (claim.renewing) parts.push('renewed while its command runs');
+  else {
+    parts.push(`${formatLeft(claim, now)} left`);
+    if (idle(claim)) parts.push('idle so the next in line may run');
+  }
+  return parts.join(', ');
+}
+
+/** When a waiting claim's turn comes, or who to ask when the board cannot tell. */
+export function describeTurn(turn: ReturnType<typeof turnIn>): string {
+  if ('ms' in turn) return turn.ms < 60_000 ? 'turn any moment now' : `turn in about ${formatSpan(turn.ms)}`;
+  return turn.unknown.mode === 'notice'
+    ? `turn unknown while the notice from ${turn.unknown.holder} stands`
+    : `turn unknown, "${turn.unknown.holder}" gave no estimate`;
 }
 
 export function parseDuration(text: string): number {
@@ -110,7 +138,10 @@ export function queued(board: Board, claim: Claim): string {
   const ahead = waiting.filter(
     (w) => w.id !== claim.id && (w.priority > claim.priority || w.createdAt < claim.createdAt),
   );
-  const lines = [`waiting #${claim.id} — ${claim.resource} is not free; you are ${ordinal(ahead.length + 1)} in line.`];
+  const turn = describeTurn(turnIn(board.status(claim.resource), claim.id, now));
+  const lines = [
+    `waiting #${claim.id} — ${claim.resource} is not free; you are ${ordinal(ahead.length + 1)} in line, your ${turn}.`,
+  ];
   for (const n of notices) lines.push(`  notice from ${n.holder}: ${n.why}`);
   for (const h of holding) lines.push(`  held by ${h.holder} (${h.mode}, ${lifetime(h, now)}): ${h.why}`);
   for (const w of ahead) lines.push(`  ahead of you: ${w.holder} (${w.mode}): ${w.why}`);

@@ -3,6 +3,7 @@ import { Board } from './board.ts';
 import { hookOutput } from './hook.ts';
 
 const MIN = 60_000;
+const HOUR = 60 * MIN;
 const T0 = 1_000_000;
 
 describe('hookOutput', () => {
@@ -37,8 +38,56 @@ describe('hookOutput', () => {
     board.attach(bench.id, process.pid, true);
 
     const context = hookOutput(board.status(), null, T0)?.hookSpecificOutput.additionalContext ?? '';
-    expect(context).toContain('held by bench, exclusive, renewed while its command runs: JMH');
+    expect(context).toContain('held by bench, exclusive, <1m in, renewed while its command runs: JMH');
     expect(context).not.toMatch(/\dm left/);
+  });
+
+  test('a held claim says how long it has held, against its estimate when it gave one', () => {
+    let now = T0;
+    const board = Board.inMemory({ now: () => now });
+    const bench = board.claim({
+      resource: 'cpu',
+      mode: 'exclusive',
+      holder: 'bench',
+      why: 'JMH',
+      ttlMs: HOUR,
+      expectMs: 17 * MIN,
+    });
+    const copier = board.claim({ resource: 'disk', mode: 'exclusive', holder: 'copier', why: 'copy', ttlMs: HOUR });
+    board.attach(bench.id, process.pid, true);
+    board.attach(copier.id, process.pid, true);
+    const context = () => hookOutput(board.status(), null, now)?.hookSpecificOutput.additionalContext ?? '';
+
+    now += 12 * MIN;
+    expect(context()).toContain('held by bench, exclusive, 12m of ~17m, renewed while its command runs: JMH');
+    expect(context()).toContain('held by copier, exclusive, 12m in, renewed while its command runs: copy');
+
+    now += 9 * MIN;
+    expect(context()).toContain(
+      'held by bench, exclusive, 21m of ~17m, over its estimate, renewed while its command runs',
+    );
+  });
+
+  test('a waiting session is told when its turn comes, in the banner and on the board', () => {
+    let now = T0;
+    const board = Board.inMemory({ now: () => now });
+    const bench = board.claim({
+      resource: 'cpu',
+      mode: 'exclusive',
+      holder: 'bench',
+      why: 'JMH',
+      ttlMs: HOUR,
+      expectMs: 17 * MIN,
+    });
+    board.attach(bench.id, process.pid, true);
+    board.claim({ resource: 'cpu', mode: 'shared', holder: 'suite', sessionId: 's-me', why: 'tests', ttlMs: HOUR });
+
+    now += 12 * MIN;
+    const out = hookOutput(board.status(), 's-me', now);
+    expect(out?.systemMessage).toContain('1 waiting; your turn in about 5m');
+    expect(out?.hookSpecificOutput.additionalContext).toContain(
+      'waiting: you, shared, priority 0, turn in about 5m: tests',
+    );
   });
 
   test("a session's own claim reads as you, not as its name", () => {

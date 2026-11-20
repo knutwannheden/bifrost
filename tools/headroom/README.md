@@ -3,9 +3,9 @@
 Advisory claims on shared resources, so parallel agent sessions on one machine do not run a benchmark on top of a test suite. One SQLite file, a CLI, and a hook that puts the board in front of every session.
 
 ```
-headroom run cpu --exclusive --why "JMH on the parser; another heavy process invalidates the run" -- ./gradlew jmh
+headroom run cpu --exclusive --expect 12m --why "JMH on the parser; another heavy process invalidates the run" -- ./gradlew jmh
 headroom acquire cpu --exclusive --ttl 10m --why "JMH on the parser; another heavy process invalidates the run"
-headroom acquire cpu --shared --why "full suite, ~6 min, just slower if you join"
+headroom acquire cpu --shared --expect 6m --why "full suite, just slower if you join"
 headroom wait <id>
 headroom release <id>
 headroom notice cpu --why "generator power, prefer targeted tests" --ttl 2h
@@ -13,7 +13,7 @@ headroom seize cpu --why "release timing, cannot wait"
 headroom status
 ```
 
-`shared` claims hold together, `exclusive` holds alone, a `notice` stops new grants without holding anything. The queue is walked by priority then age, and a waiting exclusive claim holds back the shared claims behind it. A started claim with no command running under it steps aside: the next in line is granted, and the idle claim waits its turn when it next holds, unless it was made with `--keep`. Nothing is enforced: a session that was told can still proceed, and is expected to say so.
+`shared` claims hold together, `exclusive` holds alone, a `notice` stops new grants without holding anything. The queue is walked by priority then age, and a waiting exclusive claim holds back the shared claims behind it. A started claim with no command running under it steps aside: the next in line is granted, and the idle claim waits its turn when it next holds, unless it was made with `--keep`. `--expect` says how long a claim will hold the resource once it starts, and a waiting claim is told its turn from the estimates of the claims ahead of it. Nothing is enforced: a session that was told can still proceed, and is expected to say so.
 
 There is no server. Each command opens the SQLite file, settles the queue under a write lock, and exits. Cleanup needs no sweeper either: a claim records its session's process id and is dropped the next time anyone looks after that process is gone; while `run` or `hold` holds it, it is tied to that wrapper instead, so killing the wrapper frees the resource at once; and a claim nobody renews lapses at its ttl whether held or waiting.
 

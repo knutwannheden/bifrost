@@ -21,25 +21,27 @@ import { describeLoad, sampleForeignLoad } from './machine.ts';
 
 const USAGE = `headroom — advisory claims on shared resources, for agent sessions on one machine
 
-  headroom run <resource> --shared|--exclusive --why "..." [--ttl 10m] [--grace 0] [--as name] -- <command...>
+  headroom run <resource> --shared|--exclusive --why "..." [--expect 17m] [--ttl 10m] [--grace 0] [--as name] -- <command...>
       acquire, wait your turn, hold while the command runs, release on exit
-  headroom acquire <resource> --shared|--exclusive --why "..." [--ttl 10m] [--priority N] [--wait] [--as name] [-q] [--force] [--keep]
+  headroom acquire <resource> --shared|--exclusive --why "..." [--expect 17m] [--ttl 10m] [--priority N] [--wait] [--as name] [-q] [--force] [--keep]
       a claim with nothing running under it lets the next in line run and waits its turn when it holds again;
       --keep holds the resource through the gaps, for rounds that must not be split by other load
   headroom hold <id> [--grace 0|3m|never] -- <command...>
       keep the claim alive while the command runs, and act on a yield request
   headroom wait <id> [--timeout 40m]
-  headroom renew <id> [--ttl 10m] [--why "..."]
+  headroom renew <id> [--ttl 10m] [--why "..."] [--expect 25m]
   headroom release <id> [--requeue]        --requeue lets the next in line run and files the claim right behind it
       (clear <id> is the same thing, for lifting a notice)
   headroom notice <resource> --why "..." [--serial] [--ttl 1h] [--as name]
       --serial lets work through one claim at a time instead of stopping it; without it nothing new runs
-  headroom seize <resource> --why "..." [--ttl 10m] [--as name]
+  headroom seize <resource> --why "..." [--expect 5m] [--ttl 10m] [--as name]
   headroom status [resource] [--json]
   headroom hook                      reads a Claude Code hook event on stdin
 
 shared: any number hold together (test suites, builds). exclusive: holds alone (benchmarks, profiling).
 --why says what you are doing and what breaks if someone proceeds anyway; renew --why restates it.
+--expect is how long you expect to hold the resource once you start. Each session waiting is told its turn from
+the estimates ahead of it, and renew --expect revises yours.
 --as is the name other sessions message you by; Bifrost sessions have it in BIFROST_SESSION_NAME. Without
 either, a claim is listed under the working directory and session id, which nobody can message.
 -q prints only the claim id, for $(...) and && chains.
@@ -290,6 +292,7 @@ async function main(argv: string[]): Promise<number> {
       shared: { type: 'boolean' },
       exclusive: { type: 'boolean' },
       why: { type: 'string' },
+      expect: { type: 'string' },
       ttl: { type: 'string' },
       priority: { type: 'string' },
       wait: { type: 'boolean' },
@@ -311,6 +314,7 @@ async function main(argv: string[]): Promise<number> {
     return command ? 0 : 1;
   }
   const timeoutMs = values.timeout ? parseDuration(values.timeout) : Number.POSITIVE_INFINITY;
+  const expectMs = values.expect ? parseDuration(values.expect) : undefined;
 
   /** The claim acquire and run both make from the flags. */
   const claimInput = async (): Promise<ClaimInput> => {
@@ -327,6 +331,7 @@ async function main(argv: string[]): Promise<number> {
       why: values.why,
       priority: values.priority ? Number(values.priority) : 0,
       ttlMs: parseDuration(values.ttl ?? '10m'),
+      expectMs,
       keep: !!values.keep,
     };
   };
@@ -368,7 +373,7 @@ async function main(argv: string[]): Promise<number> {
       case 'wait':
         return await waitFor(board, Number(arg), timeoutMs, values.force ?? false, values.quiet);
       case 'renew': {
-        const c = board.renew(Number(arg), parseDuration(values.ttl ?? '10m'), values.why);
+        const c = board.renew(Number(arg), parseDuration(values.ttl ?? '10m'), values.why, expectMs);
         console.log(c.grantedAt !== null ? granted(board, c) : queued(board, c));
         return 0;
       }
@@ -408,6 +413,7 @@ async function main(argv: string[]): Promise<number> {
           pid: sessionPid(),
           why: values.why,
           ttlMs: parseDuration(values.ttl ?? '10m'),
+          expectMs,
         });
         if (claim.grantedAt !== null) {
           console.log(granted(board, claim));
