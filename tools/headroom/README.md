@@ -3,13 +3,13 @@
 Advisory claims on shared resources, so parallel agent sessions on one machine do not run a benchmark on top of a test suite. One SQLite file, a CLI, and a hook that puts the board in front of every session.
 
 ```
-headroom run cpu --exclusive --expect 12m --why "JMH on the parser; another heavy process invalidates the run" -- ./gradlew jmh
-headroom acquire cpu --exclusive --ttl 10m --why "JMH on the parser; another heavy process invalidates the run"
-headroom acquire cpu --shared --expect 6m --why "full suite, just slower if you join"
+headroom run cpu --exclusive --expect 12m -- ./gradlew jmh
+headroom acquire cpu --exclusive --ttl 10m
+headroom acquire cpu --shared --expect 6m
 headroom wait <id>
 headroom release <id>
 headroom notice cpu --why "generator power, prefer targeted tests" --ttl 2h
-headroom seize cpu --why "release timing, cannot wait"
+headroom seize cpu
 headroom status
 ```
 

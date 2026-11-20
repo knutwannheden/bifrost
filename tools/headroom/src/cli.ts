@@ -13,6 +13,7 @@ import {
   nextUp,
   parseDuration,
   queued,
+  reason,
   sessionPid,
   signature,
 } from './common.ts';
@@ -21,9 +22,9 @@ import { describeLoad, insideRevertingPatchwork, sampleForeignLoad } from './mac
 
 const USAGE = `headroom — advisory claims on shared resources, for agent sessions on one machine
 
-  headroom run <resource> --shared|--exclusive --why "..." [--expect 17m] [--ttl 10m] [--grace 0] [--as name] -- <command...>
+  headroom run <resource> --shared|--exclusive [--why "..."] [--expect 17m] [--ttl 10m] [--grace 0] [--as name] -- <command...>
       acquire, wait your turn, hold while the command runs, release on exit
-  headroom acquire <resource> --shared|--exclusive --why "..." [--expect 17m] [--ttl 10m] [--priority N] [--wait] [--as name] [-q] [--force] [--keep]
+  headroom acquire <resource> --shared|--exclusive [--why "..."] [--expect 17m] [--ttl 10m] [--priority N] [--wait] [--as name] [-q] [--force] [--keep]
       a claim with nothing running under it lets the next in line run and waits its turn when it holds again;
       --keep holds the resource through the gaps, for rounds that must not be split by other load
   headroom hold <id> [--grace 0|3m|never] -- <command...>
@@ -34,12 +35,12 @@ const USAGE = `headroom — advisory claims on shared resources, for agent sessi
       (clear <id> is the same thing, for lifting a notice)
   headroom notice <resource> --why "..." [--serial] [--ttl 1h] [--as name]
       --serial lets work through one claim at a time instead of stopping it; without it nothing new runs
-  headroom seize <resource> --why "..." [--expect 5m] [--ttl 10m] [--as name]
+  headroom seize <resource> [--why "..."] [--expect 5m] [--ttl 10m] [--as name]
   headroom status [resource] [--json]
   headroom hook                      reads a Claude Code hook event on stdin
 
 shared: any number hold together (test suites, builds). exclusive: holds alone (benchmarks, profiling).
---why says what you are doing and what breaks if someone proceeds anyway; renew --why restates it.
+--why is shown to other sessions beside the claim, and is the text of a notice. renew --why restates it.
 --expect is how long you expect to hold the resource once you start. Each session waiting is told its turn from
 the estimates ahead of it, and renew --expect revises yours.
 --as is the name other sessions message you by; Bifrost sessions have it in BIFROST_SESSION_NAME. Without
@@ -158,7 +159,7 @@ async function holdWhile(board: Board, id: number, cmd: string[], graceMs: numbe
         if (c.yieldRequestedBy !== null && !yieldSeen) {
           yieldSeen = true;
           const seizer = board.get(c.yieldRequestedBy);
-          const who = `${seizer?.holder ?? 'another session'}${seizer ? `: ${seizer.why}` : ''}`;
+          const who = `${seizer?.holder ?? 'another session'}${seizer ? reason(seizer) : ''}`;
           writeFileSync(marker, `${who}\n`);
           const action =
             graceMs === null ? 'warning only' : graceMs === 0 ? 'stopping now' : `stopping in ${graceMs / 1000}s`;
@@ -344,7 +345,6 @@ async function main(argv: string[]): Promise<number> {
   const claimInput = async (): Promise<ClaimInput> => {
     if (!arg) throw new Error(`${command} needs a resource name, e.g. cpu`);
     if (values.shared === values.exclusive) throw new Error('Pass exactly one of --shared or --exclusive');
-    if (!values.why) throw new Error('Pass --why: what you are doing, and what breaks if someone proceeds anyway');
     const mode: Mode = values.shared ? 'shared' : 'exclusive';
     return {
       resource: arg,
@@ -352,7 +352,7 @@ async function main(argv: string[]): Promise<number> {
       holder: await holderName(values.as),
       sessionId: process.env.CLAUDE_CODE_SESSION_ID,
       pid: sessionPid(),
-      why: values.why,
+      why: values.why ?? '',
       priority: values.priority ? Number(values.priority) : 0,
       ttlMs: parseDuration(values.ttl ?? '10m'),
       expectMs,
@@ -430,13 +430,13 @@ async function main(argv: string[]): Promise<number> {
         return 0;
       }
       case 'seize': {
-        if (!arg || !values.why) throw new Error('seize needs a resource and --why');
+        if (!arg) throw new Error('seize needs a resource name, e.g. cpu');
         const { claim, yielding } = board.seize({
           resource: arg,
           holder: await holderName(values.as),
           sessionId: process.env.CLAUDE_CODE_SESSION_ID,
           pid: sessionPid(),
-          why: values.why,
+          why: values.why ?? '',
           ttlMs: parseDuration(values.ttl ?? '10m'),
           expectMs,
         });

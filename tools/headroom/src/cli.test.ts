@@ -207,6 +207,17 @@ describe('cli', () => {
     expect(run(['status']).out).toContain('round 3 of 5');
   });
 
+  test('run, acquire and seize need no --why, and a claim without one is listed with no dangling reason', () => {
+    expect(run(['run', 'cpu', '--shared', '--', 'true']).code).toBe(0);
+
+    run(['acquire', 'cpu', '--exclusive', '--as', 'bench']);
+    expect(run(['acquire', 'cpu', '--shared', '--as', 'suite']).out).toMatch(/held by bench \([^)]*\)$/m);
+    expect(run(['status']).out).toMatch(/whoever is ready$/m);
+
+    expect(run(['seize', 'cpu', '--as', 'urgent']).out).toContain('seizing #');
+    expect(run(['renew', '2']).out).toContain('YIELD REQUESTED by urgent. Stop');
+  });
+
   test('a hold on a claim that stepped aside waits for the resource to come back', async () => {
     run(['acquire', 'cpu', '--exclusive', '--why', 'A/B', '--as', 'bench']);
     run(['renew', '1']);

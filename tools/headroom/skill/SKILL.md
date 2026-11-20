@@ -12,7 +12,7 @@ Several agent sessions run on this machine at once. A benchmark next to a test s
 Before CPU-heavy work, claim. After it, release. The easiest way is to run the work under the claim:
 
 ```
-headroom run cpu --exclusive --expect 12m --as "<your session name>" --why "JMH on the parser; another heavy process invalidates the run and it restarts from zero. If you overlapped me, tell me so I can discard the rep" -- ./gradlew jmh
+headroom run cpu --exclusive --expect 12m --as "<your session name>" -- ./gradlew jmh
 ```
 
 `run` waits for its turn, holds and renews the claim for as long as the command runs, releases when it exits, and passes the command's exit code through. Run it in a background Bash call when the work is long. If someone seizes the resource, `run` stops the command and exits 3 — so you never have to watch for a yield request yourself.
@@ -20,7 +20,7 @@ headroom run cpu --exclusive --expect 12m --as "<your session name>" --why "JMH 
 When the work spans several commands, claim by hand and wrap each heavy command in `hold`, which keeps the claim alive and watches for a yield while that command runs:
 
 ```
-id=$(headroom acquire cpu --exclusive --as "<your session name>" --why "..." -q)
+id=$(headroom acquire cpu --exclusive --as "<your session name>" -q)
 headroom hold $id -- ./gradlew jmh -Pround=1
 headroom hold $id -- ./gradlew jmh -Pround=2
 headroom release $id
@@ -32,10 +32,9 @@ Anything under about 30 seconds of CPU — a quick grep, a single test class —
 
 - `--exclusive` when another heavy process would **corrupt your result**: benchmarks, profiling, timing measurements.
 - `--shared` when it would **only slow you down**: test suites, full builds, large recipe runs. Shared claims hold together, unless a notice is making work take turns.
-- `--why` is read by other sessions deciding whether to wait, negotiate or override you. Say what you are doing *and what breaks if they proceed anyway*. "Running tests" tells them nothing; "full suite, just slower if you join" tells them everything.
 - `--expect` is how long you expect to hold the resource once you start, such as `--expect 6m`. Each session waiting is told when its turn comes from the estimates ahead of it, and the board marks a holder that runs past its own. Leave it out when you have no basis for a number. The waiters are then told their turn is unknown and that you gave no estimate, which a guess would hide.
 - `--ttl` is how long a bare claim stands unless renewed. Running over? `headroom renew <id> --ttl 5m`. A claim nobody renews lapses at its ttl, **held or waiting** — a queued claim you walk away from disappears too, and an exclusive claim that lapses mid-benchmark lets the next session in while your numbers are still being taken. `run` and `hold` renew for you; a bare claim is yours to renew.
-- `renew --expect 25m --why "round 3 of 5"` restates your estimate and reason on the board. That is how progress and revised estimates reach the sessions waiting on you, instead of them asking.
+- `renew --expect 25m` restates your estimate on the board. That is how a revised estimate reaches the sessions waiting on you, instead of them asking.
 - `--as` is the name other sessions message you by: what `ListAgents` shows as "This session is …". Sessions started by Bifrost have it set already. Any other session is listed under its working directory and session id unless it passes `--as`, and a claim listed that way cannot be messaged, so pass a name when you expect to be negotiated with.
 
 Exit codes: 0 granted or done · 1 queued, refused or lapsed · 2 wait timed out · 3 stopped for a yield request · 4 refused because the machine is busy outside any claim · 5 `run` refused to queue inside `patchwork --revert --then` and printed the command with headroom on the outside · otherwise the command's own. A script keys on the exit code, never on the text, which is written for people. `acquire -q` prints only the claim id, for `$(...)`.
@@ -74,17 +73,17 @@ After a tool call you may be told that a session is waiting behind your claim. I
 
 1. **Wait** — `headroom wait <id>` blocks until granted and keeps your claim alive. It has no cutoff of its own, so run it in a background Bash call; `--timeout` adds one if you want it (exit 2). Exit 0 means granted, 1 means the claim lapsed. The queued output says where you are in line. Do other work first if there is any; the queue holds your place as long as something renews the claim.
 2. **Negotiate** — a shared holder may be happy to pause for your 3-minute benchmark; a benchmark holder may be 30 seconds from done. Ask them: `SendMessage` to the quoted name, say what you need and how long. Agree on an order between you; the board records whatever you then do.
-3. **Proceed anyway** — only when their `--why` says your work does not hurt them (a shared holder who is "just slower") and you accept being slower too. Tell them first with `SendMessage`. Never proceed past an exclusive holder whose `--why` says you would corrupt their run.
+3. **Proceed anyway** — only past shared holders, whom your load only slows, and only when you accept being slowed too. Tell them first with `SendMessage`. Never proceed past an exclusive holder, whose run you would corrupt.
 
 ## When asked to yield
 
-Your context says `YIELD REQUESTED on cpu: <who> needs it now — <why>`. Someone seized the resource. Stop the work there, `headroom release <id>`, and tell the requester you are clear with `SendMessage`. Re-acquire afterwards; your claim goes back in the queue. If stopping is genuinely worse than continuing (two minutes from the end of a 40-minute run), say so to the requester instead of silently continuing.
+Your context says `YIELD REQUESTED on cpu: <who> needs it now`. Someone seized the resource. Stop the work there, `headroom release <id>`, and tell the requester you are clear with `SendMessage`. Re-acquire afterwards; your claim goes back in the queue. If stopping is genuinely worse than continuing (two minutes from the end of a 40-minute run), say so to the requester instead of silently continuing.
 
 Under `run` or `hold` this is handled for you, and `--grace` decides how: `0` (the default) stops the command's whole process tree at once; `--grace 3m` first writes a marker file whose path the command has in `$HEADROOM_YIELD`, so a loop can finish its current rep and stop cleanly — `[ -e "$HEADROOM_YIELD" ] && break` between reps — and is stopped only when the grace runs out; `--grace never` only warns. Use a grace for an A/B whose completed reps are worth keeping; a run that is invalid the moment anything else starts gets the default.
 
 ## Seizing
 
-`headroom seize cpu --why "..."` puts you ahead of the queue and asks every holder to yield. It is for work that cannot wait. Holders see the request on their next prompt, which may be minutes away; `SendMessage` each name the command prints, then `headroom wait <id>`. After your release, everything resumes in queue order.
+`headroom seize cpu` puts you ahead of the queue and asks every holder to yield. It is for work that cannot wait. Holders see the request on their next prompt, which may be minutes away; `SendMessage` each name the command prints, then `headroom wait <id>`. After your release, everything resumes in queue order.
 
 ## Notices
 

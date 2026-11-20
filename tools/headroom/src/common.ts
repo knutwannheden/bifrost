@@ -12,6 +12,10 @@ export function formatLeft(claim: Claim, now: number): string {
   return hoursAndMinutes(Math.ceil(ms / 60_000));
 }
 
+export function reason(claim: Claim, separator = ': '): string {
+  return claim.why ? `${separator}${claim.why}` : '';
+}
+
 function formatSpan(ms: number): string {
   const min = Math.round(ms / 60_000);
   return min < 1 ? '<1m' : hoursAndMinutes(min);
@@ -123,7 +127,7 @@ export function granted(board: Board, c: Claim): string {
   const line = `granted #${c.id} — ${c.resource} ${c.mode} for ${formatLeft(c, Date.now())}. When done: headroom release ${c.id}`;
   if (c.yieldRequestedBy === null) return line;
   const seizer = board.get(c.yieldRequestedBy);
-  return `${line}\nYIELD REQUESTED by ${seizer?.holder ?? 'another session'}${seizer ? `: ${seizer.why}` : ''}. Stop the work and release.`;
+  return `${line}\nYIELD REQUESTED by ${seizer?.holder ?? 'another session'}${seizer ? reason(seizer) : ''}. Stop the work and release.`;
 }
 
 function ordinal(n: number): string {
@@ -143,8 +147,8 @@ export function queued(board: Board, claim: Claim): string {
     `waiting #${claim.id} — ${claim.resource} is not free; you are ${ordinal(ahead.length + 1)} in line, your ${turn}.`,
   ];
   for (const n of notices) lines.push(`  notice from ${n.holder}: ${n.why}`);
-  for (const h of holding) lines.push(`  held by ${h.holder} (${h.mode}, ${lifetime(h, now)}): ${h.why}`);
-  for (const w of ahead) lines.push(`  ahead of you: ${w.holder} (${w.mode}): ${w.why}`);
+  for (const h of holding) lines.push(`  held by ${h.holder} (${h.mode}, ${lifetime(h, now)})${reason(h)}`);
+  for (const w of ahead) lines.push(`  ahead of you: ${w.holder} (${w.mode})${reason(w)}`);
   const names = [...holding, ...ahead].map((c) => `"${c.holder}"`).join(', ');
   if (names) lines.push(`To negotiate, use SendMessage with to: ${names}.`);
   lines.push(`To wait your turn: headroom wait ${claim.id} (blocks until it is yours, keeps the claim alive)`);

@@ -1,5 +1,5 @@
 import { type Claim, type Status, turnIn } from './board.ts';
-import { describeTurn, formatLeft, lifetime } from './common.ts';
+import { describeTurn, formatLeft, lifetime, reason } from './common.ts';
 
 export interface HookOutput {
   /** One line for the user's terminal. */
@@ -102,16 +102,16 @@ export function hookOutput(
           `${c.holderLimit === 1 ? 'one claim at a time so claim and wait your turn' : 'nothing new is granted'}` +
           `: ${c.why}`,
       );
-    for (const c of shown) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${lifetime(c, now)}: ${c.why}`);
+    for (const c of shown) detail.push(`- held by ${who(c, me)}, ${c.mode}, ${lifetime(c, now)}${reason(c)}`);
     if (counted.length) detail.push(`- ${sharedCount(counted, 'other session')}; \`headroom status\` lists them`);
     for (const c of offered)
       detail.push(
         `- offered to ${who(c, me)}, ${c.mode}, not started yet — take it with \`headroom hold ${c.id}\` ` +
-          `or lose it to whoever is ready: ${c.why}`,
+          `or lose it to whoever is ready${reason(c)}`,
       );
     for (const c of waiting)
       detail.push(
-        `- waiting: ${who(c, me)}, ${c.mode}, priority ${c.priority}, ${describeTurn(turnIn(status, c.id, now))}: ${c.why}`,
+        `- waiting: ${who(c, me)}, ${c.mode}, priority ${c.priority}, ${describeTurn(turnIn(status, c.id, now))}${reason(c)}`,
       );
   }
 
@@ -120,7 +120,7 @@ export function hookOutput(
     const seizer = status.waiting.find((w) => w.id === c.yieldRequestedBy);
     detail.unshift(
       `YIELD REQUESTED on ${c.resource}: ${seizer ? who(seizer, me) : 'another session'} needs it now` +
-        `${seizer ? ` — ${seizer.why}` : ''}. Stop your work there and run \`headroom release ${c.id}\`.`,
+        `${seizer ? reason(seizer, ' — ') : ''}. Stop your work there and run \`headroom release ${c.id}\`.`,
     );
   }
 
@@ -147,7 +147,7 @@ export function waitingBehind(held: Claim, waiters: Claim[]): HookOutput {
       additionalContext: [
         ...waiters.map(
           (w) =>
-            `${w.holder} [${w.sessionId ?? '-'}] is waiting on ${held.resource} behind your claim #${held.id}: ${w.why}`,
+            `${w.holder} [${w.sessionId ?? '-'}] is waiting on ${held.resource} behind your claim #${held.id}${reason(w)}`,
         ),
         `If nothing runs under #${held.id} now, step aside with \`headroom release ${held.id} --requeue\`.`,
         'The next in line runs while you prepare your next step, and your claim comes back right behind it.',
