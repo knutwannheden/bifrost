@@ -105,13 +105,13 @@ Some things stay Claude-only:
 - Remote Control
 - following a session into another worktree, which only Claude's `EnterWorktree` and `ExitWorktree` report. Copilot and Codex file their sessions by id, so a restart resumes them in any directory.
 
-Copilot and Codex have no SendMessage, so the MCP server tells their sessions to use `send_prompt`.
+Copilot and Codex have no SendMessage, so the MCP server tells their sessions to use `message_task`, which reaches them as a queued prompt.
 
 Bifrost's own headless calls, for task titles, summaries and walkthroughs, run the agent Settings → Agent picks for them, which is the sessions' agent unless one is chosen, or none when it is Off (`oneshot.ts`). Codex enforces the reply's schema with `--output-schema`. Copilot has no such option, so the schema goes into its prompt and Bifrost checks the reply. Copilot and Codex run their own default model, at low effort for titles and summaries. The relay that delivers a message to a Claude session always runs Claude, since it sends with SendMessage.
 
 ### Tasks on other machines
 
-A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. Cmd+O or a file link opens one of its files in Zed with an `ssh://` URL to that machine's host. Other editors refuse it. An image pasted into one of its sessions, with Cmd+V or Ctrl+V, is copied to `~/.bifrost/paste` on that machine, and its path is pasted at the prompt. Its dev terminal is a login shell in that worktree over `ssh`, and ends with Bifrost like any dev terminal. SendMessage does not cross machines.
+A task with `machine` set runs on a host from `BifrostConfig.machines`, reached with plain `ssh` and whatever `~/.ssh/config` says about it. Its `worktreePath` is a path on that machine, so the services that read worktrees or transcripts from local disk skip it. Cmd+O or a file link opens one of its files in Zed with an `ssh://` URL to that machine's host. Other editors refuse it. An image pasted into one of its sessions, with Cmd+V or Ctrl+V, is copied to `~/.bifrost/paste` on that machine, and its path is pasted at the prompt. Its dev terminal is a login shell in that worktree over `ssh`, and ends with Bifrost like any dev terminal. SendMessage does not cross machines. The plugin's `message_task` does: the instance that owns the recipient has a relay deliver it with SendMessage, headed with the sender's task id, and the reply goes back through `message_task` to that id.
 
 Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there. At start, Bifrost connects to each machine a task was open on when it last quit.
 

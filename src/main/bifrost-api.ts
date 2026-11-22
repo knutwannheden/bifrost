@@ -29,7 +29,14 @@ import { relayMessage } from './oneshot';
 import { connectPeer, disconnectPeer, forwardTaskRoute, IDE, peerTasks, postToPeer, registerPeer } from './peers';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
-import { isIdle, markActive, markIdle, sendPrompt as sendPromptToTask, workingTaskIds } from './prompt-sender';
+import {
+  isIdle,
+  markActive,
+  markIdle,
+  messageTask,
+  sendPrompt as sendPromptToTask,
+  workingTaskIds,
+} from './prompt-sender';
 import { getRemoteHost, sessionIdScript } from './remote-host';
 import { addRepo } from './repo-manager';
 import { normalizeRepoPath } from './repo-path';
@@ -302,6 +309,7 @@ const FORWARDED_ROUTES = new Set([
   '/wake-task',
   '/open-task',
   '/send-prompt',
+  '/message-task',
   '/list-notes',
   '/delete-note',
 ]);
@@ -1058,6 +1066,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         wasOpen,
         worktreePath: openTask.worktreePath,
       });
+      return;
+    }
+
+    case '/message-task': {
+      const { taskId, fromTaskId, text } = body as { taskId?: string; fromTaskId?: string; text?: string };
+      if (!taskId || !text) {
+        errorResponse(res, 'taskId and text are required');
+        return;
+      }
+      jsonResponse(res, await messageTask(taskId, fromTaskId, text));
       return;
     }
 

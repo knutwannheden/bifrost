@@ -83,7 +83,7 @@ const OWN_INSTANCE = MACHINE !== '' && getApiPort() === readPort('instance-port'
 /** What to show in place of a task's session name, or null when that name is how to reach it. */
 function addressOf(t, unreachedHint) {
   if ((t.machine || '') !== MACHINE) {
-    return `on ${t.machine || "Bifrost's own machine"}, out of SendMessage's reach from here`;
+    return `on ${t.machine || "Bifrost's own machine"}, out of SendMessage's reach: message_task reaches it by id`;
   }
   return t.sessionName ? null : unreachedHint;
 }
@@ -111,6 +111,11 @@ const CLAUDE_MESSAGING = [
   'SendMessage reaches only tasks on the machine you run on, which is',
   MACHINE ? `"${MACHINE}", not the one Bifrost runs on.` : 'the one Bifrost runs on.',
   'list_tasks and find_task name the machine of a task that runs elsewhere.',
+  'To reach such a task, use message_task with its task id.',
+  '',
+  'A message that arrived through message_task begins "From task" and names the',
+  "sender's task id. Reply with message_task to that id, not with SendMessage:",
+  'the `from` such a message shows is a courier that has already exited.',
 ];
 
 // The tool descriptions below speak of SendMessage and ListAgents, which only Claude has.
@@ -118,10 +123,11 @@ const OTHER_MESSAGING = [
   'Bifrost runs each task as its own agent session in its own git worktree.',
   '',
   'This session has no SendMessage or ListAgents, whatever a tool description',
-  'below says. To reach another task, use send_prompt with its task id, which',
-  'list_tasks and find_task report. Say who you are in the prompt, since it',
-  'arrives as typed input with no sender. A task with no session yet is started',
-  'with wake_task, and one that is archived or stopped is reopened with open_task.',
+  'below says. To reach another task, use message_task with its task id, which',
+  'list_tasks and find_task report. It tells the recipient who sent it and how',
+  'to reply, and a message that reaches you the same way is answered with',
+  'message_task to the task id it names. A task that is archived or stopped is',
+  'reopened with open_task.',
 ];
 
 const server = new McpServer(
@@ -643,6 +649,33 @@ server.registerTool(
       ? `Prompt queued for task ${targetId}. It is typed when the task's current turn ends.`
       : `Prompt sent to task ${targetId} (mode: ${mode || 'queue'}).`;
     return { content: [{ type: 'text', text: sent }] };
+  },
+);
+
+server.registerTool(
+  'message_task',
+  {
+    title: 'Message Task',
+    description:
+      "Send a message to another Bifrost task by its task id, on this machine or another. It arrives in the recipient's turn headed with your task's name and id, and with how to reply, which is message_task back to you. A Claude session on the machine its instance runs on gets it as a SendMessage, and any other as a queued prompt. Returns once it is delivered or queued. A task with no session yet is started first.",
+    inputSchema: {
+      taskId: z.string().describe("The recipient's task id, as list_tasks and find_task report it"),
+      message: z.string().describe('The message, which arrives verbatim'),
+    },
+  },
+  async ({ taskId, message }) => {
+    // A relay run can take most of a minute, and a session that has to start first takes longer.
+    const result = await apiCall('/message-task', { taskId, fromTaskId: TASK_ID, text: message }, { timeout: 180000 });
+    if (!result.ok) {
+      return { content: [{ type: 'text', text: `Not delivered: ${result.error}` }], isError: true };
+    }
+    const how =
+      result.via === 'message'
+        ? 'Delivered as a message.'
+        : result.queued
+          ? "Queued as a prompt. It is typed when the task's current turn ends."
+          : 'Delivered as a prompt.';
+    return { content: [{ type: 'text', text: `${how} A reply, if it sends one, arrives headed "From task".` }] };
   },
 );
 

@@ -1,12 +1,20 @@
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { promptDraft } from '../shared/prompt-draft';
-import type { ActivityEntry } from '../shared/types';
+import type { ActivityEntry, Task } from '../shared/types';
 import { getRecentClaudeEntries } from './claude-watcher';
 import { lastReply } from './conversation-handover';
 import { emit } from './event-sink';
+import { relayMessage } from './oneshot';
+import { peerTasks } from './peers';
 import { captureScript, getRemoteHost } from './remote-host';
-import { captureLocalSession, hasSession, waitForSessionReady, writeToSession } from './session-manager';
-import { getTask, isPendingRestore, restoreTaskSession } from './task-service';
+import {
+  captureLocalSession,
+  getSessionName,
+  hasSession,
+  waitForSessionReady,
+  writeToSession,
+} from './session-manager';
+import { getTask, getTasks, isPendingRestore, restoreTaskSession } from './task-service';
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
 
@@ -190,29 +198,8 @@ export async function sendPrompt(
   mode: SendPromptMode = 'direct',
   waitForTurn = false,
 ): Promise<SendPromptResult> {
-  // Validate task exists and is running
-  try {
-    const task = getTask(taskId);
-    if (task.status !== 'running') {
-      return { ok: false, error: `Task is ${task.status}, not running` };
-    }
-  } catch {
-    return { ok: false, error: `Task ${taskId} not found` };
-  }
-
-  // Sessions deferred on startup start on tab activation, so a send that
-  // arrives first has to start one and wait for Claude's TUI: a new session
-  // accepts writes seconds before Claude reads them, and early bytes are discarded.
-  if (isPendingRestore(taskId)) {
-    restoreTaskSession(taskId);
-    if (!(await waitForSessionReady(taskId))) {
-      return { ok: false, error: 'Session did not finish starting up' };
-    }
-  }
-
-  if (!hasSession(taskId)) {
-    return { ok: false, error: `Task ${taskId} has no running session` };
-  }
+  const notReady = await readySession(taskId);
+  if (notReady) return { ok: false, error: notReady };
 
   let sendResult: SendPromptResult;
 
@@ -261,6 +248,77 @@ export async function sendPrompt(
   await waitForTurnComplete(taskId);
   sendResult.response = getLastAssistantMessage(taskId) ?? undefined;
   return sendResult;
+}
+
+/** Makes sure the task has a session that reads input, or says why it has none. */
+async function readySession(taskId: string): Promise<string | null> {
+  try {
+    const task = getTask(taskId);
+    if (task.status !== 'running') return `Task is ${task.status}, not running`;
+  } catch {
+    return `Task ${taskId} not found`;
+  }
+
+  // Sessions deferred on startup start on tab activation, so a send that
+  // arrives first has to start one and wait for Claude's TUI: a new session
+  // accepts writes seconds before Claude reads them, and early bytes are discarded.
+  if (isPendingRestore(taskId)) {
+    restoreTaskSession(taskId);
+    if (!(await waitForSessionReady(taskId))) return 'Session did not finish starting up';
+  }
+
+  return hasSession(taskId) ? null : `Task ${taskId} has no running session`;
+}
+
+export interface MessageResult {
+  ok: boolean;
+  error?: string;
+  /** "message" when it arrived as a SendMessage, "prompt" when it was typed or queued as a prompt. */
+  via?: 'message' | 'prompt';
+  queued?: boolean;
+}
+
+/** Delivers one task's message to another task's session, headed with who sent it and how to reply. */
+export async function messageTask(
+  taskId: string,
+  fromTaskId: string | undefined,
+  text: string,
+): Promise<MessageResult> {
+  let task: Task;
+  try {
+    task = getTask(taskId);
+  } catch {
+    return { ok: false, error: `Task ${taskId} not found` };
+  }
+  const wrapped = `From ${senderOf(fromTaskId)}:\n\n${text}\n\n—\n${replyHint(fromTaskId)}`;
+
+  // SendMessage reaches only sessions on this machine, and only Claude has it.
+  if (task.machine || (task.agent ?? 'claude') !== 'claude') {
+    const typed = await sendPrompt(taskId, wrapped, 'queue');
+    return { ok: typed.ok, error: typed.error, via: 'prompt', queued: typed.queued };
+  }
+
+  const notReady = await readySession(taskId);
+  if (notReady) return { ok: false, error: notReady };
+  const name = getSessionName(taskId) ?? task.name;
+  return (await relayMessage(name, wrapped))
+    ? { ok: true, via: 'message' }
+    : { ok: false, error: `The relay could not deliver to the session "${name}"` };
+}
+
+function senderOf(fromTaskId: string | undefined): string {
+  if (!fromTaskId) return 'a session outside any Bifrost task';
+  const sender = [...getTasks(), ...peerTasks()].find((t) => t.id === fromTaskId);
+  if (!sender) return `task ${fromTaskId}`;
+  return `task "${sender.name}" (${sender.id}${sender.machine ? `, on ${sender.machine}` : ''})`;
+}
+
+function replyHint(fromTaskId: string | undefined): string {
+  if (!fromTaskId) return 'The sender cannot receive a reply.';
+  return (
+    `Reply with the message_task tool, taskId "${fromTaskId}". Not with SendMessage: ` +
+    "the sender it shows is Bifrost's courier, which has already exited."
+  );
 }
 
 /** Resolve a taskId from either explicit taskId or callerTaskId. */
