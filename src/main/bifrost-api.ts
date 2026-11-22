@@ -315,7 +315,11 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const body = await readJsonBody(req);
 
   // A request about a task another instance owns is answered by that instance.
-  if (req.url && FORWARDED_ROUTES.has(req.url)) {
+  // A peer's list can still hold a task handed over to this instance, so the
+  // task's presence here decides first.
+  const named = body.taskId ?? body.callerTaskId;
+  const ownTask = typeof named === 'string' && getTasks().some((t) => t.id === named);
+  if (req.url && FORWARDED_ROUTES.has(req.url) && !ownTask) {
     try {
       const answer = await forwardTaskRoute(req.url, body);
       if (answer) {
