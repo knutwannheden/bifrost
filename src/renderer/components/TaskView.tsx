@@ -29,8 +29,8 @@ const tips = [
   `Press ${modSymbol}H to browse task history and resume archived tasks.`,
   `Use ${modSymbol}K to open the command palette for quick access to all actions. Press ${altSymbol}R to assign a custom keybinding.`,
   `Press ${modSymbol}, to open settings and customize font size, IDE, and more.`,
-  `Press ${modSymbol}/ to open a dev terminal alongside Claude \u2014 press again to toggle focus between panes.`,
-  `Press ${shortcutLabel('Cmd+Shift+C')} to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any Claude Code session to share context.`,
+  `Press ${modSymbol}/ to open a dev terminal alongside the agent \u2014 press again to toggle focus between panes.`,
+  `Press ${shortcutLabel('Cmd+Shift+C')} to capture context and copy a [Bifrost #N] reference to clipboard \u2014 paste it into any agent session to share context.`,
   'When a permission prompt appears, press Tab to focus it \u2014 then use A/D to allow/deny, Esc to deny once.',
   `Press ${modSymbol}- to jump back to your previous tab \u2014 like cd - for tasks.`,
   `Press ${modSymbol}= to jump to the last tab that had a notification.`,
@@ -150,7 +150,7 @@ export default function TaskView() {
     try {
       await window.bifrost.installIntegration();
       setPrereqs((p) => (p ? { ...p, plugin: { installed: true, updateAvailable: false } } : p));
-      dispatch({ type: 'SHOW_TOAST', message: 'Claude integration installed' });
+      dispatch({ type: 'SHOW_TOAST', message: 'Bifrost plugin installed' });
     } catch (err) {
       dispatch({ type: 'SHOW_TOAST', message: `Install failed: ${err instanceof Error ? err.message : String(err)}` });
     } finally {
@@ -176,8 +176,8 @@ export default function TaskView() {
         <div className="text-center text-muted max-w-md">
           <p className="text-2xl font-semibold text-primary mb-2">BIFROST</p>
           <p className="text-sm text-secondary mb-6 leading-relaxed">
-            A keyboard-centric command center for orchestrating parallel Claude Code sessions. Each task runs in its own
-            isolated git worktree, so agents work independently without stepping on each other.
+            A keyboard-centric command center for orchestrating parallel coding agent sessions. Each task runs in its
+            own isolated git worktree, so agents work independently without stepping on each other.
           </p>
 
           {prereqs && (

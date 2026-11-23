@@ -307,8 +307,8 @@ function buildSettings(): SettingDef[] {
       key: 'hideTerminalOnSwitch',
       category: 'Agent',
       label: 'Hide terminal on switch',
-      description: `${modSymbol}/ hides dev terminal when switching to Claude`,
-      tooltip: `When you press ${modSymbol}/ to switch focus from the dev terminal to the Claude pane, this setting also hides the dev terminal to give Claude the full screen. Press ${modSymbol}/ again to bring it back.`,
+      description: `${modSymbol}/ hides dev terminal when switching to the agent`,
+      tooltip: `When you press ${modSymbol}/ to switch focus from the dev terminal to the agent pane, this setting also hides the dev terminal to give the agent the full screen. Press ${modSymbol}/ again to bring it back.`,
       render: (config, update) => (
         <ToggleSwitch checked={config.hideTerminalOnSwitch} onChange={(v) => update({ hideTerminalOnSwitch: v })} />
       ),

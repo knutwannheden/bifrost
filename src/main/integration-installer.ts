@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import type { AgentKind } from '../shared/types.ts';
 import { claudeConfigDir } from './claude-paths.ts';
+import { loadConfig } from './config.ts';
 
 const execFile = promisify(execFileCb);
 
@@ -80,25 +82,33 @@ export function ensureHooks(): void {
   }
 }
 
+/** The agent this machine's sessions run, which decides what installing the plugin means. */
+function sessionAgent(): AgentKind {
+  return loadConfig().agent ?? 'claude';
+}
+
+function registeredWithClaude(): boolean {
+  let registered = false;
+  if (fs.existsSync(pluginsFile())) {
+    const raw = JSON.parse(fs.readFileSync(pluginsFile(), 'utf-8')) as PluginsFile;
+    registered = !!raw.plugins?.[PLUGIN_ID];
+  }
+
+  let enabled = false;
+  if (fs.existsSync(settingsFile())) {
+    const settings = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'));
+    enabled = !!(settings.enabledPlugins as Record<string, boolean>)?.[PLUGIN_ID];
+  }
+  return registered && enabled;
+}
+
 export function checkIntegration(): IntegrationStatus {
   try {
-    // Check both registration and enablement
-    let registered = false;
-    if (fs.existsSync(pluginsFile())) {
-      const raw = JSON.parse(fs.readFileSync(pluginsFile(), 'utf-8')) as PluginsFile;
-      registered = !!raw.plugins?.[PLUGIN_ID];
-    }
-
-    let enabled = false;
-    if (fs.existsSync(settingsFile())) {
-      const settings = JSON.parse(fs.readFileSync(settingsFile(), 'utf-8'));
-      enabled = !!(settings.enabledPlugins as Record<string, boolean>)?.[PLUGIN_ID];
-    }
-
-    const installed = registered && enabled;
+    const deployedVersion = readPluginVersion(PLUGIN_DEPLOY_DIR);
+    // Copilot and Codex load the deployed copy by path, so that copy is their whole install.
+    const installed = sessionAgent() === 'claude' ? registeredWithClaude() : deployedVersion !== null;
     if (!installed) return { installed: false, updateAvailable: false };
 
-    const deployedVersion = readPluginVersion(PLUGIN_DEPLOY_DIR);
     let sourceVersion: string | null = null;
     try {
       sourceVersion = readPluginVersion(getPluginSourceDir());
@@ -149,6 +159,8 @@ export async function installIntegration(): Promise<void> {
 
   // --- Install MCP server dependencies ---
   await installMcpDeps();
+
+  if (sessionAgent() !== 'claude') return;
 
   // --- Register marketplace in known_marketplaces.json ---
   registerMarketplace();

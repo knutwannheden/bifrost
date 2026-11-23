@@ -533,7 +533,7 @@ export default function TaskCreateDialog() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') e.stopPropagation();
                     }}
-                    placeholder="Initial prompt sent to Claude (optional)"
+                    placeholder="Initial prompt sent to the agent (optional)"
                     rows={3}
                     className="w-full px-3 py-1.5 resize-y"
                   />
@@ -732,7 +732,7 @@ export default function TaskCreateDialog() {
                       // Allow Enter in textarea without triggering form submit
                       if (e.key === 'Enter') e.stopPropagation();
                     }}
-                    placeholder="Initial prompt sent to Claude (optional)"
+                    placeholder="Initial prompt sent to the agent (optional)"
                     rows={3}
                     className="w-full px-3 py-1.5 resize-y"
                   />
