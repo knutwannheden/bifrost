@@ -44,7 +44,7 @@ interface SettingDef {
 
 const CATEGORIES = ['Appearance', 'Agent', 'General', 'Machines', 'Macros', 'Slack'] as const;
 
-const AGENT_OPTIONS: Array<{ label: string; value: AgentKind }> = [
+export const AGENT_OPTIONS: Array<{ label: string; value: AgentKind }> = [
   { label: 'Claude', value: 'claude' },
   { label: 'Codex', value: 'codex' },
   { label: 'Copilot', value: 'copilot' },

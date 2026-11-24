@@ -1,18 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { generateTaskName } from '../../shared/name-generator';
-import type { PrInfo, Repo } from '../../shared/types';
+import type { AgentKind, PrInfo, Repo } from '../../shared/types';
 import { useApp } from '../context/AppContext';
 import { useOverlayFocus } from '../hooks/useOverlayFocus';
 import { parsePrUrl, parseSlackUrl } from '../utils/clipboard-links';
 import { altSymbol } from '../utils/platform';
 import ActionLabel from './ActionLabel';
 import FormInput from './FormInput';
+import FormSelect from './FormSelect';
 import FormTextarea from './FormTextarea';
 import OverlayFooter from './OverlayFooter';
 import OverlayHeader from './OverlayHeader';
 import PillToggle from './PillToggle';
 import PrimaryButton from './PrimaryButton';
 import RepoDropdown from './RepoDropdown';
+import { AGENT_OPTIONS } from './SettingsOverlay';
 import Spinner from './Spinner';
 
 // Cache branches per repo so subsequent opens are instant
@@ -59,12 +61,16 @@ export default function TaskCreateDialog() {
   const [currentBranch, setCurrentBranch] = useState<string | null>(null);
   const [mode, setMode] = useState<TaskMode>('single');
   const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set());
+  const [agent, setAgent] = useState<AgentKind | ''>('');
+  const [machine, setMachine] = useState('');
 
   const repoRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const branchRef = useRef<HTMLInputElement>(null);
   const branchListRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLTextAreaElement>(null);
+  const agentRef = useRef<HTMLSelectElement>(null);
+  const machineRef = useRef<HTMLSelectElement>(null);
   const createRef = useRef<HTMLButtonElement>(null);
 
   const close = useCallback(() => {
@@ -85,6 +91,8 @@ export default function TaskCreateDialog() {
   });
 
   const repo = state.repos.find((r) => r.id === repoId);
+  const machines = state.config?.machines ?? [];
+  const defaultAgent = (machine && machines.find((m) => m.name === machine)?.agent) || state.config?.agent || 'claude';
   const existingInPlaceTask =
     inPlace && repo ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path) : undefined;
 
@@ -308,9 +316,11 @@ export default function TaskCreateDialog() {
         repoId,
         name: taskName.trim(),
         branch: inPlace ? '' : branch,
-        ...(prInfo && !inPlace && { prInfo }),
+        ...(prInfo && !inPlace && !machine && { prInfo }),
         ...(inPlace && { inPlace: true }),
         ...(prompt.trim() && { prompt: prompt.trim() }),
+        ...(machine && { machine }),
+        ...(agent && { launch: { agent } }),
       });
       localStorage.setItem('bifrost:lastRepoId', repoId);
       dispatch({ type: 'ADD_TASK', task });
@@ -374,6 +384,14 @@ export default function TaskCreateDialog() {
         case 'KeyP':
           e.preventDefault();
           promptRef.current?.focus();
+          break;
+        case 'KeyA':
+          e.preventDefault();
+          agentRef.current?.focus();
+          break;
+        case 'KeyM':
+          e.preventDefault();
+          machineRef.current?.focus();
           break;
       }
     }
@@ -590,6 +608,7 @@ export default function TaskCreateDialog() {
                   <input
                     type="checkbox"
                     checked={inPlace}
+                    disabled={!!machine}
                     onChange={(e) => {
                       setInPlace(e.target.checked);
                       if (e.target.checked) {
@@ -599,7 +618,9 @@ export default function TaskCreateDialog() {
                     }}
                     className="rounded-sm border-border-input bg-surface-alt text-accent focus:ring-accent focus:ring-offset-0"
                   />
-                  <span className="text-xs text-secondary">Use main worktree (no separate checkout)</span>
+                  <span className={`text-xs text-secondary ${machine ? 'opacity-50' : ''}`}>
+                    Use main worktree (no separate checkout)
+                  </span>
                 </label>
 
                 {/* In-place conflict banner */}
@@ -719,6 +740,50 @@ export default function TaskCreateDialog() {
                   )}
                 </div>
 
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs text-secondary mb-1">
+                      <ActionLabel text="Agent" showHint={true} />
+                    </label>
+                    <FormSelect
+                      ref={agentRef}
+                      value={agent}
+                      onChange={(e) => setAgent(e.target.value as AgentKind | '')}
+                      className="w-full px-3 py-1.5"
+                    >
+                      <option value="">Default ({AGENT_OPTIONS.find((o) => o.value === defaultAgent)?.label})</option>
+                      {AGENT_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </FormSelect>
+                  </div>
+                  {machines.length > 0 && (
+                    <div className="flex-1">
+                      <label className="block text-xs text-secondary mb-1">
+                        <ActionLabel text="Machine" showHint={true} />
+                      </label>
+                      <FormSelect
+                        ref={machineRef}
+                        value={machine}
+                        onChange={(e) => {
+                          setMachine(e.target.value);
+                          if (e.target.value) setInPlace(false);
+                        }}
+                        className="w-full px-3 py-1.5"
+                      >
+                        <option value="">This machine</option>
+                        {machines.map((m) => (
+                          <option key={m.name} value={m.name}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </FormSelect>
+                    </div>
+                  )}
+                </div>
+
                 {/* Prompt */}
                 <div>
                   <label className="block text-xs text-secondary mb-1">
@@ -749,7 +814,9 @@ export default function TaskCreateDialog() {
             <span className="text-xs text-faint">
               {mode === 'multi'
                 ? `${altSymbol}N name · ${altSymbol}P prompt · Enter create`
-                : `${altSymbol}R repo · ${altSymbol}N name · ${altSymbol}B branch · ${altSymbol}P prompt · Enter create`}
+                : `${altSymbol}R repo · ${altSymbol}N name · ${altSymbol}B branch · ${altSymbol}A agent${
+                    machines.length > 0 ? ` · ${altSymbol}M machine` : ''
+                  } · ${altSymbol}P prompt · Enter create`}
             </span>
             <span className="flex-1" />
             <PrimaryButton
