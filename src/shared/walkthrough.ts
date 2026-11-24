@@ -154,6 +154,71 @@ export const GENERATED_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** What a walkthrough still being generated has to show. */
+export interface WalkthroughProgress {
+  /** The generator's latest thought, while it plans the tour. */
+  thought: string;
+  /** The titles of the steps written so far. */
+  steps: string[];
+}
+
+/** Thinking summaries arrive as paragraphs, each followed by blank lines. */
+export function lastParagraph(text: string): string {
+  return (
+    text
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .at(-1) ?? ''
+  );
+}
+
+/**
+ * The title of each finished step in a generated walkthrough whose JSON is
+ * still arriving. It follows strings and nesting, since a step's body may
+ * quote the text `"title":` and the walkthrough has a title of its own.
+ */
+export function stepTitles(partial: string): string[] {
+  const titles: string[] = [];
+  // Each open object or array, the key it is the value of, and an object's latest key.
+  const open: { array: boolean; under: string | null; key: string | null }[] = [];
+  let expectKey = false;
+  for (let i = 0; i < partial.length; i++) {
+    const c = partial[i];
+    const top = open.at(-1);
+    if (c === '"') {
+      const end = closingQuote(partial, i);
+      if (end < 0) break;
+      const text = JSON.parse(partial.slice(i, end + 1)) as string;
+      if (top && !top.array && expectKey) top.key = text;
+      else if (open.length === 3 && top?.key === 'title' && open[1].array && open[1].under === 'steps') {
+        titles.push(text);
+      }
+      i = end;
+    } else if (c === '{' || c === '[') {
+      open.push({ array: c === '[', under: top && !top.array ? top.key : null, key: null });
+      expectKey = c === '{';
+    } else if (c === '}' || c === ']') {
+      open.pop();
+      expectKey = false;
+    } else if (c === ',') {
+      expectKey = top ? !top.array : false;
+    } else if (c === ':') {
+      expectKey = false;
+    }
+  }
+  return titles;
+}
+
+/** The index of the quote that ends the string opening at `start`, or -1 when it has not arrived. */
+function closingQuote(text: string, start: number): number {
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') i++;
+    else if (text[i] === '"') return i;
+  }
+  return -1;
+}
+
 const SIGN = { add: '+', remove: '-', context: ' ' } as const;
 
 /** A diff with both line numbers spelled out, so a model copies a number rather than counting to it. */

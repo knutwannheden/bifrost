@@ -7,6 +7,7 @@ const execFile = promisify(execFileCb);
 import { IPC, IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
 import { promptDraft } from '../shared/prompt-draft';
 import type { AddRepoParams, CreateTaskParams, PermissionDecision, Repo, SessionState } from '../shared/types';
+import type { WalkthroughProgress } from '../shared/walkthrough';
 import { getFileDiffOnDemand } from './activity-watcher';
 import { getApiPort } from './bifrost-api';
 import { loadChangeFeed, setActiveFeedTask } from './change-feed-service';
@@ -82,6 +83,7 @@ const devSessions = new Map<string, string>();
 // A run outlives the tab that started it, so its state is held here for whichever tab loads next.
 const generatingWalkthroughs = new Set<string>();
 const walkthroughErrors = new Map<string, string>();
+const walkthroughProgress = new Map<string, WalkthroughProgress>();
 const walkthroughChanged = (taskId: string) => {
   emit(IPC_STREAM.WALKTHROUGH_UPDATED, taskId);
 };
@@ -326,6 +328,7 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
       walkthrough,
       staleness,
       generating: generatingWalkthroughs.has(taskId),
+      progress: walkthroughProgress.get(taskId) ?? null,
       error: walkthroughErrors.get(taskId) ?? null,
     };
   },
@@ -339,7 +342,10 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
       const task = getTask(taskId);
       const baseRef = await resolveBaseBranch(task);
       if (!baseRef) throw new Error('Could not resolve the base branch');
-      const walkthrough = await generateWalkthrough({ worktreePath: task.worktreePath, baseRef, focus });
+      const walkthrough = await generateWalkthrough({ worktreePath: task.worktreePath, baseRef, focus }, (p) => {
+        walkthroughProgress.set(taskId, p);
+        emit(IPC_STREAM.WALKTHROUGH_PROGRESS, taskId, p);
+      });
       storeWalkthrough(taskId, walkthrough);
       return { ok: true };
     } catch (err) {
@@ -348,6 +354,7 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
       return { ok: false, error };
     } finally {
       generatingWalkthroughs.delete(taskId);
+      walkthroughProgress.delete(taskId);
       walkthroughChanged(taskId);
     }
   },

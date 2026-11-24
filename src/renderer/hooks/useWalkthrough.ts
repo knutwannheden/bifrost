@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Remapped, Staleness, Walkthrough } from '../../shared/walkthrough';
+import type { Remapped, Staleness, Walkthrough, WalkthroughProgress } from '../../shared/walkthrough';
 
 export interface UseWalkthroughResult {
   walkthrough: Walkthrough | null;
@@ -13,6 +13,7 @@ export interface UseWalkthroughResult {
   /** Present only on the current head, keyed by step or comment id. */
   remapped: Record<string, Remapped> | null;
   generating: boolean;
+  progress: WalkthroughProgress | null;
   generateError: string | null;
   generate: (focus: string | null) => void;
 }
@@ -26,6 +27,7 @@ export function useWalkthrough(taskId: string): UseWalkthroughResult {
   const [onCurrentHead, setOnCurrentHead] = useState(false);
   const [remapped, setRemapped] = useState<Record<string, Remapped> | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState<WalkthroughProgress | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -34,6 +36,7 @@ export function useWalkthrough(taskId: string): UseWalkthroughResult {
       setWalkthrough(result.walkthrough);
       setStaleness(result.staleness);
       setGenerating(result.generating);
+      setProgress(result.progress);
       setGenerateError(result.error);
     } finally {
       setLoading(false);
@@ -50,12 +53,16 @@ export function useWalkthrough(taskId: string): UseWalkthroughResult {
     const offUpdated = window.bifrost.onWalkthroughUpdated((id) => {
       if (id === taskId) load();
     });
+    const offProgress = window.bifrost.onWalkthroughProgress((id, p) => {
+      if (id === taskId) setProgress(p);
+    });
     // A commit moves the branch head, which is what staleness measures.
     const offActivity = window.bifrost.onActivityEntry((entry) => {
       if (entry.taskId === taskId && entry.type === 'commit') load();
     });
     return () => {
       offUpdated();
+      offProgress();
       offActivity();
     };
   }, [taskId, load]);
@@ -100,6 +107,7 @@ export function useWalkthrough(taskId: string): UseWalkthroughResult {
   const generate = useCallback(
     (focus: string | null) => {
       setGenerating(true);
+      setProgress(null);
       setGenerateError(null);
       window.bifrost.generateWalkthrough(taskId, focus).then((r) => {
         if (r.ok) setOnCurrentHead(false);
@@ -118,6 +126,7 @@ export function useWalkthrough(taskId: string): UseWalkthroughResult {
     setOnCurrentHead,
     remapped,
     generating,
+    progress,
     generateError,
     generate,
   };

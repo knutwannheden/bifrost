@@ -7,12 +7,14 @@ import { parseDiff } from '../src/shared/diff-parser.ts';
 import {
   type Anchor,
   extractSnippet,
+  lastParagraph,
   locateQuote,
   matchSnippet,
   numberDiff,
   parseZeroContextHunks,
   type Step,
   shiftRange,
+  stepTitles,
 } from '../src/shared/walkthrough.ts';
 
 let failed = 0;
@@ -128,6 +130,20 @@ check('a step whose lines are outside every hunk is not placed in the diff', lay
 check(
   'a comment sits after the last of its lines',
   layout.after.get(tailLine)?.[0] === comment && !layout.after.has(keep),
+);
+
+const partial =
+  '{"title": "Tour", "summary": "s", "steps": [{"kind":"narration","chapter":null,"title":"1. Zoom \\"menu\\"",' +
+  '"body":"quotes \\"title\\":\\"x\\" here","anchor":{"path":"a","side":"new","lines":[1,2],"quote":"q"},' +
+  '"comments":[{"kind":"concern","body":"b","anchor":null}]},{"kind":"narration","chapter":null,"title":"2. Sla';
+check(
+  'the finished step titles of an answer still being written, not its own title nor a title quoted in a body',
+  eq(stepTitles(partial), ['1. Zoom "menu"']),
+  JSON.stringify(stepTitles(partial)),
+);
+check(
+  'the last thought is the last paragraph that has text',
+  lastParagraph('Weighing the order.\n\n\nChecking the Slack fix\n\n\n') === 'Checking the Slack fix',
 );
 
 if (failed) {

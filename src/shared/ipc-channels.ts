@@ -28,7 +28,7 @@ import type {
   TaskPr,
   TokenUsageResult,
 } from './types.ts';
-import type { Remapped, Staleness, Walkthrough } from './walkthrough.ts';
+import type { Remapped, Staleness, Walkthrough, WalkthroughProgress } from './walkthrough.ts';
 
 // Request-response channels (invoke/handle)
 export const IPC = {
@@ -179,6 +179,7 @@ export const IPC_STREAM = {
   ACTIVITY_ENTRY: 'activity:entry',
   CHANGE_FEED_ITEMS: 'change-feed:items',
   WALKTHROUGH_UPDATED: 'walkthrough:updated',
+  WALKTHROUGH_PROGRESS: 'walkthrough:progress',
   TASK_SUMMARY: 'task:summary',
   MENU_ACTION: 'menu:action',
   HOOK_NOTIFICATION: 'hook:notification',
@@ -261,11 +262,13 @@ export interface BifrostAPI {
   getPrUrl(taskId: string): Promise<string | null>;
 
   // Walkthrough
-  /** `generating` and `error` describe the task's latest run, whichever tab started it. */
+  /** `generating`, `progress` and `error` describe the task's latest run, whichever tab started it. */
   getWalkthrough(taskId: string): Promise<{
     walkthrough: Walkthrough | null;
     staleness: Staleness | null;
     generating: boolean;
+    /** Null until the run reports any, and always for an agent that does not stream. */
+    progress: WalkthroughProgress | null;
     error: string | null;
   }>;
   /** Resolves once the run ends; `onWalkthroughUpdated` fires as it starts and as it ends. */
@@ -275,6 +278,7 @@ export interface BifrostAPI {
   /** Every anchor followed onto the current head, keyed by step or comment id. */
   remapWalkthrough(taskId: string): Promise<Record<string, Remapped>>;
   onWalkthroughUpdated(callback: (taskId: string) => void): () => void;
+  onWalkthroughProgress(callback: (taskId: string, progress: WalkthroughProgress) => void): () => void;
 
   // Shell
   openUrl(url: string): Promise<void>;

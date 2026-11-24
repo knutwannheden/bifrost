@@ -352,10 +352,27 @@ export default function WalkthroughContent({
   }
 
   if (wt.generating) {
+    const progress = wt.progress;
     return (
-      <div className="flex items-center gap-2 text-secondary p-4">
-        <Spinner />
-        <span>Narrating the change. This takes a few minutes...</span>
+      <div className="p-4 space-y-3">
+        <div className="flex items-center gap-2 text-secondary">
+          <Spinner />
+          <span>Narrating the change. This takes a few minutes...</span>
+        </div>
+        {/* The thought is about the plan, so it gives way once the steps are being written. */}
+        {progress?.thought && progress.steps.length === 0 && (
+          <div className="text-sm text-muted line-clamp-3 max-w-[48rem]">{progress.thought}</div>
+        )}
+        {progress && progress.steps.length > 0 && (
+          <ol className="space-y-1 text-sm">
+            {progress.steps.map((title, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="text-muted shrink-0">{i + 1}.</span>
+                <span className="text-primary">{title}</span>
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     );
   }

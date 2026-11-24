@@ -67,6 +67,15 @@ const api: BifrostAPI = {
     ipcRenderer.on(IPC_STREAM.WALKTHROUGH_UPDATED, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.WALKTHROUGH_UPDATED, handler);
   },
+  onWalkthroughProgress: (callback) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      taskId: string,
+      progress: import('../shared/walkthrough').WalkthroughProgress,
+    ) => callback(taskId, progress);
+    ipcRenderer.on(IPC_STREAM.WALKTHROUGH_PROGRESS, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.WALKTHROUGH_PROGRESS, handler);
+  },
   getPrUrl: (taskId) => ipcRenderer.invoke(IPC.GET_PR_URL, taskId),
 
   // Shell

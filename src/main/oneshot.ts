@@ -36,6 +36,14 @@ export interface OneShotOptions {
   timeoutMs: number;
   /** Prefixes log lines, so a failure says which caller it belonged to. */
   label: string;
+  /** Hears the reply as it is written. Only Claude streams it, so Copilot and Codex never call this. */
+  onProgress?: (delta: OutputDelta) => void;
+}
+
+/** A piece of a reply still being written, from the summary of its thinking or from its structured output's JSON. */
+export interface OutputDelta {
+  kind: 'thinking' | 'output';
+  text: string;
 }
 
 /** The agent that runs Bifrost's titles, summaries and walkthroughs, or 'off' for none. */
@@ -71,15 +79,59 @@ export async function runOneShot<T>(options: OneShotOptions, agent = oneShotAgen
 }
 
 async function runClaude<T>(options: OneShotOptions): Promise<T | null> {
-  const args = ['-p', '--output-format', 'json', '--json-schema', JSON.stringify(options.schema)];
+  const { onProgress } = options;
+  // Under -p the CLI asks the API to leave thinking out, so without the display
+  // flag the thinking deltas arrive empty.
+  const format = onProgress
+    ? ['stream-json', '--verbose', '--include-partial-messages', '--thinking-display', 'summarized']
+    : ['json'];
+  const args = ['-p', '--output-format', ...format, '--json-schema', JSON.stringify(options.schema)];
   args.push('--model', options.claudeModel, '--system-prompt', TRANSFORM_PROMPT, '--tools', '', ...CLAUDE_ISOLATION);
-  const run = await runCli('claude', args, `${options.prompt}\n\n${options.input}`, options.timeoutMs, options.label);
+  let pending = '';
+  const onStdout =
+    onProgress &&
+    ((chunk: string) => {
+      const lines = (pending + chunk).split('\n');
+      pending = lines.pop() ?? '';
+      for (const line of lines) {
+        const delta = streamDelta(line);
+        if (delta && delta.kind !== 'result') onProgress(delta);
+      }
+    });
+  const input = `${options.prompt}\n\n${options.input}`;
+  const run = await runCli('claude', args, input, options.timeoutMs, options.label, onStdout);
   if (!run.ok) return null;
+  if (onProgress) {
+    for (const line of run.stdout.split('\n')) {
+      const delta = streamDelta(line);
+      if (delta?.kind === 'result') return (delta.value as T | undefined) ?? null;
+    }
+    return null;
+  }
   try {
     return (JSON.parse(run.stdout).structured_output as T | undefined) ?? null;
   } catch {
     return null;
   }
+}
+
+/** What one line of Claude's stream-json output carries for a structured reply, or null for the rest. */
+export function streamDelta(line: string): OutputDelta | { kind: 'result'; value: unknown } | null {
+  let message: {
+    type?: string;
+    structured_output?: unknown;
+    event?: { delta?: { type?: string; thinking?: string; partial_json?: string } };
+  };
+  try {
+    message = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (message.type === 'result') return { kind: 'result', value: message.structured_output };
+  const delta = message.type === 'stream_event' ? message.event?.delta : undefined;
+  if (delta?.type === 'thinking_delta' && delta.thinking) return { kind: 'thinking', text: delta.thinking };
+  if (delta?.type === 'input_json_delta' && delta.partial_json) return { kind: 'output', text: delta.partial_json };
+  return null;
 }
 
 /**
@@ -211,12 +263,19 @@ export async function relayMessage(to: string, message: string): Promise<boolean
 }
 
 /** Runs the CLI once more after a moment when its binary was not found on the first try. */
-async function runCli(bin: string, args: string[], input: string, timeoutMs: number, label: string): Promise<CliRun> {
-  const first = await attempt(bin, args, input, timeoutMs, label);
+async function runCli(
+  bin: string,
+  args: string[],
+  input: string,
+  timeoutMs: number,
+  label: string,
+  onStdout?: (chunk: string) => void,
+): Promise<CliRun> {
+  const first = await attempt(bin, args, input, timeoutMs, label, onStdout);
   if (!first.missing) return first;
 
   await new Promise((r) => setTimeout(r, RESPAWN_DELAY_MS));
-  const second = await attempt(bin, args, input, timeoutMs, label);
+  const second = await attempt(bin, args, input, timeoutMs, label, onStdout);
   if (second.missing) {
     console.warn(`[${label}] ${bin} is not on PATH; skipping`);
   }
@@ -228,12 +287,21 @@ function oneShotDir(): string {
   return ONESHOT_DIR;
 }
 
-function attempt(bin: string, args: string[], input: string, timeoutMs: number, label: string): Promise<CliRun> {
+function attempt(
+  bin: string,
+  args: string[],
+  input: string,
+  timeoutMs: number,
+  label: string,
+  onStdout?: (chunk: string) => void,
+): Promise<CliRun> {
   return new Promise((resolve) => {
     const env = { ...process.env } as Record<string, string>;
     for (const name of INHERITED_SESSION_VARS) delete env[name];
 
     const child = spawn(bin, args, { cwd: oneShotDir(), env });
+    // Decoded as one stream, so a character split across chunks arrives whole.
+    child.stdout.setEncoding('utf8');
 
     let stdout = '';
     let stderr = '';
@@ -249,8 +317,9 @@ function attempt(bin: string, args: string[], input: string, timeoutMs: number, 
       finish(false);
     }, timeoutMs);
 
-    child.stdout.on('data', (c: Buffer) => {
-      stdout += c.toString();
+    child.stdout.on('data', (chunk: string) => {
+      stdout += chunk;
+      onStdout?.(chunk);
     });
     // Drained even though unused on success: an unread pipe fills once the CLI
     // writes past the OS buffer (~64KB) and blocks the child until the timeout.

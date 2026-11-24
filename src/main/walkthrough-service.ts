@@ -4,9 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { parseDiff } from '../shared/diff-parser';
-import { GENERATED_SCHEMA, type GeneratedWalkthrough, numberDiff, type Walkthrough } from '../shared/walkthrough';
+import {
+  GENERATED_SCHEMA,
+  type GeneratedWalkthrough,
+  lastParagraph,
+  numberDiff,
+  stepTitles,
+  type Walkthrough,
+  type WalkthroughProgress,
+} from '../shared/walkthrough';
 import { getRangeDiff, resolveDiffBase } from './diff-service';
-import { oneShotAgent, runOneShot } from './oneshot';
+import { type OutputDelta, oneShotAgent, runOneShot } from './oneshot';
 import { anchorGenerated, currentHead } from './walkthrough-anchor';
 
 const execFile = promisify(execFileCb);
@@ -18,6 +26,10 @@ const MODEL = 'claude-opus-5-5';
 const TIMEOUT_MS = 15 * 60_000;
 /** A diff past this is too large to narrate well, and a truncated one would be narrated wrongly. */
 const MAX_DIFF_CHARS = 400_000;
+/** Each report rescans the whole answer so far, and its pieces arrive far faster than anyone reads. */
+const PROGRESS_INTERVAL_MS = 300;
+/** Enough of the thinking to hold its latest paragraph. */
+const THINKING_KEPT_CHARS = 8_000;
 
 const PROMPT = `You are writing a guided tour of a code change for a human who wants to understand it.
 This is not a code review. Your job is the order and the narration.
@@ -59,7 +71,10 @@ export interface GenerateRequest {
   focus: string | null;
 }
 
-export async function generateWalkthrough({ worktreePath, baseRef, focus }: GenerateRequest): Promise<Walkthrough> {
+export async function generateWalkthrough(
+  { worktreePath, baseRef, focus }: GenerateRequest,
+  onProgress?: (progress: WalkthroughProgress) => void,
+): Promise<Walkthrough> {
   const agent = oneShotAgent();
   if (agent === 'off') throw new Error('Walkthroughs are off in Settings → Agent');
   const base = await resolveDiffBase(worktreePath, baseRef);
@@ -94,6 +109,7 @@ export async function generateWalkthrough({ worktreePath, baseRef, focus }: Gene
       schema: GENERATED_SCHEMA,
       timeoutMs: TIMEOUT_MS,
       label: 'walkthrough',
+      onProgress: onProgress && progressFrom(onProgress),
     },
     agent,
   );
@@ -108,6 +124,21 @@ export async function generateWalkthrough({ worktreePath, baseRef, focus }: Gene
 
 function taskDir(taskId: string): string {
   return path.join(ROOT, taskId);
+}
+
+/** Gathers the pieces of the answer and reports the progress they add up to. */
+function progressFrom(report: (progress: WalkthroughProgress) => void): (delta: OutputDelta) => void {
+  let thinking = '';
+  let output = '';
+  let reportedAt = 0;
+  return (delta) => {
+    if (delta.kind === 'thinking') thinking = (thinking + delta.text).slice(-THINKING_KEPT_CHARS);
+    else output += delta.text;
+    const now = Date.now();
+    if (now - reportedAt < PROGRESS_INTERVAL_MS) return;
+    reportedAt = now;
+    report({ thought: lastParagraph(thinking), steps: stepTitles(output) });
+  };
 }
 
 /** Each walkthrough is a new file, so regenerating never destroys a tour. */
