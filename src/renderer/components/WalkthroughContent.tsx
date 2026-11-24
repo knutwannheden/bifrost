@@ -230,7 +230,24 @@ export default function WalkthroughContent({
   useEffect(() => {
     if (!w || files.length === 0) return;
     const id = requestAnimationFrame(() => {
-      scroller.current?.querySelector('[data-current-step]')?.scrollIntoView({ block: 'start', inline: 'nearest' });
+      const view = scroller.current;
+      const card = view?.querySelector<HTMLElement>('[data-current-step]');
+      if (!view || !card) return;
+      card.scrollIntoView({ block: 'start', inline: 'nearest' });
+      // A step that replaces code sits between its removed and added lines, so the removed ones come into view too,
+      // as far as keeps the top of the card in view.
+      let removed: Element | null = null;
+      for (let el = card.previousElementSibling; el instanceof HTMLElement && el.dataset.lineType === 'remove'; ) {
+        removed = el;
+        el = el.previousElementSibling;
+      }
+      if (!removed) return;
+      const viewRect = view.getBoundingClientRect();
+      const margin = Number.parseFloat(getComputedStyle(card).scrollMarginTop) || 0;
+      const wanted = viewRect.top + margin - removed.getBoundingClientRect().top;
+      const room = viewRect.bottom - Math.min(card.offsetHeight, 80) - card.getBoundingClientRect().top;
+      const up = Math.min(wanted, room);
+      if (up > 0) view.scrollTop -= up;
     });
     return () => cancelAnimationFrame(id);
   }, [current, files, w, layout]);

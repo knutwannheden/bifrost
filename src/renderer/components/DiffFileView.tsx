@@ -57,7 +57,7 @@ function DiffLineRow({
   const { bg: bgClass, wordBg, signColor, sign } = lineStyles[line.type];
 
   return (
-    <div className={`flex leading-5 ${bgClass} ${extraClass ?? ''}`}>
+    <div data-line-type={line.type} className={`flex leading-5 ${bgClass} ${extraClass ?? ''}`}>
       <LineNumber num={line.oldLineNo} />
       <LineNumber num={line.newLineNo} />
       <span className="flex-1 text-xs leading-5 whitespace-pre">
