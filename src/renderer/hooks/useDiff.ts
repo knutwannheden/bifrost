@@ -25,7 +25,11 @@ export function useDiff(taskId: string | null, scope: 'working' | 'all' = 'worki
       const result = await window.bifrost.getDiff(taskId, scope);
       setDiff(result.diff);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch diff');
+      setError(
+        err instanceof Error
+          ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '')
+          : 'Failed to fetch diff',
+      );
     } finally {
       setLoading(false);
     }

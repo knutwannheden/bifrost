@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import type { DiffResult, DiffStats } from '../shared/types';
 
 const execFile = promisify(execFileCb);
+const MAX_DIFF_BYTES = 10 * 1024 * 1024;
 
 async function revParse(worktreePath: string, ref: string): Promise<string | null> {
   try {
@@ -78,7 +79,7 @@ export async function getDiff(
     // Get diff for tracked files
     const { stdout: trackedDiff } = await execFile('git', diffArgs, {
       cwd: worktreePath,
-      maxBuffer: 10 * 1024 * 1024,
+      maxBuffer: MAX_DIFF_BYTES,
       timeout: 30000,
     });
 
@@ -127,7 +128,10 @@ export async function getDiff(
     const diff = trackedDiff + untrackedDiff;
 
     return { worktreePath, diff };
-  } catch {
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      throw new Error(`The diff is larger than ${MAX_DIFF_BYTES / 1024 / 1024} MB, too large to show`);
+    }
     return { worktreePath, diff: '' };
   }
 }
@@ -139,7 +143,7 @@ export async function getRangeDiff(worktreePath: string, base: string, head: str
     ['--no-optional-locks', 'diff', '-M', '--no-color', '--no-ext-diff', base, head],
     {
       cwd: worktreePath,
-      maxBuffer: 10 * 1024 * 1024,
+      maxBuffer: MAX_DIFF_BYTES,
       timeout: 30000,
     },
   );
