@@ -33,6 +33,7 @@ import {
   isIdle,
   markActive,
   markIdle,
+  markInterrupted,
   messageTask,
   sendPrompt as sendPromptToTask,
   workingTaskIds,
@@ -500,6 +501,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         worktreePath: t.worktreePath,
         createdAt: t.createdAt,
         sessionName: getSessionName(t.id),
+        agent: t.agent ?? 'claude',
       }));
       jsonResponse(res, { tasks, total: matching.length, truncated: matching.length > tasks.length });
       return;
@@ -835,6 +837,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       if (hookEventName === 'Interrupt') {
         forgetTask(task.id);
         markIdle(task.id);
+        markInterrupted(task.id);
         turnBoundary(task.id);
         emit(IPC_STREAM.CLAUDE_ACTIVE, task.id, false);
         jsonResponse(res, { ok: true });
@@ -952,6 +955,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           sessionId: found.sessionId,
           sessionName: getSessionName(found.id),
           createdByTaskId: found.createdByTaskId,
+          agent: found.agent ?? 'claude',
         },
       });
       return;

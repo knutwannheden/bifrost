@@ -1,3 +1,5 @@
+import { execFile as execFileCb } from 'node:child_process';
+import { promisify } from 'node:util';
 import { IPC_STREAM } from '../shared/ipc-channels';
 import { promptDraft } from '../shared/prompt-draft';
 import type { ActivityEntry, Task } from '../shared/types';
@@ -6,7 +8,7 @@ import { lastReply } from './conversation-handover';
 import { emit } from './event-sink';
 import { relayMessage } from './oneshot';
 import { peerTasks } from './peers';
-import { captureScript, getRemoteHost } from './remote-host';
+import { captureScript, codexQueueScript, getRemoteHost } from './remote-host';
 import {
   captureLocalSession,
   getSessionName,
@@ -15,6 +17,8 @@ import {
   writeToSession,
 } from './session-manager';
 import { getTask, getTasks, isPendingRestore, restoreTaskSession } from './task-service';
+
+const execFile = promisify(execFileCb);
 
 export type SendPromptMode = 'direct' | 'queue' | 'only-when-idle' | 'interrupt';
 
@@ -42,12 +46,20 @@ const ENTER_RETRIES = 2;
 
 // Per-task state
 const activeSet = new Set<string>();
+// Codex holds its queue after the user interrupts a turn, until a prompt typed at it has run.
+const heldQueues = new Set<string>();
 const promptQueues = new Map<string, QueuedPrompt[]>();
 const turnWaiters = new Map<string, Array<() => void>>();
 
 /** Called by bifrost-api when UserPromptSubmit hook fires for a task. */
 export function markActive(taskId: string): void {
   activeSet.add(taskId);
+  heldQueues.delete(taskId);
+}
+
+/** Called by bifrost-api when Codex's Interrupt hook fires for a task. */
+export function markInterrupted(taskId: string): void {
+  heldQueues.add(taskId);
 }
 
 /** Called by bifrost-api when Stop hook fires for a task. */
@@ -220,6 +232,11 @@ export async function sendPrompt(
       break;
 
     case 'queue':
+      // Typed when the caller waits for the reply, so the turn it waits on is the one the prompt starts.
+      if (!waitForTurn) {
+        const queued = await codexQueue(taskId, text);
+        if (queued) return queued;
+      }
       if (isIdle(taskId)) {
         sendResult = await doSendPrompt(text, taskId);
       } else {
@@ -248,6 +265,21 @@ export async function sendPrompt(
   await waitForTurnComplete(taskId);
   sendResult.response = getLastAssistantMessage(taskId) ?? undefined;
   return sendResult;
+}
+
+/** Queues the prompt with Codex itself, or answers null when it has to be typed. */
+async function codexQueue(taskId: string, text: string): Promise<SendPromptResult | null> {
+  const task = getTask(taskId);
+  if (task.agent !== 'codex' || !task.sessionId || heldQueues.has(taskId)) return null;
+  const script = codexQueueScript(task.sessionId, text);
+  try {
+    if (task.machine) await getRemoteHost(task.machine).exec(script);
+    else await execFile('sh', ['-c', script], { timeout: 30_000 });
+    return { ok: true, queued: !isIdle(taskId) };
+  } catch (err) {
+    console.warn(`[prompt] codex queue failed for ${taskId}, typing it instead: ${(err as Error).message}`);
+    return null;
+  }
 }
 
 /** Makes sure the task has a session that reads input, or says why it has none. */

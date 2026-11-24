@@ -84,6 +84,11 @@ export function sessionIdScript(taskId: string, sessionId: string): string {
   return `printf '%s\\n' ${shQuote(sessionId)} > "$HOME"/${sessionDir(taskId)}/session-id`;
 }
 
+/** Hands a message to a Codex session, which holds it until the session's turn ends. Runs here as well as there. */
+export function codexQueueScript(sessionId: string, text: string): string {
+  return `codex queue --thread ${shQuote(sessionId)} ${shQuote(`--message=${text}`)}`;
+}
+
 /** Ends the task's tmux session, and with it Claude. */
 export function stopSessionScript(taskId: string): string {
   return `tmux -L ${TMUX_SOCKET} kill-session -t ${shQuote(`=${taskId}`)} 2>/dev/null || true`;

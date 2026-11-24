@@ -77,6 +77,18 @@ note({ ready: true });
   { mode: 0o755 },
 );
 const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
+// Codex's session draws the same input box, and `codex queue` records what it was handed.
+fs.writeFileSync(
+  path.join(stubs, 'codex'),
+  `#!/usr/bin/env node
+if (process.argv[2] === 'queue') {
+  require('fs').appendFileSync(${show(record)}, JSON.stringify({ queue: process.argv.slice(3) }) + '\\n');
+} else {
+  require(${show(path.join(stubs, 'claude'))});
+}
+`,
+  { mode: 0o755 },
+);
 git('init', '-q', '-b', 'main');
 git('-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'init');
 
@@ -200,6 +212,57 @@ try {
         early.typed === 0 &&
         since(from).find((e) => 'submitted' in e)?.submitted === prompt('queued'),
       show({ early, result, submitted: since(from).find((e) => 'submitted' in e) }),
+    );
+  }
+
+  {
+    const codex = (await post('/create-task', {
+      repoPath: repo,
+      name: 'codex prompts',
+      launch: { agent: 'codex' },
+    })) as Task;
+    await post('/session-start', {
+      session_id: 'codex-thread',
+      source: 'startup',
+      cwd: codex.worktreePath,
+      bifrost_task_id: codex.id,
+      bifrost_context: 'code',
+    });
+    await post('/hook', {
+      hook_event_name: 'UserPromptSubmit',
+      cwd: codex.worktreePath,
+      bifrost_task_id: codex.id,
+      bifrost_context: 'code',
+    });
+    const from = entries().length;
+    const result = await post('/message-task', { taskId: codex.id, text: prompt('codex') });
+    await sleep(300);
+    const queued = since(from).find((e) => 'queue' in e)?.queue as string[] | undefined;
+    check(
+      "a message for a Codex task mid-turn goes to Codex's own queue for its thread, and nothing is typed",
+      result.queued === true &&
+        queued?.slice(0, 2).join(' ') === '--thread codex-thread' &&
+        String(queued[2]).startsWith('--message=From ') &&
+        String(queued[2]).includes(prompt('codex')) &&
+        !since(from).some((e) => typeof e.read === 'string'),
+      show({ result, queued: queued?.slice(0, 2), reads: since(from).filter((e) => 'read' in e).length }),
+    );
+
+    await post('/hook', {
+      hook_event_name: 'Interrupt',
+      cwd: codex.worktreePath,
+      bifrost_task_id: codex.id,
+      bifrost_context: 'code',
+    });
+    const at = entries().length;
+    const typed = await post('/message-task', { taskId: codex.id, text: prompt('interrupted') });
+    await until(() => since(at).some((e) => 'submitted' in e));
+    check(
+      'after the user interrupts a Codex turn, which holds its queue until the next prompt, a message is typed',
+      typed.ok === true &&
+        !since(at).some((e) => 'queue' in e) &&
+        String(since(at).find((e) => 'submitted' in e)?.submitted).includes(prompt('interrupted')),
+      show({ typed, queued: since(at).some((e) => 'queue' in e) }),
     );
   }
 

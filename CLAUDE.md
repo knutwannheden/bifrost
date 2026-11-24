@@ -105,7 +105,7 @@ Some things stay Claude-only:
 - Remote Control
 - following a session into another worktree, which only Claude's `EnterWorktree` and `ExitWorktree` report. Copilot and Codex file their sessions by id, so a restart resumes them in any directory.
 
-Copilot and Codex have no SendMessage, so the MCP server tells their sessions to use `message_task`, which reaches them as a queued prompt.
+Copilot and Codex have no SendMessage, so the MCP server tells their sessions to use `message_task`, which reaches them as a queued prompt. Codex queues it itself with `codex queue`, once its first SessionStart hook has reported the session's id. After the user interrupts a Codex turn, Codex holds that queue until a prompt typed at it has run, so until then the message is typed. Copilot has it typed at the turn's end.
 
 Bifrost's own headless calls, for task titles, summaries and walkthroughs, run the agent Settings → Agent picks for them, which is the sessions' agent unless one is chosen, or none when it is Off (`oneshot.ts`). Codex enforces the reply's schema with `--output-schema`. Copilot has no such option, so the schema goes into its prompt and Bifrost checks the reply. Copilot and Codex run their own default model, at low effort for titles and summaries. The relay that delivers a message to a Claude session always runs Claude, since it sends with SendMessage.
 

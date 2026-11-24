@@ -85,6 +85,9 @@ function addressOf(t, unreachedHint) {
   if ((t.machine || '') !== MACHINE) {
     return `on ${t.machine || "Bifrost's own machine"}, out of SendMessage's reach: message_task reaches it by id`;
   }
+  if (t.agent && t.agent !== 'claude') {
+    return `a ${t.agent} session, out of SendMessage's reach: message_task reaches it by id`;
+  }
   return t.sessionName ? null : unreachedHint;
 }
 
