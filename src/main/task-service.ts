@@ -977,6 +977,7 @@ export async function adoptSessionCore(params: {
   };
   tasks.push(task);
   saveTasks(tasks);
+  emit(IPC_STREAM.TASK_CREATED, task);
   startRemoteSession(task);
   return task;
 }

@@ -528,9 +528,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       try {
-        const task = await adoptSessionCore({ machine, socket, session, name, agent });
-        emit(IPC_STREAM.TASK_CREATED, task);
-        jsonResponse(res, task);
+        jsonResponse(res, await adoptSessionCore({ machine, socket, session, name, agent }));
       } catch (e) {
         errorResponse(res, (e as Error).message);
       }

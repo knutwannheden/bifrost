@@ -51,7 +51,15 @@ process.env.HOME = home;
     hasUnread: false,
     createdAt: 1,
   };
-  store.saveTasks([busy]);
+  const chat: Task = {
+    ...busy,
+    id: 'c1',
+    name: 'chat there',
+    status: 'running',
+    isExternal: true,
+    adopted: { socket: 'devpod', session: 'chat' },
+  };
+  store.saveTasks([busy, chat]);
   db.closeDatabase();
 }
 process.env.HOME = realHome;
@@ -124,6 +132,15 @@ try {
         removed.status === 200 &&
         listed.join() === 'busy',
       show({ refused, removed, listed }),
+    );
+  }
+  {
+    const again = await post('/adopt-session', { machine: 'busy', socket: 'devpod', session: 'chat' });
+    await sleep(500);
+    check(
+      'adopting a session a task already shows answers that task, and tells the window of no new one',
+      again.body.id === 'c1' && !seen.includes(IPC_STREAM.TASK_CREATED),
+      show({ again, seen }),
     );
   }
   abort.abort();
