@@ -115,6 +115,16 @@ export function controlArgs(
   ];
 }
 
+/** The flags naming a tmux server: a path to its socket, or its name in tmux's own directory. */
+export function serverFlags(socket: string): string[] {
+  return socket.includes('/') ? ['-S', socket] : ['-L', socket];
+}
+
+/** The arguments that attach a tmux control client to a session something else started, failing once it has ended. */
+export function attachArgs(target: { socket: string; session: string }): string[] {
+  return ['-u', ...serverFlags(target.socket), '-C', 'attach-session', '-t', `=${target.session}`];
+}
+
 /** Writes Bifrost's tmux configuration and the task's session files under this machine's home. */
 export function writeLocalSession(spec: SessionSpec): void {
   const dir = path.join(spec.home, sessionDir(spec.taskId));

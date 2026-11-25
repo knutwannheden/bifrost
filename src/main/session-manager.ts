@@ -5,6 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import type { IPty } from 'node-pty';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
+import type { Task } from '../shared/types.ts';
 import { modelFlags } from './agents.ts';
 import { emit } from './event-sink.ts';
 import type { RemoteHost } from './remote-host.ts';
@@ -624,7 +625,7 @@ export function createRemoteSession(
   sessionId: string,
   host: RemoteHost,
   /** tmuxName is the session's name there, when it differs from the id it is read under here. */
-  options: { name?: string; onGiveUp?: () => void; tmuxName?: string },
+  options: { name?: string; onGiveUp?: () => void; tmuxName?: string; adopted?: Task['adopted'] },
 ): void {
   announceIdle(sessionId, sessionId);
   host.hold(sessionId);
@@ -662,12 +663,14 @@ export function createRemoteSession(
     attachTmux(
       sessionId,
       ({ cols, rows }) => {
-        const { command, args } = host.controlCommand(options.tmuxName ?? sessionId, cols, rows);
+        const { command, args } = host.controlCommand(options.tmuxName ?? sessionId, cols, rows, options.adopted);
         return TmuxControl.start(command, args, { cols, rows });
       },
       (control) => {
         host.release(sessionId);
-        control.kill();
+        // An adopted session belongs to whoever started it, so ending this stream only lets go of it.
+        if (options.adopted) control.detach();
+        else control.kill();
       },
       { redraw, onExit: lost },
     );

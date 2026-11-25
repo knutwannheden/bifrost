@@ -199,6 +199,7 @@ export const IPC_STREAM = {
   CURATOR_UPDATE: 'curator:update',
   DISK_RECLAIM_READY: 'disk-reclaim:ready',
   REPOS_CHANGED: 'repos:changed',
+  CONFIG_CHANGED: 'config:changed',
   TOAST: 'ui:toast',
 } as const;
 
@@ -411,6 +412,7 @@ export interface BifrostAPI {
   applyDiskReclaim(worktreePaths: string[]): Promise<DiskReclaimResult>;
   onDiskReclaimReady(callback: (scan: DiskReclaimScan) => void): () => void;
   onReposChanged(callback: (repos: Repo[]) => void): () => void;
+  onConfigChanged(callback: () => void): () => void;
   onCuratorUpdate(callback: (taskId: string, curation: TaskCuration) => void): () => void;
 
   // Toast (main → renderer)

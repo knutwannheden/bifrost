@@ -146,6 +146,15 @@ export default function App() {
     return unsub;
   }, [dispatch]);
 
+  // So is a machine, by the MCP add_machine and remove_machine tools.
+  useEffect(
+    () =>
+      window.bifrost.onConfigChanged(() =>
+        window.bifrost.loadConfig().then((config) => dispatch({ type: 'SET_CONFIG', config })),
+      ),
+    [dispatch],
+  );
+
   // A reclaim scan finishing is the only thing that raises this notification;
   // the scan itself is scheduled in the main process.
   useEffect(() => {

@@ -23,6 +23,7 @@ import { handOver, isInstanceMachine } from './instance-link.ts';
 import { PLUGIN_DEPLOY_DIR } from './integration-installer.ts';
 import { cancelTaskRequests, setWorktreePathResolver } from './permission-manager.ts';
 import {
+  adoptedSessionScript,
   archiveScript,
   diffScript,
   getRemoteHost,
@@ -208,7 +209,7 @@ export async function archiveTaskCore(taskId: string, devSessions?: Map<string, 
   const updates: Partial<Task> = { status: 'archived', archivedAt: Date.now() };
   let removal: (() => Promise<void>) | null = null;
 
-  const host = remoteHostFor(task);
+  const host = task.adopted ? undefined : remoteHostFor(task);
   if (host) {
     // The branch is read there as the worktree goes, so it is recorded once removal reports it.
     removal = () =>
@@ -295,7 +296,7 @@ export async function destroyTask(taskId: string): Promise<void> {
   if (task.status === 'running') {
     killSession(taskId);
   }
-  const host = remoteHostFor(task);
+  const host = task.adopted ? undefined : remoteHostFor(task);
   if (host) {
     cleanups.set(
       taskId,
@@ -650,6 +651,7 @@ function startLocalSession(task: Task, prompt?: string): void {
 /** Ends a task's session. On another machine the script also ends a tmux session no stream reads. */
 export function stopTaskSession(task: Task): void {
   killSession(task.id);
+  if (task.adopted) return;
   remoteHostFor(task)
     ?.exec(stopSessionScript(task.id))
     .catch((err) => console.warn(`[remote] could not stop ${task.id}: ${(err as Error).message}`));
@@ -787,11 +789,17 @@ function startRemoteSession(task: Task): void {
     name: task.name,
     // Given up on, the session waits for its tab to be opened again, as after a restart.
     onGiveUp: () => pendingRestore.add(task.id),
+    adopted: task.adopted,
   });
 }
 
 async function reopenRemoteTask(task: Task): Promise<Task> {
   const host = getRemoteHost(task.machine ?? '');
+  if (task.adopted) {
+    await host.exec(adoptedSessionScript(task.adopted));
+    startRemoteSession(task);
+    return updateTask(task.id, { status: 'running', hasUnread: false, archivedAt: undefined });
+  }
   const info = await host.connectReady();
   if (task.branch) await host.exec(restoreWorktreeScript(task.worktreePath, task.branch));
   const changes = await writeRemoteSession(task, host, info);
@@ -932,6 +940,45 @@ export async function isRemoteWorktreeDirty(task: Task): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Opens a tmux session something else started on a machine as a task, whose
+ * tab joins it. A task already open on that session is answered instead.
+ */
+export async function adoptSessionCore(params: {
+  machine: string;
+  socket: string;
+  session: string;
+  name?: string;
+  agent?: AgentKind;
+}): Promise<Task> {
+  const { machine, socket, session } = params;
+  const open = tasks.find(
+    (t) =>
+      t.status !== 'archived' && t.machine === machine && t.adopted?.socket === socket && t.adopted.session === session,
+  );
+  if (open) return open.status === 'running' ? open : reopenTaskCore(open.id);
+  const adopted = { socket, session };
+  const { CWD } = parseScriptOutput(await getRemoteHost(machine).exec(adoptedSessionScript(adopted)));
+  const task: Task = {
+    id: randomUUID(),
+    name: params.name || `${session} on ${machine}`,
+    repoId: '',
+    machine,
+    baseBranch: '',
+    worktreePath: CWD,
+    status: 'running',
+    hasUnread: false,
+    createdAt: Date.now(),
+    isExternal: true,
+    adopted,
+    ...(params.agent ? { agent: params.agent } : {}),
+  };
+  tasks.push(task);
+  saveTasks(tasks);
+  startRemoteSession(task);
+  return task;
 }
 
 /** Check if a task needs session restoration (deferred on startup). */

@@ -286,6 +286,11 @@ const api: BifrostAPI = {
     ipcRenderer.on(IPC_STREAM.REPOS_CHANGED, handler);
     return () => ipcRenderer.removeListener(IPC_STREAM.REPOS_CHANGED, handler);
   },
+  onConfigChanged: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on(IPC_STREAM.CONFIG_CHANGED, handler);
+    return () => ipcRenderer.removeListener(IPC_STREAM.CONFIG_CHANGED, handler);
+  },
   onDiskReclaimReady: (callback) => {
     const handler = (_event: Electron.IpcRendererEvent, scan: import('../shared/types').DiskReclaimScan) =>
       callback(scan);

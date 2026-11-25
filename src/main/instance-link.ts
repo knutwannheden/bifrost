@@ -36,7 +36,8 @@ export function linkInstances(): void {
         console.warn(`[instances] ${machine.name} kept its old settings: ${(err as Error).message}`),
       );
     }
-    const held = getTasks().filter((t) => t.machine === machine.name);
+    // An adopted session stays with the IDE, which is what joined it.
+    const held = getTasks().filter((t) => t.machine === machine.name && !t.adopted);
     if (held.length > 0) {
       handOver(machine.name, held).catch((err) =>
         console.warn(`[instances] ${machine.name} kept none of ${held.length} tasks: ${(err as Error).message}`),

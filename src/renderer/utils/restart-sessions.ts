@@ -43,7 +43,8 @@ const waiting = new Set<string>();
 export async function restartSessions(tasks: Task[], consoles: string[], dispatch: Dispatch): Promise<void> {
   await restartAll(
     [
-      ...tasks.filter((t) => t.status === 'running').map((t) => taskSession(t, dispatch)),
+      // An adopted session is not Bifrost's to restart.
+      ...tasks.filter((t) => t.status === 'running' && !t.adopted).map((t) => taskSession(t, dispatch)),
       ...consoles.map(consoleSession),
     ],
     dispatch,

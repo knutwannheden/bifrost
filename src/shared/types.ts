@@ -89,6 +89,8 @@ export interface Task {
   agent?: AgentKind;
   /** What create_task chose for the task to run with, ahead of its machine's agent and the agent's own defaults. */
   launch?: { agent?: AgentKind; model?: string; effort?: string };
+  /** The tmux session the task's tab joins, which something other than Bifrost started and owns. */
+  adopted?: { socket: string; session: string };
   status: TaskStatus;
   hasUnread: boolean;
   createdAt: number;

@@ -53,6 +53,7 @@
     "check:headless": "node scripts/check-headless.mts",
     "check:instance-reach": "node scripts/check-instance-reach.mts",
     "check:mcp-machine": "node scripts/check-mcp-machine.mts",
+    "check:machine-tools": "node scripts/check-machine-tools.mts",
     "check:peers": "node scripts/check-peers.mts",
     "check:agent-hooks": "node scripts/check-agent-hooks.mts",
     "check:task-launch": "node scripts/check-task-launch.mts",

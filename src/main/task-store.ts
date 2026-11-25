@@ -31,6 +31,7 @@ function rowToTask(row: Row): Task {
   if (row.machine != null) task.machine = row.machine;
   if (row.agent != null) task.agent = row.agent;
   if (row.launch != null) task.launch = JSON.parse(row.launch);
+  if (row.adopted != null) task.adopted = JSON.parse(row.adopted);
 
   if (row.cur_outcome != null) {
     const curation: TaskCuration = {
@@ -54,8 +55,8 @@ const UPSERT_SQL = `INSERT OR REPLACE INTO tasks (
   created_at, archived_at, terminal_title, summary, is_external, in_place,
   session_history, claude_active, cur_outcome, cur_confidence, cur_reason,
   cur_pr_state, cur_branch_merged, cur_classified_at, cur_user_override, cur_user_note,
-  created_by_task_id, last_turn_boundary_at, interrupted_at, machine, agent, launch
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  created_by_task_id, last_turn_boundary_at, interrupted_at, machine, agent, launch, adopted
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function taskParams(t: Task) {
   return [
@@ -90,6 +91,7 @@ function taskParams(t: Task) {
     t.machine ?? null,
     t.agent ?? null,
     t.launch ? JSON.stringify(t.launch) : null,
+    t.adopted ? JSON.stringify(t.adopted) : null,
   ];
 }
 

@@ -11,7 +11,7 @@ const DB_PATH = path.join(BIFROST_DIR, 'bifrost.db');
 
 let db: DatabaseSync | null = null;
 
-const CURRENT_VERSION = 10;
+const CURRENT_VERSION = 11;
 /** How long a write waits for a lock another connection holds, such as a sqlite3 shell's. */
 const BUSY_TIMEOUT_MS = 5_000;
 
@@ -48,7 +48,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   interrupted_at INTEGER,
   machine TEXT,
   agent TEXT,
-  launch TEXT
+  launch TEXT,
+  adopted TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_repo ON tasks(repo_id);
@@ -396,6 +397,13 @@ function runMigrations(): void {
         d.prepare('UPDATE schema_version SET version = ?').run(10);
       });
       console.log('[db] Migration v10: added tasks.launch');
+    }
+    if (row.version < 11) {
+      transaction(() => {
+        d.exec('ALTER TABLE tasks ADD COLUMN adopted TEXT');
+        d.prepare('UPDATE schema_version SET version = ?').run(11);
+      });
+      console.log('[db] Migration v11: added tasks.adopted');
     }
   }
 }

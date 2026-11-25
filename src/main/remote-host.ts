@@ -6,7 +6,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { promisify } from 'node:util';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
-import type { AgentKind, Machine } from '../shared/types.ts';
+import type { AgentKind, Machine, Task } from '../shared/types.ts';
 import { claudeConfigDir, claudeConfigRelative } from './claude-paths.ts';
 import { TRUSTED_ENTRY } from './claude-trust.ts';
 import { loadConfig } from './config.ts';
@@ -17,9 +17,11 @@ import { PLUGIN_DEPLOY_DIR, readPluginVersion } from './integration-installer.ts
 import { peerTasks } from './peers.ts';
 import { rsyncArgs, syncMachine } from './remote-sync.ts';
 import {
+  attachArgs,
   configDirScript,
   controlArgs,
   type SessionSpec,
+  serverFlags,
   sessionDir,
   sessionFiles,
   shQuote,
@@ -82,6 +84,16 @@ export function sessionSetupScript(spec: SessionSpec): string {
 /** Points run.sh at the session a `/clear` started, so a later attach resumes that one. */
 export function sessionIdScript(taskId: string, sessionId: string): string {
   return `printf '%s\\n' ${shQuote(sessionId)} > "$HOME"/${sessionDir(taskId)}/session-id`;
+}
+
+/** Prints CWD, the directory of a session something else started there, and fails when no such session runs. */
+export function adoptedSessionScript(target: { socket: string; session: string }): string {
+  const tmux = ['tmux', ...serverFlags(target.socket)].map(shQuote).join(' ');
+  return [
+    `${tmux} has-session -t ${shQuote(`=${target.session}`)} || exit 1`,
+    `cwd=$(${tmux} display-message -p -t ${shQuote(`=${target.session}:`)} '#{pane_current_path}') || exit 1`,
+    `printf 'CWD=%s\\n' "$cwd"`,
+  ].join('\n');
 }
 
 /** Hands a message to a Codex session, which holds it until the session's turn ends. Runs here as well as there. */
@@ -556,8 +568,15 @@ export class RemoteHost {
    * the machine, starting it when it is missing. The login shell there reads
    * the remote command, whose every word is safe for it unquoted.
    */
-  controlCommand(taskId: string, cols: number, rows: number): { command: string; args: string[] } {
-    const remote = ['tmux', ...controlArgs(REMOTE_DIR, taskId, cols, rows)].join(' ');
+  controlCommand(
+    taskId: string,
+    cols: number,
+    rows: number,
+    adopted?: Task['adopted'],
+  ): { command: string; args: string[] } {
+    const remote = adopted
+      ? ['tmux', ...attachArgs(adopted)].map(shQuote).join(' ')
+      : ['tmux', ...controlArgs(REMOTE_DIR, taskId, cols, rows)].join(' ');
     return { command: 'ssh', args: [...this.sshOptions(), '-T', '-o', 'BatchMode=yes', this.machine.host, remote] };
   }
 

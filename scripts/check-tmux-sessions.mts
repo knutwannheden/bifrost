@@ -23,7 +23,7 @@ import {
   writeToSession,
 } from '../src/main/session-manager.ts';
 import { TmuxControl } from '../src/main/tmux-control.ts';
-import { controlArgs, writeLocalSession } from '../src/main/tmux-session.ts';
+import { attachArgs, controlArgs, writeLocalSession } from '../src/main/tmux-session.ts';
 import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 
 const { Terminal } = headless;
@@ -286,6 +286,50 @@ try {
     );
     check('a dropped connection reconnects and redraws the tab', redrawn && alive('remote'), show(alive('remote')));
     killSession('remote');
+  }
+
+  {
+    // A session something else started, on a tmux server of its own.
+    const devpod = path.join(root, 'devpod');
+    execFileSync('tmux', [
+      '-S',
+      devpod,
+      '-f',
+      '/dev/null',
+      'new-session',
+      '-d',
+      '-s',
+      'chat',
+      'sh',
+      '-c',
+      'echo stub-chat; exec cat',
+    ]);
+    const adopted = { socket: devpod, session: 'chat' };
+    const host = {
+      machine: { name: 'fake', host: 'fake' },
+      hold() {},
+      release() {},
+      connect: async () => ({}),
+      controlCommand: () => ({ command: 'tmux', args: attachArgs(adopted) }),
+    } as unknown as RemoteHost;
+    createRemoteSession('adopted', host, { name: 'adopted', adopted });
+    await attachSession('adopted', 80, 10);
+    const shown = await until(() => dataOf('adopted').join('').includes('stub-chat'));
+    killSession('adopted');
+    await sleep(500);
+    let kept = false;
+    try {
+      execFileSync('tmux', ['-S', devpod, 'has-session', '-t', '=chat'], { stdio: 'ignore' });
+      kept = true;
+    } catch {
+      /* the session was ended */
+    }
+    try {
+      execFileSync('tmux', ['-S', devpod, 'kill-server'], { stdio: 'ignore' });
+    } catch {
+      /* gone already */
+    }
+    check('ending the stream of an adopted session leaves that session running', shown && kept, show({ shown, kept }));
   }
 
   {

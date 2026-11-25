@@ -92,8 +92,8 @@ try {
     try {
       const [other, own] = await Promise.all([copilot.ready, claude.ready]);
       check(
-        'a session of an agent without SendMessage is told to reach other tasks with send_prompt',
-        !!other.instructions?.includes('use send_prompt') &&
+        'a session of an agent without SendMessage is told to reach other tasks with message_task',
+        !!other.instructions?.includes('use message_task') &&
           !other.instructions.includes('use the built-in SendMessage') &&
           !!own.instructions?.includes('use the built-in SendMessage'),
         JSON.stringify({ other: other.instructions, own: own.instructions?.slice(0, 80) }),

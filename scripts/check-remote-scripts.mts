@@ -5,12 +5,13 @@
  * quoting slip shows up as a mangled argument. Run with
  * `npm run check:remote-scripts`.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { subscribe } from '../src/main/event-sink.ts';
 import {
+  adoptedSessionScript,
   archiveScript,
   diffScript,
   loginScript,
@@ -22,6 +23,7 @@ import {
   sessionSetupScript,
   worktreeScript,
 } from '../src/main/remote-host.ts';
+import { attachArgs } from '../src/main/tmux-session.ts';
 import { parseDiff } from '../src/shared/diff-parser.ts';
 import { IPC_STREAM } from '../src/shared/ipc-channels.ts';
 
@@ -572,6 +574,41 @@ check(
       !fs.existsSync(path.join(pastes, 'old.png')) &&
       fs.existsSync(path.join(pastes, 'recent.png')),
     show({ printed, left: fs.readdirSync(pastes) }),
+  );
+}
+
+// A session started outside Bifrost, on a tmux server of its own, which a task adopts.
+{
+  const home = path.join(root, 'adopt-home');
+  const dir = path.join(root, 'adopt dir');
+  fs.mkdirSync(home);
+  fs.mkdirSync(dir);
+  const socket = path.join(root, 'devpod.sock');
+  const adopted = { socket, session: 'chat' };
+  execFileSync('tmux', ['-S', socket, '-f', '/dev/null', 'new-session', '-d', '-s', 'chat', '-c', dir, 'cat']);
+  const cwd = parseScriptOutput(runRemote(home, adoptedSessionScript(adopted))).CWD;
+  let missing = '';
+  try {
+    runRemote(home, adoptedSessionScript({ socket, session: 'gone' }));
+  } catch (err) {
+    missing = String((err as { stderr?: Buffer }).stderr ?? err);
+  }
+
+  const client = spawn('tmux', attachArgs(adopted), { stdio: 'pipe' });
+  let out = '';
+  client.stdout.on('data', (d) => (out += d));
+  for (const end = Date.now() + 5000; !out.includes('%begin') && Date.now() < end; ) {
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  const clients = execFileSync('tmux', ['-S', socket, 'list-clients', '-F', '#{client_control_mode}']).toString();
+  client.stdin.end();
+  await new Promise((r) => client.on('exit', r));
+  const sessions = execFileSync('tmux', ['-S', socket, 'list-sessions', '-F', '#{session_name}']).toString().trim();
+  execFileSync('tmux', ['-S', socket, 'kill-server']);
+  check(
+    'an adopted session reports its directory, a missing one fails, and a control client joins it and leaves it running',
+    cwd === dir && /can't find session/.test(missing) && clients.trim() === '1' && sessions === 'chat',
+    show({ cwd, missing, clients, sessions }),
   );
 }
 

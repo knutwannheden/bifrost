@@ -312,6 +312,94 @@ server.registerTool(
   },
 );
 
+/** A machine as list_machines and add_machine report it. */
+function describeMachine(m) {
+  const traits = [m.instance && 'its own Bifrost instance', m.sync && 'setup synced', m.agent && `runs ${m.agent}`];
+  return `${m.name} (${m.host}${traits
+    .filter(Boolean)
+    .map((t) => `, ${t}`)
+    .join('')})`;
+}
+
+server.registerTool(
+  'list_machines',
+  {
+    title: 'List Machines',
+    description:
+      "List the machines Bifrost runs tasks on besides its own, by the name create_task's machine takes and the ssh host it connects to.",
+    inputSchema: {},
+  },
+  async () => {
+    const { machines } = await apiCall('/machines', {});
+    const text = machines.length > 0 ? machines.map(describeMachine).join('\n') : 'No machines configured.';
+    return { content: [{ type: 'text', text }] };
+  },
+);
+
+server.registerTool(
+  'add_machine',
+  {
+    title: 'Add Machine',
+    description:
+      "Add a machine for Bifrost to run tasks on, reached with plain `ssh <host>` as ~/.ssh/config says. It starts without its setup synced and without an instance of its own, which the user can turn on in Bifrost's settings. A host already configured is answered with its entry.",
+    inputSchema: {
+      host: z.string().describe("The host ssh connects to, e.g. 'gpu-box.coder'"),
+      name: z
+        .string()
+        .optional()
+        .describe("What Bifrost and create_task call it. Omitted, the host's first label, e.g. 'gpu-box'."),
+    },
+  },
+  async ({ host, name }) => {
+    const { machine } = await apiCall('/add-machine', { host, name });
+    return { content: [{ type: 'text', text: `Machine: ${describeMachine(machine)}` }] };
+  },
+);
+
+server.registerTool(
+  'remove_machine',
+  {
+    title: 'Remove Machine',
+    description:
+      'Remove a machine from Bifrost, by name. Refused while a task that is not archived runs there. Nothing on the machine itself is touched.',
+    inputSchema: {
+      name: z.string().describe('The machine, by its name in list_machines'),
+    },
+  },
+  async ({ name }) => {
+    await apiCall('/remove-machine', { name });
+    return { content: [{ type: 'text', text: `Removed machine ${name}.` }] };
+  },
+);
+
+server.registerTool(
+  'open_tmux_session',
+  {
+    title: 'Open tmux Session',
+    description:
+      "Open a tmux session something else started on one of Bifrost's machines as a task, whose tab in Bifrost joins it to show it and take typing. Bifrost never starts, restarts or ends that session: closing or archiving the task only lets go of it. A session already open as a task is answered with that task. To find one, run `tmux -S <socket> ls` on the machine for each socket in /tmp/tmux-$(id -u)/ (Bifrost's own is named bifrost), and `tmux -S <socket> display-message -p -t <session> '#{pane_current_command} #{pane_current_path}'` to see what runs in it. A machine not yet in list_machines is added with add_machine first.",
+    inputSchema: {
+      machine: z.string().describe("The machine, by its name in list_machines, e.g. 'gpu-box'"),
+      socket: z
+        .string()
+        .describe(
+          "The tmux server: the name `tmux -L` takes, e.g. 'devpod', or the path of its socket, e.g. '/tmp/tmux-1001/devpod'",
+        ),
+      session: z.string().describe("The tmux session's name, e.g. 'chat'"),
+      name: z.string().optional().describe('The task\'s title. Omitted, "<session> on <machine>".'),
+      agent: z
+        .enum(['claude', 'codex', 'copilot'])
+        .optional()
+        .describe('The coding agent running in the session, when it is one.'),
+    },
+  },
+  async ({ machine, socket, session, name, agent }) => {
+    const task = await apiCall('/adopt-session', { machine, socket, session, name, agent }, { timeout: 120000 });
+    const text = `Task "${task.name}" (${task.id}) shows tmux session "${session}" on ${machine}, in ${task.worktreePath}.`;
+    return { content: [{ type: 'text', text }] };
+  },
+);
+
 server.registerTool(
   'create_task',
   {

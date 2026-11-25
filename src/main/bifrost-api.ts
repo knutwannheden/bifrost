@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { BifrostConfig, Repo, Task } from '../shared/types';
+import type { AgentKind, BifrostConfig, Repo, Task } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
@@ -19,7 +19,7 @@ import {
 } from './activity-state';
 import { getActivityLog, stopWatching } from './activity-watcher';
 import { applyClaudeConfigDir, claudeProjectDir } from './claude-paths';
-import { loadConfig, saveConfig } from './config';
+import { addMachine, loadConfig, removeMachine, saveConfig } from './config';
 import { CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
@@ -50,6 +50,7 @@ import {
   waitForSessionReady,
 } from './session-manager';
 import {
+  adoptSessionCore,
   archiveTaskCore,
   createTaskCore,
   followWorktree,
@@ -453,6 +454,85 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         jsonResponse(res, repo);
       } catch (e) {
         errorResponse(res, (e as Error).message, 400);
+      }
+      return;
+    }
+
+    case '/machines':
+    case '/add-machine':
+    case '/remove-machine': {
+      // Only the IDE knows the machines, so a machine's instance asks it.
+      if (process.env.BIFROST_MACHINE) {
+        try {
+          jsonResponse(res, await postToPeer(IDE, req.url, body));
+        } catch (e) {
+          errorResponse(res, `${IDE}: ${(e as Error).message}`, 502);
+        }
+        return;
+      }
+      if (req.url === '/machines') {
+        jsonResponse(res, { machines: loadConfig().machines ?? [] });
+        return;
+      }
+      if (req.url === '/add-machine') {
+        const { host, name } = body as { host?: string; name?: string };
+        if (!host) {
+          errorResponse(res, 'host is required');
+          return;
+        }
+        try {
+          const machine = addMachine(host, name || undefined);
+          emit(IPC_STREAM.CONFIG_CHANGED);
+          jsonResponse(res, { ok: true, machine });
+        } catch (e) {
+          errorResponse(res, (e as Error).message);
+        }
+        return;
+      }
+      const { name } = body as { name?: string };
+      const held = [...getTasks(), ...peerTasks()].filter((t) => t.machine === name && t.status !== 'archived');
+      if (held.length > 0) {
+        const names = held.map((t) => `"${t.name}"`).join(', ');
+        errorResponse(res, `${names} still on ${name}. Archive them first.`, 409);
+        return;
+      }
+      try {
+        removeMachine(String(name));
+        emit(IPC_STREAM.CONFIG_CHANGED);
+        jsonResponse(res, { ok: true });
+      } catch (e) {
+        errorResponse(res, (e as Error).message);
+      }
+      return;
+    }
+
+    case '/adopt-session': {
+      const { machine, socket, session, name, agent } = body as {
+        machine?: string;
+        socket?: string;
+        session?: string;
+        name?: string;
+        agent?: AgentKind;
+      };
+      if (!machine || !socket || !session) {
+        errorResponse(res, 'machine, socket and session are required');
+        return;
+      }
+      // Only the IDE shows tabs, so a machine's instance has it join the session.
+      if (process.env.BIFROST_MACHINE) {
+        try {
+          jsonResponse(res, await postToPeer(IDE, '/adopt-session', body));
+        } catch (e) {
+          errorResponse(res, `${IDE}: ${(e as Error).message}`, 502);
+        }
+        return;
+      }
+      try {
+        const task = await adoptSessionCore({ machine, socket, session, name, agent });
+        emit(IPC_STREAM.TASK_CREATED, task);
+        jsonResponse(res, task);
+      } catch (e) {
+        errorResponse(res, (e as Error).message);
       }
       return;
     }

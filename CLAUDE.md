@@ -115,6 +115,8 @@ A task with `machine` set runs on a host from `BifrostConfig.machines`, reached 
 
 Bifrost keeps one OpenSSH master connection per machine, under `~/.bifrost/ssh/`. Tabs and commands share it, and it forwards the API to the machine for the copy of the plugin there. At start, Bifrost connects to each machine a task was open on when it last quit.
 
+The plugin's `add_machine`, `remove_machine` and `list_machines` edit the machines as Settings does, and the window reloads its config when they do. A machine stays while a task that is not archived runs there. `open_tmux_session` makes a task of a tmux session something else started on a machine, on any tmux server there (`Task.adopted`). Its tab attaches to that session instead of starting one from `run.sh`, so stopping, archiving and Restart sessions leave the session running, and it is never handed to the machine's instance.
+
 On the machine, a repo is cloned once, at the path it has here relative to home, so `~/git/org/repo` there too. A task's worktree sits in the clone's `.worktrees/`. Claude runs in tmux there as it does here, and the tab's control client reaches it over `ssh`, so Claude outlives the connection and Bifrost. A connection that drops is retried, and the tab is redrawn from the new client's replay.
 
 Nobody may be there to answer Claude's first-run screens, so Bifrost answers them up front. Connecting marks onboarding done, setting up a session trusts its worktree, and the session's `--settings` settle the renderer and the warning about skipped permissions.
