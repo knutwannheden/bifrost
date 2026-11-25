@@ -312,9 +312,24 @@ try {
       connect: async () => ({}),
       controlCommand: () => ({ command: 'tmux', args: attachArgs(adopted) }),
     } as unknown as RemoteHost;
-    createRemoteSession('adopted', host, { name: 'adopted', adopted });
+    let activity = 0;
+    createRemoteSession('adopted', host, { name: 'adopted', adopted, onActivity: () => activity++ });
     await attachSession('adopted', 80, 10);
     const shown = await until(() => dataOf('adopted').join('').includes('stub-chat'));
+    // The program redraws on joining, which is no sign of work.
+    writeToSession('adopted', 'early\r');
+    await until(() => dataOf('adopted').join('').includes('early'));
+    const onJoining = activity;
+    const realNow = Date.now;
+    Date.now = () => realNow() + 61_000;
+    writeToSession('adopted', 'later\r');
+    await until(() => dataOf('adopted').join('').includes('later'));
+    Date.now = realNow;
+    check(
+      "an adopted session's output after its first minute counts as activity",
+      onJoining === 0 && activity === 1,
+      show({ onJoining, activity }),
+    );
     killSession('adopted');
     await sleep(500);
     let kept = false;

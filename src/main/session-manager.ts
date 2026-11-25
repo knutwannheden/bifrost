@@ -482,13 +482,19 @@ function attachTmux(
     redraw?: boolean;
     /** Answers whether it has taken the exit over, such as to reconnect. */
     onExit?: (code: number | null) => boolean;
+    /** Told of the pane's output at most once a minute, and not in the minute after joining or resizing, when the program redraws. */
+    onActivity?: () => void;
   } = {},
 ): void {
   const size = desiredGeometry.get(sessionId) ?? lastKnownGeometry;
   const control = start(size);
+  let quietUntil = Date.now() + ACTIVITY_INTERVAL_MS;
   const stream: SessionStream = {
     write: (data) => control.write(data),
-    resize: (cols, rows) => control.resize(cols, rows),
+    resize: (cols, rows) => {
+      quietUntil = Date.now() + ACTIVITY_INTERVAL_MS;
+      control.resize(cols, rows);
+    },
     detach: () => control.detach(),
     kill: () => end(control),
   };
@@ -509,7 +515,12 @@ function attachTmux(
     ),
   );
   control.onOutput((data) => {
-    if (current()) output(data, true);
+    if (!current()) return;
+    output(data, true);
+    if (options.onActivity && Date.now() >= quietUntil) {
+      quietUntil = Date.now() + ACTIVITY_INTERVAL_MS;
+      options.onActivity();
+    }
   });
   control.onExit((code, error) => {
     if (!current()) return;
@@ -612,6 +623,7 @@ function announceIdle(sessionId: string, taskId?: string): void {
 const RECONNECT_DELAYS_MS = [2_000, 5_000, 10_000, 20_000, 30_000];
 /** A connection that held this long counts as recovered, and the next drop gets every attempt again. */
 const RECONNECT_RESET_MS = 60_000;
+const ACTIVITY_INTERVAL_MS = 60_000;
 /** Remote sessions between a dropped connection and the next attempt, with how to give the attempt up. */
 const pendingReconnects = new Map<string, { timer: ReturnType<typeof setTimeout>; abandon: () => void }>();
 
@@ -625,7 +637,13 @@ export function createRemoteSession(
   sessionId: string,
   host: RemoteHost,
   /** tmuxName is the session's name there, when it differs from the id it is read under here. */
-  options: { name?: string; onGiveUp?: () => void; tmuxName?: string; adopted?: Task['adopted'] },
+  options: {
+    name?: string;
+    onGiveUp?: () => void;
+    tmuxName?: string;
+    adopted?: Task['adopted'];
+    onActivity?: () => void;
+  },
 ): void {
   announceIdle(sessionId, sessionId);
   host.hold(sessionId);
@@ -672,7 +690,7 @@ export function createRemoteSession(
         if (options.adopted) control.detach();
         else control.kill();
       },
-      { redraw, onExit: lost },
+      { redraw, onExit: lost, onActivity: options.onActivity },
     );
   };
   connect(false);

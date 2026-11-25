@@ -222,9 +222,7 @@ function hookTask(body: Record<string, unknown>): Task | undefined {
 
 /** The sidebar orders by these, so the writes inside a turn leave rows put. */
 function turnBoundary(taskId: string): void {
-  const at = Date.now();
-  markTurnBoundary(taskId, at);
-  emit(IPC_STREAM.TASK_TURN_BOUNDARY, taskId, at);
+  markTurnBoundary(taskId, Date.now());
 }
 
 /** The end of a task's work: idle, notified, and the sidebar's bar turned. */

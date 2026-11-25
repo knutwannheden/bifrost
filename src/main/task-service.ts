@@ -93,6 +93,7 @@ export function markTurnBoundary(taskId: string, at: number): void {
   if (!task) return;
   task.lastTurnBoundaryAt = at;
   saveTurnBoundary(taskId, at);
+  emit(IPC_STREAM.TASK_TURN_BOUNDARY, taskId, at);
   // A turn of any kind means the task is going again, whatever cut the last one off.
   if (task.interruptedAt != null) clearInterrupted(taskId);
 }
@@ -790,6 +791,8 @@ function startRemoteSession(task: Task): void {
     // Given up on, the session waits for its tab to be opened again, as after a restart.
     onGiveUp: () => pendingRestore.add(task.id),
     adopted: task.adopted,
+    // Its agent carries none of Bifrost's hooks, so the pane's output stands in for its turns.
+    ...(task.adopted ? { onActivity: () => markTurnBoundary(task.id, Date.now()) } : {}),
   });
 }
 
