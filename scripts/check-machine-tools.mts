@@ -28,7 +28,16 @@ const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-mach
 const home = path.join(root, 'home');
 const tmp = path.join(root, 'tmp');
 for (const dir of [home, tmp]) fs.mkdirSync(dir);
-const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, TMPDIR: tmp, TMUX_TMPDIR: root };
+const stubs = path.join(root, 'stubs');
+fs.mkdirSync(stubs);
+fs.writeFileSync(path.join(stubs, 'claude'), '#!/bin/sh\nexec sleep 600\n', { mode: 0o755 });
+const env: NodeJS.ProcessEnv = {
+  ...process.env,
+  HOME: home,
+  TMPDIR: tmp,
+  TMUX_TMPDIR: root,
+  PATH: `${stubs}:${process.env.PATH}`,
+};
 delete env.BIFROST_MACHINE;
 delete env.CLAUDE_CONFIG_DIR;
 delete env.TMUX;
@@ -59,7 +68,18 @@ process.env.HOME = home;
     isExternal: true,
     adopted: { socket: 'devpod', session: 'chat' },
   };
-  store.saveTasks([busy, chat]);
+  const shelved: Task = {
+    id: 'x1',
+    name: 'shelved here',
+    repoId: '',
+    baseBranch: '',
+    worktreePath: tmp,
+    status: 'archived',
+    hasUnread: false,
+    createdAt: 1,
+    isExternal: true,
+  };
+  store.saveTasks([busy, chat, shelved]);
   db.closeDatabase();
 }
 process.env.HOME = realHome;
@@ -142,6 +162,12 @@ try {
       again.body.id === 'c1' && !seen.includes(IPC_STREAM.TASK_CREATED),
       show({ again, seen }),
     );
+  }
+  {
+    // Another instance keeps its own copy of this one's tasks, which only an event updates.
+    void post('/open-task', { taskId: 'x1' }).catch(() => {});
+    const told = await until(() => seen.includes(IPC_STREAM.TASK_UPDATED), 10_000);
+    check('a task reopened through the API is announced as updated', told, show(seen));
   }
   abort.abort();
   await reading;

@@ -1131,6 +1131,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
           } else {
             openTask = await reopenTaskCore(openId);
           }
+          emit(IPC_STREAM.TASK_UPDATED, openTask);
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Task could not be opened';
           console.error(`[api] open-task: failed to open ${openId}:`, err);
