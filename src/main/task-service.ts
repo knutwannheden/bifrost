@@ -672,7 +672,7 @@ async function localGitConfig(repoPath: string, key: string): Promise<string | u
  */
 async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: string): Promise<Task> {
   const host = getRemoteHost(machine);
-  const info = await host.connectReady();
+  const info = await host.connectReady(params.launch?.agent ?? agentOn(machine));
   let url: string;
   try {
     ({ stdout: url } = await execFile('git', ['remote', 'get-url', 'origin'], { cwd: repo.path, timeout: 5000 }));
@@ -800,7 +800,7 @@ async function reopenRemoteTask(task: Task): Promise<Task> {
     startRemoteSession(task);
     return updateTask(task.id, { status: 'running', hasUnread: false, archivedAt: undefined });
   }
-  const info = await host.connectReady();
+  const info = await host.connectReady(agentFor(task));
   if (task.branch) await host.exec(restoreWorktreeScript(task.worktreePath, task.branch));
   const changes = await writeRemoteSession(task, host, info);
   startRemoteSession(task);
@@ -830,7 +830,7 @@ export async function transferTaskCore(taskId: string, machine: string): Promise
     throw new Error(`${repo.name} has no origin remote for ${machine} to clone from`);
   }
   const host = getRemoteHost(machine);
-  const info = await host.connectReady();
+  const info = await host.connectReady(agentFor({ ...task, machine }));
 
   const slug = path.basename(task.worktreePath);
   const clonePath = remoteClonePath(repo);

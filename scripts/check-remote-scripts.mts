@@ -457,20 +457,21 @@ const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'ut
 }
 
 {
-  const connected = async (agents: string[]) => {
-    const box = new RemoteHost({ name: 'cbox', host: 'cbox', agent: 'codex' });
+  const connected = async (agents: string[], machineAgent: 'claude' | 'codex' = 'codex', taskAgent?: 'codex') => {
+    const box = new RemoteHost({ name: 'cbox', host: 'cbox', agent: machineAgent });
     (box as unknown as { info: object }).info = { home, missing: [], agents, loggedIn: false, pluginDir: null };
-    return box.connectReady().then(
+    return box.connectReady(taskAgent).then(
       () => 'ready',
       (err: Error) => err.message,
     );
   };
   const withCodex = await connected(['codex']);
   const without = await connected(['claude']);
+  const codexTaskOnClaudeMachine = await connected(['codex'], 'claude', 'codex');
   check(
-    'a machine is checked for the agent it runs, and for a Claude login only when that is Claude',
-    withCodex === 'ready' && without === 'cbox is missing codex',
-    show({ withCodex, without }),
+    'a machine is checked for the agent the task runs, and for a Claude login only when that is Claude',
+    withCodex === 'ready' && without === 'cbox is missing codex' && codexTaskOnClaudeMachine === 'ready',
+    show({ withCodex, without, codexTaskOnClaudeMachine }),
   );
 }
 

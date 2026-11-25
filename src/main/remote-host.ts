@@ -596,11 +596,11 @@ export class RemoteHost {
     return this.linking;
   }
 
-  /** Throws naming what the machine lacks for running a task. */
-  async connectReady(): Promise<RemoteInfo> {
+  /** Throws naming what the machine lacks for running a task with the agent given, or else the machine's own. */
+  async connectReady(taskAgent?: AgentKind): Promise<RemoteInfo> {
     const info = await this.connect();
     const name = this.machine.name;
-    const agent = this.machine.agent ?? loadConfig().agent ?? 'claude';
+    const agent = taskAgent ?? this.machine.agent ?? loadConfig().agent ?? 'claude';
     const missing = info.agents.includes(agent) ? info.missing : [...info.missing, agent];
     if (missing.length) throw new Error(`${name} is missing ${missing.join(', ')}`);
     if (agent === 'claude' && !info.loggedIn) {
