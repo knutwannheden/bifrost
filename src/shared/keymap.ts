@@ -55,6 +55,12 @@ export const ACTION_REGISTRY: Record<string, ActionDefinition> = {
   'action.openPr': { id: 'action.openPr', label: 'Open PR in GitHub', category: 'actions', requiresTask: true },
   'action.copyPrUrl': { id: 'action.copyPrUrl', label: 'Copy PR URL', category: 'actions', requiresTask: true },
   'action.restartSessions': { id: 'action.restartSessions', label: 'Restart sessions', category: 'actions' },
+  'action.restartTaskSession': {
+    id: 'action.restartTaskSession',
+    label: "Restart this task's session",
+    category: 'actions',
+    requiresTask: true,
+  },
   'action.find': { id: 'action.find', label: 'Find in terminal', category: 'actions', requiresTask: true },
   'action.copyRef': { id: 'action.copyRef', label: 'Copy task reference', category: 'actions', requiresTask: true },
   'action.scrollUp': { id: 'action.scrollUp', label: 'Scroll terminal up', category: 'actions', requiresTask: true },

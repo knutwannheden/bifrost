@@ -450,6 +450,14 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           void restartSessions(s.tasks, consoleTabs(s.config), dispatch);
           break;
 
+        case 'action.restartTaskSession':
+          void restartSessions(
+            s.tasks.filter((t) => t.id === s.activeTaskId),
+            [],
+            dispatch,
+          );
+          break;
+
         case 'action.openPr':
         case 'action.copyPrUrl': {
           const activeTask = s.tasks.find((t) => t.id === s.activeTaskId);
