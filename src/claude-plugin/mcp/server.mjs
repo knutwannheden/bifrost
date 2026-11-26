@@ -377,7 +377,7 @@ server.registerTool(
   {
     title: 'Open tmux Session',
     description:
-      "Open a tmux session something else started on one of Bifrost's machines as a task, whose tab in Bifrost joins it to show it and take typing. Bifrost never starts, restarts or ends that session: closing or archiving the task only lets go of it. A session already open as a task is answered with that task. To find one, run `tmux -S <socket> ls` on the machine for each socket in /tmp/tmux-$(id -u)/ (Bifrost's own is named bifrost), and `tmux -S <socket> display-message -p -t <session> '#{pane_current_command} #{pane_current_path}'` to see what runs in it. A machine not yet in list_machines is added with add_machine first.",
+      "Open a tmux session something else started on one of Bifrost's machines as a task, whose tab in Bifrost joins it to show it and take typing. Bifrost never starts, restarts or ends that session: closing or archiving the task only lets go of it. A session already open as a task is answered with that task, which a directory given moves there. To find one, run `tmux -S <socket> ls` on the machine for each socket in /tmp/tmux-$(id -u)/ (Bifrost's own is named bifrost), and `tmux -S <socket> display-message -p -t <session> '#{pane_current_command} #{pane_current_path}'` to see what runs in it. A machine not yet in list_machines is added with add_machine first.",
     inputSchema: {
       machine: z.string().describe("The machine, by its name in list_machines, e.g. 'gpu-box'"),
       socket: z
@@ -391,10 +391,20 @@ server.registerTool(
         .enum(['claude', 'codex', 'copilot'])
         .optional()
         .describe('The coding agent running in the session, when it is one.'),
+      directory: z
+        .string()
+        .optional()
+        .describe(
+          "The directory on the machine whose changes the task's diff shows, such as the repo the session's agent edits, e.g. '~/work/my-recipes'. Omitted, the repo the agent runs in, else the directory it runs in.",
+        ),
     },
   },
-  async ({ machine, socket, session, name, agent }) => {
-    const task = await apiCall('/adopt-session', { machine, socket, session, name, agent }, { timeout: 120000 });
+  async ({ machine, socket, session, name, agent, directory }) => {
+    const task = await apiCall(
+      '/adopt-session',
+      { machine, socket, session, name, agent, directory },
+      { timeout: 120000 },
+    );
     const text = `Task "${task.name}" (${task.id}) shows tmux session "${session}" on ${machine}, in ${task.worktreePath}.`;
     return { content: [{ type: 'text', text }] };
   },

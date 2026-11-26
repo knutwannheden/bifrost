@@ -947,7 +947,7 @@ export async function isRemoteWorktreeDirty(task: Task): Promise<boolean> {
 
 /**
  * Opens a tmux session something else started on a machine as a task, whose
- * tab joins it. A task already open on that session is answered instead.
+ * tab joins it. A task already open on that session is answered instead, moved to the directory given.
  */
 export async function adoptSessionCore(params: {
   machine: string;
@@ -955,15 +955,23 @@ export async function adoptSessionCore(params: {
   session: string;
   name?: string;
   agent?: AgentKind;
+  directory?: string;
 }): Promise<Task> {
-  const { machine, socket, session } = params;
-  const open = tasks.find(
+  const { machine, socket, session, directory } = params;
+  let open = tasks.find(
     (t) =>
       t.status !== 'archived' && t.machine === machine && t.adopted?.socket === socket && t.adopted.session === session,
   );
-  if (open) return open.status === 'running' ? open : reopenTaskCore(open.id);
   const adopted = { socket, session };
-  const { CWD, BASE } = parseScriptOutput(await getRemoteHost(machine).exec(adoptedSessionScript(adopted)));
+  if (open && directory) {
+    const { CWD, BASE } = parseScriptOutput(
+      await getRemoteHost(machine).exec(adoptedSessionScript(adopted, directory)),
+    );
+    open = updateTask(open.id, { worktreePath: CWD, baseBranch: BASE ?? '' });
+    emit(IPC_STREAM.TASK_UPDATED, open);
+  }
+  if (open) return open.status === 'running' ? open : reopenTaskCore(open.id);
+  const { CWD, BASE } = parseScriptOutput(await getRemoteHost(machine).exec(adoptedSessionScript(adopted, directory)));
   const task: Task = {
     id: randomUUID(),
     name: params.name || `${session} on ${machine}`,

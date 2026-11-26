@@ -505,12 +505,13 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     case '/adopt-session': {
-      const { machine, socket, session, name, agent } = body as {
+      const { machine, socket, session, name, agent, directory } = body as {
         machine?: string;
         socket?: string;
         session?: string;
         name?: string;
         agent?: AgentKind;
+        directory?: string;
       };
       if (!machine || !socket || !session) {
         errorResponse(res, 'machine, socket and session are required');
@@ -526,7 +527,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         return;
       }
       try {
-        jsonResponse(res, await adoptSessionCore({ machine, socket, session, name, agent }));
+        jsonResponse(res, await adoptSessionCore({ machine, socket, session, name, agent, directory }));
       } catch (e) {
         errorResponse(res, (e as Error).message);
       }

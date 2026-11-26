@@ -582,9 +582,11 @@ check(
 {
   const home = path.join(root, 'adopt-home');
   const dir = path.join(root, 'adopt dir');
+  const workspace = path.join(root, 'adopt workspace');
   const repo = path.join(root, 'adopt repo');
   fs.mkdirSync(home);
   fs.mkdirSync(dir);
+  fs.mkdirSync(workspace);
   fs.mkdirSync(path.join(repo, 'sub'), { recursive: true });
   const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });
   git('init', '-q');
@@ -596,9 +598,19 @@ check(
   // The agent runs as a child of a wrapper whose own directory is no repo.
   const agent = `(cd ${JSON.stringify(path.join(repo, 'sub'))} && exec sleep 600) & exec cat`;
   execFileSync('tmux', ['-S', socket, '-f', '/dev/null', 'new-session', '-d', '-s', 'chat', '-c', dir, agent]);
-  execFileSync('tmux', ['-S', socket, 'new-session', '-d', '-s', 'plain', '-c', dir, 'cat']);
+  const inWorkspace = `(cd ${JSON.stringify(workspace)} && exec sleep 600) & exec cat`;
+  execFileSync('tmux', ['-S', socket, 'new-session', '-d', '-s', 'plain', '-c', dir, inWorkspace]);
   const found = parseScriptOutput(runRemote(home, adoptedSessionScript(adopted)));
   const plain = parseScriptOutput(runRemote(home, adoptedSessionScript({ socket, session: 'plain' })));
+  const named = parseScriptOutput(
+    runRemote(home, adoptedSessionScript({ socket, session: 'plain' }, path.join(repo, 'sub'))),
+  );
+  let unnamed = '';
+  try {
+    runRemote(home, adoptedSessionScript(adopted, path.join(root, 'nowhere')));
+  } catch (err) {
+    unnamed = String((err as { stderr?: Buffer }).stderr ?? err);
+  }
   let missing = '';
   try {
     runRemote(home, adoptedSessionScript({ socket, session: 'gone' }));
@@ -627,9 +639,14 @@ check(
     show({ found, missing, clients, sessions }),
   );
   check(
-    'an adopted session with no repo below it reports its own directory',
-    plain.CWD === dir && !plain.BASE,
+    'an adopted session whose agent works outside any repo reports the directory the agent works in',
+    plain.CWD === workspace && !plain.BASE,
     show(plain),
+  );
+  check(
+    "a directory named for an adopted session reports its repo and that repo's default branch, and one that does not exist fails",
+    named.CWD === repo && named.BASE === 'origin/main' && unnamed.includes('nowhere'),
+    show({ named, unnamed }),
   );
 }
 
