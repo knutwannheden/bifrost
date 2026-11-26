@@ -17,6 +17,8 @@ const api: BifrostAPI = {
 
   // Tasks
   createTask: (params) => ipcRenderer.invoke(IPC.CREATE_TASK, params),
+  listEpicTemplates: () => ipcRenderer.invoke(IPC.EPIC_TEMPLATES),
+  markEpicCheckedIn: (taskId, through) => ipcRenderer.invoke(IPC.EPIC_CHECK_IN, taskId, through),
   closeTask: (taskId) => ipcRenderer.invoke(IPC.CLOSE_TASK, taskId),
   stopTask: (taskId) => ipcRenderer.invoke(IPC.STOP_TASK, taskId),
   getSessionState: (taskId) => ipcRenderer.invoke(IPC.SESSION_STATE, taskId),

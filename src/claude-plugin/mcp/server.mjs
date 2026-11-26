@@ -4,9 +4,11 @@ import fs from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { readEpicTemplates } from './epic-templates.mjs';
 
 // ---------------------------------------------------------------------------
 // Bifrost API access
@@ -139,7 +141,12 @@ const server = new McpServer(
     version: '1.0.0',
   },
   {
-    instructions: [...(AGENT === 'claude' ? CLAUDE_MESSAGING : OTHER_MESSAGING)].join('\n'),
+    instructions: [
+      ...(AGENT === 'claude' ? CLAUDE_MESSAGING : OTHER_MESSAGING),
+      '',
+      'For a goal that needs several task sessions, use list_epic_templates to find a workflow and create_epic to start its coordinator.',
+      'Use message_task for epic coordination and get_epic to recover its recorded progress.',
+    ].join('\n'),
   },
 );
 
@@ -410,105 +417,90 @@ server.registerTool(
   },
 );
 
+const taskTarget = {
+  name: z.string().optional().describe('Short title shown in the task list.'),
+  repo: z
+    .string()
+    .optional()
+    .describe(
+      "The repo name, GitHub slug, or absolute path. Use the slug if more than one repo has the name. Defaults to the calling task's repo.",
+    ),
+  worktree: z
+    .string()
+    .optional()
+    .describe(
+      'Path to an existing worktree on the machine Bifrost runs on. This selects the repo and carries along its branch and uncommitted changes. Archiving removes a task worktree and keeps its branch. A primary checkout stays in place.',
+    ),
+  machine: z
+    .string()
+    .optional()
+    .describe(
+      `${
+        OWN_INSTANCE
+          ? `Omitted or 'local', the task runs on this machine, "${MACHINE}". 'ide' is the machine Bifrost's window runs on while it is connected. Other names come from list_machines.`
+          : 'Choose a machine by name from list_machines. Omitted, the task runs on the machine Bifrost runs on.'
+      } A task on another machine starts from a fresh worktree. Reserve the worktree option for tasks on this instance. Use message_task across machines.`,
+    ),
+  agent: z
+    .enum(['claude', 'codex', 'copilot'])
+    .optional()
+    .describe(
+      "The agent the task runs, defaulting to this session's agent. The task keeps its choice when machine defaults change.",
+    ),
+  model: z.string().optional().describe("Model as the chosen agent's --model flag names it."),
+  effort: z.string().optional().describe('Reasoning effort as the chosen agent names it.'),
+};
+
 server.registerTool(
   'create_task',
   {
     title: 'Create Task',
     description:
-      'Create a new Bifrost task. Spawns a coding agent session in a git worktree, fresh or one that already exists. The new task runs in the background. Works from any Claude Code session — specify repo by path if not running inside a Bifrost task. Called from inside a task, the new one is told who created it and how to reach them, so it can report back with the built-in SendMessage tool; to follow up on it yourself, find it in ListAgents and use SendMessage rather than waiting here.',
+      'Start a task session in a git worktree. From an epic, include the epic and work-item IDs in the prompt and use message_task to coordinate.',
     inputSchema: {
-      name: z
-        .string()
-        .optional()
-        .describe('Short task title (max ~50 chars, shown in tabs/history). Auto-generated from prompt if omitted.'),
-      repo: z
-        .string()
-        .optional()
-        .describe(
-          "Which repository to create the task in: the name Bifrost lists for it (e.g. 'my-repo'), a GitHub slug (e.g. 'org/my-repo'), or an absolute path (e.g. '~/git/org/my-repo'). A name shared by two repos is refused and names both slugs, so pass the slug for those. Required when not running inside a Bifrost task, unless 'worktree' is given.",
-        ),
-      worktree: z
-        .string()
-        .optional()
-        .describe(
-          "Path to a git worktree that already exists on the machine Bifrost runs on (e.g. '~/git/org/repo/.worktrees/feature'), for the task to run in instead of a fresh one. The task starts on the branch that worktree has checked out, with its uncommitted changes in place, so use this to hand over work already set up there. The repo is read from the worktree, which makes 'repo' unnecessary and overrides it. Archiving the task removes the worktree, leaving its branch, except where the path is the repo's primary checkout.",
-        ),
-      machine: z
-        .string()
-        .optional()
-        .describe(
-          `${
-            OWN_INSTANCE
-              ? `The machine to run the task on, when the user names one. Omitted or 'local', the task runs on this machine, "${MACHINE}". 'ide' is the machine Bifrost's window runs on, while that is connected. Any other name is a machine from Bifrost's settings there, and one it does not know is refused with the names it does.`
-              : "The machine to run the task on, by its name in Bifrost's settings (e.g. 'gpu-box'), when the user names one. Omitted, the task runs on the machine Bifrost runs on. A name Bifrost does not know is refused with the names it does."
-          } On another machine the repo is cloned there and the task starts from a fresh worktree, so naming one cannot be combined with 'worktree'. SendMessage does not cross machines, so a task elsewhere is not told how to reach its creator.`,
-        ),
+      ...taskTarget,
       prompt: z
         .string()
         .describe(
           "The prompt for the new task's session. Carry what only this session knows: the objective, the decisions taken and why, what was ruled out, what the user actually asked for. Point at everything else rather than transcribing it — file paths, issue and PR numbers, branch names, failing run ids — and say what to look for in each. The new task has its own tools and a fresh context window, so it reads a source faster than you can paraphrase one, and your paraphrase is the lossy copy. Unless you pass 'worktree', it starts from a fresh worktree on the repo's default branch, so a pointer only helps if it resolves there: absolute paths, or a branch it can check out. Write it from what you already have: researching it with file reads and commands spends your context to fill one that is empty anyway. Hand over what you would have looked up, and mark what you did not check as unverified.",
         ),
-      agent: z
-        .enum(['claude', 'codex', 'copilot'])
+      wait: z
+        .boolean()
         .optional()
-        .describe(
-          "The coding agent the new task runs. Omitted, it runs the agent this session runs. The task keeps it when its machine's agent changes.",
-        ),
-      model: z
-        .string()
-        .optional()
-        .describe(
-          "The model for the new task's agent, as that agent's own --model flag names it. Omitted, the agent's default.",
-        ),
-      effort: z
-        .string()
-        .optional()
-        .describe(
-          "The reasoning effort for the new task's agent, as that agent names its levels. Omitted, the agent's default.",
-        ),
+        .describe('Wait for creation and return the task ID. The default returns while creation is in progress.'),
     },
   },
-  async ({ name, repo, worktree, machine: asked, prompt, agent, model, effort }) => {
-    // The API this server reaches may be the IDE's, which cannot tell where "local" is.
-    const machine = asked === 'local' ? MACHINE || undefined : asked;
-    let repoId;
-    let repoPath;
+  createTask,
+);
 
-    if (TASK_ID) {
-      // The capped list need not include the caller, so look it up by id.
-      const caller = await apiCall('/find-task', { query: TASK_ID });
-      if (caller.ok) {
-        repoId = caller.task.repoId;
-      }
+async function createTask({ name, repo, worktree, machine: asked, prompt, agent, model, effort, wait = false, epic }) {
+  // A session names its own host when the IDE serves its API.
+  const machine = asked === 'local' ? MACHINE || undefined : asked;
+  let repoId;
+  const repoPath = worktree ? undefined : repo;
+
+  if (TASK_ID && !repoPath && !worktree) {
+    const caller = await apiCall('/find-task', { query: TASK_ID });
+    if (caller.ok) {
+      repoId = caller.task.repoId;
     }
+  }
 
-    // Explicit repo path overrides caller task's repo
-    if (repo) {
-      repoId = undefined;
-      repoPath = repo;
-    }
+  if (!repoId && !repoPath && !worktree) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: "No repo specified. Provide a 'repo' path or a 'worktree' path, or run inside a Bifrost task.",
+        },
+      ],
+      isError: true,
+    };
+  }
 
-    // Bifrost reads the repo off the worktree, which is more specific than either.
-    if (worktree) {
-      repoId = undefined;
-      repoPath = undefined;
-    }
-
-    if (!repoId && !repoPath && !worktree) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: "No repo specified. Provide a 'repo' path or a 'worktree' path, or run inside a Bifrost task.",
-          },
-        ],
-        isError: true,
-      };
-    }
-
-    // Bifrost tells the new task who created it and how to reach them; sending
-    // the creator's id is all that takes.
-    const result = await apiCall('/create-task', {
+  const result = await apiCall(
+    '/create-task',
+    {
       repoId,
       repoPath,
       worktreePath: worktree,
@@ -518,23 +510,157 @@ server.registerTool(
       createdByTaskId: TASK_ID || undefined,
       callerContext: process.env.BIFROST_CONTEXT,
       launch: { agent: agent ?? AGENT, model, effort },
-      async: true,
-    });
-    const taskName = name || 'new task';
-    return {
-      content: [
-        {
-          type: 'text',
-          text: result.pending
-            ? `Task "${taskName}" is being created${machine ? ` on ${machine}` : ''} and will appear in a new Bifrost tab shortly.${
-                (TASK_ID && !MACHINE) || process.env.BIFROST_CONTEXT === 'console'
-                  ? ' If it cannot be created, a message from Bifrost will say why.'
-                  : ''
-              }`
-            : `Task "${result.name}" created (id: ${result.id}, branch: ${result.branch}). It's running in a new tab.`,
-        },
-      ],
-    };
+      async: !wait,
+      epic,
+    },
+    wait ? { timeout: 0 } : undefined,
+  );
+  const taskName = name || 'new task';
+  const type = epic ? 'Epic' : 'Task';
+  return {
+    content: [
+      {
+        type: 'text',
+        text: result.pending
+          ? `${type} "${taskName}" is being created${machine ? ` on ${machine}` : ''} and will appear in a new Bifrost tab shortly.${
+              (TASK_ID && !MACHINE) || process.env.BIFROST_CONTEXT === 'console'
+                ? ' If it cannot be created, a message from Bifrost will say why.'
+                : ''
+            }`
+          : `${type} "${result.name}" created (id: ${result.id}, branch: ${result.branch}). It's running in a new tab.`,
+      },
+    ],
+  };
+}
+
+const pluginDir = fileURLToPath(new URL('..', import.meta.url));
+const nonBlank = z.string().trim().min(1);
+
+server.registerTool(
+  'list_epic_templates',
+  {
+    title: 'List Epic Templates',
+    description: 'Read the built-in workflow templates. Returns each template ID, title, and prompt text.',
+    inputSchema: {},
+  },
+  () => ({ content: [{ type: 'text', text: JSON.stringify(readEpicTemplates(pluginDir), null, 2) }] }),
+);
+
+server.registerTool(
+  'create_epic',
+  {
+    title: 'Create Epic',
+    description:
+      'Start one coordinator task for a goal and a plain-text workflow, then return its task ID. Its session creates the workers.',
+    inputSchema: {
+      ...taskTarget,
+      goal: nonBlank.describe('The outcome the epic should work toward.'),
+      template_id: nonBlank.optional().describe('A template ID from list_epic_templates. Supply an ID or inline text.'),
+      template_text: z.string().optional().describe('The exact workflow text for a custom or adapted template.'),
+    },
+  },
+  ({ goal, template_id: templateId, template_text: inlineText, ...task }) => {
+    if ((templateId === undefined) === (inlineText === undefined)) {
+      throw new Error('Supply exactly one of template_id and template_text');
+    }
+    const template =
+      templateId === undefined
+        ? inlineText
+        : readEpicTemplates(pluginDir).find((entry) => entry.id === templateId)?.text;
+    if (!template?.trim()) {
+      throw new Error(
+        templateId
+          ? `Unknown epic template "${templateId}". Run list_epic_templates for the IDs.`
+          : 'Template text is empty',
+      );
+    }
+    const name = task.name ?? goal.split(/\r?\n/, 1)[0].slice(0, 50);
+    return createTask({ ...task, name, epic: { goal, template, templateId }, wait: true });
+  },
+);
+
+const epicChange = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('item'),
+    id: nonBlank,
+    title: nonBlank,
+    status: z.enum(['open', 'done', 'dropped']),
+    taskId: nonBlank.optional(),
+    detail: nonBlank.optional(),
+  }),
+  z.object({
+    kind: z.literal('decision'),
+    id: nonBlank,
+    question: nonBlank.describe(
+      'For a user decision, ask a concrete question in plain language and state what approval would change.',
+    ),
+    status: z.enum(['open', 'awaiting-advice', 'needs-user', 'resolved']),
+    itemId: nonBlank.optional(),
+    recommendation: nonBlank
+      .optional()
+      .describe('Give the recommended choice and its practical reason in one short sentence.'),
+    options: z.array(nonBlank).optional(),
+    advisorTaskId: nonBlank.optional(),
+    answer: nonBlank.optional(),
+    decidedBy: z.enum(['coordinator', 'user']).optional(),
+    reference: nonBlank.optional().describe('The exact outline, revision, or artifact the decision concerns.'),
+    rationale: nonBlank.optional().describe('Supporting reasoning and technical evidence.'),
+  }),
+  z.object({ kind: z.literal('note'), text: nonBlank }),
+  z.object({ kind: z.literal('end'), text: nonBlank }),
+  z.object({ kind: z.literal('attach'), taskId: nonBlank }),
+]);
+
+async function epicCall(endpoint, body, key) {
+  const result = await apiCall(endpoint, { ...body, callerTaskId: TASK_ID || undefined });
+  if (!result.ok) throw new Error(result.error || 'The epic request failed');
+  return { content: [{ type: 'text', text: JSON.stringify(result[key], null, 2) }] };
+}
+
+server.registerTool(
+  'get_epic',
+  {
+    title: 'Get Epic',
+    description: 'Read an epic’s saved goal, workflow, members, work items, decisions, and results.',
+    inputSchema: { taskId: nonBlank.optional().describe('Epic task ID, defaulting to the calling task.') },
+  },
+  ({ taskId = TASK_ID }) => {
+    if (!taskId) throw new Error('Supply an epic task ID');
+    return epicCall('/epic/get', { taskId }, 'state');
+  },
+);
+
+server.registerTool(
+  'update_epic',
+  {
+    title: 'Update Epic',
+    description:
+      'Record a complete work item or decision, a progress note, the final outcome, or the ID of an existing task to attach. For the coordinating task.',
+    inputSchema: { change: epicChange },
+  },
+  ({ change }) => {
+    if (!TASK_ID) throw new Error('Run update_epic in the coordinator task');
+    return epicCall('/epic/update', { taskId: TASK_ID, change }, 'update');
+  },
+);
+
+server.registerTool(
+  'report_epic_result',
+  {
+    title: 'Report Epic Result',
+    description:
+      'Save a result or blocker for your epic assignment. Reuse the report ID if a submission needs retrying. Send a short message_task after saving so the coordinator can pick it up.',
+    inputSchema: {
+      epicId: nonBlank.describe("The coordinator's task ID."),
+      itemId: nonBlank.describe('The assigned work-item ID.'),
+      reportId: nonBlank.describe('A stable ID you choose for this report.'),
+      text: nonBlank.describe('Concise outcome or blocker and a reference to the evidence.'),
+      revision: nonBlank.optional().describe('The revision or artifact this result concerns.'),
+    },
+  },
+  ({ epicId, ...report }) => {
+    if (!TASK_ID) throw new Error('Run report_epic_result in the assigned member task');
+    return epicCall('/epic/report', { taskId: epicId, ...report }, 'update');
   },
 );
 

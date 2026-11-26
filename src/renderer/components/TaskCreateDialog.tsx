@@ -63,6 +63,11 @@ export default function TaskCreateDialog() {
   const [selectedRepoIds, setSelectedRepoIds] = useState<Set<string>>(new Set());
   const [agent, setAgent] = useState<AgentKind | ''>('');
   const [machine, setMachine] = useState('');
+  const [isEpic, setIsEpic] = useState(false);
+  const [templates, setTemplates] = useState<Awaited<ReturnType<typeof window.bifrost.listEpicTemplates>>>([]);
+  const [templatesError, setTemplatesError] = useState(false);
+  const [templateId, setTemplateId] = useState<string>();
+  const [templateDraft, setTemplateDraft] = useState<string>();
 
   const repoRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -85,7 +90,10 @@ export default function TaskCreateDialog() {
     branchRef.current.selectionEnd === branchRef.current.value.length &&
     branchRef.current.value.length > 0;
 
-  const filteredBranches = branches.filter((b) => {
+  const remoteEpic = isEpic && !!machine;
+  const originBranches = remoteEpic ? branches.filter((b) => b.startsWith('origin/')) : [];
+  const availableBranches = originBranches.length > 0 ? originBranches : branches;
+  const filteredBranches = availableBranches.filter((b) => {
     if (!branchSearch || branchInputFullySelected) return true;
     return b.toLowerCase().includes(branchSearch.toLowerCase());
   });
@@ -95,6 +103,34 @@ export default function TaskCreateDialog() {
   const defaultAgent = (machine && machines.find((m) => m.name === machine)?.agent) || state.config?.agent || 'claude';
   const existingInPlaceTask =
     inPlace && repo ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path) : undefined;
+  const selectedTemplate = templates.find((entry) => entry.id === (templateId ?? templates[0]?.id));
+  const templateText = templateDraft ?? selectedTemplate?.text ?? '';
+  const epic = isEpic
+    ? {
+        goal: prompt.trim(),
+        template: templateText,
+        ...(selectedTemplate?.text === templateText && { templateId: selectedTemplate.id }),
+      }
+    : undefined;
+
+  useEffect(() => {
+    if (!isEpic) return;
+    let cancelled = false;
+    window.bifrost
+      .listEpicTemplates()
+      .then((loaded) => {
+        if (!cancelled) {
+          setTemplates(loaded);
+          setTemplatesError(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTemplatesError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEpic]);
 
   useEffect(() => {
     setBranchFocusedIdx(0);
@@ -230,7 +266,7 @@ export default function TaskCreateDialog() {
   // Select branch when branches load or PR is detected
   useEffect(() => {
     if (branches.length === 0) return;
-    if (prBanner?.headBranch && prBanner.repoId === repoId) {
+    if (!remoteEpic && prBanner?.headBranch && prBanner.repoId === repoId) {
       if (!branches.includes(prBanner.headBranch)) {
         setBranches((prev) => [prBanner.headBranch!, ...prev]);
       }
@@ -238,13 +274,13 @@ export default function TaskCreateDialog() {
       setBranchSearch(prBanner.headBranch);
     } else {
       const repo = state.repos.find((r) => r.id === repoId);
-      const defaultBranch = pickDefaultBranch(branches, repo);
+      const defaultBranch = pickDefaultBranch(availableBranches, repo);
       if (defaultBranch) {
         setBranch(defaultBranch);
         setBranchSearch(defaultBranch);
       }
     }
-  }, [branches, prBanner]);
+  }, [branches, prBanner, remoteEpic]);
 
   const handleRepoSelect = (id: string) => {
     setRepoId(id);
@@ -285,6 +321,8 @@ export default function TaskCreateDialog() {
   };
 
   const handleSubmit = async () => {
+    if (loading || (epic && (!epic.goal || !epic.template.trim()))) return;
+    const brief = epic ? { epic } : prompt.trim() ? { prompt: prompt.trim() } : {};
     if (mode === 'multi') {
       if (selectedRepoIds.size < 2 || !taskName.trim()) return;
       setLoading(true);
@@ -294,7 +332,7 @@ export default function TaskCreateDialog() {
           multiRepoIds: [...selectedRepoIds],
           name: taskName.trim(),
           branch: '', // ignored for multi-repo
-          ...(prompt.trim() && { prompt: prompt.trim() }),
+          ...brief,
         });
         localStorage.setItem('bifrost:lastRepoId', '');
         dispatch({ type: 'ADD_TASK', task });
@@ -315,10 +353,10 @@ export default function TaskCreateDialog() {
       const task = await window.bifrost.createTask({
         repoId,
         name: taskName.trim(),
-        branch: inPlace ? '' : branch,
+        branch: inPlace ? '' : remoteEpic ? branch.replace(/^origin\//, '') : branch,
         ...(prInfo && !inPlace && !machine && { prInfo }),
         ...(inPlace && { inPlace: true }),
-        ...(prompt.trim() && { prompt: prompt.trim() }),
+        ...brief,
         ...(machine && { machine }),
         ...(agent && { launch: { agent } }),
       });
@@ -397,6 +435,26 @@ export default function TaskCreateDialog() {
     }
   };
 
+  const promptField = (
+    <div>
+      <label htmlFor="create-task-prompt" className="block text-xs text-secondary mb-1">
+        {isEpic ? 'Epic goal' : <ActionLabel text="Prompt" showHint />}
+      </label>
+      <FormTextarea
+        id="create-task-prompt"
+        ref={promptRef}
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.stopPropagation();
+        }}
+        placeholder={isEpic ? 'What should the epic accomplish?' : 'Initial prompt sent to the agent (optional)'}
+        rows={3}
+        className="w-full px-3 py-1.5 resize-y"
+      />
+    </div>
+  );
+
   return (
     <div
       ref={overlayRef}
@@ -406,10 +464,19 @@ export default function TaskCreateDialog() {
       onKeyDown={handleKeyDown}
     >
       <div
-        className="bg-surface rounded-lg border border-border-input w-[550px] shadow-xl"
+        className={`w-[550px] bg-surface rounded-lg border border-border-input shadow-xl ${
+          isEpic ? 'flex max-h-[calc(100%-2rem)] max-w-[calc(100%-2rem)] flex-col' : ''
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <OverlayHeader title="Create Task" onClose={close} />
+        <OverlayHeader title={isEpic ? 'Create Epic' : 'Create Task'} onClose={close} className="shrink-0">
+          {state.repos.length > 0 && (
+            <label className="flex items-center gap-2 text-xs text-secondary">
+              <input type="checkbox" checked={isEpic} onChange={(e) => setIsEpic(e.target.checked)} />
+              Epic
+            </label>
+          )}
+        </OverlayHeader>
 
         {state.repos.filter((r) => !r.multiTaskId).length > 1 && (
           <div className="px-4 pt-3">
@@ -430,7 +497,7 @@ export default function TaskCreateDialog() {
           </div>
         )}
 
-        <div className="p-4 space-y-4">
+        <div className={`p-4 space-y-4 ${isEpic ? 'min-h-0 overflow-y-auto' : ''}`}>
           {/* PR detection banner */}
           {prBanner && (
             <div className="flex items-center justify-between bg-accent/10 border border-accent-muted rounded-sm px-3 py-2">
@@ -539,25 +606,7 @@ export default function TaskCreateDialog() {
                   </div>
                 </div>
 
-                {/* Prompt */}
-                <div>
-                  <label className="block text-xs text-secondary mb-1">
-                    <ActionLabel text="Prompt" showHint={true} />
-                  </label>
-                  <FormTextarea
-                    ref={promptRef}
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') e.stopPropagation();
-                    }}
-                    placeholder="Initial prompt sent to the agent (optional)"
-                    rows={3}
-                    className="w-full px-3 py-1.5 resize-y"
-                  />
-                </div>
-
-                {error && <p className="text-xs text-danger">{error}</p>}
+                {promptField}
               </>
             ) : (
               <>
@@ -784,39 +833,65 @@ export default function TaskCreateDialog() {
                   )}
                 </div>
 
-                {/* Prompt */}
-                <div>
-                  <label className="block text-xs text-secondary mb-1">
-                    <ActionLabel text="Prompt" showHint={true} />
-                  </label>
-                  <FormTextarea
-                    ref={promptRef}
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Allow Enter in textarea without triggering form submit
-                      if (e.key === 'Enter') e.stopPropagation();
-                    }}
-                    placeholder="Initial prompt sent to the agent (optional)"
-                    rows={3}
-                    className="w-full px-3 py-1.5 resize-y"
-                  />
-                </div>
-
-                {error && <p className="text-xs text-danger">{error}</p>}
+                {promptField}
               </>
             ))}
+          {isEpic && (
+            <div className="space-y-2">
+              <label htmlFor="epic-template" className="block text-xs text-secondary">
+                Workflow template
+              </label>
+              <FormSelect
+                id="epic-template"
+                value={selectedTemplate?.id ?? ''}
+                className="w-full px-3 py-1.5"
+                onChange={(e) => {
+                  setTemplateId(e.target.value);
+                  setTemplateDraft(undefined);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.stopPropagation();
+                }}
+              >
+                {templates.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    {entry.title}
+                  </option>
+                ))}
+                <option value="">Custom workflow</option>
+              </FormSelect>
+              <FormTextarea
+                aria-label="Workflow text"
+                value={templateText}
+                onChange={(e) => {
+                  if (!selectedTemplate) setTemplateId('');
+                  setTemplateDraft(e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.stopPropagation();
+                }}
+                placeholder="Describe what the coordinator should assign, check, and report."
+                rows={5}
+                className="w-full px-3 py-1.5 resize-y"
+              />
+              {templatesError && (
+                <p className="text-xs text-muted">Built-in templates are unavailable. Enter a custom workflow.</p>
+              )}
+            </div>
+          )}
+          {error && <p className="text-xs text-danger">{error}</p>}
         </div>
 
         {/* Footer */}
         {state.repos.length > 0 && (
-          <OverlayFooter className="flex items-center gap-2">
+          <OverlayFooter className="flex shrink-0 items-center gap-2">
             <span className="text-xs text-faint">
               {mode === 'multi'
-                ? `${altSymbol}N name · ${altSymbol}P prompt · Enter create`
+                ? `${altSymbol}N name`
                 : `${altSymbol}R repo · ${altSymbol}N name · ${altSymbol}B branch · ${altSymbol}A agent${
                     machines.length > 0 ? ` · ${altSymbol}M machine` : ''
-                  } · ${altSymbol}P prompt · Enter create`}
+                  }`}
+              {` · ${altSymbol}P ${isEpic ? 'goal' : 'prompt'} · Enter create`}
             </span>
             <span className="flex-1" />
             <PrimaryButton
@@ -824,8 +899,10 @@ export default function TaskCreateDialog() {
               onClick={handleSubmit}
               disabled={
                 loading ||
-                (mode === 'single' && (!repoId || !taskName.trim() || (!inPlace && !branch))) ||
-                (mode === 'multi' && (selectedRepoIds.size < 2 || !taskName.trim()))
+                !taskName.trim() ||
+                (mode === 'single' && (!repoId || (!inPlace && !branch))) ||
+                (mode === 'multi' && selectedRepoIds.size < 2) ||
+                (!!epic && (!epic.goal || !epic.template.trim()))
               }
               className="px-4"
             >

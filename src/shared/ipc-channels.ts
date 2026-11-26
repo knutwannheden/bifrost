@@ -47,6 +47,8 @@ export const IPC = {
 
   // Tasks
   CREATE_TASK: 'task:create',
+  EPIC_TEMPLATES: 'epic:templates',
+  EPIC_CHECK_IN: 'epic:check-in',
   CLOSE_TASK: 'task:close',
   STOP_TASK: 'task:stop',
   SESSION_STATE: 'session:state',
@@ -220,6 +222,8 @@ export interface BifrostAPI {
 
   // Tasks
   createTask(params: CreateTaskParams): Promise<Task>;
+  listEpicTemplates(): Promise<Array<{ id: string; title: string; text: string }>>;
+  markEpicCheckedIn(taskId: string, through: number): Promise<number>;
   closeTask(taskId: string): Promise<void>;
   stopTask(taskId: string): Promise<Task>;
   /** Whether the task's session runs, is mid-turn, or holds text typed at its prompt, asked of the instance that owns it. */

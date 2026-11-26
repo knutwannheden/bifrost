@@ -7,9 +7,10 @@ import { promisify } from 'node:util';
 
 const execFile = promisify(execFileCb);
 
+import { createEpicState } from '../shared/epic.ts';
 import { IPC_STREAM } from '../shared/ipc-channels.ts';
 import { generateTaskName } from '../shared/name-generator.ts';
-import type { AgentKind, CreateTaskParams, DiffResult, Repo, Task } from '../shared/types.ts';
+import type { AgentKind, CreateTaskParams, DiffResult, EpicState, Repo, Task } from '../shared/types.ts';
 import { startWatching, stopWatching } from './activity-watcher.ts';
 import { agentLaunch } from './agents.ts';
 import { forgetChangeFeed } from './change-feed-service.ts';
@@ -18,9 +19,11 @@ import { lastConversationAt } from './claude-watcher.ts';
 import { loadConfig, saveConfig } from './config.ts';
 import { handOverConversation, remoteHandOver, switchAgent, transcriptFile } from './conversation-handover.ts';
 import { relatedBaseRef, resolveBaseRef } from './diff-service.ts';
+import { buildEpicPrompt } from './epic-templates.ts';
 import { emit } from './event-sink.ts';
 import { handOver, isInstanceMachine } from './instance-link.ts';
 import { PLUGIN_DEPLOY_DIR } from './integration-installer.ts';
+import { peerTasks } from './peers.ts';
 import { cancelTaskRequests, setWorktreePathResolver } from './permission-manager.ts';
 import {
   adoptedSessionScript,
@@ -52,7 +55,14 @@ import {
   killSession,
   runningLocalSessions,
 } from './session-manager.ts';
-import { loadTasks, saveInterrupted, saveTasks, saveTurnBoundaries, saveTurnBoundary } from './task-store.ts';
+import {
+  loadTasks,
+  saveEpicState,
+  saveInterrupted,
+  saveTasks,
+  saveTurnBoundaries,
+  saveTurnBoundary,
+} from './task-store.ts';
 import { summarizeTask } from './task-summarizer.ts';
 import { packTask, unpackScript } from './task-transfer.ts';
 import { generateTaskTitle } from './title-generator.ts';
@@ -129,6 +139,16 @@ export function updateTask(taskId: string, updates: Partial<Task>): Task {
   tasks[idx] = { ...tasks[idx], ...updates };
   saveTasks(tasks);
   return tasks[idx];
+}
+
+export function updateEpicState(taskId: string, epic: EpicState): Task {
+  const idx = tasks.findIndex((task) => task.id === taskId);
+  if (idx === -1 || !tasks[idx].epic) throw new Error(`Epic not found: ${taskId}`);
+  saveEpicState(taskId, epic);
+  const task = { ...tasks[idx], epic };
+  tasks[idx] = task;
+  emit(IPC_STREAM.TASK_UPDATED, task);
+  return task;
 }
 
 /**
@@ -335,7 +355,11 @@ export async function destroyTask(taskId: string): Promise<void> {
   saveTasks(tasks);
 }
 
-async function createMultiRepoTask(params: CreateTaskParams): Promise<Task> {
+async function createMultiRepoTask(
+  params: CreateTaskParams,
+  description: Pick<Task, 'epic' | 'summary'>,
+  prompt?: string,
+): Promise<Task> {
   const config = loadConfig();
   const selectedRepos = params.multiRepoIds!.map((id) => {
     const repo = config.repos.find((r: Repo) => r.id === id);
@@ -370,14 +394,11 @@ async function createMultiRepoTask(params: CreateTaskParams): Promise<Task> {
     status: 'running',
     hasUnread: false,
     createdAt: Date.now(),
-    ...(params.prompt ? { summary: params.prompt } : {}),
+    ...description,
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
     ...(params.launch ? { launch: params.launch } : {}),
   };
-  startLocalSession(
-    task,
-    params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
-  );
+  startLocalSession(task, prompt ? prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined);
 
   tasks.push(task);
   saveTasks(tasks);
@@ -398,6 +419,12 @@ function creatorCoordinates(createdByTaskId: string | undefined, taskId: string,
   if (!createdByTaskId) return '';
   // SendMessage reaches only sessions on the machine it is sent from, and a creator held by another instance runs elsewhere.
   const creator = tasks.find((t) => t.id === createdByTaskId);
+  if (creator?.epic || (!creator && peerTasks().some((t) => t.id === createdByTaskId && t.epic))) {
+    return (
+      `\n\n---\nThis task is Bifrost task ${taskId}. Epic ${createdByTaskId} created it. ` +
+      `Use message_task with taskId ${createdByTaskId} for questions and handoffs.`
+    );
+  }
   if (!creator || creator.machine !== machine) return '';
   const sessionName = getSessionName(createdByTaskId);
   if (!sessionName) return '';
@@ -466,15 +493,18 @@ export async function resolveTaskTarget(params: CreateTaskParams): Promise<TaskT
 }
 
 export async function createTaskCore(params: CreateTaskParams, target?: TaskTarget): Promise<Task> {
+  const epic = params.epic === undefined ? undefined : createEpicState(params.epic);
+  const prompt = epic ? buildEpicPrompt(epic) : params.prompt;
+  const description = epic ? { epic, summary: epic.goal } : prompt ? { summary: prompt } : {};
   if (params.multiRepoIds?.length) {
-    return createMultiRepoTask(params);
+    return createMultiRepoTask(params, description, prompt);
   }
 
   const { repo, adopted } = target ?? (await resolveTaskTarget(params));
   if (params.machine) {
-    const task = await createRemoteTask(params, repo, params.machine);
+    const task = await createRemoteTask(params, repo, params.machine, description, prompt);
     if (isInstanceMachine(params.machine)) await handOverOrKeep(params.machine, task);
-    return task;
+    return currentEpicTask(task);
   }
 
   // An adopted worktree's branch says what the work is.
@@ -537,14 +567,11 @@ export async function createTaskCore(params: CreateTaskParams, target?: TaskTarg
     hasUnread: false,
     createdAt: Date.now(),
     ...(inPlace && { inPlace: true }),
-    ...(params.prompt ? { summary: params.prompt } : {}),
+    ...description,
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
     ...(params.launch ? { launch: params.launch } : {}),
   };
-  startLocalSession(
-    task,
-    params.prompt ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined,
-  );
+  startLocalSession(task, prompt ? prompt + creatorCoordinates(params.createdByTaskId, taskId) : undefined);
 
   tasks.push(task);
   saveTasks(tasks);
@@ -671,7 +698,13 @@ async function localGitConfig(repoPath: string, key: string): Promise<string | u
  * Creates a task on another machine, in a worktree of a clone made there from
  * the repo's origin. Commits there carry the identity this repo commits with here.
  */
-async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: string): Promise<Task> {
+async function createRemoteTask(
+  params: CreateTaskParams,
+  repo: Repo,
+  machine: string,
+  description: Pick<Task, 'epic' | 'summary'>,
+  prompt?: string,
+): Promise<Task> {
   const host = getRemoteHost(machine);
   const info = await host.connectReady(params.launch?.agent ?? agentOn(machine));
   let url: string;
@@ -709,15 +742,13 @@ async function createRemoteTask(params: CreateTaskParams, repo: Repo, machine: s
     status: 'running',
     hasUnread: false,
     createdAt: Date.now(),
-    ...(params.prompt ? { summary: params.prompt } : {}),
+    ...description,
     ...(params.createdByTaskId ? { createdByTaskId: params.createdByTaskId } : {}),
     ...(params.launch ? { launch: params.launch } : {}),
   };
-  const prompt = params.prompt
-    ? params.prompt + creatorCoordinates(params.createdByTaskId, taskId, machine)
-    : undefined;
+  const initialPrompt = prompt ? prompt + creatorCoordinates(params.createdByTaskId, taskId, machine) : undefined;
   // Kept on the task, since the instance it may be handed to learns it from the record.
-  Object.assign(task, await writeRemoteSession(task, host, info, prompt));
+  Object.assign(task, await writeRemoteSession(task, host, info, initialPrompt));
 
   tasks.push(task);
   saveTasks(tasks);
@@ -925,7 +956,7 @@ export async function transferTaskCore(taskId: string, machine: string): Promise
       console.error(`[transfer] could not remove ${task.worktreePath}:`, err),
     );
   }
-  return updated;
+  return currentEpicTask(updated);
 }
 
 /** The working diff of a task on another machine, or against its base for scope 'all'. */
@@ -1124,13 +1155,18 @@ export function importTasks(handed: Task[], repos: Repo[]): string[] {
   for (const repo of repos) byId.set(repo.id, { ...byId.get(repo.id), ...repo });
   saveConfig({ ...config, repos: [...byId.values()] });
 
-  for (const t of handed) {
-    if (!tasks.some((x) => x.id === t.id)) tasks.push({ ...t, machine: undefined, unreachable: undefined });
-  }
-  saveTasks(tasks);
+  const existing = new Set(tasks.map((task) => task.id));
+  const fresh = handed.filter((task) => {
+    if (existing.has(task.id)) return false;
+    existing.add(task.id);
+    return true;
+  });
+  const imported = [...tasks, ...fresh.map((task) => ({ ...task, machine: undefined, unreachable: undefined }))];
+  saveTasks(imported);
+  tasks = imported;
 
   const running = runningLocalSessions();
-  for (const task of handed) {
+  for (const task of fresh) {
     if (task.status !== 'running' || hasSession(task.id)) continue;
     if (!running.has(task.id)) {
       pendingRestore.add(task.id);
@@ -1146,6 +1182,28 @@ export function importTasks(handed: Task[], repos: Repo[]): string[] {
   return handed.map((t) => t.id);
 }
 
+export function prepareTaskHandover(machine: string, taskIds: string[]): Task[] {
+  const selected = new Set(taskIds);
+  const transferred = (task: Task) => selected.has(task.id) && task.machine === machine;
+  const freeze = tasks.filter((task) => transferred(task) && task.epic && !task.epic.handoffPending);
+  if (freeze.length > 0) {
+    const frozenIds = new Set(freeze.map((task) => task.id));
+    const updated = tasks.map(
+      (task): Task =>
+        task.epic && frozenIds.has(task.id) ? { ...task, epic: { ...task.epic, handoffPending: true } } : task,
+    );
+    // Once the recipient may have imported the snapshot, the sender cannot safely resume writing.
+    saveTasks(updated);
+    tasks = updated;
+    for (const id of frozenIds) emit(IPC_STREAM.TASK_UPDATED, getTask(id));
+  }
+  return tasks.filter(transferred).map((task) => {
+    if (!task.epic?.handoffPending) return task;
+    const { handoffPending: _pending, ...epic } = task.epic;
+    return { ...task, epic };
+  });
+}
+
 /** Drops tasks that another instance now owns, leaving their worktrees and sessions as they are. */
 export function forgetTasks(ids: string[]): void {
   const gone = new Set(ids);
@@ -1159,6 +1217,11 @@ async function handOverOrKeep(machine: string, task: Task): Promise<void> {
   await handOver(machine, [task]).catch((err) =>
     console.warn(`[instances] ${task.id} stays here for now: ${(err as Error).message}`),
   );
+}
+
+function currentEpicTask(task: Task): Task {
+  if (!task.epic) return task;
+  return tasks.find(({ id }) => id === task.id) ?? peerTasks().find(({ id }) => id === task.id) ?? task;
 }
 
 function saveSummary(taskId: string, summary: string): void {

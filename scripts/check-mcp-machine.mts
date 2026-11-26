@@ -9,6 +9,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 let failed = 0;
 function check(name: string, ok: boolean, detail = '') {
@@ -23,9 +24,12 @@ if (!fs.existsSync(path.join(installed, '@modelcontextprotocol'))) {
 }
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'bifrost-mcp-')));
-fs.copyFileSync('src/claude-plugin/mcp/server.mjs', path.join(root, 'server.mjs'));
-fs.copyFileSync('src/claude-plugin/mcp/package.json', path.join(root, 'package.json'));
-fs.symlinkSync(installed, path.join(root, 'node_modules'));
+fs.cpSync('src/claude-plugin/mcp', path.join(root, 'mcp'), {
+  recursive: true,
+  filter: (file) => path.basename(file) !== 'node_modules',
+});
+fs.cpSync('src/claude-plugin/skills', path.join(root, 'skills'), { recursive: true });
+fs.symlinkSync(installed, path.join(root, 'mcp', 'node_modules'));
 
 /** A server on the named machine whose home holds these port files, spoken to over stdio. */
 function serve(machine: string, ports: Record<string, string | number>, extra: NodeJS.ProcessEnv = {}) {
@@ -35,7 +39,7 @@ function serve(machine: string, ports: Record<string, string | number>, extra: N
   const env: NodeJS.ProcessEnv = { ...process.env, HOME: home, BIFROST_MACHINE: machine };
   for (const key of ['BIFROST_API_PORT', 'BIFROST_TASK_ID', 'BIFROST_CONTEXT', 'BIFROST_AGENT']) delete env[key];
   Object.assign(env, extra);
-  const server = spawn('node', [path.join(root, 'server.mjs')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+  const server = spawn('node', [path.join(root, 'mcp', 'server.mjs')], { env, stdio: ['pipe', 'pipe', 'ignore'] });
   let out = '';
   let next = 1;
   server.stdout.on('data', (chunk) => {
@@ -105,16 +109,28 @@ try {
   }
 
   // A machine without its own instance, whose API is the IDE's.
-  const bodies: Array<Record<string, unknown>> = [];
+  const requests: Array<{ route: string; body: Record<string, unknown> }> = [];
+  const lastBody = () => requests.at(-1)?.body;
   const api = http.createServer((req, res) => {
     let data = '';
     req.on('data', (chunk) => {
       data += chunk;
     });
     req.on('end', () => {
-      bodies.push(JSON.parse(data || '{}'));
+      const body = JSON.parse(data || '{}') as Record<string, unknown>;
+      const route = req.url ?? '';
+      requests.push({ route, body });
+      const answers: Record<string, object> = {
+        '/find-task': { ok: true, task: { repoId: 'caller-repo' } },
+        '/create-task': body.async
+          ? { ok: true, pending: true }
+          : { id: 'new-task', name: body.name, branch: 'new-task' },
+        '/epic/get': { ok: true, state: { epic: { goal: 'Ship a change' }, members: [] } },
+        '/epic/update': { ok: true, update: { seq: 1 } },
+        '/epic/report': { ok: true, update: { seq: 2 } },
+      };
       res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify({ ok: true, pending: true }));
+      res.end(JSON.stringify(answers[route] ?? {}));
     });
   });
   await new Promise<void>((resolve) => api.listen(0, '127.0.0.1', resolve));
@@ -127,20 +143,20 @@ try {
     });
     check(
       'create_task sends "local" as the machine the session runs on',
-      bodies.at(-1)?.machine === 'recipes',
-      JSON.stringify(bodies),
+      lastBody()?.machine === 'recipes',
+      JSON.stringify(requests),
     );
 
     const codex = serve('recipes', { 'api-port': (api.address() as AddressInfo).port }, { BIFROST_AGENT: 'codex' });
     try {
       await codex.ready;
       await codex.request('tools/call', { name: 'create_task', arguments: { repo: '/r', prompt: 'x' } });
-      const inherited = bodies.at(-1)?.launch;
+      const inherited = lastBody()?.launch;
       await codex.request('tools/call', {
         name: 'create_task',
         arguments: { repo: '/r', prompt: 'x', agent: 'claude', model: 'opus', effort: 'high' },
       });
-      const named = bodies.at(-1)?.launch;
+      const named = lastBody()?.launch;
       check(
         "create_task gives the new task its creator's agent, or the agent, model and effort it names",
         JSON.stringify(inherited) === JSON.stringify({ agent: 'codex' }) &&
@@ -149,6 +165,95 @@ try {
       );
     } finally {
       codex.close();
+    }
+
+    const epic = serve('', { 'api-port': (api.address() as AddressInfo).port }, { BIFROST_TASK_ID: 'epic-root' });
+    try {
+      await epic.ready;
+      const call = (name: string, args: object = {}) => epic.request('tools/call', { name, arguments: args });
+      const replyText = (result: Record<string, unknown>) => {
+        const content = result.content as Array<{ text: string }> | undefined;
+        return content?.[0]?.text ?? '';
+      };
+      const catalogReply = await call('list_epic_templates');
+      const templates = JSON.parse(replyText(catalogReply) || '[]') as Array<{
+        id: string;
+        title: string;
+        text: string;
+      }>;
+      const preset = templates.find((template) => template.id === 'implement-review');
+      const presetResult = await call('create_epic', {
+        name: 'Ship a change',
+        goal: 'A tested fix',
+        template_id: 'implement-review',
+      });
+      const chosen = lastBody();
+      const inlineText = '  Investigate.\n\nThen report.\n';
+      const inlineResult = await call('create_epic', { goal: 'Learn why', template_text: inlineText, repo: '/r' });
+      const inline = lastBody();
+      const requestCount = requests.length;
+      const ambiguous = await call('create_epic', {
+        goal: 'A tested fix',
+        template_id: 'implement-review',
+        template_text: 'Investigate',
+      });
+      check(
+        'create_epic saves the chosen prose and returns an actual task id',
+        !!preset?.title &&
+          !!preset.text &&
+          isDeepStrictEqual(
+            templates.map(({ id }) => id),
+            ['implement-review', 'implement-review-measure', 'investigate-in-parallel'],
+          ) &&
+          replyText(presetResult).includes('new-task') &&
+          replyText(inlineResult).includes('new-task') &&
+          isDeepStrictEqual(chosen?.epic, { goal: 'A tested fix', template: preset.text, templateId: preset.id }) &&
+          isDeepStrictEqual(inline?.epic, { goal: 'Learn why', template: inlineText }) &&
+          chosen?.async === false &&
+          chosen?.repoId === 'caller-repo' &&
+          inline?.repoPath === '/r' &&
+          ambiguous?.isError === true &&
+          requests.length === requestCount,
+        JSON.stringify({ templates, chosen, inline, presetResult, ambiguous }),
+      );
+
+      const queued = await call('create_task', { prompt: 'Do work', name: 'queued' });
+      const queuedBody = lastBody();
+      const confirmed = await call('create_task', { prompt: 'Do work', wait: true });
+      check(
+        'create_task waits for an actual task id only when requested',
+        queuedBody?.async === true &&
+          replyText(queued).includes('is being created') &&
+          lastBody()?.async === false &&
+          replyText(confirmed).includes('new-task'),
+      );
+
+      const change = { kind: 'decision', id: 'scope', question: 'Change scope?', status: 'needs-user' };
+      const before = requests.length;
+      const state = await call('get_epic');
+      await call('update_epic', { change });
+      await call('report_epic_result', { epicId: 'other-epic', itemId: 'review', reportId: 'first', text: 'Ready' });
+      check(
+        'epic tools address the coordinator and carry the calling task identity',
+        replyText(state).includes('Ship a change') &&
+          isDeepStrictEqual(requests.slice(before), [
+            { route: '/epic/get', body: { taskId: 'epic-root', callerTaskId: 'epic-root' } },
+            { route: '/epic/update', body: { taskId: 'epic-root', callerTaskId: 'epic-root', change } },
+            {
+              route: '/epic/report',
+              body: {
+                taskId: 'other-epic',
+                callerTaskId: 'epic-root',
+                itemId: 'review',
+                reportId: 'first',
+                text: 'Ready',
+              },
+            },
+          ]),
+        JSON.stringify(requests.slice(before)),
+      );
+    } finally {
+      epic.close();
     }
   } finally {
     server.close();

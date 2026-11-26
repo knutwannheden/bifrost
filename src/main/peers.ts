@@ -30,6 +30,7 @@ export const PER_TASK: ReadonlySet<IpcChannel> = new Set<IpcChannel>([
   IPC.GET_LAST_CHANGED_FILE,
   IPC.GET_TOKEN_USAGE,
   IPC.CHANGE_FEED_LOAD,
+  IPC.EPIC_CHECK_IN,
   IPC.GET_SESSION_METRICS,
   IPC.SET_ACTIVE_TASK_ID,
   IPC.GET_LAST_ASSISTANT_MESSAGE,
@@ -257,6 +258,10 @@ function relay(peer: Peer, event: { channel: EventChannel; args: unknown[] }): v
     const [id, archived] = args as [string, boolean];
     const task = peer.tasks.find((t) => t.id === id);
     if (task) upsert(peer, { ...task, status: archived ? 'archived' : 'stopped' });
+  } else if (channel === IPC_STREAM.TASK_TURN_BOUNDARY) {
+    const [id, at] = args as [string, number];
+    const task = peer.tasks.find((t) => t.id === id);
+    if (task) task.lastTurnBoundaryAt = Math.max(task.lastTurnBoundaryAt ?? 0, at);
   } else if (channel === IPC_STREAM.REPOS_CHANGED) {
     // The window keeps the repos here. The peer's serve only to match its tasks' repos to them.
     saveRepos(peer, args[0] as Repo[]);

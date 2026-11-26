@@ -4,7 +4,7 @@ import { loadConfig } from './config.ts';
 import { connectPeer, IDE, peerPort, peerTasks, postToPeer, refreshPeer, registerPeer } from './peers.ts';
 import { getRemoteHost, localClaudeValue, remoteClonePath } from './remote-host.ts';
 import { machinesInUse } from './restore-plan.ts';
-import { forgetTasks, getTasks } from './task-service.ts';
+import { forgetTasks, getTasks, prepareTaskHandover } from './task-service.ts';
 
 /** Whether the named machine runs its own instance, which owns the tasks there. */
 export function isInstanceMachine(name: string | undefined): boolean {
@@ -61,6 +61,7 @@ export function connectMachinesInUse(): void {
 
 /** One handover at a time per machine, since each settings save asks for one. */
 const handingOver = new Map<string, Promise<void>>();
+const retryingHandover = new Set<string>();
 
 /**
  * Hands tasks to the machine's instance, with their repos at the paths they
@@ -73,6 +74,10 @@ export function handOver(machine: string, handed: Task[]): Promise<void> {
     .then(() => {
       const still = handed.filter((t) => getTasks().some((held) => held.id === t.id));
       return still.length > 0 ? handOverNow(machine, still) : undefined;
+    })
+    .catch((error: unknown) => {
+      if (pendingEpicHandover(machine).length > 0) retryEpicHandover(machine);
+      throw error;
     });
   handingOver.set(machine, next);
   return next;
@@ -80,12 +85,42 @@ export function handOver(machine: string, handed: Task[]): Promise<void> {
 
 async function handOverNow(machine: string, handed: Task[]): Promise<void> {
   const info = await getRemoteHost(machine).connectReady();
+  await connectPeer(machine);
   const repos = loadConfig()
     .repos.filter((r) => handed.some((t) => t.repoId === r.id))
     .map((r) => ({ ...r, path: `${info.home}/${remoteClonePath(r)}` }));
-  const answer = await postToPeer(machine, '/import-tasks', { tasks: handed, repos });
-  forgetTasks((answer.ids as string[] | undefined) ?? []);
+  const ordinary = handed.filter((task) => !task.epic);
+  if (ordinary.length > 0) {
+    const answer = await postToPeer(machine, '/import-tasks', { tasks: ordinary, repos });
+    forgetTasks((answer.ids as string[] | undefined) ?? []);
+  }
+  const epics = prepareTaskHandover(
+    machine,
+    handed.filter((task) => task.epic).map((task) => task.id),
+  );
+  if (epics.length > 0) {
+    const { ids } = await postToPeer(machine, '/epic/import', { tasks: epics, repos });
+    const confirmed = epics.filter((task) => Array.isArray(ids) && ids.includes(task.id)).map((task) => task.id);
+    forgetTasks(confirmed);
+    if (confirmed.length !== epics.length) throw new Error('The destination has not confirmed every epic handover');
+  }
   await refreshPeer(machine);
+}
+
+function pendingEpicHandover(machine: string): Task[] {
+  return getTasks().filter((task) => task.machine === machine && task.epic?.handoffPending);
+}
+
+function retryEpicHandover(machine: string): void {
+  if (retryingHandover.has(machine)) return;
+  retryingHandover.add(machine);
+  setTimeout(() => {
+    retryingHandover.delete(machine);
+    if (!isInstanceMachine(machine)) return;
+    void handOver(machine, pendingEpicHandover(machine)).catch((error: Error) =>
+      console.warn(`[instances] ${machine} epic handover: ${error.message}`),
+    );
+  }, 30_000).unref();
 }
 
 function sendPreferences(port: number, machine: Machine): Promise<void> {

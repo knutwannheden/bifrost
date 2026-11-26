@@ -374,11 +374,13 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
         }
 
         case 'view.changeFeed': {
-          if (!s.config) break;
+          const activeTask = s.tasks.find((t) => t.id === s.activeTaskId);
+          if (!s.config || !activeTask) break;
+          const dockPreference = activeTask.epic ? 'epicActivityOpen' : 'changeFeedOpen';
           // The same key reaches the dock and dismisses it: it opens and focuses,
           // focuses when open, and closes only from inside.
-          if (s.config.changeFeedOpen && changeFeedHasFocus()) {
-            const updated = { ...s.config, changeFeedOpen: false };
+          if (s.config[dockPreference] && changeFeedHasFocus()) {
+            const updated = { ...s.config, [dockPreference]: false };
             dispatch({ type: 'SET_CONFIG', config: updated });
             window.bifrost.saveConfig(updated);
             // Closing unmounts whatever held focus, so the terminal has to be
@@ -386,8 +388,8 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
             focusTaskTerminal(s, s.activeTaskId);
             break;
           }
-          if (!s.config.changeFeedOpen) {
-            const updated = { ...s.config, changeFeedOpen: true };
+          if (!s.config[dockPreference]) {
+            const updated = { ...s.config, [dockPreference]: true };
             dispatch({ type: 'SET_CONFIG', config: updated });
             window.bifrost.saveConfig(updated);
           }

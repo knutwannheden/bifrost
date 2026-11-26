@@ -170,10 +170,13 @@ export default function RightIconBar() {
 
   const { showDiff: isDiffActive, diffMode } = getActiveDiffState(state);
   const hasUnreadNotifications = state.notifications.some((n) => !n.read);
+  const activeTask = state.tasks.find((task) => task.id === state.activeTaskId);
+  const dockPreference = activeTask?.epic ? 'epicActivityOpen' : 'changeFeedOpen';
+  const dockOpen = !!activeTask && !!state.config?.[dockPreference];
 
   const toggleChangeFeed = () => {
-    if (!state.config) return;
-    const updated = { ...state.config, changeFeedOpen: !state.config.changeFeedOpen };
+    if (!state.config || !activeTask) return;
+    const updated = { ...state.config, [dockPreference]: !dockOpen };
     dispatch({ type: 'SET_CONFIG', config: updated });
     window.bifrost.saveConfig(updated);
   };
@@ -221,9 +224,9 @@ export default function RightIconBar() {
       </IconButton>
 
       <IconButton
-        label="Change feed"
+        label={activeTask?.epic ? 'Epic activity' : 'Change feed'}
         shortcut={getDisplayString('view.changeFeed')}
-        active={state.config?.changeFeedOpen ?? false}
+        active={dockOpen}
         onClick={toggleChangeFeed}
       >
         <ChangeFeedIcon />

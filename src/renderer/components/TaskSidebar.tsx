@@ -7,20 +7,16 @@ import { terminalRegistry } from '../hooks/useTerminal';
 import { nextActiveTaskId } from '../utils/next-active-task';
 import { repoDisplayName, repoNameFromWorktree } from '../utils/paths';
 import { matchesTaskSearch } from '../utils/search';
-import { getTimeBucket, TIME_BUCKETS } from '../utils/time-buckets';
+import { taskSections } from '../utils/task-groups';
 import CloseButton from './CloseButton';
 import FormInput from './FormInput';
 import Kbd from './Kbd';
 import TaskTab from './TaskTab';
 
 const DEFAULT_WIDTH = 240;
-// Pinned tasks leave their time group for this one, so every task still belongs
-// to exactly one group and the header counts stay true.
-const PINNED = 'Pinned';
-const GROUPS = [PINNED, ...TIME_BUCKETS] as const;
 // Anything older than the current week starts folded, so dormant work costs
 // one line per group rather than one line per task.
-const DEFAULT_COLLAPSED: (typeof GROUPS)[number][] = ['This week', 'Last week', 'This month', 'Older'];
+const DEFAULT_COLLAPSED = ['This week', 'Last week', 'This month', 'Older'];
 
 export default function TaskSidebar() {
   const { state, dispatch } = useApp();
@@ -29,6 +25,7 @@ export default function TaskSidebar() {
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState(0);
   const [filterFocused, setFilterFocused] = useState(false);
+  const [collapsedEpics, setCollapsedEpics] = useState<Set<string>>(() => new Set());
   const filterRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const filterShortcut = useKeymap().getDisplayString('nav.filterTasks');
@@ -63,10 +60,7 @@ export default function TaskSidebar() {
 
   const openTasks = state.tasks.filter((t) => t.status !== 'archived');
 
-  const recency = (t: Task) => t.lastTurnBoundaryAt ?? t.createdAt;
-  const sorted = [...openTasks].sort((a, b) => recency(b) - recency(a));
-
-  const repoNameFor = (task: (typeof sorted)[number]) => {
+  const repoNameFor = (task: Task) => {
     const repo = state.repos.find((r) => r.id === task.repoId);
     return repo ? repoDisplayName(repo) : repoNameFromWorktree(task.worktreePath);
   };
@@ -74,25 +68,26 @@ export default function TaskSidebar() {
   const filtering = filter.trim().length > 0;
   const matchedIds = filtering
     ? new Set(
-        sorted
+        openTasks
           // The PR number lives beside the task, not on it, so it is passed in.
           // Written with its hash so both 8559 and #8559 find the same task.
           .filter((t) => matchesTaskSearch(t, repoNameFor(t), filter, prs[t.id] ? `#${prs[t.id].number}` : ''))
           .map((t) => t.id),
       )
     : null;
-  // Keeps the row you are looking at from vanishing as you type.
-  const shown = matchedIds ? sorted.filter((t) => matchedIds.has(t.id) || t.id === state.activeTaskId) : sorted;
-
   const pinnedIds = config?.pinnedTaskIds ?? [];
-
-  const groups = new Map<string, typeof sorted>();
-  for (const task of shown) {
-    const bucket = pinnedIds.includes(task.id) ? PINNED : getTimeBucket(recency(task));
-    const list = groups.get(bucket);
-    if (list) list.push(task);
-    else groups.set(bucket, [task]);
-  }
+  const sections = taskSections(openTasks, {
+    pinnedIds,
+    collapsedBuckets: collapsed,
+    collapsedEpics,
+    activeTaskId: state.activeTaskId,
+    matchedIds,
+  });
+  const visibleTaskIds = sections.flatMap(({ rows }) => rows.map(({ task }) => task.id));
+  useFlipList(
+    listRef,
+    sections.map(({ bucket, rows }) => `${bucket}:${rows.map(({ task }) => task.id).join(',')}`).join('|'),
+  );
 
   const toggle = (bucket: string) => {
     const next = collapsed.includes(bucket) ? collapsed.filter((b) => b !== bucket) : [...collapsed, bucket];
@@ -102,20 +97,6 @@ export default function TaskSidebar() {
       window.bifrost.saveConfig(updated);
     }
   };
-
-  // A filter overrides folds, since a hidden match defeats it, and an unfiltered
-  // fold still shows the active task's row — so this is not simply "skip folded
-  // buckets". Shared by the published order and the rendered rows below.
-  const visibleTasksFor = (bucket: string) => {
-    const tasks = groups.get(bucket) ?? [];
-    if (filtering) return tasks;
-    return collapsed.includes(bucket) ? tasks.filter((t) => t.id === state.activeTaskId) : tasks;
-  };
-
-  const shownGroups = GROUPS.filter((b) => groups.has(b));
-  const visibleTaskIds = shownGroups.flatMap((b) => visibleTasksFor(b).map((t) => t.id));
-  // Group headers shift when a group gains or loses rows, so they move with them.
-  useFlipList(listRef, shownGroups.map((b) => `${b}:${visibleTasksFor(b).length}`).join('|'));
 
   // The active task's row is listed whether or not it matches, and it usually
   // sorts first, so the cursor starts on the first real match instead.
@@ -131,13 +112,22 @@ export default function TaskSidebar() {
     setSelected(firstMatch);
   }, [filter]);
 
-  const togglePin = (taskId: string) => {
-    const next = pinnedIds.includes(taskId) ? pinnedIds.filter((id) => id !== taskId) : [...pinnedIds, taskId];
+  const togglePin = (rootId: string, groupPins: string[]) => {
+    const next = groupPins.length > 0 ? pinnedIds.filter((id) => !groupPins.includes(id)) : [...pinnedIds, rootId];
     if (config) {
       const updated = { ...config, pinnedTaskIds: next };
       dispatch({ type: 'SET_CONFIG', config: updated });
       window.bifrost.saveConfig(updated);
     }
+  };
+
+  const toggleEpic = (id: string) => {
+    setCollapsedEpics((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -225,13 +215,11 @@ export default function TaskSidebar() {
         </div>
       </div>
       <div ref={listRef} className="flex-1 overflow-y-auto">
-        {filtering && groups.size === 0 ? (
+        {filtering && sections.length === 0 ? (
           <div className="text-sm text-muted text-center py-4">No matching tasks</div>
         ) : null}
-        {shownGroups.map((bucket) => {
-          const tasks = groups.get(bucket) ?? [];
+        {sections.map(({ bucket, count, rows }) => {
           const isCollapsed = !filtering && collapsed.includes(bucket);
-          const visibleTasks = visibleTasksFor(bucket);
           const headerClass =
             'flex w-full items-center gap-1 px-2 py-1 bg-surface-alt text-xs font-semibold text-secondary uppercase tracking-wider';
           return (
@@ -241,7 +229,7 @@ export default function TaskSidebar() {
                 <div className={headerClass} data-flip-key={`group:${bucket}`}>
                   <span className="w-3 shrink-0" />
                   <span className="truncate">{bucket}</span>
-                  <span className="ml-auto text-muted">{tasks.length}</span>
+                  <span className="ml-auto text-muted">{count}</span>
                 </div>
               ) : (
                 <button
@@ -252,11 +240,22 @@ export default function TaskSidebar() {
                 >
                   <span className="w-3 shrink-0">{isCollapsed ? '▸' : '▾'}</span>
                   <span className="truncate">{bucket}</span>
-                  <span className="ml-auto text-muted">{tasks.length}</span>
+                  <span className="ml-auto text-muted">{count}</span>
                 </button>
               )}
-              {visibleTasks.map((task) => (
-                <div key={task.id} data-flip-key={task.id}>
+              {rows.map(({ task, rootId, child, foldable, pinIds }) => (
+                <div key={task.id} data-flip-key={task.id} className={child ? 'pl-8' : 'relative'}>
+                  {foldable && (
+                    <button
+                      type="button"
+                      aria-expanded={!collapsedEpics.has(task.id)}
+                      aria-label={`${collapsedEpics.has(task.id) ? 'Expand' : 'Collapse'} ${task.name}`}
+                      className="absolute inset-y-0 left-1 z-10 w-5 text-xs text-muted hover:text-primary transition-colors"
+                      onClick={() => toggleEpic(task.id)}
+                    >
+                      {collapsedEpics.has(task.id) ? '▸' : '▾'}
+                    </button>
+                  )}
                   <TaskTab
                     task={task}
                     repoName={repoNameFor(task)}
@@ -278,8 +277,10 @@ export default function TaskSidebar() {
                         dispatch({ type: 'UPDATE_TASK', task: updated });
                       });
                     }}
-                    isPinned={pinnedIds.includes(task.id)}
-                    onTogglePin={() => togglePin(task.id)}
+                    isPinned={pinIds.length > 0}
+                    onTogglePin={() => togglePin(rootId, pinIds)}
+                    epicGroup={child || !!task.epic}
+                    epicDisclosure={foldable}
                     onRegenerateTitle={async () => {
                       try {
                         const result = await window.bifrost.regenerateTaskTitle(task.id);

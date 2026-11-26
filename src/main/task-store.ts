@@ -1,4 +1,4 @@
-import type { Task, TaskCuration, TaskOutcome } from '../shared/types';
+import type { EpicState, Task, TaskCuration, TaskOutcome } from '../shared/types';
 import { getDb, transaction } from './db.ts';
 
 // biome-ignore lint/suspicious/noExplicitAny: row objects from SQLite have dynamic fields
@@ -32,6 +32,7 @@ function rowToTask(row: Row): Task {
   if (row.agent != null) task.agent = row.agent;
   if (row.launch != null) task.launch = JSON.parse(row.launch);
   if (row.adopted != null) task.adopted = JSON.parse(row.adopted);
+  if (row.epic != null) task.epic = JSON.parse(row.epic);
 
   if (row.cur_outcome != null) {
     const curation: TaskCuration = {
@@ -55,8 +56,8 @@ const UPSERT_SQL = `INSERT OR REPLACE INTO tasks (
   created_at, archived_at, terminal_title, summary, is_external, in_place,
   session_history, claude_active, cur_outcome, cur_confidence, cur_reason,
   cur_pr_state, cur_branch_merged, cur_classified_at, cur_user_override, cur_user_note,
-  created_by_task_id, last_turn_boundary_at, interrupted_at, machine, agent, launch, adopted
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  created_by_task_id, last_turn_boundary_at, interrupted_at, machine, agent, launch, adopted, epic
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
 function taskParams(t: Task) {
   return [
@@ -92,12 +93,17 @@ function taskParams(t: Task) {
     t.agent ?? null,
     t.launch ? JSON.stringify(t.launch) : null,
     t.adopted ? JSON.stringify(t.adopted) : null,
+    t.epic ? JSON.stringify(t.epic) : null,
   ];
 }
 
 /** Stamped several times a turn, so it writes one row rather than the table. */
 export function saveTurnBoundary(taskId: string, at: number): void {
   getDb().prepare('UPDATE tasks SET last_turn_boundary_at = ? WHERE id = ?').run(at, taskId);
+}
+
+export function saveEpicState(taskId: string, epic: EpicState): void {
+  getDb().prepare('UPDATE tasks SET epic = ? WHERE id = ?').run(JSON.stringify(epic), taskId);
 }
 
 /** Written for every task cut off at once, so one transaction covers them all. */

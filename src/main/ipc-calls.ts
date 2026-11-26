@@ -26,6 +26,8 @@ import { findTranscriptMatch, getClaudeJsonlPath } from './context-store';
 import { getCuratorState, runCuratorNow } from './curator-service';
 import { getDiff, getDiffStats, getFileStatuses, getRangeDiff, resolveDiffBase } from './diff-service';
 import { applyReclaim, scanReclaimable } from './disk-reclaim-service';
+import { markEpicCheckedIn } from './epic-service';
+import { listEpicTemplates } from './epic-templates';
 import { emit } from './event-sink';
 import { getGitLog } from './git-log-service';
 import { scanRecentRepos } from './history-scanner';
@@ -151,6 +153,10 @@ export const calls: Partial<Record<IpcChannel, (...args: any[]) => unknown>> = {
   [IPC.CREATE_TASK]: async (params: CreateTaskParams) => {
     return createTaskCore(params);
   },
+
+  [IPC.EPIC_TEMPLATES]: listEpicTemplates,
+  [IPC.EPIC_CHECK_IN]: (taskId: string, through: number) =>
+    markEpicCheckedIn(taskId, through).epic?.checkedThrough ?? 0,
 
   [IPC.CLOSE_TASK]: async (taskId: string) => {
     killSession(taskId);

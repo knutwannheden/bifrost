@@ -99,6 +99,7 @@ export interface Task {
   terminalTitle?: string;
   /** The task whose agent asked for this one, by id: a name can be changed, an id cannot. */
   createdByTaskId?: string;
+  epic?: EpicState;
   /** Auto-generated one-sentence summary of what the task is doing */
   summary?: string;
   /** True if this task has no managed worktree (e.g. resumed external session) */
@@ -115,6 +116,39 @@ export interface Task {
   interruptedAt?: number;
   curation?: TaskCuration;
 }
+
+export interface EpicState {
+  goal: string;
+  template: string;
+  templateId?: string;
+  updates: EpicUpdate[];
+  checkedThrough: number;
+  handoffPending?: true;
+}
+
+export type EpicChange =
+  | { kind: 'item'; id: string; title: string; status: 'open' | 'done' | 'dropped'; taskId?: string; detail?: string }
+  | {
+      kind: 'decision';
+      id: string;
+      question: string;
+      status: 'open' | 'awaiting-advice' | 'needs-user' | 'resolved';
+      itemId?: string;
+      recommendation?: string;
+      options?: string[];
+      advisorTaskId?: string;
+      answer?: string;
+      decidedBy?: 'coordinator' | 'user';
+      reference?: string;
+      rationale?: string;
+    }
+  | { kind: 'note' | 'end'; text: string }
+  | { kind: 'attach'; taskId: string }
+  | { kind: 'report'; itemId: string; reportId: string; text: string; revision?: string };
+
+export type EpicUpdate = EpicChange & { seq: number; at: number; authorTaskId: string };
+
+export type EpicWorkItem = Extract<EpicChange, { kind: 'item' }> & { addedSeq: number };
 
 export interface Note {
   id: string; // UUID
@@ -170,6 +204,7 @@ export interface BifrostConfig {
   sidebarHidden?: boolean;
   /** The change feed dock, which starts closed and keeps its width once resized. */
   changeFeedOpen?: boolean;
+  epicActivityOpen?: boolean;
   changeFeedWidth?: number;
   /**
    * Whether the feed shows a worktree change only while one of the session's own
@@ -225,6 +260,7 @@ export interface CreateTaskParams {
   worktreePath?: string;
   /** Initial prompt sent to Claude as the first message */
   prompt?: string;
+  epic?: Pick<EpicState, 'goal' | 'template' | 'templateId'>;
   /** The task whose agent asked for this one, when one did */
   createdByTaskId?: string;
   /** Repo IDs for multi-repo task — when set, repoId/branch/inPlace/prInfo are ignored */

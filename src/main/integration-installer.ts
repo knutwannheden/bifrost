@@ -317,7 +317,7 @@ function cleanupOldIntegration(): void {
   }
 }
 
-function getPluginSourceDir(): string {
+export function getPluginSourceDir(): string {
   // In dev: __dirname is .vite/build, so ../../src/claude-plugin exists
   const devRoot = path.resolve(__dirname, '..', '..');
   const devPlugin = path.join(devRoot, 'src', 'claude-plugin');

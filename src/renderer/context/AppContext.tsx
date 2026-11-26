@@ -134,6 +134,7 @@ export type AppAction =
   | { type: 'SET_VISIBLE_TASK_IDS'; taskIds: string[] }
   | { type: 'FOCUS_SIDEBAR_FILTER' }
   | { type: 'FOCUS_CHANGE_FEED' }
+  | { type: 'SET_EPIC_CHECK_IN'; taskId: string; through: number }
   | { type: 'SET_CHANGE_FEED_SELECTION'; selection: { filePath: string; line?: number } | null };
 
 const initialState: AppState = {
@@ -273,7 +274,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SYNC_TASKS':
       return { ...state, tasks: syncTasks(state.tasks, action.tasks) };
     case 'ADD_TASK':
-      return { ...state, tasks: [...state.tasks, action.task] };
+      return state.tasks.some((task) => task.id === action.task.id)
+        ? state
+        : { ...state, tasks: [...state.tasks, action.task] };
     case 'REMOVE_TASK': {
       const newTasks = state.tasks.filter((t) => t.id !== action.taskId);
       const activeTasks = newTasks.filter((t) => t.status !== 'archived');
@@ -499,6 +502,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, sidebarFilterFocus: state.sidebarFilterFocus + 1 };
     case 'FOCUS_CHANGE_FEED':
       return { ...state, changeFeedFocus: state.changeFeedFocus + 1 };
+    case 'SET_EPIC_CHECK_IN':
+      return {
+        ...state,
+        tasks: state.tasks.map((task) =>
+          task.id === action.taskId && task.epic && task.epic.checkedThrough < action.through
+            ? { ...task, epic: { ...task.epic, checkedThrough: action.through } }
+            : task,
+        ),
+      };
     case 'SET_CHANGE_FEED_SELECTION':
       return { ...state, changeFeedSelection: action.selection };
     default:

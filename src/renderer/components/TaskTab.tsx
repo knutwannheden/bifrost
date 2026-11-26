@@ -21,6 +21,8 @@ interface TaskTabProps {
   onRegenerateTitle: () => Promise<void>;
   isPinned: boolean;
   onTogglePin: () => void;
+  epicGroup?: boolean;
+  epicDisclosure?: boolean;
   search: string;
   isSelected: boolean;
   pr?: TaskPr;
@@ -61,6 +63,8 @@ export default function TaskTab({
   onRegenerateTitle,
   isPinned,
   onTogglePin,
+  epicGroup,
+  epicDisclosure,
   search,
   isSelected,
   pr,
@@ -197,12 +201,15 @@ export default function TaskTab({
   // The bar carries one colour at a time, so a task working on top of output
   // nobody has read yet holds the top of its pulse still to say so.
   const holdCap = showPulse && !isActive && task.hasUnread;
+  const pinLabel = `${isPinned ? 'Unpin' : 'Pin'}${epicGroup ? ' epic' : ''}`;
 
   return (
     <>
       <button
         ref={buttonRef}
-        className={`group relative flex w-full items-center px-3 py-1.5 text-left transition-colors ${
+        className={`group relative flex w-full items-center py-1.5 pr-3 text-left transition-colors ${
+          epicDisclosure ? 'pl-7' : 'pl-3'
+        } ${
           isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
         } ${isSelected ? 'ring-1 ring-inset ring-accent' : ''} ${task.status === 'stopped' || task.unreachable ? 'opacity-60' : ''}`}
         style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
@@ -232,6 +239,7 @@ export default function TaskTab({
             <span className="truncate">
               <Highlight text={repoName} search={search} />
             </span>
+            {task.epic ? <span className="shrink-0 text-accent-hover">Epic</span> : null}
             {task.machine ? (
               <span className="shrink-0 rounded-sm bg-surface-alt px-1 text-secondary">{task.machine}</span>
             ) : null}
@@ -244,7 +252,7 @@ export default function TaskTab({
           {/* biome-ignore lint/a11y/useSemanticElements: can't nest <button> inside parent <button> */}
           <span
             role="button"
-            title={isPinned ? 'Unpin' : 'Pin'}
+            title={pinLabel}
             className={`transition-colors cursor-pointer ${
               isPinned ? 'text-accent hover:text-primary' : 'text-muted hover:text-primary'
             }`}
@@ -309,7 +317,7 @@ export default function TaskTab({
                 onTogglePin();
               }}
             >
-              {isPinned ? 'Unpin' : 'Pin'}
+              {pinLabel}
             </button>
             <button
               type="button"

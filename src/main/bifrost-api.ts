@@ -4,10 +4,11 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import type { AgentKind, BifrostConfig, Repo, Task } from '../shared/types';
+import type { AgentKind, BifrostConfig, CreateTaskParams, Repo, Task } from '../shared/types';
 
 const execFile = promisify(execFileCb);
 
+import { projectEpic } from '../shared/epic';
 import { IPC_STREAM, type IpcChannel } from '../shared/ipc-channels';
 import {
   forgetTask,
@@ -22,11 +23,21 @@ import { applyClaudeConfigDir, claudeProjectDir } from './claude-paths';
 import { addMachine, loadConfig, removeMachine, saveConfig } from './config';
 import { CONSOLE_SESSION_ID } from './console-service';
 import { getDiff } from './diff-service';
+import { getEpic, reportEpicResult, updateEpic } from './epic-service';
 import { BELL, emit, listening, subscribe } from './event-sink';
 import { calls } from './ipc-calls';
 import { deleteNote, listNotes } from './note-store';
 import { relayMessage } from './oneshot';
-import { connectPeer, disconnectPeer, forwardTaskRoute, IDE, peerTasks, postToPeer, registerPeer } from './peers';
+import {
+  connectPeer,
+  disconnectPeer,
+  forwardTaskRoute,
+  IDE,
+  peerPort,
+  peerTasks,
+  postToPeer,
+  registerPeer,
+} from './peers';
 import { cancelTaskRequests, checkExistingRules, createRequest } from './permission-manager';
 import { markPrIndexStale } from './pr-index';
 import {
@@ -301,18 +312,63 @@ async function closeTask(task: Task, archive: boolean): Promise<void> {
   emit(IPC_STREAM.TASK_CLOSED, task.id, archive);
 }
 
+const VIA_IDE_ROUTES = new Set(['/message-task', '/epic/get', '/epic/update', '/epic/report']);
+
 /** The routes that act on one task, named by the request. */
 const FORWARDED_ROUTES = new Set([
+  ...VIA_IDE_ROUTES,
   '/close-task',
   '/get-task-diff',
   '/get-activity-log',
   '/wake-task',
   '/open-task',
   '/send-prompt',
-  '/message-task',
   '/list-notes',
   '/delete-note',
 ]);
+
+async function forwardApiTaskRoute(route: string, body: Record<string, unknown>) {
+  const viaIde = VIA_IDE_ROUTES.has(route);
+  const here = process.env.BIFROST_MACHINE;
+  const forwarded = await forwardTaskRoute(route, viaIde && !here ? { ...body, viaIde: true } : body);
+  if (forwarded || !viaIde || !here || body.viaIde === true || !peerPort(IDE)) return forwarded;
+  return postToPeer(IDE, route, { ...body, viaIde: true });
+}
+
+function relatedEpicTasks(taskId: string, taskIds: string[]): Task[] {
+  const all = [...getTasks(), ...peerTasks()];
+  const related = new Set(taskIds);
+  const members = all.filter((task) => task.createdByTaskId === taskId || related.has(task.id));
+  const creators = new Set(members.map((task) => task.createdByTaskId));
+  return all.filter(
+    (task) =>
+      task.id === taskId ||
+      task.createdByTaskId === taskId ||
+      related.has(task.id) ||
+      (task.epic &&
+        (creators.has(task.id) ||
+          task.epic.updates.some((update) => update.kind === 'attach' && related.has(update.taskId)))),
+  );
+}
+
+async function epicInventory(taskId: string, related: unknown[]) {
+  const local = getTasks();
+  const peers = peerTasks();
+  let network: Task[] = [];
+  if (process.env.BIFROST_MACHINE && peerPort(IDE)) {
+    const epic = local.find((task) => task.id === taskId)?.epic;
+    const taskIds = [...(epic ? projectEpic(epic).attachedTaskIds : []), ...related].filter(
+      (id): id is string => typeof id === 'string',
+    );
+    try {
+      const { tasks } = await postToPeer(IDE, '/epic/inventory', { taskId, taskIds });
+      if (Array.isArray(tasks)) network = tasks;
+    } catch {
+      // Local work can continue while the IDE is away.
+    }
+  }
+  return [...new Map([...peers, ...network, ...local].map((task) => [task.id, task])).values()];
+}
 
 async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
   if (req.method !== 'POST') {
@@ -322,14 +378,16 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
 
   const body = await readJsonBody(req);
 
-  // A request about a task another instance owns is answered by that instance.
-  // A peer's list can still hold a task handed over to this instance, so the
-  // task's presence here decides first.
+  // A local task record takes precedence over a peer cache until the epic freezes for handover.
   const named = body.taskId ?? body.callerTaskId;
-  const ownTask = typeof named === 'string' && getTasks().some((t) => t.id === named);
-  if (req.url && FORWARDED_ROUTES.has(req.url) && !ownTask) {
+  const ownTask = getTasks().find((t) => t.id === named);
+  if (
+    req.url &&
+    FORWARDED_ROUTES.has(req.url) &&
+    (!ownTask || (ownTask.epic?.handoffPending && VIA_IDE_ROUTES.has(req.url)))
+  ) {
     try {
-      const answer = await forwardTaskRoute(req.url, body);
+      const answer = await forwardApiTaskRoute(req.url, body);
       if (answer) {
         jsonResponse(res, answer);
         return;
@@ -411,9 +469,48 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     }
 
     // Tasks another instance hands this one. The sender forgets them once this answers.
-    case '/import-tasks': {
+    case '/import-tasks':
+    case '/epic/import': {
       const { tasks: handed = [], repos = [] } = body as { tasks?: Task[]; repos?: Repo[] };
       jsonResponse(res, { ids: importTasks(handed, repos) });
+      return;
+    }
+
+    case '/epic/inventory': {
+      if (process.env.BIFROST_MACHINE) {
+        errorResponse(res, 'The IDE has the inventory of all connected machines', 404);
+        return;
+      }
+      const { taskId, taskIds } = body;
+      if (typeof taskId !== 'string' || !Array.isArray(taskIds) || !taskIds.every((id) => typeof id === 'string')) {
+        errorResponse(res, 'taskId and taskIds are required');
+        return;
+      }
+      jsonResponse(res, { tasks: relatedEpicTasks(taskId, taskIds) });
+      return;
+    }
+
+    case '/epic/get':
+    case '/epic/update':
+    case '/epic/report': {
+      const { taskId, callerTaskId, change } = body;
+      if (typeof taskId !== 'string' || (callerTaskId !== undefined && typeof callerTaskId !== 'string')) {
+        errorResponse(res, 'A task id is required');
+        return;
+      }
+      const changeFields = change as { taskId?: unknown; advisorTaskId?: unknown } | undefined;
+      const inventory = await epicInventory(taskId, [callerTaskId, changeFields?.taskId, changeFields?.advisorTaskId]);
+      try {
+        if (req.url === '/epic/get') {
+          jsonResponse(res, { ok: true, state: getEpic(taskId, inventory) });
+        } else if (req.url === '/epic/update') {
+          jsonResponse(res, { ok: true, update: updateEpic(taskId, callerTaskId, change, inventory) });
+        } else {
+          jsonResponse(res, { ok: true, update: reportEpicResult(taskId, callerTaskId, body, inventory) });
+        }
+      } catch (err) {
+        errorResponse(res, (err as Error).message);
+      }
       return;
     }
 
@@ -589,6 +686,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         repoId,
         repoPath,
         worktreePath,
+        repoSlug,
         name,
         branch,
         branchName,
@@ -596,10 +694,12 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         createdByTaskId,
         machine: asked,
         launch,
+        epic,
       } = body as {
         repoId?: string;
         repoPath?: string;
         worktreePath?: string;
+        repoSlug?: string;
         name?: string;
         branch?: string;
         branchName?: string;
@@ -607,6 +707,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         createdByTaskId?: string;
         machine?: string;
         launch?: Task['launch'];
+        epic?: CreateTaskParams['epic'];
       };
       if (!repoId && !repoPath && !worktreePath) {
         errorResponse(res, 'either repoId, repoPath or worktreePath is required');
@@ -618,8 +719,9 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       );
       const here = process.env.BIFROST_MACHINE;
       const machine = asked === 'local' || asked === here || (!here && asked === IDE) ? undefined : asked;
+      const repos = loadConfig().repos;
       const params = {
-        repoId,
+        repoId: (repoSlug && repos.find((repo) => repo.githubPath === repoSlug)?.id) || repoId,
         repoPath,
         worktreePath,
         name,
@@ -629,11 +731,18 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
         createdByTaskId,
         machine,
         launch,
+        epic,
       };
       // Only the IDE knows the machines, so a machine's instance has it create a task for anywhere else.
       // It waits for the answer, so a failure is reported here, to whoever asked.
       if (here && machine) {
-        const created = postToPeer(IDE, '/create-task', { ...body, async: false, callerContext: undefined }).then(
+        const sourceSlug = repos.find((repo) => repo.id === repoId)?.githubPath;
+        const created = postToPeer(IDE, '/create-task', {
+          ...body,
+          repoSlug: sourceSlug,
+          async: false,
+          callerContext: undefined,
+        }).then(
           (task) => ({ ...task, machine: task.machine ?? IDE }),
           (err: Error) => {
             throw new Error(`${IDE}: ${err.message}`);

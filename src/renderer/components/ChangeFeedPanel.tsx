@@ -9,6 +9,7 @@ import { type WordRange, wordRanges } from '../utils/inline-diff';
 import { type HighlightedToken, highlightLines } from '../utils/syntax-highlight';
 import DiffLineTokens from './DiffLineTokens';
 import DiffStatsBadge from './DiffStatsBadge';
+import EpicActivity from './EpicActivity';
 import Kbd from './Kbd';
 import OverlayFooter from './OverlayFooter';
 import SimpleMarkdown from './SimpleMarkdown';
@@ -169,9 +170,11 @@ export default function ChangeFeedPanel() {
   const { state, dispatch } = useApp();
   const { getDisplayString } = useKeymap();
   const config = state.config;
-  const open = config?.changeFeedOpen ?? false;
   const activeTask = state.tasks.find((t) => t.id === state.activeTaskId);
   const taskId = activeTask?.id;
+  const isEpic = !!activeTask?.epic;
+  const dockPreference = isEpic ? 'epicActivityOpen' : 'changeFeedOpen';
+  const open = !!activeTask && !!config?.[dockPreference];
 
   const [items, setItems] = useState<FeedItem[]>([]);
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
@@ -184,7 +187,7 @@ export default function ChangeFeedPanel() {
   const width = dragWidth ?? config?.changeFeedWidth ?? DEFAULT_WIDTH;
 
   useEffect(() => {
-    if (!open || !taskId) {
+    if (!open || !taskId || isEpic) {
       setItems([]);
       return;
     }
@@ -202,14 +205,20 @@ export default function ChangeFeedPanel() {
     return () => {
       cancelled = true;
     };
-  }, [open, taskId]);
+  }, [open, taskId, isEpic]);
 
   useEffect(() => {
-    if (!open || !taskId) return;
+    if (!open || !taskId || isEpic) return;
     return window.bifrost.onChangeFeed((id, next) => {
       if (id === taskId) setItems(next);
     });
-  }, [open, taskId]);
+  }, [open, taskId, isEpic]);
+
+  useEffect(() => {
+    if (!open || !isEpic) return;
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    dispatch({ type: 'SET_CHANGE_FEED_SELECTION', selection: null });
+  }, [open, taskId, isEpic, dispatch]);
 
   useEffect(() => {
     if (state.changeFeedFocus === 0) return;
@@ -217,10 +226,10 @@ export default function ChangeFeedPanel() {
   }, [state.changeFeedFocus]);
 
   useEffect(() => {
-    if (!pinned) return;
+    if (!pinned || isEpic) return;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [items, pinned]);
+  }, [items, pinned, isEpic]);
 
   const changes = useMemo(() => items.filter((i): i is FeedChange => i.kind === 'change'), [items]);
   const defaultExpanded = useMemo(() => new Set(changes.slice(-EXPANDED_TAIL).map((c) => c.id)), [changes]);
@@ -261,7 +270,12 @@ export default function ChangeFeedPanel() {
       tabIndex={-1}
       onMouseDown={() => containerRef.current?.focus()}
       onKeyDown={(e) => {
-        if (e.key === 'ArrowDown') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          focusTaskTerminal(state, state.activeTaskId);
+        } else if (isEpic) {
+          return;
+        } else if (e.key === 'ArrowDown') {
           e.preventDefault();
           step(1);
         } else if (e.key === 'ArrowUp') {
@@ -270,9 +284,6 @@ export default function ChangeFeedPanel() {
         } else if (e.key === 'Enter') {
           const change = changes.find((c) => c.id === selectedId);
           if (change) openInIde(change.filePath, change.hunks[0]?.newStart);
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          focusTaskTerminal(state, state.activeTaskId);
         }
       }}
       className="relative flex flex-col bg-surface border-l-2 border-border-default shrink-0 focus:outline-hidden focus:border-accent-hover focus-within:border-accent-hover"
@@ -307,12 +318,15 @@ export default function ChangeFeedPanel() {
       <div
         ref={scrollRef}
         onScroll={(e) => {
+          if (isEpic) return;
           const el = e.currentTarget;
           setPinned(el.scrollHeight - el.scrollTop - el.clientHeight < PIN_SLACK_PX);
         }}
         className="flex-1 min-h-0 overflow-y-auto px-2 py-2"
       >
-        {items.length === 0 ? (
+        {activeTask?.epic ? (
+          <EpicActivity key={activeTask.id} task={activeTask} epic={activeTask.epic} />
+        ) : items.length === 0 ? (
           <div className="text-sm text-muted text-center py-4">Nothing yet</div>
         ) : (
           items.map((item) => {
@@ -369,9 +383,15 @@ export default function ChangeFeedPanel() {
 
       <OverlayFooter className="shrink-0">
         <div className="flex items-center gap-2 text-xs text-faint">
-          <span>↑↓ select</span>
-          <span>·</span>
-          <span>Enter open</span>
+          {isEpic ? (
+            <span>Tab actions</span>
+          ) : (
+            <>
+              <span>↑↓ select</span>
+              <span>·</span>
+              <span>Enter open</span>
+            </>
+          )}
           <span>·</span>
           <span>Esc terminal</span>
           <span className="flex-1" />
