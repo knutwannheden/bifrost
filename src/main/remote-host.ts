@@ -86,13 +86,26 @@ export function sessionIdScript(taskId: string, sessionId: string): string {
   return `printf '%s\\n' ${shQuote(sessionId)} > "$HOME"/${sessionDir(taskId)}/session-id`;
 }
 
-/** Prints CWD, the directory of a session something else started there, and fails when no such session runs. */
+/**
+ * Prints CWD, the work tree of the deepest process in a session something else started there,
+ * else the pane's directory, and BASE, that work tree's default branch. Fails when no such session runs.
+ */
 export function adoptedSessionScript(target: { socket: string; session: string }): string {
   const tmux = ['tmux', ...serverFlags(target.socket)].map(shQuote).join(' ');
+  const pane = shQuote(`=${target.session}:`);
   return [
     `${tmux} has-session -t ${shQuote(`=${target.session}`)} || exit 1`,
-    `cwd=$(${tmux} display-message -p -t ${shQuote(`=${target.session}:`)} '#{pane_current_path}') || exit 1`,
-    `printf 'CWD=%s\\n' "$cwd"`,
+    `cwd=$(${tmux} display-message -p -t ${pane} '#{pane_current_path}') || exit 1`,
+    `pid=$(${tmux} display-message -p -t ${pane} '#{pane_pid}') || exit 1`,
+    // A wrapper such as a login shell can sit elsewhere while the agent below it works in a repo.
+    `dir_of() { readlink "/proc/$1/cwd" 2>/dev/null || lsof -a -p "$1" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p'; }`,
+    'top=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)',
+    'while pid=$(pgrep -P "$pid" | tail -n 1) && [ -n "$pid" ]; do',
+    '  d=$(dir_of "$pid") && t=$(git -C "$d" rev-parse --show-toplevel 2>/dev/null) && top=$t',
+    'done',
+    `printf 'CWD=%s\\n' "\${top:-$cwd}"`,
+    `[ -n "$top" ] && printf 'BASE=%s\\n' "$(git -C "$top" symbolic-ref -q --short refs/remotes/origin/HEAD)"`,
+    'exit 0',
   ].join('\n');
 }
 

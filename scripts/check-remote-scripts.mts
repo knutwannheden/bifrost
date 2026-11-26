@@ -582,12 +582,23 @@ check(
 {
   const home = path.join(root, 'adopt-home');
   const dir = path.join(root, 'adopt dir');
+  const repo = path.join(root, 'adopt repo');
   fs.mkdirSync(home);
   fs.mkdirSync(dir);
+  fs.mkdirSync(path.join(repo, 'sub'), { recursive: true });
+  const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { stdio: 'pipe' });
+  git('init', '-q');
+  git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'first');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main');
   const socket = path.join(root, 'devpod.sock');
   const adopted = { socket, session: 'chat' };
-  execFileSync('tmux', ['-S', socket, '-f', '/dev/null', 'new-session', '-d', '-s', 'chat', '-c', dir, 'cat']);
-  const cwd = parseScriptOutput(runRemote(home, adoptedSessionScript(adopted))).CWD;
+  // The agent runs as a child of a wrapper whose own directory is no repo.
+  const agent = `(cd ${JSON.stringify(path.join(repo, 'sub'))} && exec sleep 600) & exec cat`;
+  execFileSync('tmux', ['-S', socket, '-f', '/dev/null', 'new-session', '-d', '-s', 'chat', '-c', dir, agent]);
+  execFileSync('tmux', ['-S', socket, 'new-session', '-d', '-s', 'plain', '-c', dir, 'cat']);
+  const found = parseScriptOutput(runRemote(home, adoptedSessionScript(adopted)));
+  const plain = parseScriptOutput(runRemote(home, adoptedSessionScript({ socket, session: 'plain' })));
   let missing = '';
   try {
     runRemote(home, adoptedSessionScript({ socket, session: 'gone' }));
@@ -604,12 +615,21 @@ check(
   const clients = execFileSync('tmux', ['-S', socket, 'list-clients', '-F', '#{client_control_mode}']).toString();
   client.stdin.end();
   await new Promise((r) => client.on('exit', r));
-  const sessions = execFileSync('tmux', ['-S', socket, 'list-sessions', '-F', '#{session_name}']).toString().trim();
+  const sessions = execFileSync('tmux', ['-S', socket, 'list-sessions', '-F', '#{session_name}']).toString();
   execFileSync('tmux', ['-S', socket, 'kill-server']);
   check(
-    'an adopted session reports its directory, a missing one fails, and a control client joins it and leaves it running',
-    cwd === dir && /can't find session/.test(missing) && clients.trim() === '1' && sessions === 'chat',
-    show({ cwd, missing, clients, sessions }),
+    "an adopted session reports the repo its agent works in and that repo's default branch, a missing one fails, and a control client joins it and leaves it running",
+    found.CWD === repo &&
+      found.BASE === 'origin/main' &&
+      /can't find session/.test(missing) &&
+      clients.trim() === '1' &&
+      sessions.includes('chat'),
+    show({ found, missing, clients, sessions }),
+  );
+  check(
+    'an adopted session with no repo below it reports its own directory',
+    plain.CWD === dir && !plain.BASE,
+    show(plain),
   );
 }
 

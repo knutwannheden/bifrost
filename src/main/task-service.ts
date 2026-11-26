@@ -963,13 +963,13 @@ export async function adoptSessionCore(params: {
   );
   if (open) return open.status === 'running' ? open : reopenTaskCore(open.id);
   const adopted = { socket, session };
-  const { CWD } = parseScriptOutput(await getRemoteHost(machine).exec(adoptedSessionScript(adopted)));
+  const { CWD, BASE } = parseScriptOutput(await getRemoteHost(machine).exec(adoptedSessionScript(adopted)));
   const task: Task = {
     id: randomUUID(),
     name: params.name || `${session} on ${machine}`,
     repoId: '',
     machine,
-    baseBranch: '',
+    baseBranch: BASE ?? '',
     worktreePath: CWD,
     status: 'running',
     hasUnread: false,
