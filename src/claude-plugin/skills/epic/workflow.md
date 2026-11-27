@@ -21,7 +21,7 @@ Your task is the coordinator. Follow the goal and workflow text and adapt the pl
 | Undo | Assign a specific corrective action and verify what it reversed. |
 | End | Record the outcome and any remaining work. |
 
-Record an open item with a stable ID before dispatching it. Use `create_task` with `wait: true` to get the worker's task ID, then record the assignment on the item. If creation times out, reconcile the members and worker acknowledgements before launching a replacement. To assign an existing task from outside the group, attach its task ID and keep its original creator as provenance.
+Record an open item with a stable ID before dispatching it. Use `create_task` with `wait: true` to get the worker's task ID, then record the assignment on the item. Name each worker after its work item, such as "fix V3 type tables (F2)". The epic's group in the task list already shows which epic it belongs to. If creation times out, reconcile the members and worker acknowledgements before launching a replacement. To assign an existing task from outside the group, attach its task ID and keep its original creator as provenance.
 
 Pass a role's requested `agent`, `model`, `effort`, and `machine` to `create_task`. Use `list_machines` to resolve a configured name. If the assignment requires specific memory, free disk, CPU cores, or exclusive access, verify that the host can provide it and use its resource claim where configured. Record a blocker and ask for a decision if a required host or capability is unavailable.
 
