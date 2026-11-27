@@ -189,21 +189,28 @@ try {
       });
       const chosen = lastBody();
       const inlineText = '  Investigate.\n\nThen report.\n';
-      const inlineResult = await call('create_epic', { goal: 'Learn why', template_text: inlineText, repo: '/r' });
+      const inlineResult = await call('create_epic', {
+        name: 'Learn why',
+        goal: 'Learn why',
+        template_text: inlineText,
+        repo: '/r',
+      });
       const inline = lastBody();
       const requestCount = requests.length;
       const ambiguous = await call('create_epic', {
+        name: 'Ship a change',
         goal: 'A tested fix',
         template_id: 'implement-review',
         template_text: 'Investigate',
       });
+      const unnamed = await call('create_epic', { goal: 'A tested fix', template_id: 'plan-first' });
       check(
         'create_epic saves the chosen prose and returns an actual task id',
         !!preset?.title &&
           !!preset.text &&
           isDeepStrictEqual(
             templates.map(({ id }) => id),
-            ['implement-review', 'implement-review-measure', 'investigate-in-parallel'],
+            ['implement-review', 'implement-review-measure', 'investigate-in-parallel', 'plan-first'],
           ) &&
           replyText(presetResult).includes('new-task') &&
           replyText(inlineResult).includes('new-task') &&
@@ -213,8 +220,9 @@ try {
           chosen?.repoId === 'caller-repo' &&
           inline?.repoPath === '/r' &&
           ambiguous?.isError === true &&
+          unnamed?.isError === true &&
           requests.length === requestCount,
-        JSON.stringify({ templates, chosen, inline, presetResult, ambiguous }),
+        JSON.stringify({ templates, chosen, inline, presetResult, ambiguous, unnamed }),
       );
 
       const queued = await call('create_task', { prompt: 'Do work', name: 'queued' });

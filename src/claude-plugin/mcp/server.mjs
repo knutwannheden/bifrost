@@ -554,6 +554,7 @@ server.registerTool(
       'Start one coordinator task for a goal and a plain-text workflow, then return its task ID. Its session creates the workers.',
     inputSchema: {
       ...taskTarget,
+      name: nonBlank.describe('Short title shown in the task list.'),
       goal: nonBlank.describe('The outcome the epic should work toward.'),
       template_id: nonBlank.optional().describe('A template ID from list_epic_templates. Supply an ID or inline text.'),
       template_text: z.string().optional().describe('The exact workflow text for a custom or adapted template.'),
@@ -574,8 +575,7 @@ server.registerTool(
           : 'Template text is empty',
       );
     }
-    const name = task.name ?? goal.split(/\r?\n/, 1)[0].slice(0, 50);
-    return createTask({ ...task, name, epic: { goal, template, templateId }, wait: true });
+    return createTask({ ...task, epic: { goal, template, templateId }, wait: true });
   },
 );
 

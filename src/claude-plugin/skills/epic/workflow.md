@@ -34,3 +34,9 @@ For a design question, record the item it affects and the reference under discus
 Write a user decision so the question and recommendation are enough to act on. Ask for a concrete choice in plain language and explain what happens if the user accepts it. Give one reason for your recommendation and spell out the practical trade-off if there are options. Put technical evidence in the rationale and the exact artifact in the reference.
 
 Capture milestones and the next action in the journal. When waiting for a task or the user, end your turn so queued messages and replies can arrive. Record a final outcome when the workflow ends.
+
+## Common shapes
+
+- Review: an independent reviewer inspects the exact commit the implementer reports, and each accepted finding goes back to the implementer and then to the same reviewer.
+- Investigation: investigators take the same question with different methods, and you reconcile their findings.
+- Measurement: settle the baseline, the target and the machine before a candidate exists, and measure every revised commit there.

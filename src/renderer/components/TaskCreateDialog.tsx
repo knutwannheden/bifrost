@@ -103,7 +103,10 @@ export default function TaskCreateDialog() {
   const defaultAgent = (machine && machines.find((m) => m.name === machine)?.agent) || state.config?.agent || 'claude';
   const existingInPlaceTask =
     inPlace && repo ? state.tasks.find((t) => t.status !== 'archived' && t.worktreePath === repo.path) : undefined;
-  const selectedTemplate = templates.find((entry) => entry.id === (templateId ?? templates[0]?.id));
+  const selectedTemplate =
+    templateId === undefined
+      ? (templates.find((entry) => entry.id === 'plan-first') ?? templates[0])
+      : templates.find((entry) => entry.id === templateId);
   const templateText = templateDraft ?? selectedTemplate?.text ?? '';
   const epic = isEpic
     ? {
