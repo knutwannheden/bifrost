@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { subscribe } from '../src/main/event-sink.ts';
+import { relayScript } from '../src/main/oneshot.ts';
 import {
   adoptedSessionScript,
   archiveScript,
@@ -425,6 +426,23 @@ const configDirUsed = () => fs.readFileSync(path.join(record, 'config-dir'), 'ut
     "logging in on a machine runs Claude's login under the config dir sessions there use",
     argsOf('args').join(' ') === 'auth login --claudeai' && configDirUsed() === path.join(home, '.claude-work'),
     show({ args: argsOf('args'), dir: configDirUsed() }),
+  );
+}
+
+{
+  process.env.CLAUDE_CONFIG_DIR = path.join(os.homedir(), '.claude-work');
+  const script = relayScript(awkwardName, awkwardPrompt);
+  delete process.env.CLAUDE_CONFIG_DIR;
+  runRemote(home, script, stubs);
+  const args = argsOf('args');
+  check(
+    'a message for a session on a machine is relayed there with SendMessage, under the config dir its sessions use',
+    !fs.existsSync(injected) &&
+      args[args.indexOf('--tools') + 1] === 'SendMessage,ListAgents' &&
+      fs.readFileSync(path.join(record, 'stdin'), 'utf-8') ===
+        `Recipient: ${JSON.stringify(awkwardName)}\n\nMessage:\n${awkwardPrompt}` &&
+      configDirUsed() === path.join(home, '.claude-work'),
+    show({ args, dir: configDirUsed() }),
   );
 }
 

@@ -7,6 +7,7 @@ import type { AgentKind, BifrostConfig } from '../shared/types.ts';
 import { modelFlags } from './agents.ts';
 import { loadConfig } from './config.ts';
 import { INHERITED_SESSION_VARS } from './session-manager.ts';
+import { configDirScript, shQuote } from './tmux-session.ts';
 
 /**
  * A transcript is filed under a project directory derived from the working
@@ -239,21 +240,51 @@ const RELAY_PROMPT =
   'and send to the one that is running, not offline, giving its [ref]. ' +
   'Reply with SENT followed by the address you gave SendMessage, or FAILED followed by the reason.';
 
+const RELAY_ARGS = [
+  ...['-p', '--output-format', 'json', '--model', 'haiku', '--name', RELAY_NAME],
+  ...['--system-prompt', RELAY_PROMPT, '--tools', 'SendMessage,ListAgents', ...CLAUDE_ISOLATION],
+];
+
+const relayInput = (to: string, message: string) => `Recipient: ${JSON.stringify(to)}\n\nMessage:\n${message}`;
+
+/** The relay run on another machine, which SendMessage reaches only from there. */
+export function relayScript(to: string, message: string): string {
+  return [
+    configDirScript(),
+    'export PATH="$HOME/.local/bin:$PATH"',
+    'mkdir -p "$HOME"/.bifrost/oneshot && cd "$HOME"/.bifrost/oneshot',
+    `printf '%s' ${shQuote(relayInput(to, message))} | claude ${RELAY_ARGS.map(shQuote).join(' ')}`,
+  ].join('\n');
+}
+
 /**
  * Deliver one message to the session with that name, the way one session
  * messages another. Bifrost is no session, so a headless one sends it for it.
  * The sender exits once it has sent, so a reply reaches nobody. It always runs
- * Claude, since only Claude has SendMessage.
+ * Claude, since only Claude has SendMessage. A session on another machine is
+ * reached by running the relay there with `exec`.
  */
-export async function relayMessage(to: string, message: string): Promise<boolean> {
-  const args = ['-p', '--output-format', 'json', '--model', 'haiku', '--name', RELAY_NAME];
-  args.push('--system-prompt', RELAY_PROMPT, '--tools', 'SendMessage,ListAgents', ...CLAUDE_ISOLATION);
-  const input = `Recipient: ${JSON.stringify(to)}\n\nMessage:\n${message}`;
-  const run = await runCli('claude', args, input, RELAY_TIMEOUT_MS, 'relay');
-  if (!run.ok) return false;
+export async function relayMessage(
+  to: string,
+  message: string,
+  exec?: (script: string, timeoutMs: number) => Promise<string>,
+): Promise<boolean> {
+  let stdout: string;
+  if (exec) {
+    try {
+      stdout = await exec(relayScript(to, message), RELAY_TIMEOUT_MS);
+    } catch (err) {
+      console.warn(`[relay] to ${to}: ${(err as Error).message}`);
+      return false;
+    }
+  } else {
+    const run = await runCli('claude', RELAY_ARGS, relayInput(to, message), RELAY_TIMEOUT_MS, 'relay');
+    if (!run.ok) return false;
+    stdout = run.stdout;
+  }
   let result = '';
   try {
-    result = String(JSON.parse(run.stdout).result ?? '').trim();
+    result = String(JSON.parse(stdout).result ?? '').trim();
   } catch {
     /* reported as not sent below */
   }

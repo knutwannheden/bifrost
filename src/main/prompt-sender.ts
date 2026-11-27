@@ -324,8 +324,8 @@ export async function messageTask(
   }
   const wrapped = `From ${senderOf(fromTaskId)}:\n\n${text}\n\n—\n${replyHint(fromTaskId)}`;
 
-  // SendMessage reaches only sessions on this machine, and only Claude has it.
-  if (task.machine || (task.agent ?? 'claude') !== 'claude') {
+  // Only Claude has SendMessage, and an adopted session runs under no name Bifrost gave it.
+  if ((task.agent ?? 'claude') !== 'claude' || task.adopted) {
     const typed = await sendPrompt(taskId, wrapped, 'queue');
     return { ok: typed.ok, error: typed.error, via: 'prompt', queued: typed.queued };
   }
@@ -333,9 +333,15 @@ export async function messageTask(
   const notReady = await readySession(taskId);
   if (notReady) return { ok: false, error: notReady };
   const name = getSessionName(taskId) ?? task.name;
-  return (await relayMessage(name, wrapped))
-    ? { ok: true, via: 'message' }
-    : { ok: false, error: `The relay could not deliver to the session "${name}"` };
+  const { machine } = task;
+  const exec = machine ? (script: string, ms: number) => getRemoteHost(machine).exec(script, ms) : undefined;
+  if (await relayMessage(name, wrapped, exec)) return { ok: true, via: 'message' };
+  // Typed, so a machine whose Claude cannot relay still gets the message.
+  if (machine) {
+    const typed = await sendPrompt(taskId, wrapped, 'queue');
+    return { ok: typed.ok, error: typed.error, via: 'prompt', queued: typed.queued };
+  }
+  return { ok: false, error: `The relay could not deliver to the session "${name}"` };
 }
 
 function senderOf(fromTaskId: string | undefined): string {
