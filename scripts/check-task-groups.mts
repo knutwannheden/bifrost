@@ -25,7 +25,7 @@ const sections = (tasks: Task[], overrides: Partial<Parameters<typeof taskSectio
   taskSections(tasks, {
     pinnedIds: [],
     collapsedBuckets: [],
-    collapsedEpics: new Set(),
+    expandedEpicIds: new Set(),
     activeTaskId: null,
     matchedIds: null,
     ...overrides,
@@ -34,17 +34,20 @@ const rows = (result: ReturnType<typeof sections>) => result.flatMap(({ rows }) 
 
 const recentGroup = sections([companion, worker, root]);
 assert.equal(recentGroup[0]?.bucket, 'Last 10 minutes', 'a recent worker moves the entire epic');
-assert.deepEqual(rows(recentGroup), ['epic', 'worker', 'companion'], 'the parent is followed by both workers');
+assert.deepEqual(rows(recentGroup), ['epic'], 'an epic starts collapsed');
+assert.deepEqual(
+  rows(sections([companion, worker, root], { expandedEpicIds: new Set([root.id]) })),
+  ['epic', 'worker', 'companion'],
+  'expanding an epic reveals its workers',
+);
 
 const folded = sections([root, worker, companion], {
   collapsedBuckets: ['Last 10 minutes'],
-  collapsedEpics: new Set([root.id]),
   activeTaskId: worker.id,
 });
 assert.deepEqual(rows(folded), ['epic', 'worker'], 'a folded section keeps the selected worker and its parent visible');
 const filtered = sections([root, worker, companion], {
   collapsedBuckets: ['Last 10 minutes'],
-  collapsedEpics: new Set([root.id]),
   matchedIds: new Set([companion.id]),
 });
 assert.deepEqual(rows(filtered), ['epic', 'companion'], 'a matching worker overrides both folds and gives it context');
@@ -56,7 +59,10 @@ const epicWithAttachment = task('epic', {
     updates: [{ kind: 'attach', taskId: inherited.id, seq: 1, at: now, authorTaskId: root.id }],
   },
 });
-const pinned = sections([epicWithAttachment, inherited], { pinnedIds: [inherited.id] });
+const pinned = sections([epicWithAttachment, inherited], {
+  pinnedIds: [inherited.id],
+  expandedEpicIds: new Set([root.id]),
+});
 assert.equal(pinned[0]?.bucket, 'Pinned', 'pinning a member pins the group');
 assert.deepEqual(rows(pinned), ['epic', 'inherited'], 'an attached worker is grouped by the current epic');
 

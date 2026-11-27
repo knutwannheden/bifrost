@@ -68,6 +68,7 @@ export interface AppState {
   taskFailed: Record<string, boolean>;
   /** Task ids in the order the sidebar renders them (collapsed groups contribute only the active task's row, if any). */
   visibleTaskIds: string[];
+  expandedEpicIds: ReadonlySet<string>;
   /** Bumped to move focus into the sidebar's filter box; the value itself carries no meaning. */
   sidebarFilterFocus: number;
   /** Bumped to move focus into the change feed dock. */
@@ -132,6 +133,7 @@ export type AppAction =
   | { type: 'SET_CLAUDE_ACTIVE'; taskId: string; active: boolean }
   | { type: 'SET_TURN_BOUNDARY'; taskId: string; at: number }
   | { type: 'SET_VISIBLE_TASK_IDS'; taskIds: string[] }
+  | { type: 'TOGGLE_EPIC'; taskId: string }
   | { type: 'FOCUS_SIDEBAR_FILTER' }
   | { type: 'FOCUS_CHANGE_FEED' }
   | { type: 'SET_EPIC_CHECK_IN'; taskId: string; through: number }
@@ -173,6 +175,7 @@ const initialState: AppState = {
   archiveConfirm: null,
   renamingTaskId: null,
   visibleTaskIds: [],
+  expandedEpicIds: new Set(),
   sidebarFilterFocus: 0,
   changeFeedFocus: 0,
   changeFeedSelection: null,
@@ -500,6 +503,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
     }
     case 'FOCUS_SIDEBAR_FILTER':
       return { ...state, sidebarFilterFocus: state.sidebarFilterFocus + 1 };
+    case 'TOGGLE_EPIC': {
+      if (!state.tasks.some((task) => task.id === action.taskId && task.epic)) return state;
+      const expandedEpicIds = new Set(state.expandedEpicIds);
+      if (!expandedEpicIds.delete(action.taskId)) expandedEpicIds.add(action.taskId);
+      return { ...state, expandedEpicIds };
+    }
     case 'FOCUS_CHANGE_FEED':
       return { ...state, changeFeedFocus: state.changeFeedFocus + 1 };
     case 'SET_EPIC_CHECK_IN':
