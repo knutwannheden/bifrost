@@ -25,6 +25,8 @@ if [ "$MODE" = launch ]; then
   done
   export RESTART_TS=$(date +%Y%m%d-%H%M%S)
   export RESTART_CALLER=${BIFROST_TASK_ID:-} RESTART_REVERT= RESTART_PROMPT= RESTART_WHILE_STOPPED=
+  RESTART_SELF=$(cd "$(dirname "$0")/.." && pwd)
+  export RESTART_SELF
   while [ $# -gt 0 ]; do
     case "$1" in
       --revert) RESTART_REVERT=$2; shift 2 ;;
@@ -74,19 +76,24 @@ processes() { ps -eo pid=,ppid=,args= | sed 's/^ *//'; }
 ELECTRON_BIN='/node_modules/electron/dist/(Electron[.]app/Contents/MacOS/Electron|electron)$'
 # Each Electron run in development mode, as its pid, its parent's pid and its checkout.
 electrons() { processes | awk -v bin="$ELECTRON_BIN" '$3 ~ bin && $4 == "." && NF == 4 { sub(/\/node_modules\/.*/, "", $3); print $1, $2, $3 }'; }
-electron_pid() { electrons | awk -v repo="$REPO" '$3 == repo { print $1 }' | head -1; }
+electron_pid() { electrons | awk -v repo="$RUNNING" '$3 == repo { print $1 }' | head -1; }
 # Forge started Electron, so it is Electron's parent, whatever path it was started under. Prints its pid and its node.
 forge() {
   local parent
-  parent=$(electrons | awk -v repo="$REPO" '$3 == repo { print $2 }' | head -1)
+  parent=$(electrons | awk -v repo="$RUNNING" '$3 == repo { print $2 }' | head -1)
   processes | awk -v pid="$parent" '$1 == pid && $4 ~ /\/@electron-forge\/cli\/dist\/electron-forge-start[.]js$/ { print $1, $3 }'
 }
 forge_pid() { forge | awk '{ print $1 }'; }
 
 # The running Bifrost says which checkout to start again, and which node to start it with.
-REPO=
+# A checkout removed under it, such as a merged task's worktree, leaves only its build, so the checkout the restart was launched from starts instead.
+REPO= RUNNING=
 while read -r _ _ checkout; do
-  grep -q '"name": "bifrost"' "$checkout/package.json" 2>/dev/null && { REPO=$checkout; break; }
+  if grep -q '"name": "bifrost"' "$checkout/package.json" 2>/dev/null; then
+    REPO=$checkout RUNNING=$checkout
+    break
+  fi
+  [ -d "$checkout/.vite" ] && [ ! -e "$checkout/package.json" ] && RUNNING=$checkout REPO=${RESTART_SELF:-}
 done < <(electrons)
 if [ -z "$REPO" ]; then
   log "no Bifrost running in development mode; nothing restarted"
@@ -127,7 +134,7 @@ stop_bifrost() {
 
 start_bifrost() {
   # Bifrost hands its environment to every session, so the restart's own variables stay behind.
-  (cd "$REPO" && env -u RESTART_TS -u RESTART_CALLER -u RESTART_REVERT -u RESTART_PROMPT -u RESTART_WHILE_STOPPED \
+  (cd "$REPO" && env -u RESTART_TS -u RESTART_CALLER -u RESTART_REVERT -u RESTART_PROMPT -u RESTART_WHILE_STOPPED -u RESTART_SELF \
     nohup npm start >> "$NPM_LOG" 2>&1 < /dev/null &)
   log "npm start launched, output in $NPM_LOG"
 }

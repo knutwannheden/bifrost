@@ -44,10 +44,10 @@ function standIn(): number {
 }
 
 /** The log of a run that sees these ps lines. */
-function runSeeing(psLines: string[]): string {
+function runSeeing(psLines: string[], env: Record<string, string> = {}): string {
   fs.writeFileSync(path.join(bin, 'ps'), `#!/bin/sh\ncat <<'EOF'\n${psLines.join('\n')}\nEOF\n`, { mode: 0o755 });
   const ts = `t${Math.random().toString(36).slice(2)}`;
-  spawnSync(bash, [script, '--run'], { env: { HOME: home, PATH: bin, RESTART_TS: ts }, stdio: 'ignore' });
+  spawnSync(bash, [script, '--run'], { env: { HOME: home, PATH: bin, RESTART_TS: ts, ...env }, stdio: 'ignore' });
   return fs.readFileSync(path.join(home, '.bifrost', 'restart', `${ts}.log`), 'utf-8');
 }
 
@@ -93,6 +93,38 @@ try {
 
   const zygoteOnly = runSeeing([`  103 102 ${repo}/node_modules/electron/dist/electron --type=zygote`]);
   check('a Chromium helper process is not taken for Bifrost', zygoteOnly.includes('no Bifrost running'), zygoteOnly);
+
+  const removed = path.join(root, 'removed-worktree');
+  fs.mkdirSync(path.join(removed, '.vite'), { recursive: true });
+  const orphan = standIn();
+  fs.writeFileSync(
+    path.join(bin, 'ps'),
+    `#!/bin/sh\necho '  ${orphan} 100 ${removed}/node_modules/electron/dist/electron .'\n`,
+    {
+      mode: 0o755,
+    },
+  );
+  // Launched from the checkout's own copy, as a task runs it. The detached run is a copy elsewhere.
+  fs.mkdirSync(path.join(repo, 'scripts'));
+  fs.copyFileSync(script, path.join(repo, 'scripts', 'restart-bifrost.sh'));
+  const launchHome = path.join(root, 'launch-home');
+  // The launch hands the copy to bash by name.
+  fs.symlinkSync(bash, path.join(bin, 'bash'));
+  const launched = spawnSync(bash, [path.join(repo, 'scripts', 'restart-bifrost.sh')], {
+    env: { HOME: launchHome, PATH: bin },
+    encoding: 'utf-8',
+  });
+  const log = path.join(launchHome, '.bifrost', 'restart', `${/restart\/(\S+)\.log/.exec(launched.stdout)?.[1]}.log`);
+  let fromRemoved = '';
+  for (let i = 0; i < 100 && !fromRemoved.includes('SIGTERM'); i++) {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    fromRemoved = fs.existsSync(log) ? fs.readFileSync(log, 'utf-8') : '';
+  }
+  check(
+    'a Bifrost whose checkout was removed is stopped and started again from the checkout the restart was launched from',
+    fromRemoved.includes(`Bifrost runs from ${repo}\n`) && fromRemoved.includes(`SIGTERM Electron ${orphan}`),
+    fromRemoved,
+  );
 
   fs.rmSync(path.join(bin, 'jq'));
   const launch = spawnSync(bash, [script], { env: { HOME: home, PATH: bin }, encoding: 'utf-8' });
