@@ -25,7 +25,6 @@ export default function TaskSidebar() {
   const [filter, setFilter] = useState('');
   const [selected, setSelected] = useState(0);
   const [filterFocused, setFilterFocused] = useState(false);
-  const [collapsedEpics, setCollapsedEpics] = useState<Set<string>>(() => new Set());
   const filterRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const filterShortcut = useKeymap().getDisplayString('nav.filterTasks');
@@ -79,7 +78,7 @@ export default function TaskSidebar() {
   const sections = taskSections(openTasks, {
     pinnedIds,
     collapsedBuckets: collapsed,
-    collapsedEpics,
+    expandedEpicIds: state.expandedEpicIds,
     activeTaskId: state.activeTaskId,
     matchedIds,
   });
@@ -119,15 +118,6 @@ export default function TaskSidebar() {
       dispatch({ type: 'SET_CONFIG', config: updated });
       window.bifrost.saveConfig(updated);
     }
-  };
-
-  const toggleEpic = (id: string) => {
-    setCollapsedEpics((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   };
 
   useEffect(() => {
@@ -244,16 +234,16 @@ export default function TaskSidebar() {
                 </button>
               )}
               {rows.map(({ task, rootId, child, foldable, pinIds }) => (
-                <div key={task.id} data-flip-key={task.id} className={child ? 'pl-8' : 'relative'}>
+                <div key={task.id} data-flip-key={task.id} className={child ? 'pl-5' : 'relative'}>
                   {foldable && (
                     <button
                       type="button"
-                      aria-expanded={!collapsedEpics.has(task.id)}
-                      aria-label={`${collapsedEpics.has(task.id) ? 'Expand' : 'Collapse'} ${task.name}`}
-                      className="absolute inset-y-0 left-1 z-10 w-5 text-xs text-muted hover:text-primary transition-colors"
-                      onClick={() => toggleEpic(task.id)}
+                      aria-expanded={state.expandedEpicIds.has(task.id)}
+                      aria-label={`${state.expandedEpicIds.has(task.id) ? 'Collapse' : 'Expand'} ${task.name}`}
+                      className="absolute bottom-0 left-3 z-10 h-4 w-3.5 text-xs leading-none text-muted hover:text-primary transition-colors"
+                      onClick={() => dispatch({ type: 'TOGGLE_EPIC', taskId: task.id })}
                     >
-                      {collapsedEpics.has(task.id) ? '▸' : '▾'}
+                      {state.expandedEpicIds.has(task.id) ? '▾' : '▸'}
                     </button>
                   )}
                   <TaskTab
@@ -280,7 +270,6 @@ export default function TaskSidebar() {
                     isPinned={pinIds.length > 0}
                     onTogglePin={() => togglePin(rootId, pinIds)}
                     epicGroup={child || !!task.epic}
-                    epicDisclosure={foldable}
                     onRegenerateTitle={async () => {
                       try {
                         const result = await window.bifrost.regenerateTaskTitle(task.id);

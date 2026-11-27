@@ -274,6 +274,10 @@ export function useKeymapEngine(state: AppState, dispatch: React.Dispatch<AppAct
           break;
         }
 
+        case 'nav.toggleEpic':
+          if (s.activeTaskId) dispatch({ type: 'TOGGLE_EPIC', taskId: s.activeTaskId });
+          break;
+
         case 'nav.filterTasks': {
           if (s.config?.sidebarHidden) {
             const updated = { ...s.config, sidebarHidden: false };

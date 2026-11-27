@@ -22,7 +22,6 @@ interface TaskTabProps {
   isPinned: boolean;
   onTogglePin: () => void;
   epicGroup?: boolean;
-  epicDisclosure?: boolean;
   search: string;
   isSelected: boolean;
   pr?: TaskPr;
@@ -64,7 +63,6 @@ export default function TaskTab({
   isPinned,
   onTogglePin,
   epicGroup,
-  epicDisclosure,
   search,
   isSelected,
   pr,
@@ -207,9 +205,7 @@ export default function TaskTab({
     <>
       <button
         ref={buttonRef}
-        className={`group relative flex w-full items-center py-1.5 pr-3 text-left transition-colors ${
-          epicDisclosure ? 'pl-7' : 'pl-3'
-        } ${
+        className={`group relative flex w-full items-start gap-1 px-3 py-1.5 text-left transition-colors ${
           isActive ? 'bg-surface-alt text-primary' : 'hover:bg-surface-hover text-secondary'
         } ${isSelected ? 'ring-1 ring-inset ring-accent' : ''} ${task.status === 'stopped' || task.unreachable ? 'opacity-60' : ''}`}
         style={isActive ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' } : undefined}
@@ -228,6 +224,15 @@ export default function TaskTab({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
+        <span
+          aria-hidden="true"
+          className={`mt-px grid size-3.5 shrink-0 place-items-center rounded-full text-[8px] font-semibold leading-none ${
+            task.epic ? 'bg-accent text-white' : 'bg-surface-hover text-primary'
+          }`}
+        >
+          {task.epic ? 'E' : 'T'}
+        </span>
+        {task.epic && <span className="sr-only">Epic</span>}
         <span className="flex flex-col min-w-0 flex-1 overflow-hidden group-hover:mask-r-from-[calc(100%-2rem)] group-hover:mask-r-to-[calc(100%-1.5rem)]">
           <span className="flex items-center gap-1.5">
             {regenerating ? <Spinner size="sm" /> : null}
@@ -239,7 +244,6 @@ export default function TaskTab({
             <span className="truncate">
               <Highlight text={repoName} search={search} />
             </span>
-            {task.epic ? <span className="shrink-0 text-accent-hover">Epic</span> : null}
             {task.machine ? (
               <span className="shrink-0 rounded-sm bg-surface-alt px-1 text-secondary">{task.machine}</span>
             ) : null}

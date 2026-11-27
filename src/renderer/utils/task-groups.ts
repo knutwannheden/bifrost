@@ -11,13 +11,13 @@ export function taskSections(
   {
     pinnedIds,
     collapsedBuckets,
-    collapsedEpics,
+    expandedEpicIds,
     activeTaskId,
     matchedIds,
   }: {
     pinnedIds: readonly string[];
     collapsedBuckets: readonly string[];
-    collapsedEpics: ReadonlySet<string>;
+    expandedEpicIds: ReadonlySet<string>;
     activeTaskId: string | null;
     matchedIds: ReadonlySet<string> | null;
   },
@@ -79,7 +79,7 @@ export function taskSections(
     const activeInGroup = all.some((task) => task.id === activeTaskId);
     if (bucketFolded && !activeInGroup) continue;
 
-    const epicFolded = !matchedIds && collapsedEpics.has(root.id);
+    const epicFolded = !matchedIds && !expandedEpicIds.has(root.id);
     const foldable = !matchedIds && !bucketFolded && members.length > 0;
     section.rows.push({ task: root, rootId: root.id, child: false, foldable, pinIds });
     for (const task of shown) {
